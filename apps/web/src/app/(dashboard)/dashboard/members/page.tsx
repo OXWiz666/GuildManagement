@@ -1,0 +1,419 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { guildApi, type GuildMemberData, type JoinRequestData } from "@/lib/api";
+import { useToast } from "@/components/ui/Toast";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import { Skeleton, SkeletonAvatar } from "@/components/ui/Skeleton";
+import DashboardDecor from "@/components/dashboard/DashboardDecor";
+import {
+  Reveal,
+  ModuleHeader,
+  ModuleTabs,
+  LiveDot,
+} from "@/components/dashboard/DashboardHelpers";
+
+// Imports from co-located components
+import MemberRow from "./components/MemberRow";
+import ApplicationsTab from "./components/ApplicationsTab";
+import InviteTab from "./components/InviteTab";
+import RoleConfirmModal from "./components/RoleConfirmModal";
+import StalkProfileModal from "./components/StalkProfileModal";
+
+export default function MembersPage() {
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const [members, setMembers] = useState<GuildMemberData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("ALL");
+  const [confirmModal, setConfirmModal] = useState<{
+    memberId: string;
+    memberName: string;
+    currentRole: string;
+    newRole: string;
+    isTransfer: boolean;
+  } | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [expandedMember, setExpandedMember] = useState<string | null>(null);
+  const [selectedStalkMember, setSelectedStalkMember] = useState<GuildMemberData | null>(null);
+
+  // New admin flow state variables
+  const [activeTab, setActiveTab] = useState<"members" | "applications" | "invites">("members");
+  const [applications, setApplications] = useState<JoinRequestData[]>([]);
+  const [isLoadingApps, setIsLoadingApps] = useState(false);
+  const [guildInviteCode, setGuildInviteCode] = useState<string | null>(null);
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+  const [isLoadingInvite, setIsLoadingInvite] = useState(false);
+  const [isReviewingId, setIsReviewingId] = useState<string | null>(null);
+
+  const activeGuild = user?.guilds[0];
+  const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
+  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader;
+
+  const loadMembers = useCallback(async () => {
+    if (!activeGuild) return;
+    setIsLoading(true);
+    try {
+      const result = await guildApi.getMembers(activeGuild.guildId);
+      if (result.success && result.data?.members) {
+        setMembers(result.data.members);
+      }
+    } catch {
+      addToast("error", "Failed to load members");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeGuild, addToast]);
+
+  const loadApplications = useCallback(async () => {
+    if (!activeGuild || !isOfficer) return;
+    setIsLoadingApps(true);
+    try {
+      const result = await guildApi.getGuildApplications(activeGuild.guildId);
+      if (result.success && result.data?.applications) {
+        setApplications(result.data.applications);
+      }
+    } catch {
+      addToast("error", "Failed to load applications");
+    } finally {
+      setIsLoadingApps(false);
+    }
+  }, [activeGuild, isOfficer, addToast]);
+
+  const loadInviteCode = useCallback(async () => {
+    if (!activeGuild || !isGuildLeader) return;
+    setIsLoadingInvite(true);
+    try {
+      const result = await guildApi.getInviteCode(activeGuild.guildId);
+      if (result.success) {
+        setGuildInviteCode(result.data?.inviteCode || null);
+      }
+    } catch {
+      // Quiet fail
+    } finally {
+      setIsLoadingInvite(false);
+    }
+  }, [activeGuild, isGuildLeader]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
+
+  // Load apps or invite codes when tabs change
+  useEffect(() => {
+    if (activeTab === "applications") {
+      loadApplications();
+    } else if (activeTab === "invites") {
+      loadInviteCode();
+    }
+  }, [activeTab, loadApplications, loadInviteCode]);
+
+  // Filter members
+  const filteredMembers = members.filter((m) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      m.user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.ign && m.ign.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (m.memberCode && m.memberCode.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesRole = roleFilter === "ALL" || m.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+  async function handleRoleChange(
+    memberId: string,
+    memberName: string,
+    currentRole: string,
+    newRole: string,
+  ) {
+    const isTransfer = newRole === "GUILD_LEADER";
+    setConfirmModal({ memberId, memberName, currentRole, newRole, isTransfer });
+  }
+
+  async function confirmRoleChange() {
+    if (!confirmModal || !activeGuild) return;
+    setIsUpdating(true);
+
+    try {
+      const result = await guildApi.updateMemberRole(
+        activeGuild.guildId,
+        confirmModal.memberId,
+        confirmModal.newRole,
+      );
+
+      if (result.success) {
+        const actionLabel = confirmModal.isTransfer
+          ? `Transferred Guild Leader to ${confirmModal.memberName}`
+          : `Updated ${confirmModal.memberName}'s role to ${confirmModal.newRole.replace("_", " ")}`;
+        addToast("success", actionLabel);
+        // Reload members to reflect changes
+        await loadMembers();
+      } else {
+        addToast("error", result.error?.message || "Failed to update role");
+      }
+    } catch {
+      addToast("error", "Failed to update role");
+    } finally {
+      setIsUpdating(false);
+      setConfirmModal(null);
+    }
+  }
+
+  async function handleReviewApplication(requestId: string, action: "ACCEPT" | "DECLINE") {
+    if (!activeGuild || !isGuildLeader) return;
+    setIsReviewingId(requestId);
+    try {
+      const result = await guildApi.reviewApplication(activeGuild.guildId, requestId, action);
+      if (result.success) {
+        if (action === "ACCEPT") {
+          addToast("success", `Application accepted! Member Code: ${result.data?.memberCode || "Generated"}`);
+        } else {
+          addToast("info", "Application declined");
+        }
+        await loadApplications();
+        await loadMembers();
+      } else {
+        addToast("error", result.error?.message || "Failed to process application");
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to process application");
+    } finally {
+      setIsReviewingId(null);
+    }
+  }
+
+  async function handleGenerateInvite() {
+    if (!activeGuild || !isGuildLeader) return;
+    setIsGeneratingInvite(true);
+    try {
+      const result = await guildApi.generateInviteCode(activeGuild.guildId);
+      if (result.success && result.data?.inviteCode) {
+        setGuildInviteCode(result.data.inviteCode);
+        addToast("success", "New Guild Invite Code generated!");
+      } else {
+        addToast("error", "Failed to generate invite code");
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to generate invite code");
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  }
+
+  if (!user || !activeGuild) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-white/40 text-[13px]">No active guild selected</p>
+      </div>
+    );
+  }
+
+  const tabs: Array<{ value: "members" | "applications" | "invites"; label: string; count?: number }> = [
+    { value: "members", label: "Active members", count: members.length },
+    { value: "applications", label: "Pending applications", count: applications.length },
+    ...(isGuildLeader
+      ? [{ value: "invites" as const, label: "Invite code" }]
+      : []),
+  ];
+
+  return (
+    <div className="relative max-w-7xl mx-auto w-full">
+      <DashboardDecor />
+
+      <div className="relative z-10 space-y-6 text-white/85">
+        <ModuleHeader
+          eyebrow="Roster"
+          title="Members"
+          description={
+            <span className="inline-flex items-center gap-1.5">
+              <LiveDot tone="emerald" size={5} />
+              {members.length} members in {activeGuild.guildName}
+            </span>
+          }
+          right={
+            isGuildLeader ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/70 text-[11px] font-medium uppercase tracking-[0.18em]">
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M12 15l-2-4h4l-2 4z" />
+                  <path d="M5 7l3 4L12 3l4 8 3-4v12H5V7z" />
+                </svg>
+                Role management
+              </span>
+            ) : null
+          }
+        />
+
+        {/* Tabs */}
+        {isOfficer && (
+          <Reveal delay={80}>
+            <ModuleTabs
+              tabs={tabs}
+              active={activeTab}
+              onChange={(v) => setActiveTab(v)}
+            />
+          </Reveal>
+        )}
+
+        {/* Members Tab Content */}
+        {activeTab === "members" && (
+          <>
+            {/* Search & Filters */}
+            <Card padding="sm">
+              <div className="flex flex-col sm:flex-row gap-3">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <svg
+                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    id="member-search"
+                    type="text"
+                    placeholder="Search by name, IGN, or member code..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white/25 focus:bg-white/[0.05] transition-colors"
+                  />
+                </div>
+
+                {/* Role Filter */}
+                <select
+                  id="role-filter"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-white/25 transition-colors cursor-pointer appearance-none min-w-[160px]"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 12px center",
+                  }}
+                >
+                  <option value="ALL" className="bg-[#0f0f16] text-white">All Roles</option>
+                  <option value="GUILD_LEADER" className="bg-[#0f0f16] text-white">Guild Leader</option>
+                  <option value="OFFICER" className="bg-[#0f0f16] text-white">Officer</option>
+                  <option value="CORE_MEMBER" className="bg-[#0f0f16] text-white">Core Member</option>
+                  <option value="ELITE_MEMBER" className="bg-[#0f0f16] text-white">Elite Member</option>
+                  <option value="MEMBER" className="bg-[#0f0f16] text-white">Member</option>
+                </select>
+              </div>
+            </Card>
+
+            {/* Members List */}
+            {isLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="p-4 rounded-xl bg-[#111116]/40 border border-white/[0.04] flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <SkeletonAvatar size="md" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-44" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-6 w-16 rounded-md" />
+                      <Skeleton className="h-6 w-20 rounded-md" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredMembers.length === 0 ? (
+              <Card>
+                <div className="text-center py-12">
+                  <svg className="h-12 w-12 text-white/35 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                  </svg>
+                  <p className="text-white/40 text-sm">No members found</p>
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="mt-2 text-white text-xs hover:text-white/85 transition-colors cursor-pointer"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {filteredMembers.map((member, index) => (
+                  <MemberRow
+                    key={member.id}
+                    member={member}
+                    index={index}
+                    isGuildLeader={isGuildLeader}
+                    currentUserId={user.id}
+                    isExpanded={expandedMember === member.id}
+                    onToggleExpand={() =>
+                      setExpandedMember(expandedMember === member.id ? null : member.id)
+                    }
+                    onRoleChange={(newRole) =>
+                      handleRoleChange(member.id, member.user.displayName, member.role, newRole)
+                    }
+                    onAvatarClick={() => setSelectedStalkMember(member)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Applications Tab Content */}
+        {activeTab === "applications" && (
+          <ApplicationsTab
+            applications={applications}
+            isLoadingApps={isLoadingApps}
+            isReviewingId={isReviewingId}
+            isGuildLeader={isGuildLeader}
+            loadApplications={loadApplications}
+            handleReviewApplication={handleReviewApplication}
+          />
+        )}
+
+        {/* Invite Codes Tab Content */}
+        {activeTab === "invites" && isGuildLeader && (
+          <InviteTab
+            guildInviteCode={guildInviteCode}
+            isLoadingInvite={isLoadingInvite}
+            isGeneratingInvite={isGeneratingInvite}
+            isGuildLeader={isGuildLeader}
+            activeGuildName={activeGuild.guildName}
+            handleGenerateInvite={handleGenerateInvite}
+            addToast={addToast}
+          />
+        )}
+
+        {/* Role Change Confirmation Modal */}
+        <RoleConfirmModal
+          confirmModal={confirmModal}
+          isUpdating={isUpdating}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={confirmRoleChange}
+        />
+
+        {/* DISCORD STYLE STALK PROFILE CARD MODAL */}
+        <StalkProfileModal
+          selectedStalkMember={selectedStalkMember}
+          activeGuildName={activeGuild.guildName}
+          onClose={() => setSelectedStalkMember(null)}
+        />
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,25 @@
+{
+  "name": "guild-management",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@guild/api",
+    "dev:web": "turbo run dev --filter=@guild/web",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "db:generate": "turbo run db:generate --filter=@guild/db",
+    "db:migrate": "turbo run db:migrate --filter=@guild/db",
+    "db:seed": "turbo run db:seed --filter=@guild/db",
+    "db:studio": "turbo run db:studio --filter=@guild/db",
+    "db:push": "turbo run db:push --filter=@guild/db",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@10.12.1",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

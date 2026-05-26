@@ -16,12 +16,8 @@ export const passwordSchema = z
   .max(128, "Password too long")
   .regex(/[a-z]/, "Password must contain a lowercase letter")
   .regex(/[A-Z]/, "Password must contain an uppercase letter")
-<<<<<<< HEAD
   .regex(/[0-9]/, "Password must contain a number")
   .regex(/[^a-zA-Z0-9]/, "Password must contain a special character (e.g., !, @, #, $, etc.)");
-=======
-  .regex(/[0-9]/, "Password must contain a number");
->>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288
 
 export const displayNameSchema = z
   .string()

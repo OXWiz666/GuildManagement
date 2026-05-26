@@ -195,6 +195,29 @@ router.get(
   },
 );
 
+// Get dynamic dashboard stats. Requires auth.
+router.get(
+  "/stats/:guildId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const stats = await dashboardService.getDashboardSummary(
+        guildId,
+        req.user!.userId,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: stats,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // ─── Boss Schedules Endpoints ────────────────────
 
 // Get boss schedule list. Requires auth.

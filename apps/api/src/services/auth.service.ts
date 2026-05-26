@@ -252,13 +252,7 @@ export async function refreshTokens(
     email: user.email,
   });
 
-  // Audit log
-  await writeAuditLog({
-    actorId: user.id,
-    action: AUDIT_ACTIONS.TOKEN_REFRESHED,
-    ipAddress,
-    userAgent,
-  });
+  // Silent refresh — omitted database logging for TOKEN_REFRESHED to prevent storage bloat
 
   return {
     accessToken: newAccessToken,

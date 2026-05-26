@@ -17,9 +17,9 @@ export function errorHandler(
 ): void {
   // Log the error (always)
   if (env.NODE_ENV === "development") {
-    console.error("🔥 Error:", err);
+    console.error(" Error:", err);
   } else {
-    console.error("🔥 Error:", err.message);
+    console.error(" Error:", err.message);
   }
 
   // Zod validation errors → 422

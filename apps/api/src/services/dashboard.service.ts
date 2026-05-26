@@ -600,6 +600,7 @@ export async function getMemberAttendanceStats(guildId: string, userId: string) 
   };
 }
 
+<<<<<<< HEAD
 export async function getDashboardSummary(guildId: string, userId: string) {
   // Verify membership
   const membership = await prisma.guildMember.findUnique({
@@ -880,3 +881,5 @@ export async function getDashboardSummary(guildId: string, userId: string) {
 }
 
 
+=======
+>>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288

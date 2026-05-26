@@ -2,6 +2,11 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+
+// Global BigInt JSON serialization override to prevent Express JSON serialization crashes
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
 import { apiLimiter } from "./middleware/rateLimiter";
@@ -41,7 +46,7 @@ app.use(errorHandler);
 // ─── Start Server ───────────────────────────────
 app.listen(env.PORT, () => {
   console.log(`
-  ⚔️  Guild Management API
+  Guild Management API
   ────────────────────────
   Status:  Running
   Port:    ${env.PORT}

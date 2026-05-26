@@ -600,3 +600,286 @@ export async function getMemberAttendanceStats(guildId: string, userId: string) 
   };
 }
 
+<<<<<<< HEAD
+export async function getDashboardSummary(guildId: string, userId: string) {
+  // Verify membership
+  const membership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId,
+        guildId,
+      },
+    },
+  });
+
+  if (!membership || !membership.isActive) {
+    throw new ForbiddenError("You must be an active member of this guild to view dashboard stats");
+  }
+
+  // 1. Get guild settings for currency symbol & code
+  const settings = await prisma.guildSettings.findUnique({
+    where: { guildId },
+  });
+
+  const currencySymbol = settings?.currencySymbol || "₱";
+  const currencyCode = settings?.currencyCode || "PHP";
+
+  // 2. Fetch Balance and Balance change this week (last 7 days)
+  const ledgerEntries = await prisma.ledgerEntry.groupBy({
+    by: ["entryType"],
+    where: {
+      accountType: "MEMBER",
+      accountId: userId,
+      currency: currencyCode,
+      guildId,
+    },
+    _sum: { amount: true },
+  });
+
+  let credits = 0n;
+  let debits = 0n;
+  for (const row of ledgerEntries) {
+    if (row.entryType === "CREDIT") {
+      credits = row._sum.amount ?? 0n;
+    } else {
+      debits = row._sum.amount ?? 0n;
+    }
+  }
+  const balanceCents = credits - debits;
+  const balanceValue = `${currencySymbol} ${(Number(balanceCents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const weeklyCreditSum = await prisma.ledgerEntry.aggregate({
+    where: {
+      accountType: "MEMBER",
+      accountId: userId,
+      currency: currencyCode,
+      guildId,
+      entryType: "CREDIT",
+      createdAt: { gte: sevenDaysAgo },
+    },
+    _sum: { amount: true },
+  });
+  const weeklyCredit = Number(weeklyCreditSum._sum.amount || 0n) / 100;
+  const balanceSub = `+${currencySymbol}${weeklyCredit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this week`;
+
+  // 3. Guild Points
+  const pointsSum = await prisma.ledgerEntry.aggregate({
+    where: {
+      guildId,
+      accountId: userId,
+      accountType: "MEMBER",
+      referenceType: "ATTENDANCE",
+    },
+    _sum: { amount: true },
+  });
+  const totalPoints = Number(pointsSum._sum.amount || 0n);
+  const guildPointsValue = totalPoints.toLocaleString();
+
+  const weeklyPointsSum = await prisma.ledgerEntry.aggregate({
+    where: {
+      guildId,
+      accountId: userId,
+      accountType: "MEMBER",
+      referenceType: "ATTENDANCE",
+      createdAt: { gte: sevenDaysAgo },
+    },
+    _sum: { amount: true },
+  });
+  const weeklyPoints = Number(weeklyPointsSum._sum.amount || 0n);
+  const guildPointsSub = `+${weeklyPoints.toLocaleString()} this week`;
+
+  // 4. Members
+  const totalMembers = await prisma.guildMember.count({
+    where: { guildId, isActive: true },
+  });
+
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const onlineMembersCount = await prisma.guildMember.count({
+    where: {
+      guildId,
+      isActive: true,
+      user: {
+        sessions: {
+          some: {
+            lastActive: { gte: fifteenMinutesAgo },
+          },
+        },
+      },
+    },
+  });
+  const membersValue = totalMembers.toString();
+  const membersSub = `${onlineMembersCount} online`;
+
+  // 5. Boss Today
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const bossKillsToday = await prisma.bossSchedule.count({
+    where: {
+      OR: [
+        { guildId },
+        { guildId: null },
+      ],
+      status: BossEventStatus.KILLED,
+      killedAt: { gte: startOfToday },
+    },
+  });
+
+  const totalBossKills = await prisma.bossSchedule.count({
+    where: {
+      OR: [
+        { guildId },
+        { guildId: null },
+      ],
+      status: BossEventStatus.KILLED,
+    },
+  });
+  const bossTodayValue = bossKillsToday.toString();
+  const bossTodaySub = `${totalBossKills} this season`;
+
+  // 6. Recent Activity Timeline
+  const memberLedger = await prisma.ledgerEntry.findMany({
+    where: {
+      guildId,
+      accountId: userId,
+      accountType: "MEMBER",
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+
+  const guildAudit = await prisma.auditLog.findMany({
+    where: { guildId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+
+  const activities: Array<{
+    type: "CREDIT" | "DEBIT" | "POINTS" | "INFO" | "CONFIG";
+    action: string;
+    detail: string;
+    createdAt: Date;
+  }> = [];
+
+  for (const entry of memberLedger) {
+    if (entry.referenceType === "ATTENDANCE") {
+      activities.push({
+        type: "POINTS",
+        action: "Attendance Check-In",
+        detail: `Earned +${entry.amount.toString()} points for attendance`,
+        createdAt: entry.createdAt,
+      });
+    } else if (entry.entryType === "CREDIT") {
+      const amountFormatted = `${currencySymbol}${(Number(entry.amount) / 100).toFixed(2)}`;
+      activities.push({
+        type: "CREDIT",
+        action: entry.referenceType === "BOSS_KILL" ? "Boss Kill Payout" : "Ledger Credit",
+        detail: entry.description || `Received ${amountFormatted} credit payout`,
+        createdAt: entry.createdAt,
+      });
+    } else {
+      const amountFormatted = `${currencySymbol}${(Number(entry.amount) / 100).toFixed(2)}`;
+      activities.push({
+        type: "DEBIT",
+        action: entry.referenceType === "PAYOUT" ? "Cash Out" : "Ledger Debit",
+        detail: entry.description || `Withdrew ${amountFormatted} from ledger`,
+        createdAt: entry.createdAt,
+      });
+    }
+  }
+
+  for (const log of guildAudit) {
+    if (log.action === "MEMBER_ADDED" || log.action === "GUILD_JOIN_REQUEST_ACCEPTED") {
+      const addedMemberName = (log.detail as any)?.displayName || "New member";
+      activities.push({
+        type: "INFO",
+        action: "Member Joined",
+        detail: `${addedMemberName} joined the guild`,
+        createdAt: log.createdAt,
+      });
+    } else if (log.action.includes("SETTINGS") || log.action.includes("CONFIG")) {
+      activities.push({
+        type: "CONFIG",
+        action: "Settings Updated",
+        detail: "Guild configuration was modified",
+        createdAt: log.createdAt,
+      });
+    } else if (log.action === "BOSS_KILLED_LOGGED" || log.action === "BOSS_KILL_RECORDED") {
+      const bossName = (log.detail as any)?.bossName || "World Boss";
+      activities.push({
+        type: "CREDIT",
+        action: "Boss Defeated",
+        detail: `${bossName} was successfully recorded killed`,
+        createdAt: log.createdAt,
+      });
+    }
+  }
+
+  activities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const formattedActivities = activities.slice(0, 5).map((act) => {
+    const diffMs = Date.now() - act.createdAt.getTime();
+    const diffMins = Math.floor(diffMs / (60 * 1000));
+    const diffHours = Math.floor(diffMs / (3600 * 1000));
+    const diffDays = Math.floor(diffMs / (24 * 3600 * 1000));
+
+    let timeStr = "Just now";
+    if (diffMins > 0 && diffMins < 60) {
+      timeStr = `${diffMins}m ago`;
+    } else if (diffHours > 0 && diffHours < 24) {
+      timeStr = `${diffHours}h ago`;
+    } else if (diffDays === 1) {
+      timeStr = "Yesterday";
+    } else if (diffDays > 1) {
+      timeStr = `${diffDays}d ago`;
+    }
+
+    return {
+      type: act.type,
+      action: act.action,
+      detail: act.detail,
+      time: timeStr,
+    };
+  });
+
+  if (formattedActivities.length === 0) {
+    formattedActivities.push({
+      type: "INFO",
+      action: "Welcome",
+      detail: "Welcome to your guild dashboard!",
+      time: "Just now",
+    });
+  }
+
+  return {
+    balance: {
+      raw: Number(balanceCents) / 100,
+      value: balanceValue,
+      sub: balanceSub,
+      currencySymbol,
+    },
+    guildPoints: {
+      raw: totalPoints,
+      value: guildPointsValue,
+      sub: guildPointsSub,
+    },
+    members: {
+      raw: totalMembers,
+      value: membersValue,
+      sub: membersSub,
+      online: onlineMembersCount,
+    },
+    bossToday: {
+      raw: bossKillsToday,
+      value: bossTodayValue,
+      sub: bossTodaySub,
+      total: totalBossKills,
+    },
+    recentActivity: formattedActivities,
+  };
+}
+
+
+=======
+>>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288

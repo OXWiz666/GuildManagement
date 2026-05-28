@@ -18,11 +18,11 @@ function validateEnv() {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-<<<<<<< HEAD
+
     console.error("Invalid environment variables:");
-=======
+
     console.error("❌ Invalid environment variables:");
->>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288
+
     console.error(result.error.format());
     process.exit(1);
   }

@@ -23,13 +23,13 @@ export const authLimiter = rateLimit({
  * 100 requests per minute per IP.
  */
 export const apiLimiter = rateLimit({
-<<<<<<< HEAD
+
   windowMs:  60 * 1000, // 1 minute
   max: 100, // requests
-=======
+
   windowMs: 60 * 1000, // 1 minute
   max: 100,
->>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288
+
   message: {
     success: false,
     error: {

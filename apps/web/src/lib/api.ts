@@ -47,7 +47,7 @@ async function apiFetch<T = unknown>(
   });
 
   // If 401, try refreshing the token once
-  if (response.status === 401 && !skipAuth && accessToken) {
+  if (response.status === 401 && !skipAuth) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       headers["Authorization"] = `Bearer ${accessToken}`;
@@ -353,6 +353,14 @@ export const guildApi = {
       `/guilds/${guildId}/invite-code`,
     );
   },
+
+  async getSettings(guildId: string) {
+    return api.get<any>(`/guilds/${guildId}/settings`);
+  },
+
+  async updateSettings(guildId: string, payload: any) {
+    return api.patch<any>(`/guilds/${guildId}/settings`, payload);
+  },
 };
 
 // ─── Dashboard-specific API calls (Attendance & Boss Timers) ────
@@ -502,6 +510,51 @@ export const dashboardApi = {
     );
   },
 
+  async updateBossSchedule(
+    guildId: string,
+    scheduleId: string,
+    payload: {
+      bossName?: string;
+      bossImageUrl?: string;
+      spawnTime?: string;
+      location?: string;
+      guildTurn?: string;
+      isFaction?: boolean;
+    },
+  ) {
+    return api.patch<{ schedule: BossScheduleData }>(
+      `/dashboard/boss-schedule/${guildId}/${scheduleId}`,
+      payload,
+    );
+  },
+
+  async deleteBossSchedule(guildId: string, scheduleId: string) {
+    return api.delete<{ success: boolean }>(
+      `/dashboard/boss-schedule/${guildId}/${scheduleId}`,
+    );
+  },
+
+  async updateAttendanceSession(
+    guildId: string,
+    sessionId: string,
+    payload: {
+      title?: string;
+      expiresAt?: string;
+      isActive?: boolean;
+    },
+  ) {
+    return api.patch<{ session: AttendanceSessionData }>(
+      `/dashboard/attendance/session/${guildId}/${sessionId}`,
+      payload,
+    );
+  },
+
+  async deleteAttendanceSession(guildId: string, sessionId: string) {
+    return api.delete<{ success: boolean }>(
+      `/dashboard/attendance/session/${guildId}/${sessionId}`,
+    );
+  },
+
   async getDashboardStats(guildId: string) {
     return api.get<{
       balance: {
@@ -534,6 +587,41 @@ export const dashboardApi = {
         time: string;
       }>;
     }>(`/dashboard/stats/${guildId}`);
+  },
+
+  async addLootSale(
+    guildId: string,
+    payload: {
+      itemName: string;
+      category: string;
+      bossScheduleId?: string | null;
+      saleValue: number;
+      currency: string;
+    },
+  ) {
+    return api.post<any>(`/dashboard/loot-sale/${guildId}`, payload);
+  },
+
+  async getLootSales(guildId: string) {
+    return api.get<any>(`/dashboard/loot-sale/${guildId}`);
+  },
+
+  async getAccountingDashboard(guildId: string, page = 1, limit = 25) {
+    return api.get<any>(`/dashboard/accounting/${guildId}?page=${page}&limit=${limit}`);
+  },
+
+  async addTreasuryAdjustment(
+    guildId: string,
+    payload: {
+      accountId: string;
+      accountType: "MEMBER" | "GUILD_FUND" | "TAX";
+      entryType: "CREDIT" | "DEBIT";
+      amount: number;
+      currency: string;
+      description: string;
+    },
+  ) {
+    return api.post<any>(`/dashboard/accounting/adjustment/${guildId}`, payload);
   },
 };
 

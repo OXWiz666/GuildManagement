@@ -22,5 +22,6 @@ export type {
   AttendanceSession,
   AttendanceRecord,
   BossSchedule,
+  LootSale,
 } from "@prisma/client";
 

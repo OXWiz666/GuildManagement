@@ -146,6 +146,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // 5 minutes inactive automatic logout
+  useEffect(() => {
+    if (!user) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        console.log("Inactivity logout triggered (5 minutes inactive)");
+        logout();
+      }, 5 * 60 * 1000); // 5 minutes
+    };
+
+    // Events to track user activity
+    const activityEvents = [
+      "mousedown",
+      "mousemove",
+      "keypress",
+      "scroll",
+      "touchstart",
+    ];
+
+    // Start timer on mount
+    resetTimer();
+
+    // Register event listeners
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [user, logout]);
+
   return (
     <AuthContext.Provider
       value={{

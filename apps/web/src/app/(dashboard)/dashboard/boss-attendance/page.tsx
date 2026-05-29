@@ -20,6 +20,7 @@ import TimelineSpawns from "./components/TimelineSpawns";
 import VerificationQueue from "./components/VerificationQueue";
 import CheckInModal from "./components/CheckInModal";
 import CreateSessionModal from "./components/CreateSessionModal";
+import EditSessionModal from "./components/EditSessionModal";
 
 interface AttendanceStats {
   presenceRate: number;
@@ -58,6 +59,10 @@ export default function BossAttendancePage() {
   const [sessionType, setSessionType] = useState<"GUILD" | "FACTION">("GUILD");
   const [isGeneratingSession, setIsGeneratingSession] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+
+  // Officer Session Editing State
+  const [showEditSessionModal, setShowEditSessionModal] = useState<AttendanceSessionData | null>(null);
+  const [isEditingSession, setIsEditingSession] = useState(false);
 
   // Officer Verification Queue State
   const [selectedActiveSession, setSelectedActiveSession] = useState<AttendanceSessionData | null>(null);
@@ -190,6 +195,51 @@ export default function BossAttendancePage() {
       addToast("error", err?.message || "Failed to create attendance session");
     } finally {
       setIsGeneratingSession(false);
+    }
+  };
+
+  // Edit attendance session (Officer)
+  const handleEditSession = async (title: string, minutes: number, isActive: boolean) => {
+    if (!activeGuild || !showEditSessionModal) return;
+
+    setIsEditingSession(true);
+    try {
+      const expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+      const result = await dashboardApi.updateAttendanceSession(
+        activeGuild.guildId,
+        showEditSessionModal.id,
+        { title, expiresAt, isActive }
+      );
+
+      if (result.success) {
+        addToast("success", "Attendance session updated successfully!");
+        setShowEditSessionModal(null);
+        await loadData();
+        await loadPendingRecords();
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to update attendance session");
+    } finally {
+      setIsEditingSession(false);
+    }
+  };
+
+  // Delete attendance session (Officer)
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!activeGuild) return;
+    if (!window.confirm("Are you sure you want to delete this attendance session? All pending check-in requests for this session will be removed.")) return;
+
+    try {
+      const result = await dashboardApi.deleteAttendanceSession(activeGuild.guildId, sessionId);
+      if (result.success) {
+        addToast("success", "Attendance session deleted successfully!");
+        setSelectedActiveSession(null);
+        setPendingRecords([]);
+        await loadData();
+        await loadPendingRecords();
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to delete attendance session");
     }
   };
 
@@ -569,6 +619,8 @@ export default function BossAttendancePage() {
             isVerifying={isVerifying}
             handleApproveAll={handleApproveAll}
             handleVerifyPresence={handleVerifyPresence}
+            onEditSession={(session) => setShowEditSessionModal(session)}
+            onDeleteSession={handleDeleteSession}
           />
         )}
 
@@ -595,6 +647,15 @@ export default function BossAttendancePage() {
           onClose={() => setShowCreateSessionModal(null)}
           setGeneratedCode={setGeneratedCode}
           addToast={addToast}
+        />
+
+        {/* Modal: Edit Raid Attendance */}
+        <EditSessionModal
+          showModal={!!showEditSessionModal}
+          onClose={() => setShowEditSessionModal(null)}
+          session={showEditSessionModal}
+          isSubmitting={isEditingSession}
+          handleEditSession={handleEditSession}
         />
       </div>
     </div>

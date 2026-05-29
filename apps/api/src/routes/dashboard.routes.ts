@@ -3,8 +3,10 @@ import type { Request, Response, NextFunction } from "express";
 import { requireAuth } from "../middleware/auth";
 import { requireGuildRole } from "../middleware/rbac";
 import * as dashboardService from "../services/dashboard.service";
+import * as lootService from "../services/loot.service";
 import type { ApiResponse } from "@guild/shared";
 import { AttendanceType } from "@guild/db";
+import { cache } from "../lib/cache";
 
 const router: Router = Router();
 
@@ -202,10 +204,19 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
+      const cacheKey = `stats:${guildId}:user:${req.user!.userId}`;
+
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
       const stats = await dashboardService.getDashboardSummary(
         guildId,
         req.user!.userId,
       );
+
+      await cache.set(cacheKey, stats, 30); // Cache for 30 seconds
 
       const response: ApiResponse = {
         success: true,
@@ -227,7 +238,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
-      const schedules = await dashboardService.getBossSchedules(guildId);
+      const schedules = await dashboardService.getBossSchedules(guildId, req.user?.userId);
 
       const response: ApiResponse = {
         success: true,
@@ -352,6 +363,319 @@ router.get(
       const response: ApiResponse = {
         success: true,
         data: { bosses },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Edit boss schedule event
+router.patch(
+  "/boss-schedule/:guildId/:scheduleId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const scheduleId = req.params['scheduleId'] as string;
+      const payload = req.body as {
+        bossName?: string;
+        bossImageUrl?: string;
+        spawnTime?: string;
+        location?: string;
+        guildTurn?: string;
+        isFaction?: boolean;
+      };
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const schedule = await dashboardService.updateBossSchedule(
+        guildId,
+        scheduleId,
+        payload,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: { schedule },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Delete boss schedule event
+router.delete(
+  "/boss-schedule/:guildId/:scheduleId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const scheduleId = req.params['scheduleId'] as string;
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const result = await dashboardService.deleteBossSchedule(
+        guildId,
+        scheduleId,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Edit attendance session
+router.patch(
+  "/attendance/session/:guildId/:sessionId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const sessionId = req.params['sessionId'] as string;
+      const payload = req.body as {
+        title?: string;
+        expiresAt?: string;
+        isActive?: boolean;
+      };
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const session = await dashboardService.updateAttendanceSession(
+        guildId,
+        sessionId,
+        payload,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: { session },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Delete attendance session
+router.delete(
+  "/attendance/session/:guildId/:sessionId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const sessionId = req.params['sessionId'] as string;
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const result = await dashboardService.deleteAttendanceSession(
+        guildId,
+        sessionId,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ─── Loot Sales Endpoints ────────────────────────
+
+// Record a new loot sale and split proceeds
+router.post(
+  "/loot-sale/:guildId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const { itemName, category, bossScheduleId, saleValue, currency } = req.body as {
+        itemName: string;
+        category: string;
+        bossScheduleId?: string | null;
+        saleValue: number; // in floating decimal standard format (e.g. 100.00)
+        currency: string;
+      };
+
+      if (!itemName || !category || !saleValue || isNaN(Number(saleValue))) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Missing item name, category, or invalid sale value",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const centsValue = BigInt(Math.round(saleValue * 100));
+
+      const sale = await lootService.createLootSale({
+        guildId,
+        bossScheduleId,
+        itemName,
+        category,
+        saleValue: centsValue,
+        currency,
+        creatorId: req.user!.userId,
+      });
+
+      // Invalidate caches concurrently
+      await Promise.all([
+        cache.invalidatePattern(`accounting:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+        cache.invalidatePattern(`loot:${guildId}:*`),
+      ]);
+
+      const response: ApiResponse = {
+        success: true,
+        data: { sale },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Get sold items list
+router.get(
+  "/loot-sale/:guildId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const cacheKey = `loot:${guildId}:sales`;
+
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
+      const sales = await lootService.getLootSales(guildId);
+      const data = { sales };
+
+      await cache.set(cacheKey, data, 120); // Cache for 2 minutes
+
+      const response: ApiResponse = {
+        success: true,
+        data,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ─── Accounting Endpoints ────────────────────────
+
+// Get ledger treasury accounting stats & balances
+router.get(
+  "/accounting/:guildId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 25;
+      
+      const cacheKey = `accounting:${guildId}:p${page}:l${limit}`;
+
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
+      const data = await dashboardService.getAccountingDashboard(guildId, req.user!.userId, page, limit);
+
+      await cache.set(cacheKey, data, 60); // Cache for 60 seconds
+
+      const response: ApiResponse = {
+        success: true,
+        data,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Record manual treasury debit/credit adjustment
+router.post(
+  "/accounting/adjustment/:guildId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const payload = req.body as {
+        accountId: string;
+        accountType: "MEMBER" | "GUILD_FUND" | "TAX";
+        entryType: "CREDIT" | "DEBIT";
+        amount: number;
+        currency: string;
+        description: string;
+      };
+
+      if (!payload.accountId || !payload.accountType || !payload.entryType || !payload.amount || !payload.currency || !payload.description) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Missing dynamic transaction details",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const entry = await dashboardService.createTreasuryAdjustment(
+        guildId,
+        payload,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      // Invalidate caches concurrently
+      await Promise.all([
+        cache.invalidatePattern(`accounting:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
+      const response: ApiResponse = {
+        success: true,
+        data: { entry },
       };
       res.json(response);
     } catch (error) {

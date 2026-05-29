@@ -73,6 +73,7 @@ model Session {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([userId])
+  @@index([lastActive])
   @@map("sessions")
 }
 
@@ -112,6 +113,7 @@ model Guild {
   joinRequests  GuildJoinRequest[]
   attendanceSessions AttendanceSession[]
   bossSchedules      BossSchedule[]
+  lootSales          LootSale[]
 
   @@map("guilds")
 }
@@ -219,6 +221,9 @@ model LedgerEntry {
   @@index([guildId])
   @@index([referenceType, referenceId])
   @@index([createdAt])
+  @@index([guildId, accountType, entryType, currency])
+  @@index([guildId, accountId, accountType, referenceType])
+  @@index([guildId, accountId, accountType, entryType, currency])
   @@map("ledger_entries")
 }
 
@@ -324,6 +329,7 @@ model AttendanceSession {
   bossSchedule   BossSchedule?     @relation(fields: [bossScheduleId], references: [id], onDelete: SetNull)
 
   @@index([guildId])
+  @@index([bossScheduleId])
   @@map("attendance_sessions")
 }
 
@@ -359,8 +365,12 @@ model BossSchedule {
 
   lootDrop           String?             @map("loot_drop")
   screenshotUrl      String?             @map("screenshot_url")
+  lootSales          LootSale[]
 
   @@index([guildId])
+  @@index([spawnTime])
+  @@index([status])
+  @@index([guildId, status, killedAt])
   @@map("boss_schedules")
 }
 
@@ -376,5 +386,27 @@ model Boss {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@map("bosses")
+}
+
+model LootSale {
+  id                String        @id @default(cuid())
+  guildId           String        @map("guild_id")
+  guild             Guild         @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  bossScheduleId    String?       @map("boss_schedule_id")
+  bossSchedule      BossSchedule? @relation(fields: [bossScheduleId], references: [id], onDelete: SetNull)
+  itemName          String        @map("item_name")
+  category          String        // e.g. "WEAPON", "ARMOR", "ACCESSORY", "MATERIAL", "SCROLL", "OTHER"
+  saleValue         BigInt        @map("sale_value") // Integer cents
+  taxRatePercent    Int           @map("tax_rate_percent")
+  taxAmount         BigInt        @map("tax_amount") // Integer cents
+  netProfit         BigInt        @map("net_profit") // Integer cents
+  distributionModel String        @map("distribution_model") // "PRO_RATA", "EQUAL", "DKP"
+  currency          String        @default("PHP")
+  creatorId         String        @map("creator_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([guildId])
+  @@index([bossScheduleId])
+  @@map("loot_sales")
 }
 

@@ -322,7 +322,7 @@ export async function confirmAttendanceRecord(
 
 // ─── Boss schedules & Calendar systems ───────────
 
-export async function getBossSchedules(guildId: string) {
+export async function getBossSchedules(guildId: string, requestingUserId?: string) {
   // Retrieve combining both guild-specific events AND unified faction-wide events (guildId: null)
   const schedules = await prisma.bossSchedule.findMany({
     where: {
@@ -334,9 +334,13 @@ export async function getBossSchedules(guildId: string) {
     include: {
       attendanceSessions: {
         include: {
-          records: true
-        }
-      }
+          records: requestingUserId
+            ? {
+                where: { userId: requestingUserId },
+              }
+            : true,
+        },
+      },
     },
     orderBy: { spawnTime: "asc" },
   });
@@ -482,22 +486,9 @@ export async function logBossKill(
     },
   });
 
-  // Automatically calculate next spawn and schedule it in the calendar
+  // Automatically calculate next spawn for audit logging (do not create schedule)
   const killDate = new Date(killedAt);
   const nextSpawnTime = getNextBossSpawnTime(schedule.bossName, killDate);
-
-  await prisma.bossSchedule.create({
-    data: {
-      guildId: schedule.guildId, // Maintains the same guild or faction unified scope
-      bossName: schedule.bossName,
-      bossImageUrl: schedule.bossImageUrl,
-      location: schedule.location,
-      guildTurn: schedule.guildTurn,
-      status: BossEventStatus.UPCOMING,
-      spawnTime: nextSpawnTime,
-      creatorId: actorId,
-    },
-  });
 
   await writeAuditLog({
     actorId,
@@ -517,6 +508,235 @@ export async function logBossKill(
   });
 
   return updatedEvent;
+}
+
+export async function updateBossSchedule(
+  guildId: string,
+  scheduleId: string,
+  payload: {
+    bossName?: string;
+    bossImageUrl?: string;
+    spawnTime?: string;
+    location?: string;
+    guildTurn?: string;
+    isFaction?: boolean;
+  },
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  // Validate actor is Guild Leader or Officer
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "ALLIANCE_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can edit schedules");
+  }
+
+  const schedule = await prisma.bossSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw new NotFoundError("Boss schedule not found");
+  }
+
+  // Faction (null) events or guild-specific events can be edited
+  if (schedule.guildId && schedule.guildId !== guildId) {
+    throw new ForbiddenError("You cannot edit another guild's schedule");
+  }
+
+  // Faction Leader check for guildTurn
+  const isFactionLeader = actorMembership.role === "ALLIANCE_LEADER" || actorMembership.role === "ADMIN";
+  let resolvedGuildTurn = payload.guildTurn;
+  if (!isFactionLeader) {
+    // If not faction leader, do not allow changing or adding guild turn
+    resolvedGuildTurn = schedule.guildTurn || undefined;
+  }
+
+  const updatedEvent = await prisma.bossSchedule.update({
+    where: { id: scheduleId },
+    data: {
+      bossName: payload.bossName,
+      bossImageUrl: payload.bossImageUrl,
+      spawnTime: payload.spawnTime ? new Date(payload.spawnTime) : undefined,
+      location: payload.location,
+      guildTurn: isFactionLeader ? payload.guildTurn : resolvedGuildTurn,
+      guildId: payload.isFaction ? null : (payload.isFaction === false ? guildId : undefined),
+    },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_EVENT_UPDATED",
+    target: "BossSchedule",
+    targetId: scheduleId,
+    detail: { ...payload },
+    ipAddress,
+    userAgent,
+  });
+
+  return updatedEvent;
+}
+
+export async function deleteBossSchedule(
+  guildId: string,
+  scheduleId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  // Validate actor is Guild Leader or Officer
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "ALLIANCE_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can delete schedules");
+  }
+
+  const schedule = await prisma.bossSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw new NotFoundError("Boss schedule not found");
+  }
+
+  if (schedule.guildId && schedule.guildId !== guildId) {
+    throw new ForbiddenError("You cannot delete another guild's schedule");
+  }
+
+  await prisma.bossSchedule.delete({
+    where: { id: scheduleId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_EVENT_DELETED",
+    target: "BossSchedule",
+    targetId: scheduleId,
+    detail: { bossName: schedule.bossName },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true };
+}
+
+export async function updateAttendanceSession(
+  guildId: string,
+  sessionId: string,
+  payload: {
+    title?: string;
+    expiresAt?: string;
+    isActive?: boolean;
+  },
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "ALLIANCE_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can edit attendance sessions");
+  }
+
+  const session = await prisma.attendanceSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!session || session.guildId !== guildId) {
+    throw new NotFoundError("Attendance session not found");
+  }
+
+  const updatedSession = await prisma.attendanceSession.update({
+    where: { id: sessionId },
+    data: {
+      title: payload.title,
+      expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : undefined,
+      isActive: payload.isActive,
+    },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "ATTENDANCE_SESSION_UPDATED",
+    target: "AttendanceSession",
+    targetId: sessionId,
+    detail: { ...payload },
+    ipAddress,
+    userAgent,
+  });
+
+  return updatedSession;
+}
+
+export async function deleteAttendanceSession(
+  guildId: string,
+  sessionId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "ALLIANCE_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can delete attendance sessions");
+  }
+
+  const session = await prisma.attendanceSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!session || session.guildId !== guildId) {
+    throw new NotFoundError("Attendance session not found");
+  }
+
+  await prisma.attendanceSession.delete({
+    where: { id: sessionId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "ATTENDANCE_SESSION_DELETED",
+    target: "AttendanceSession",
+    targetId: sessionId,
+    detail: { title: session.title },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true };
 }
 
 export async function getBosses() {
@@ -600,7 +820,6 @@ export async function getMemberAttendanceStats(guildId: string, userId: string) 
   };
 }
 
-<<<<<<< HEAD
 export async function getDashboardSummary(guildId: string, userId: string) {
   // Verify membership
   const membership = await prisma.guildMember.findUnique({
@@ -880,6 +1099,305 @@ export async function getDashboardSummary(guildId: string, userId: string) {
   };
 }
 
+export async function getAccountingDashboard(guildId: string, actorId: string, page: number = 1, limit: number = 25) {
+  // Validate actor is Guild Leader, Officer, or Faction Leader
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
 
-=======
->>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288
+  if (!actorMembership || !actorMembership.isActive) {
+    throw new ForbiddenError("You must be an active member of this guild to view accounting");
+  }
+
+  const settings = await prisma.guildSettings.findUnique({
+    where: { guildId },
+  });
+
+  const currencySymbol = settings?.currencySymbol || "₱";
+  const currencyCode = settings?.currencyCode || "PHP";
+  const secondarySymbol = settings?.secondaryCurrencySymbol || "💎";
+  const secondaryCode = settings?.secondaryCurrencyCode || "DIAMOND";
+
+  // 1. Fetch treasury balances
+  // A. Guild Treasury Balance
+  const fundCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "CREDIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const fundDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "DEBIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const fundBalanceCents = (fundCreditsSum._sum.amount || 0n) - (fundDebitsSum._sum.amount || 0n);
+
+  // B. Guild Tax Balance
+  const taxCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "CREDIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const taxDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "DEBIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const taxBalanceCents = (taxCreditsSum._sum.amount || 0n) - (taxDebitsSum._sum.amount || 0n);
+
+  // C. Total Expenses
+  const expensesSum = await prisma.ledgerEntry.aggregate({
+    where: {
+      guildId,
+      entryType: "DEBIT",
+      currency: currencyCode,
+      accountType: { in: ["GUILD_FUND", "TAX"] },
+    },
+    _sum: { amount: true },
+  });
+  const totalExpensesCents = expensesSum._sum.amount || 0n;
+
+  // Secondary Currency Treasury
+  const secFundCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "CREDIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secFundDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "DEBIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secFundBalanceCents = (secFundCreditsSum._sum.amount || 0n) - (secFundDebitsSum._sum.amount || 0n);
+
+  const secTaxCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "CREDIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secTaxDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "DEBIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secTaxBalanceCents = (secTaxCreditsSum._sum.amount || 0n) - (secTaxDebitsSum._sum.amount || 0n);
+
+  const secExpensesSum = await prisma.ledgerEntry.aggregate({
+    where: {
+      guildId,
+      entryType: "DEBIT",
+      currency: secondaryCode,
+      accountType: { in: ["GUILD_FUND", "TAX"] },
+    },
+    _sum: { amount: true },
+  });
+  const secExpensesCents = secExpensesSum._sum.amount || 0n;
+
+  // 2. Member Balance Board - OPTIMIZED O(1) BATCH QUERIES
+  const members = await prisma.guildMember.findMany({
+    where: { guildId, isActive: true },
+    include: {
+      user: {
+        select: {
+          id: true,
+          displayName: true,
+          email: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  });
+
+  // A. Fetch DKP points for all guild members in a single query
+  const dkpAggregates = await prisma.ledgerEntry.groupBy({
+    by: ["accountId"],
+    where: {
+      guildId,
+      accountType: "MEMBER",
+      referenceType: "ATTENDANCE",
+    },
+    _sum: { amount: true },
+  });
+
+  const memberDkpMap: Record<string, number> = {};
+  for (const row of dkpAggregates) {
+    memberDkpMap[row.accountId] = Number(row._sum.amount || 0n);
+  }
+
+  // B. Fetch credits and debits for ALL members and ALL currencies in a single query
+  const balanceAggregates = await prisma.ledgerEntry.groupBy({
+    by: ["accountId", "entryType", "currency"],
+    where: {
+      guildId,
+      accountType: "MEMBER",
+    },
+    _sum: { amount: true },
+  });
+
+  // memberBalancesMap[userId][currencyCode][entryType] = amount
+  const memberBalancesMap: Record<string, Record<string, { CREDIT: bigint; DEBIT: bigint }>> = {};
+
+  for (const row of balanceAggregates) {
+    const userId = row.accountId;
+    const currency = row.currency;
+    const entryType = row.entryType as "CREDIT" | "DEBIT";
+    const amount = row._sum.amount || 0n;
+
+    if (!memberBalancesMap[userId]) {
+      memberBalancesMap[userId] = {};
+    }
+    if (!memberBalancesMap[userId][currency]) {
+      memberBalancesMap[userId][currency] = { CREDIT: 0n, DEBIT: 0n };
+    }
+    memberBalancesMap[userId][currency][entryType] = amount;
+  }
+
+  const memberBalances = members.map((m) => {
+    const userId = m.userId;
+    const dkp = memberDkpMap[userId] || 0;
+
+    // Primary Currency Balance
+    const prim = memberBalancesMap[userId]?.[currencyCode] || { CREDIT: 0n, DEBIT: 0n };
+    const balance = Number(prim.CREDIT - prim.DEBIT) / 100;
+    const totalEarned = Number(prim.CREDIT) / 100;
+
+    // Secondary Currency Balance
+    const sec = memberBalancesMap[userId]?.[secondaryCode] || { CREDIT: 0n, DEBIT: 0n };
+    const secBalance = Number(sec.CREDIT - sec.DEBIT) / 100;
+    const secTotalEarned = Number(sec.CREDIT) / 100;
+
+    return {
+      memberId: m.id,
+      userId: m.userId,
+      ign: m.ign || m.user.displayName,
+      role: m.role,
+      rankName: m.rankName,
+      cp: m.cp || 0,
+      class: m.class || "Unknown",
+      dkp,
+      balance,
+      totalEarned,
+      secBalance,
+      secTotalEarned,
+      user: m.user,
+    };
+  });
+
+  // 3. Paginated Transaction Ledger history
+  const totalTransactions = await prisma.ledgerEntry.count({
+    where: { guildId },
+  });
+
+  const skip = (page - 1) * limit;
+  const take = limit;
+
+  const ledgerHistory = await prisma.ledgerEntry.findMany({
+    where: { guildId },
+    orderBy: { createdAt: "desc" },
+    skip,
+    take,
+  });
+
+  const formattedHistory = ledgerHistory.map((item) => ({
+    id: item.id,
+    accountType: item.accountType,
+    accountId: item.accountId,
+    currency: item.currency,
+    amount: Number(item.amount) / 100,
+    entryType: item.entryType,
+    referenceType: item.referenceType,
+    referenceId: item.referenceId,
+    description: item.description,
+    createdAt: item.createdAt.toISOString(),
+  }));
+
+  return {
+    treasury: {
+      primary: {
+        currencyCode,
+        currencySymbol,
+        fundBalance: Number(fundBalanceCents) / 100,
+        taxBalance: Number(taxBalanceCents) / 100,
+        totalExpenses: Number(totalExpensesCents) / 100,
+      },
+      secondary: {
+        currencyCode: secondaryCode,
+        currencySymbol: secondarySymbol,
+        fundBalance: Number(secFundBalanceCents) / 100,
+        taxBalance: Number(secTaxBalanceCents) / 100,
+        totalExpenses: Number(secExpensesCents) / 100,
+      },
+    },
+    memberBalances,
+    transactions: formattedHistory,
+    pagination: {
+      page,
+      limit,
+      total: totalTransactions,
+      totalPages: Math.ceil(totalTransactions / limit),
+    },
+  };
+}
+
+export async function createTreasuryAdjustment(
+  guildId: string,
+  payload: {
+    accountId: string; // userId or guildId
+    accountType: "MEMBER" | "GUILD_FUND" | "TAX";
+    entryType: "CREDIT" | "DEBIT";
+    amount: number; // in floating decimal standard format (e.g. 150.50)
+    currency: string;
+    description: string;
+  },
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  // Validate actor is Guild Leader, Officer, or Faction Leader
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "ALLIANCE_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can make treasury adjustments");
+  }
+
+  const centsAmount = BigInt(Math.round(payload.amount * 100));
+  const idKey = `ADJ-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
+
+  const entry = await createLedgerEntry({
+    guildId,
+    accountType: payload.accountType,
+    accountId: payload.accountId,
+    currency: payload.currency,
+    amount: centsAmount,
+    entryType: payload.entryType,
+    referenceType: "MANUAL_ADJUSTMENT",
+    referenceId: idKey,
+    idempotencyKey: idKey,
+    actorId,
+    description: payload.description,
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "TREASURY_ADJUSTMENT",
+    target: "LedgerEntry",
+    targetId: entry.id,
+    detail: {
+      accountId: payload.accountId,
+      accountType: payload.accountType,
+      entryType: payload.entryType,
+      amount: payload.amount.toString(),
+      currency: payload.currency,
+      description: payload.description,
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  return entry;
+}

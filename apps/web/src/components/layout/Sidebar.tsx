@@ -12,6 +12,13 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+interface NavItem {
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  roles?: string[];
+}
+
 const navItems = [
   {
     label: "Overview",
@@ -69,9 +76,9 @@ const navItems = [
       </svg>
     ),
   },
-    {
-    label: "Item Distribution",
-    href: "/dashboard/item-distribution",
+  {
+    label: "Guild Market",
+    href: "/dashboard/guild-market",
     icon: (
       <svg className="h-[20px] w-[20px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
@@ -79,6 +86,27 @@ const navItems = [
         <line x1="12" y1="22.08" x2="12" y2="12" />
       </svg>
     ),
+  },
+  {
+    label: "Officer Panel",
+    href: "/dashboard/officer-panel",
+    icon: (
+      <svg className="h-[20px] w-[20px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    ),
+    roles: ["OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"],
+  },
+  {
+    label: "Leader Panel",
+    href: "/dashboard/leader-panel",
+    icon: (
+      <svg className="h-[20px] w-[20px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z" />
+        <path d="M3 20h18" />
+      </svg>
+    ),
+    roles: ["GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"],
   },
   {
     label: "Settings",
@@ -174,11 +202,19 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.12em] px-3 mb-3">
             Menu
           </p>
-          {navItems.map((item) => {
+          {navItems.map((item: NavItem) => {
             const hasNoGuild = user?.guilds && user.guilds.length === 0;
             if (hasNoGuild && item.href !== "/dashboard" && item.href !== "/dashboard/settings") {
               return null;
             }
+
+            // Role requirement filter
+            const activeGuild = user?.guilds?.[0];
+            const activeRole = activeGuild?.role;
+            if (item.roles && (!activeRole || !item.roles.includes(activeRole))) {
+              return null;
+            }
+
             const isActive =
               item.href === "/dashboard"
                 ? pathname === "/dashboard"

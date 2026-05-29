@@ -278,3 +278,73 @@ export async function updateMemberRole(
     user: updated.user,
   };
 }
+
+export async function getGuildSettings(guildId: string) {
+  const settings = await prisma.guildSettings.findUnique({
+    where: { guildId },
+  });
+  if (!settings) {
+    throw new NotFoundError("Guild settings not found");
+  }
+  return settings;
+}
+
+export async function updateGuildSettings(
+  guildId: string,
+  payload: {
+    taxRatePercent?: number;
+    attendancePoints?: number;
+    bossKillPoints?: number;
+    rankMultipliers?: Record<string, number>;
+    activeShareModel?: string;
+    currencyCode?: string;
+    currencySymbol?: string;
+    secondaryCurrencyCode?: string | null;
+    secondaryCurrencySymbol?: string | null;
+  },
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  // Validate actor is Guild Leader, Officer, or Faction Leader
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "ALLIANCE_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can update settings");
+  }
+
+  const updated = await prisma.guildSettings.update({
+    where: { guildId },
+    data: {
+      taxRatePercent: payload.taxRatePercent,
+      attendancePoints: payload.attendancePoints,
+      bossKillPoints: payload.bossKillPoints,
+      rankMultipliers: payload.rankMultipliers || undefined,
+      activeShareModel: payload.activeShareModel,
+      currencyCode: payload.currencyCode,
+      currencySymbol: payload.currencySymbol,
+      secondaryCurrencyCode: payload.secondaryCurrencyCode,
+      secondaryCurrencySymbol: payload.secondaryCurrencySymbol,
+    },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "GUILD_SETTINGS_UPDATED",
+    target: "GuildSettings",
+    targetId: updated.id,
+    detail: { ...payload },
+    ipAddress,
+    userAgent,
+  });
+
+  return updated;
+}

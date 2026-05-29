@@ -21,6 +21,7 @@ import ActiveSpawnsQueue from "./components/ActiveSpawnsQueue";
 import KilledBossHistory from "./components/KilledBossHistory";
 import AddScheduleModal from "./components/AddScheduleModal";
 import LogKillModal from "./components/LogKillModal";
+import BossRespawnList from "./components/BossRespawnList";
 
 export default function BossSchedulePage() {
   const { user } = useAuth();
@@ -37,15 +38,8 @@ export default function BossSchedulePage() {
 
   // Add Event Form State
   const [showAddModal, setShowAddModal] = useState(false);
-  const [bossName, setBossName] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [bossImageUrl, setBossImageUrl] = useState("");
   const [spawnDate, setSpawnDate] = useState("");
   const [spawnTime, setSpawnTime] = useState("");
-  const [location, setLocation] = useState("");
-  const [guildTurn, setGuildTurn] = useState("");
-  const [isFactionWide, setIsFactionWide] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Log Kill Form State
@@ -58,7 +52,11 @@ export default function BossSchedulePage() {
 
   const activeGuild = user?.guilds?.[0];
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
-  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader;
+  const isFactionLeader = activeGuild?.role === "ALLIANCE_LEADER" || activeGuild?.role === "ADMIN";
+  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader || isFactionLeader;
+
+  // State for single editing event
+  const [editingEvent, setEditingEvent] = useState<BossScheduleData | null>(null);
 
   // Sync clocks every second
   useEffect(() => {
@@ -97,83 +95,88 @@ export default function BossSchedulePage() {
     loadBosses();
   }, [loadSchedules, loadBosses]);
 
-  // Auto-resolve spawn time for fixed schedule bosses
-  useEffect(() => {
-    if (!bossName || !spawnDate) return;
-    const selectedBoss = bosses.find((b) => b.name.toLowerCase() === bossName.toLowerCase());
-    if (selectedBoss && selectedBoss.type === "FIXED_SCHEDULE" && selectedBoss.fixedSpawns) {
-      const dateParts = spawnDate.split("-");
-      if (dateParts.length === 3) {
-        const year = parseInt(dateParts[0], 10);
-        const month = parseInt(dateParts[1], 10) - 1;
-        const day = parseInt(dateParts[2], 10);
-        const targetDate = new Date(year, month, day);
-        const dayOfWeek = targetDate.getDay();
-
-        let spawnsArray: Array<{ day: number; hour: number; minute: number }> = [];
-        try {
-          if (typeof selectedBoss.fixedSpawns === "string") {
-            spawnsArray = JSON.parse(selectedBoss.fixedSpawns);
-          } else if (Array.isArray(selectedBoss.fixedSpawns)) {
-            spawnsArray = selectedBoss.fixedSpawns;
-          }
-        } catch (e) {
-          spawnsArray = [];
-        }
-
-        const match = spawnsArray.find((s) => s.day === dayOfWeek);
-        if (match) {
-          const hh = String(match.hour).padStart(2, "0");
-          const mm = String(match.minute).padStart(2, "0");
-          setSpawnTime(`${hh}:${mm}`);
-        } else if (spawnsArray.length > 0) {
-          const first = spawnsArray[0];
-          const hh = String(first.hour).padStart(2, "0");
-          const mm = String(first.minute).padStart(2, "0");
-          setSpawnTime(`${hh}:${mm}`);
-        }
-      }
-    }
-  }, [bossName, spawnDate, bosses]);
-
-  // Submit new boss schedule
-  async function handleAddSchedule(e: React.FormEvent) {
-    e.preventDefault();
-    if (!activeGuild || !bossName.trim() || !spawnDate || !spawnTime || !location.trim()) {
-      addToast("error", "Please fill in all event details");
-      return;
-    }
-
+  // Submit new boss schedule batch
+  async function handleAddScheduleBatch(
+    spawnDate: string,
+    isFactionWide: boolean,
+    items: Array<{
+      bossName: string;
+      bossImageUrl?: string;
+      spawnTime: string;
+      location: string;
+      guildTurn?: string;
+    }>
+  ) {
+    if (!activeGuild || items.length === 0) return;
     setIsSubmitting(true);
     try {
-      const fullSpawnTime = new Date(`${spawnDate}T${spawnTime}:00`);
-      const result = await dashboardApi.addBossSchedule(activeGuild.guildId, {
-        bossName: bossName.trim(),
-        bossImageUrl: bossImageUrl.trim() || undefined,
-        spawnTime: fullSpawnTime.toISOString(),
-        location: location.trim(),
-        guildTurn: guildTurn.trim() || undefined,
-        isFaction: isFactionWide,
-      });
+      let succeeded = 0;
+      for (const item of items) {
+        const result = await dashboardApi.addBossSchedule(activeGuild.guildId, {
+          bossName: item.bossName,
+          bossImageUrl: item.bossImageUrl,
+          spawnTime: item.spawnTime,
+          location: item.location,
+          guildTurn: item.guildTurn,
+          isFaction: isFactionWide,
+        });
+        if (result.success) {
+          succeeded++;
+        }
+      }
 
+      addToast("success", `Successfully scheduled ${succeeded} boss spawn(s)!`);
+      setShowAddModal(false);
+      await loadSchedules();
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to add boss schedule batch");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // Edit boss schedule handler
+  async function handleEditSchedule(
+    scheduleId: string,
+    payload: {
+      bossName?: string;
+      bossImageUrl?: string;
+      spawnTime?: string;
+      location?: string;
+      guildTurn?: string;
+      isFaction?: boolean;
+    }
+  ) {
+    if (!activeGuild) return;
+    setIsSubmitting(true);
+    try {
+      const result = await dashboardApi.updateBossSchedule(activeGuild.guildId, scheduleId, payload);
       if (result.success) {
-        addToast("success", `Scheduled ${bossName} spawn successfully!`);
+        addToast("success", "Boss schedule updated successfully!");
         setShowAddModal(false);
-        // Reset form
-        setBossName("");
-        setSearchQuery("");
-        setBossImageUrl("");
-        setSpawnDate("");
-        setSpawnTime("");
-        setLocation("");
-        setGuildTurn("");
-        setIsFactionWide(false);
+        setEditingEvent(null);
         await loadSchedules();
       }
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to add boss schedule");
+      addToast("error", err?.message || "Failed to update boss schedule");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  // Delete boss schedule handler
+  async function handleDeleteSchedule(scheduleId: string) {
+    if (!activeGuild) return;
+    if (!window.confirm("Are you sure you want to delete this scheduled boss fight? This will also remove any check-in data.")) return;
+
+    try {
+      const result = await dashboardApi.deleteBossSchedule(activeGuild.guildId, scheduleId);
+      if (result.success) {
+        addToast("success", "Boss schedule deleted successfully!");
+        await loadSchedules();
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to delete boss schedule");
     }
   }
 
@@ -193,7 +196,7 @@ export default function BossSchedulePage() {
         screenshotUrl.trim() || undefined
       );
       if (result.success) {
-        let successMsg = `Boss kill logged for ${showKillModal.bossName}! Next spawn auto-scheduled.`;
+        let successMsg = `Boss kill logged for ${showKillModal.bossName}! Expected respawn timer updated.`;
         if (broadcastDiscord) {
           successMsg += " Discord webhook notification broadcasted! 📡";
         }
@@ -429,6 +432,11 @@ export default function BossSchedulePage() {
             isOfficer={isOfficer}
             setShowKillModal={setShowKillModal}
             setKillTimeInput={setKillTimeInput}
+            onEditSchedule={(item) => {
+              setEditingEvent(item);
+              setShowAddModal(true);
+            }}
+            onDeleteSchedule={handleDeleteSchedule}
           />
 
           {/* Upcoming Active Spawns Countdown Tracker Panel */}
@@ -443,32 +451,29 @@ export default function BossSchedulePage() {
           />
         </div>
 
-        {/* Modal: Schedule Boss Spawn */}
+        {/* New Boss Respawn Tracker sub-module */}
+        <BossRespawnList
+          killedHistory={killedHistory}
+          bosses={bosses}
+        />
+
+        {/* Modal: Schedule / Edit Boss Spawn */}
         <AddScheduleModal
           showAddModal={showAddModal}
-          setShowAddModal={setShowAddModal}
-          bossName={bossName}
-          setBossName={setBossName}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          showSuggestions={showSuggestions}
-          setShowSuggestions={setShowSuggestions}
-          bossImageUrl={bossImageUrl}
-          setBossImageUrl={setBossImageUrl}
+          setShowAddModal={(val) => {
+            setShowAddModal(val);
+            if (!val) setEditingEvent(null);
+          }}
+          bosses={bosses}
+          isFactionLeader={isFactionLeader}
+          isSubmitting={isSubmitting}
           spawnDate={spawnDate}
           setSpawnDate={setSpawnDate}
           spawnTime={spawnTime}
           setSpawnTime={setSpawnTime}
-          location={location}
-          setLocation={setLocation}
-          guildTurn={guildTurn}
-          setGuildTurn={setGuildTurn}
-          isFactionWide={isFactionWide}
-          setIsFactionWide={setIsFactionWide}
-          isSubmitting={isSubmitting}
-          handleAddSchedule={handleAddSchedule}
-          bosses={bosses}
-          getFixedSpawnDaysText={getFixedSpawnDaysText}
+          handleAddScheduleBatch={handleAddScheduleBatch}
+          editingEvent={editingEvent}
+          handleEditSchedule={handleEditSchedule}
         />
 
         {/* Modal: Log Boss Death */}

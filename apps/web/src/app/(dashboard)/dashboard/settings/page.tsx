@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
+  const activeGuild = user?.guilds?.[0];
+
   // Profile states
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [email, setEmail] = useState(user?.email || "");
@@ -237,6 +239,8 @@ export default function SettingsPage() {
             handleLogoutAll={handleLogoutAll}
           />
         </Reveal>
+
+
 
         {/* Danger Zone */}
         <Reveal>

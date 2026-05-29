@@ -304,4 +304,66 @@ router.post(
   },
 );
 
+// ─── GET /:guildId/settings ──────────────────────
+router.get(
+  "/:guildId/settings",
+  requireAuth,
+  requireGuildRole("MEMBER"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const settings = await guildService.getGuildSettings(guildId);
+
+      const response: ApiResponse = {
+        success: true,
+        data: settings,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ─── PATCH /:guildId/settings ────────────────────
+router.patch(
+  "/:guildId/settings",
+  requireAuth,
+  requireGuildRole("OFFICER"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const payload = req.body as {
+        taxRatePercent?: number;
+        attendancePoints?: number;
+        bossKillPoints?: number;
+        rankMultipliers?: Record<string, number>;
+        activeShareModel?: string;
+        currencyCode?: string;
+        currencySymbol?: string;
+        secondaryCurrencyCode?: string | null;
+        secondaryCurrencySymbol?: string | null;
+      };
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const settings = await guildService.updateGuildSettings(
+        guildId,
+        payload,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: settings,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 export default router;

@@ -3,6 +3,7 @@
 import { type BossScheduleData } from "@/lib/api";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import { getBossImageUrl } from "@guild/shared";
 
 export interface DaySpawnsTimelineProps {
   selectedDate: Date | null;
@@ -11,6 +12,8 @@ export interface DaySpawnsTimelineProps {
   isOfficer: boolean;
   setShowKillModal: (val: BossScheduleData | null) => void;
   setKillTimeInput: (val: string) => void;
+  onEditSchedule: (item: BossScheduleData) => void;
+  onDeleteSchedule: (itemId: string) => void;
 }
 
 export default function DaySpawnsTimeline({
@@ -20,6 +23,8 @@ export default function DaySpawnsTimeline({
   isOfficer,
   setShowKillModal,
   setKillTimeInput,
+  onEditSchedule,
+  onDeleteSchedule,
 }: DaySpawnsTimelineProps) {
   return (
     <Card>
@@ -63,13 +68,20 @@ export default function DaySpawnsTimeline({
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h4 className="font-semibold text-white text-xs truncate">
-                      {item.bossName}
-                    </h4>
-                    <p className="text-[10px] text-white/40 truncate mt-0.5">
-                      📍 {item.location}
-                    </p>
+                  <div className="min-w-0 flex items-center gap-2">
+                    <img
+                      src={item.bossImageUrl || getBossImageUrl(item.bossName)}
+                      alt={item.bossName}
+                      className="h-8 w-8 rounded-lg object-cover border border-white/10 shrink-0 shadow-sm"
+                    />
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-white text-xs truncate">
+                        {item.bossName}
+                      </h4>
+                      <p className="text-[10px] text-white/40 truncate mt-0.5">
+                        📍 {item.location}
+                      </p>
+                    </div>
                   </div>
                   {isKilled ? (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-white/[0.04] border-white/10 text-white/50">
@@ -99,20 +111,36 @@ export default function DaySpawnsTimeline({
                   )}
                 </div>
 
-                {/* Log Kill trigger inside active card */}
-                {isOfficer && !isKilled && (tick.expired || tick.warning) && (
-                  <div className="mt-1">
-                    <Button
-                      variant="danger"
-                      size="xs"
-                      fullWidth
-                      onClick={() => {
-                        setShowKillModal(item);
-                        setKillTimeInput(new Date().toLocaleTimeString("en-US", { hour12: false }).substring(0, 5));
-                      }}
+                {/* Actions inside timeline card */}
+                {isOfficer && (
+                  <div className="flex gap-2 mt-1.5 pt-1.5 border-t border-white/[0.05]">
+                    {!isKilled && (tick.expired || tick.warning) && (
+                      <Button
+                        variant="danger"
+                        size="xs"
+                        onClick={() => {
+                          setShowKillModal(item);
+                          setKillTimeInput(new Date().toLocaleTimeString("en-US", { hour12: false }).substring(0, 5));
+                        }}
+                        className="flex-1"
+                      >
+                        Log Kill
+                      </Button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onEditSchedule(item)}
+                      className="px-2 py-1 rounded bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/20 text-[10px] font-bold text-white transition-all cursor-pointer flex-1"
                     >
-                      Log Kill
-                    </Button>
+                      ✏️ Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteSchedule(item.id)}
+                      className="px-2 py-1 rounded bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/20 text-[10px] font-bold text-rose-400 transition-all cursor-pointer flex-1"
+                    >
+                      🗑️ Delete
+                    </button>
                   </div>
                 )}
               </div>

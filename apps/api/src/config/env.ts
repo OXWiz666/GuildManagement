@@ -18,7 +18,9 @@ function validateEnv() {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-    console.error("❌ Invalid environment variables:");
+
+    console.error("Invalid environment variables:");
+
     console.error(result.error.format());
     process.exit(1);
   }

@@ -4,6 +4,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/client"
 }
 
 datasource db {
@@ -114,6 +115,9 @@ model Guild {
   attendanceSessions AttendanceSession[]
   bossSchedules      BossSchedule[]
   lootSales          LootSale[]
+  pointsSnapshots    GuildPointsSnapshot[]
+  auctionItems       AuctionItem[]
+  itemRequests       ItemRequest[]
 
   @@map("guilds")
 }
@@ -143,6 +147,12 @@ model GuildSettings {
   // Share distribution model
   activeShareModel String @default("EQUAL") @map("active_share_model")
 
+  // Guild Points reset cycle — "MANUAL" | "WEEKLY" | "MONTHLY"
+  pointsResetCycle String @default("MANUAL") @map("points_reset_cycle")
+
+  // Per-rank item request limits per cycle (JSON: { "CORE_MEMBER": 7, "ELITE_MEMBER": 7, "MEMBER": 5, "OFFICER": 5 })
+  itemRequestLimits Json @default("{}") @map("item_request_limits")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -166,6 +176,14 @@ model GuildMember {
   joinedAt   DateTime  @default(now()) @map("joined_at")
   isActive   Boolean   @default(true) @map("is_active")
 
+  // Bid points — separate from DKP/ledger balance, earned from same activities
+  // Spending on auctions does NOT reduce DKP ranking score
+  bidPoints          Int       @default(0) @map("bid_points")
+  bidPointsLastReset DateTime? @map("bid_points_last_reset")
+
+  auctionBids  AuctionBid[]
+  itemRequests ItemRequest[]
+
   @@unique([userId, guildId])
   @@index([guildId])
   @@index([userId])
@@ -180,6 +198,125 @@ enum GuildRole {
   CORE_MEMBER
   ELITE_MEMBER
   MEMBER
+}
+
+// ═══════════════════════════════════════════════════
+// GUILD POINTS RESET SNAPSHOTS
+// Immutable record of each member's points before each reset
+// ═══════════════════════════════════════════════════
+model GuildPointsSnapshot {
+  id      String @id @default(cuid())
+  guildId String @map("guild_id")
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  // Who triggered the reset
+  actorId     String   @map("actor_id")
+  resetCycle  String   @map("reset_cycle") // "WEEKLY" | "MONTHLY" | "MANUAL"
+  snapshotData Json    @map("snapshot_data") // Array of { memberId, userId, ign, dkp, bidPoints }
+  membersCount Int     @map("members_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([guildId])
+  @@index([createdAt])
+  @@map("guild_points_snapshots")
+}
+
+// ═══════════════════════════════════════════════════
+// AUCTIONS
+// Leaders create auction items; members bid with bid points
+// ═══════════════════════════════════════════════════
+model AuctionItem {
+  id          String        @id @default(cuid())
+  guildId     String        @map("guild_id")
+  guild       Guild         @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  creatorId   String        @map("creator_id")
+
+  itemName    String        @map("item_name")
+  description String?
+  imageUrl    String?       @map("image_url")
+  category    String        @default("OTHER") // "WEAPON" | "ARMOR" | etc.
+  startingBid Int           @default(0) @map("starting_bid") // in bid points
+  currentBid  Int           @default(0) @map("current_bid")
+  winnerId    String?       @map("winner_id") // GuildMember.id of winner
+  status      AuctionStatus @default(ACTIVE)
+  endsAt      DateTime      @map("ends_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  bids        AuctionBid[]
+
+  @@index([guildId, status])
+  @@index([endsAt])
+  @@map("auction_items")
+}
+
+model AuctionBid {
+  id          String      @id @default(cuid())
+  auctionId   String      @map("auction_id")
+  auction     AuctionItem @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  memberId    String      @map("member_id")
+  member      GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  bidAmount   Int         @map("bid_amount") // in bid points
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@index([auctionId])
+  @@index([memberId])
+  @@map("auction_bids")
+}
+
+enum AuctionStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+// ═══════════════════════════════════════════════════
+// ITEM REQUESTS & WITHDRAWAL REQUESTS
+// Members request items or currency withdrawals;
+// leaders approve/decline/fulfill
+// ═══════════════════════════════════════════════════
+model ItemRequest {
+  id        String            @id @default(cuid())
+  guildId   String            @map("guild_id")
+  guild     Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  memberId  String            @map("member_id")
+  member    GuildMember       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  type      ItemRequestType   // ITEM | WITHDRAWAL
+  status    ItemRequestStatus @default(PENDING)
+
+  // For ITEM requests
+  itemName    String?   @map("item_name")
+  quantity    Int?      @default(1)
+  itemCategory String?  @map("item_category") // matches CATEGORIES list
+
+  // For WITHDRAWAL requests
+  withdrawalAmount   Decimal? @map("withdrawal_amount") @db.Decimal(12, 2)
+  withdrawalCurrency String?  @map("withdrawal_currency") // "PHP" | "DIAMOND"
+
+  note          String?   // Applicant's note
+  reviewNote    String?   @map("review_note") // Leader/officer's response note
+  reviewedById  String?   @map("reviewed_by_id") // Actor who reviewed
+  reviewedAt    DateTime? @map("reviewed_at")
+  fulfilledAt   DateTime? @map("fulfilled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([guildId, status])
+  @@index([memberId])
+  @@map("item_requests")
+}
+
+enum ItemRequestType {
+  ITEM
+  WITHDRAWAL
+}
+
+enum ItemRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  FULFILLED
 }
 
 // ═══════════════════════════════════════════════════
@@ -409,4 +546,3 @@ model LootSale {
   @@index([bossScheduleId])
   @@map("loot_sales")
 }
-

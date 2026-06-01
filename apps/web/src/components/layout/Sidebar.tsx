@@ -43,7 +43,15 @@ const navItems = [
       </svg>
     ),
   },
-
+  {
+    label: "Boss Rotation",
+    href: "/dashboard/boss-rotation",
+    icon: (
+      <svg className="h-[20px] w-[20px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l5.67-5.67" />
+      </svg>
+    ),
+  },
   {
     label: "Boss Schedule",
     href: "/dashboard/boss-schedule",
@@ -109,6 +117,17 @@ const navItems = [
     roles: ["GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"],
   },
   {
+    label: "Statistics",
+    href: "/dashboard/statistics",
+    icon: (
+      <svg className="h-[20px] w-[20px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
     label: "Settings",
     href: "/dashboard/settings",
     icon: (
@@ -155,27 +174,35 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             <div className="relative h-[42px] w-[42px] shrink-0">
               {/* Orbit ring */}
               <div
-                className="absolute -inset-1 rounded-2xl border border-white/[0.08] transition-colors duration-500 group-hover:border-white/25"
+                className="absolute -inset-1 rounded-2xl border border-amber-500/20 transition-colors duration-500 group-hover:border-amber-500/40"
                 style={{ animation: "spin-slow 16s linear infinite" }}
               >
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1 w-1 rounded-full bg-white/80" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_1.5px_rgba(245,158,11,0.6)]" />
               </div>
-              <div className="absolute inset-0 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur flex items-center justify-center transition-all duration-300 group-hover:border-white/25 group-hover:bg-white/[0.07]">
+              <div className="absolute inset-0 rounded-xl border border-amber-500/15 bg-amber-500/[0.03] backdrop-blur flex items-center justify-center transition-all duration-300 group-hover:border-amber-500/30 group-hover:bg-amber-500/[0.06]">
                 <svg
-                  className="h-[20px] w-[20px] text-white/90 transition-transform duration-500 group-hover:scale-110"
+                  className="h-[22px] w-[22px] text-amber-500 transition-transform duration-500 group-hover:scale-110"
                   viewBox="0 0 24 24"
-                  fill="currentColor"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="currentColor" fillOpacity="0.1" className="text-amber-500/10" />
+                  <path d="M12 2L4 5v7c0 6 8 10 8 10s8-4 8-10V5L12 2z" />
+                  <path d="M8 9h8" />
+                  <path d="M10 9v4l-2 2h8l-2-2V9" />
+                  <circle cx="12" cy="6" r="1.5" className="fill-amber-500 text-amber-500" />
                 </svg>
               </div>
             </div>
             <div>
-              <h1 className="text-[15px] font-semibold text-white tracking-tight">
-                GuildMaster
+              <h1 className="text-[15px] font-bold text-white tracking-wider uppercase font-display bg-gradient-to-r from-white via-zinc-200 to-amber-400 bg-clip-text text-transparent">
+                ForgeKeep
               </h1>
-              <p className="text-[10px] text-white/40 font-medium tracking-[0.2em] uppercase mt-0.5 transition-colors duration-300 group-hover:text-white/60">
-                Command Center
+              <p className="text-[9px] text-amber-500/60 font-semibold tracking-[0.25em] uppercase mt-0.5 transition-colors duration-300 group-hover:text-amber-400/80">
+                Guild System
               </p>
             </div>
           </Link>

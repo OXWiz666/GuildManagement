@@ -361,6 +361,18 @@ export const guildApi = {
   async updateSettings(guildId: string, payload: any) {
     return api.patch<any>(`/guilds/${guildId}/settings`, payload);
   },
+
+  async getAuditLogs(guildId: string, filter?: string, page = 1, limit = 30) {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (filter) params.set("filter", filter);
+    return api.get<{
+      logs: AuditLogEntry[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/guilds/${guildId}/audit-logs?${params.toString()}`);
+  },
 };
 
 // ─── Dashboard-specific API calls (Attendance & Boss Timers) ────
@@ -413,6 +425,7 @@ export interface BossScheduleData {
   status: "UPCOMING" | "SPAWNED" | "KILLED";
   killedAt: string | null;
   creatorId: string;
+  creatorName?: string;
   createdAt: string;
   attendanceSessions?: AttendanceSessionData[];
   lootDrop?: string | null;
@@ -624,4 +637,18 @@ export const dashboardApi = {
     return api.post<any>(`/dashboard/accounting/adjustment/${guildId}`, payload);
   },
 };
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  target: string | null;
+  targetId: string | null;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+  actor: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
 

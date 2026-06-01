@@ -6,28 +6,37 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "test": "vitest run",
     "clean": "rimraf node_modules .turbo dist"
   },
   "dependencies": {
     "@guild/db": "workspace:*",
     "@guild/shared": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^2.4.3",
+    "cookie": "^1.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
+    "ioredis": "^5.11.0",
     "jsonwebtoken": "^9.0.2",
+    "rate-limiter-flexible": "^11.1.0",
+    "socket.io": "^4.8.3",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/cookie": "^1.0.0",
     "@types/cookie-parser": "^1.4.8",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.5"
   }
 }

@@ -7,6 +7,7 @@ import * as lootService from "../services/loot.service";
 import type { ApiResponse } from "@guild/shared";
 import { AttendanceType } from "@guild/db";
 import { cache } from "../lib/cache";
+import { broadcastToGuild } from "../lib/socket";
 
 const router: Router = Router();
 
@@ -62,9 +63,17 @@ router.post(
         bossScheduleId,
       );
 
+      // Serialize Date fields for socket transmission compatibility
+      const socketPayload = {
+        ...session,
+        expiresAt: session.expiresAt.toISOString(),
+        createdAt: session.createdAt.toISOString(),
+      };
+      broadcastToGuild(guildId, "attendance_session_created", socketPayload);
+
       const response: ApiResponse = {
         success: true,
-        data: { session },
+        data: { session: socketPayload },
       };
       res.json(response);
     } catch (error) {
@@ -98,9 +107,23 @@ router.post(
         code,
       );
 
+      // Serialize Date fields for socket transmission compatibility
+      const serializedRecord = {
+        ...result.record,
+        joinedAt: result.record.joinedAt.toISOString(),
+      };
+      
+      broadcastToGuild(result.guildId, "attendance_record_created", {
+        ...result,
+        record: serializedRecord,
+      });
+
       const response: ApiResponse = {
         success: true,
-        data: result,
+        data: {
+          ...result,
+          record: serializedRecord,
+        },
       };
       res.json(response);
     } catch (error) {
@@ -163,9 +186,23 @@ router.patch(
         userAgent,
       );
 
+      // Serialize Date fields for socket transmission compatibility
+      const serializedRecord = {
+        ...result.record,
+        joinedAt: result.record.joinedAt.toISOString(),
+      };
+
+      broadcastToGuild(guildId, "attendance_record_confirmed", {
+        ...result,
+        record: serializedRecord,
+      });
+
       const response: ApiResponse = {
         success: true,
-        data: result,
+        data: {
+          ...result,
+          record: serializedRecord,
+        },
       };
       res.json(response);
     } catch (error) {
@@ -292,9 +329,19 @@ router.post(
         userAgent,
       );
 
+      // Serialize Date fields to ISO strings for socket transmission compatibility
+      const socketPayload = {
+        ...schedule,
+        spawnTime: schedule.spawnTime.toISOString(),
+        killedAt: schedule.killedAt ? schedule.killedAt.toISOString() : null,
+        createdAt: schedule.createdAt.toISOString(),
+      };
+
+      broadcastToGuild(targetGuildId, "boss_rotation_updated", socketPayload);
+
       const response: ApiResponse = {
         success: true,
-        data: { schedule },
+        data: { schedule: socketPayload },
       };
       res.json(response);
     } catch (error) {
@@ -342,9 +389,19 @@ router.patch(
         userAgent,
       );
 
+      // Serialize Date fields to ISO strings for socket transmission compatibility
+      const socketPayload = {
+        ...result,
+        spawnTime: result.spawnTime.toISOString(),
+        killedAt: result.killedAt ? result.killedAt.toISOString() : null,
+        createdAt: result.createdAt.toISOString(),
+      };
+
+      broadcastToGuild(result.guildId || guildId, "boss_rotation_updated", socketPayload);
+
       const response: ApiResponse = {
         success: true,
-        data: { schedule: result },
+        data: { schedule: socketPayload },
       };
       res.json(response);
     } catch (error) {
@@ -399,9 +456,19 @@ router.patch(
         userAgent,
       );
 
+      // Serialize Date fields to ISO strings for socket transmission compatibility
+      const socketPayload = {
+        ...schedule,
+        spawnTime: schedule.spawnTime.toISOString(),
+        killedAt: schedule.killedAt ? schedule.killedAt.toISOString() : null,
+        createdAt: schedule.createdAt.toISOString(),
+      };
+
+      broadcastToGuild(schedule.guildId || guildId, "boss_rotation_updated", socketPayload);
+
       const response: ApiResponse = {
         success: true,
-        data: { schedule },
+        data: { schedule: socketPayload },
       };
       res.json(response);
     } catch (error) {
@@ -428,6 +495,8 @@ router.delete(
         ipAddress,
         userAgent,
       );
+
+      broadcastToGuild(guildId, "boss_schedule_deleted", { scheduleId });
 
       const response: ApiResponse = {
         success: true,
@@ -465,9 +534,17 @@ router.patch(
         userAgent,
       );
 
+      // Serialize Date fields for socket transmission compatibility
+      const socketPayload = {
+        ...session,
+        expiresAt: session.expiresAt.toISOString(),
+        createdAt: session.createdAt.toISOString(),
+      };
+      broadcastToGuild(guildId, "attendance_session_updated", socketPayload);
+
       const response: ApiResponse = {
         success: true,
-        data: { session },
+        data: { session: socketPayload },
       };
       res.json(response);
     } catch (error) {
@@ -494,6 +571,8 @@ router.delete(
         ipAddress,
         userAgent,
       );
+
+      broadcastToGuild(guildId, "attendance_session_deleted", { sessionId });
 
       const response: ApiResponse = {
         success: true,
@@ -554,9 +633,20 @@ router.post(
         cache.invalidatePattern(`loot:${guildId}:*`),
       ]);
 
+      // Serialize Date and BigInt fields for socket transmission compatibility
+      const socketPayload = {
+        ...sale,
+        saleValue: sale.saleValue.toString(),
+        taxAmount: sale.taxAmount.toString(),
+        netProfit: sale.netProfit.toString(),
+        createdAt: sale.createdAt.toISOString(),
+      };
+      
+      broadcastToGuild(guildId, "loot_sale_recorded", socketPayload);
+
       const response: ApiResponse = {
         success: true,
-        data: { sale },
+        data: { sale: socketPayload },
       };
       res.json(response);
     } catch (error) {
@@ -604,8 +694,8 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
-      const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 25;
+      const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
+      const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 25;
       
       const cacheKey = `accounting:${guildId}:p${page}:l${limit}`;
 
@@ -673,9 +763,18 @@ router.post(
         cache.invalidatePattern(`stats:${guildId}:*`),
       ]);
 
+      // Serialize Date and BigInt fields for socket transmission compatibility
+      const socketPayload = {
+        ...entry,
+        amount: entry.amount.toString(),
+        createdAt: entry.createdAt.toISOString(),
+      };
+
+      broadcastToGuild(guildId, "treasury_adjusted", socketPayload);
+
       const response: ApiResponse = {
         success: true,
-        data: { entry },
+        data: { entry: socketPayload },
       };
       res.json(response);
     } catch (error) {

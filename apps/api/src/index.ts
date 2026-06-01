@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import http from "http";
+import { initSocketServer } from "./lib/socket";
 
 // Global BigInt JSON serialization override to prevent Express JSON serialization crashes
 (BigInt.prototype as any).toJSON = function () {
@@ -9,7 +11,7 @@ import cookieParser from "cookie-parser";
 };
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
-import { apiLimiter } from "./middleware/rateLimiter";
+import { apiLimiter, authLimiter } from "./middleware/rateLimiter";
 import healthRoutes from "./routes/health.routes";
 import authRoutes from "./routes/auth.routes";
 import guildRoutes from "./routes/guild.routes";
@@ -36,17 +38,23 @@ app.use("/api", apiLimiter);
 
 // ─── Routes ─────────────────────────────────────
 app.use("/api/health", healthRoutes);
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/guilds", guildRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
 // ─── Error Handler (must be last) ───────────────
 app.use(errorHandler);
 
+// Wrap Express app in HTTP server to enable WebSockets
+const server = http.createServer(app);
+
+// Initialize our real-time socket server
+initSocketServer(server);
+
 // ─── Start Server ───────────────────────────────
-app.listen(env.PORT, () => {
+server.listen(env.PORT, () => {
   console.log(`
-  Guild Management API
+  Guild Management API (Real-Time Enabled)
   ────────────────────────
   Status:  Running
   Port:    ${env.PORT}

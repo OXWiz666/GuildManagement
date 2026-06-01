@@ -146,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 5 minutes inactive automatic logout
+  // 30 minutes inactive automatic logout
   useEffect(() => {
     if (!user) return;
 
@@ -155,9 +155,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const resetTimer = () => {
       if (timeoutId) clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        console.log("Inactivity logout triggered (5 minutes inactive)");
+        console.log("Inactivity logout triggered (30 minutes inactive)");
         logout();
-      }, 5 * 60 * 1000); // 5 minutes
+      }, 30 * 60 * 1000); // 30 minutes
     };
 
     // Events to track user activity

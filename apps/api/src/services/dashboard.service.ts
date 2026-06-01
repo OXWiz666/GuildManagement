@@ -180,6 +180,7 @@ export async function submitAttendanceCode(userId: string, code: string) {
     success: true,
     sessionTitle: session.title,
     guildName: session.guild.name,
+    guildId: session.guildId,
     record,
   };
 }
@@ -345,6 +346,14 @@ export async function getBossSchedules(guildId: string, requestingUserId?: strin
     orderBy: { spawnTime: "asc" },
   });
 
+  // Fetch users for creator details
+  const creatorIds = Array.from(new Set(schedules.map((s) => s.creatorId)));
+  const users = await prisma.user.findMany({
+    where: { id: { in: creatorIds } },
+    select: { id: true, displayName: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u.displayName]));
+
   return schedules.map((s) => ({
     id: s.id,
     guildId: s.guildId,
@@ -356,6 +365,7 @@ export async function getBossSchedules(guildId: string, requestingUserId?: strin
     status: s.status,
     killedAt: s.killedAt ? s.killedAt.toISOString() : null,
     creatorId: s.creatorId,
+    creatorName: userMap.get(s.creatorId) || "System / Officer",
     createdAt: s.createdAt.toISOString(),
     attendanceSessions: s.attendanceSessions.map(session => ({
       id: session.id,

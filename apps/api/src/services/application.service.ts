@@ -194,7 +194,7 @@ export async function cancelJoinRequest(userId: string, requestId: string) {
     where: { id: requestId },
   });
 
-  return { success: true };
+  return { success: true, guildId: request.guildId };
 }
 
 // ─── Get Guild Applications ──────────────────────

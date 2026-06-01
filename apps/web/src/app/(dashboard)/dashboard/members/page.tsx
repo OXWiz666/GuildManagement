@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useSocket } from "@/components/providers/socket-provider";
 import { guildApi, type GuildMemberData, type JoinRequestData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import Card from "@/components/ui/Card";
@@ -25,6 +26,7 @@ import StalkProfileModal from "./components/StalkProfileModal";
 export default function MembersPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { socket } = useSocket();
   const [members, setMembers] = useState<GuildMemberData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -110,6 +112,44 @@ export default function MembersPage() {
       loadInviteCode();
     }
   }, [activeTab, loadApplications, loadInviteCode]);
+
+  // Listen to real-time events to refresh members list and pending join applications instantly
+  useEffect(() => {
+    if (!socket || !activeGuild) return;
+
+    const handleRosterUpdate = () => {
+      console.log("[Roster Socket]: Guild members updated. Refreshing members list...");
+      loadMembers();
+    };
+
+    const handleApplicationsUpdate = () => {
+      console.log("[Applications Socket]: Guild applications changed. Refreshing queues...");
+      if (isOfficer) {
+        loadApplications();
+      }
+    };
+
+    const handleInviteUpdate = (payload: { inviteCode: string }) => {
+      console.log("[Invite Socket]: Invite code updated.");
+      setGuildInviteCode(payload.inviteCode);
+    };
+
+    socket.on("member_role_updated", handleRosterUpdate);
+    socket.on("join_request_created", handleApplicationsUpdate);
+    socket.on("join_request_cancelled", handleApplicationsUpdate);
+    socket.on("join_request_processed", handleApplicationsUpdate);
+    socket.on("join_request_processed", handleRosterUpdate); // accepted applicant joins roster
+    socket.on("invite_code_updated", handleInviteUpdate);
+
+    return () => {
+      socket.off("member_role_updated", handleRosterUpdate);
+      socket.off("join_request_created", handleApplicationsUpdate);
+      socket.off("join_request_cancelled", handleApplicationsUpdate);
+      socket.off("join_request_processed", handleApplicationsUpdate);
+      socket.off("join_request_processed", handleRosterUpdate);
+      socket.off("invite_code_updated", handleInviteUpdate);
+    };
+  }, [socket, activeGuild, loadMembers, loadApplications, isOfficer]);
 
   // Filter members
   const filteredMembers = members.filter((m) => {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useSocket } from "@/components/providers/socket-provider";
 import { guildApi, dashboardApi, type JoinRequestData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
@@ -14,6 +15,7 @@ import AttendanceVerification from "./components/AttendanceVerification";
 export default function OfficerPanelPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { addToast } = useToast();
+  const { socket } = useSocket();
   const router = useRouter();
 
   const activeGuild = user?.guilds?.[0];
@@ -80,6 +82,43 @@ export default function OfficerPanelPage() {
       loadAttendanceQueue();
     }
   }, [isOfficer, activeGuild, loadApplications, loadAttendanceQueue]);
+
+  // Listen to real-time events to refresh applications queue and attendance verification queue instantly
+  useEffect(() => {
+    if (!socket || !activeGuild || !isOfficer) return;
+
+    const handleApplicationsUpdate = () => {
+      console.log("[Officer Panel Socket]: Applications updated. Refreshing queue...");
+      loadApplications();
+    };
+
+    const handleAttendanceUpdate = () => {
+      console.log("[Officer Panel Socket]: Attendance record/session updated. Refreshing verification queue...");
+      loadAttendanceQueue();
+    };
+
+    socket.on("join_request_created", handleApplicationsUpdate);
+    socket.on("join_request_cancelled", handleApplicationsUpdate);
+    socket.on("join_request_processed", handleApplicationsUpdate);
+
+    socket.on("attendance_session_created", handleAttendanceUpdate);
+    socket.on("attendance_session_updated", handleAttendanceUpdate);
+    socket.on("attendance_session_deleted", handleAttendanceUpdate);
+    socket.on("attendance_record_created", handleAttendanceUpdate);
+    socket.on("attendance_record_confirmed", handleAttendanceUpdate);
+
+    return () => {
+      socket.off("join_request_created", handleApplicationsUpdate);
+      socket.off("join_request_cancelled", handleApplicationsUpdate);
+      socket.off("join_request_processed", handleApplicationsUpdate);
+
+      socket.off("attendance_session_created", handleAttendanceUpdate);
+      socket.off("attendance_session_updated", handleAttendanceUpdate);
+      socket.off("attendance_session_deleted", handleAttendanceUpdate);
+      socket.off("attendance_record_created", handleAttendanceUpdate);
+      socket.off("attendance_record_confirmed", handleAttendanceUpdate);
+    };
+  }, [socket, activeGuild, isOfficer, loadApplications, loadAttendanceQueue]);
 
   // Review Application (Accept/Decline)
   async function handleReviewApplication(requestId: string, action: "ACCEPT" | "DECLINE") {

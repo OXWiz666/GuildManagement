@@ -161,7 +161,7 @@ export default function BossRespawnList({ killedHistory, bosses }: BossRespawnLi
                     {log.isExpired ? (
                       <>
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>EXPECTED LIVE</span>
+                        <span>EXPECTED RESPAWN</span>
                       </>
                     ) : (
                       <>

@@ -224,35 +224,64 @@ export function getNextBossSpawnTime(bossName: string, killedAt: Date): Date {
 }
 
 export function getBossImageUrl(bossName: string): string {
-  const name = bossName.toLowerCase();
-  
-  // Curated high-quality, relevant fantasy creature/MMORPG artwork from Unsplash
-  if (name.includes("dragon") || name.includes("viorent") || name.includes("icaruthia")) {
-    return "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80"; // Golden/red dragon/creature
+  const BASE = "https://tsjuckpzfuaozktqhior.supabase.co/storage/v1/object/public/Bosses";
+
+  // ─── Supabase Storage Boss Images ────────────────────────────────────────────
+  // Map of lowercase boss name → Supabase Storage public URL.
+  // To add a new boss image: upload <BossName>.png to the "Bosses" bucket,
+  // then add an entry here as "boss name lowercase": `${BASE}/BossName.png`
+  const SUPABASE_IMAGES: Record<string, string> = {
+    "venatus":          `${BASE}/Venatus.png`,
+    "viorent":          `${BASE}/Viorent.png`,
+    "livera":           `${BASE}/Livera.png`,
+    "araneo":           `${BASE}/Araneo.png`,
+    "ego":              `${BASE}/Ego.png`,
+    "lady dalia":       `${BASE}/LadyDalia.png`,
+    "neutro":           `${BASE}/Neutro.png`,
+    "undomiel":         `${BASE}/Undomiel.png`,
+    "clemantis":        `${BASE}/Clemantis.png`,
+    "general aquleus":  `${BASE}/GeneralAquleus.png`,
+    "amentis":          `${BASE}/Amentis.png`,
+    "baron baraudmore": `${BASE}/BaronBaraudmore.png`,
+    "wannitas":         `${BASE}/Wannitas.png`,
+    "duplican":         `${BASE}/Duplican.png`,
+    "metus":            `${BASE}/Metus.png`,
+    "shuliar":          `${BASE}/Shuliar.png`,
+    "gareth":           `${BASE}/Gareth.png`,
+    "larba":            `${BASE}/Larba.png`,
+    "titore":           `${BASE}/Titore.png`,
+    "catena":           `${BASE}/Catena.png`,
+    "secreta":          `${BASE}/Secreta.png`,
+    "ordo":             `${BASE}/Ordo.png`,
+    "asta":             `${BASE}/Asta.png`,
+    "supore":           `${BASE}/Supore.png`,
+    "chaiflock":        `${BASE}/Chaiflock.png`,
+    "benji":            `${BASE}/Benji.png`,
+    "libitina":         `${BASE}/Libitina.png`,
+    "rakajeth":         `${BASE}/Rakajeth.png`,
+    "tumier":           `${BASE}/Tumier.png`,
+    "saphirus":         `${BASE}/Saphirus.png`,
+    "thymele":          `${BASE}/Thymele.png`,
+    "milavy":           `${BASE}/Milavy.png`,
+    "ringor":           `${BASE}/Ringor.png`,
+    "roderick":         `${BASE}/Roderick.png`,
+    "auraq":            `${BASE}/Auraq.png`,
+    "icaruthia":        `${BASE}/Icaruthia.png`,
+    "motti":            `${BASE}/Motti.png`,
+    "nevaeh":           `${BASE}/Nevaeh.png`,
+    "lucus":            `${BASE}/Lucus.png`,
+  };
+
+  const name = bossName.toLowerCase().trim();
+
+  // 1. Exact match
+  if (SUPABASE_IMAGES[name]) return SUPABASE_IMAGES[name];
+
+  // 2. Partial match — handles aliases, typos, or sub-string boss names
+  for (const [key, url] of Object.entries(SUPABASE_IMAGES)) {
+    if (name.includes(key) || key.includes(name)) return url;
   }
-  if (name.includes("spider") || name.includes("araneo") || name.includes("larba")) {
-    return "https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?w=300&auto=format&fit=crop&q=80"; // Alien/spider neon look
-  }
-  if (name.includes("lich") || name.includes("lord") || name.includes("baron") || name.includes("gareth") || name.includes("roderick") || name.includes("ringor")) {
-    return "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=300&auto=format&fit=crop&q=80"; // Knight/Deathlord anime/fantasy armor
-  }
-  if (name.includes("aquleus") || name.includes("shuliar") || name.includes("lucus") || name.includes("saphirus")) {
-    return "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=300&auto=format&fit=crop&q=80"; // Deep sea/kraken/blue magic abstract
-  }
-  if (name.includes("dalia") || name.includes("undomiel") || name.includes("libitina") || name.includes("milavy") || name.includes("clemantis") || name.includes("thymele")) {
-    return "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format&fit=crop&q=80"; // Fantasy goddess/elf queen
-  }
-  if (name.includes("venatus") || name.includes("ego") || name.includes("amentis") || name.includes("auraq")) {
-    return "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=300&auto=format&fit=crop&q=80"; // Neon dark monolith/glowing runes
-  }
-  if (name.includes("metus") || name.includes("abyss") || name.includes("supore") || name.includes("crypt") || name.includes("neutro")) {
-    return "https://images.unsplash.com/photo-1509248961158-e54f6934749c?w=300&auto=format&fit=crop&q=80"; // Ghostly spirit/grim reaper
-  }
-  if (name.includes("motti") || name.includes("tumier") || name.includes("chaiflock")) {
-    return "https://images.unsplash.com/photo-1559827291-72ee739d0d9a?w=300&auto=format&fit=crop&q=80"; // Golem/giant monster
-  }
-  
-  // Generic beautiful fantasy artwork default
+
+  // Generic fantasy artwork default (for any boss not yet in Supabase)
   return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&auto=format&fit=crop&q=80";
 }
-

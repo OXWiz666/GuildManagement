@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useSocket } from "@/components/providers/socket-provider";
 import { dashboardApi, guildApi, type BossScheduleData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
@@ -17,6 +18,7 @@ import TreasuryAdjModal from "./components/TreasuryAdjModal";
 export default function GuildMarketPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { socket } = useSocket();
 
   const [activeTab, setActiveTab] = useState<"loot" | "accounting">("loot");
   const [isLoading, setIsLoading] = useState(true);
@@ -102,6 +104,24 @@ export default function GuildMarketPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Listen to real-time events to refresh Guild Market and Ledger history instantly
+  useEffect(() => {
+    if (!socket || !activeGuild) return;
+
+    const handleMarketUpdate = () => {
+      console.log("[Market Socket]: Loot sale or treasury adjusted. Refreshing statistics...");
+      loadData();
+    };
+
+    socket.on("loot_sale_recorded", handleMarketUpdate);
+    socket.on("treasury_adjusted", handleMarketUpdate);
+
+    return () => {
+      socket.off("loot_sale_recorded", handleMarketUpdate);
+      socket.off("treasury_adjusted", handleMarketUpdate);
+    };
+  }, [socket, activeGuild, loadData]);
 
   // Load preview attendees when boss fight changes in sale modal
   useEffect(() => {

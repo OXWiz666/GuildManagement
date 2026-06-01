@@ -12,6 +12,7 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRY: z.string().default("7d"),
   BCRYPT_ROUNDS: z.coerce.number().min(10).max(15).default(12),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  REDIS_URL: z.string().optional(),
 });
 
 function validateEnv() {

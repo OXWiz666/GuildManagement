@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
-import { prisma } from "@guild/db";
+import * as guildService from "../services/guild.service";
 import { hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import { ForbiddenError, UnauthorizedError } from "../utils/errors";
 import type { GuildMember } from "@guild/db";
+
 
 // Extend Express Request to include guild membership
 declare global {
@@ -44,14 +45,7 @@ export function requireGuildRole(minimumRole: GuildRoleType) {
       }
 
       // Look up the user's membership in this specific guild
-      const membership = await prisma.guildMember.findUnique({
-        where: {
-          userId_guildId: {
-            userId: req.user.userId,
-            guildId,
-          },
-        },
-      });
+      const membership = await guildService.getGuildMemberByUser(req.user.userId, guildId);
 
       if (!membership || !membership.isActive) {
         throw new ForbiddenError("You are not a member of this guild");

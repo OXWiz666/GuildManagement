@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // Global cache store for frontend query results
 const globalQueryCache = new Map<string, { data: any; timestamp: number }>();
@@ -19,6 +19,11 @@ export function useQuery<T>(
 ): QueryResult<T> {
   const staleTime = options.staleTime ?? 15000; // default 15s stale window
   const cacheKey = key;
+
+  // Store fetcher in a ref to avoid including it in dependency arrays
+  // This prevents infinite re-render loops when callers pass inline arrow functions
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
 
   const getCached = useCallback(() => {
     const cached = globalQueryCache.get(cacheKey);
@@ -43,7 +48,7 @@ export function useQuery<T>(
 
     setIsFetching(true);
     try {
-      const result = await fetcher();
+      const result = await fetcherRef.current();
       globalQueryCache.set(cacheKey, { data: result, timestamp: Date.now() });
       setData(result);
       setError(null);
@@ -53,7 +58,7 @@ export function useQuery<T>(
       setIsLoading(false);
       setIsFetching(false);
     }
-  }, [cacheKey, staleTime, fetcher]);
+  }, [cacheKey, staleTime]);
 
   useEffect(() => {
     fetchData();

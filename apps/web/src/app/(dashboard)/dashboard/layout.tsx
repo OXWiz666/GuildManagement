@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
+import { SocketProvider } from "@/components/providers/socket-provider";
 
 export default function DashboardLayout({
   children,
@@ -70,14 +71,16 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#08080a] flex">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        <TopBar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 p-6 lg:p-8 xl:p-10 overflow-auto relative">
-          {children}
-        </main>
+    <SocketProvider>
+      <div className="min-h-screen bg-[#08080a] flex">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 flex flex-col min-w-0 relative">
+          <TopBar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
+          <main className="flex-1 p-6 lg:p-8 xl:p-10 overflow-auto relative">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </SocketProvider>
   );
 }

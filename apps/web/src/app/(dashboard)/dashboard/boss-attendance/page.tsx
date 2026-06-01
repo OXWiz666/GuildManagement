@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useSocket } from "@/components/providers/socket-provider";
 import { dashboardApi, type BossScheduleData, type AttendanceSessionData, type AttendanceRecordData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import Card from "@/components/ui/Card";
@@ -38,6 +39,7 @@ interface AttendanceStats {
 export default function BossAttendancePage() {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { socket } = useSocket();
 
   const [schedules, setSchedules] = useState<BossScheduleData[]>([]);
   const [stats, setStats] = useState<AttendanceStats | null>(null);
@@ -129,6 +131,33 @@ export default function BossAttendancePage() {
       loadPendingRecords();
     }
   }, [isOfficer, activeGuild, loadPendingRecords]);
+
+  // Listen to real-time events to refresh attendance portal & verification queue instantly
+  useEffect(() => {
+    if (!socket || !activeGuild) return;
+
+    const handleAttendanceUpdate = () => {
+      console.log("[Attendance Socket]: Attendance or session updated. Refreshing data...");
+      loadData();
+      if (isOfficer) {
+        loadPendingRecords();
+      }
+    };
+
+    socket.on("attendance_session_created", handleAttendanceUpdate);
+    socket.on("attendance_session_updated", handleAttendanceUpdate);
+    socket.on("attendance_session_deleted", handleAttendanceUpdate);
+    socket.on("attendance_record_created", handleAttendanceUpdate);
+    socket.on("attendance_record_confirmed", handleAttendanceUpdate);
+
+    return () => {
+      socket.off("attendance_session_created", handleAttendanceUpdate);
+      socket.off("attendance_session_updated", handleAttendanceUpdate);
+      socket.off("attendance_session_deleted", handleAttendanceUpdate);
+      socket.off("attendance_record_created", handleAttendanceUpdate);
+      socket.off("attendance_record_confirmed", handleAttendanceUpdate);
+    };
+  }, [socket, activeGuild, loadData, loadPendingRecords, isOfficer]);
 
   // Format real-time countdown
   const getCountdownText = (spawnTimeStr: string) => {

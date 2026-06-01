@@ -8,6 +8,7 @@ import {
   type JoinRequestData,
   type BossScheduleData,
 } from "@/lib/api";
+import { useSocket } from "@/components/providers/socket-provider";
 import { useToast } from "@/components/ui/Toast";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -167,6 +168,25 @@ export default function DashboardPage() {
       loadDashboardStats();
     }
   }, [activeGuild, loadPendingRequest, loadBossSchedules, loadDashboardStats]);
+
+  // Real-time Socket.IO listeners for instant dashboard updates
+  const { socket } = useSocket();
+  useEffect(() => {
+    if (!socket || !activeGuild) return;
+
+    const handleRealTimeRefresh = () => {
+      loadBossSchedules();
+      loadDashboardStats();
+    };
+
+    socket.on("boss_rotation_updated", handleRealTimeRefresh);
+    socket.on("boss_schedule_deleted", handleRealTimeRefresh);
+
+    return () => {
+      socket.off("boss_rotation_updated", handleRealTimeRefresh);
+      socket.off("boss_schedule_deleted", handleRealTimeRefresh);
+    };
+  }, [socket, activeGuild, loadBossSchedules, loadDashboardStats]);
 
   // Verify invite code
   async function handleVerifyCode() {

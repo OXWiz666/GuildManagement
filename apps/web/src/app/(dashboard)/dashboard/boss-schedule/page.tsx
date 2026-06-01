@@ -12,6 +12,7 @@ import {
   Reveal,
   ModuleHeader,
   Magnetic,
+  LiveDot
 } from "@/components/dashboard/DashboardHelpers";
 
 // Imports from co-located components
@@ -23,6 +24,28 @@ import AddScheduleModal from "./components/AddScheduleModal";
 import LogKillModal from "./components/LogKillModal";
 import BossRespawnList from "./components/BossRespawnList";
 
+// Guild badges and colors configuration
+const GUILD_CONFIG: Record<string, { color: string; border: string; bg: string; text: string }> = {
+  SAUSAGE: {
+    color: "#f59e0b",
+    border: "border-amber-500/20",
+    bg: "bg-amber-500/[0.08]",
+    text: "text-amber-400"
+  },
+  VALHALLA: {
+    color: "#10b981",
+    border: "border-emerald-500/20",
+    bg: "bg-emerald-500/[0.08]",
+    text: "text-emerald-400"
+  },
+  BZDK: {
+    color: "#3b82f6",
+    border: "border-blue-500/20",
+    bg: "bg-blue-500/[0.08]",
+    text: "text-blue-400"
+  }
+};
+
 export default function BossSchedulePage() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -31,6 +54,9 @@ export default function BossSchedulePage() {
   const [bosses, setBosses] = useState<BossData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // View Switcher (Card vs Timeline) for active schedules
+  const [viewMode, setViewMode] = useState<"CARD" | "TIMELINE">("CARD");
 
   // Weekly Planner Navigation State
   const [anchorDate, setAnchorDate] = useState<Date>(new Date());
@@ -218,23 +244,28 @@ export default function BossSchedulePage() {
   function getCountdownText(spawnTimeStr: string) {
     const target = new Date(spawnTimeStr).getTime();
     const diff = target - currentTime;
-    if (diff <= 0) return { expired: true, text: "SPAWNED", danger: true };
+    if (diff <= 0) return { expired: true, text: "LIVE", danger: true, warning: false };
 
     const hrs = Math.floor(diff / (3600 * 1000));
     const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
     const secs = Math.floor((diff % (60 * 1000)) / 1000);
 
-    const text = `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-    const warning = diff <= 5 * 60 * 1000; // less than 5 mins
+    const hrsStr = hrs > 0 ? `${hrs}h ` : "";
+    const minsStr = `${String(mins).padStart(2, "0")}m `;
+    const secsStr = `${String(secs).padStart(2, "0")}s`;
 
-    return { expired: false, text, warning };
+    return {
+      expired: false,
+      text: `${hrsStr}${minsStr}${secsStr}`,
+      warning: diff <= 60 * 60 * 1000 // less than 1 hour remains
+    };
   }
 
   // Calendar math calculations for Weekly View
   const getDaysOfWeek = (date: Date) => {
     const start = new Date(date);
-    const day = start.getDay(); // 0 is Sunday
-    start.setDate(start.getDate() - day); // Move to Sunday
+    const day = start.getDay();
+    start.setDate(start.getDate() - day);
     start.setHours(0, 0, 0, 0);
 
     const days = [];
@@ -247,26 +278,6 @@ export default function BossSchedulePage() {
   };
 
   const daysOfWeek = getDaysOfWeek(anchorDate);
-
-  const getFixedSpawnDaysText = (selectedBossName: string) => {
-    const selectedBoss = bosses.find((b) => b.name.toLowerCase() === selectedBossName.toLowerCase());
-    if (selectedBoss && selectedBoss.type === "FIXED_SCHEDULE" && selectedBoss.fixedSpawns) {
-      let spawnsArray: Array<{ day: number; hour: number; minute: number }> = [];
-      try {
-        if (typeof selectedBoss.fixedSpawns === "string") {
-          spawnsArray = JSON.parse(selectedBoss.fixedSpawns);
-        } else if (Array.isArray(selectedBoss.fixedSpawns)) {
-          spawnsArray = selectedBoss.fixedSpawns;
-        }
-      } catch (e) {
-        spawnsArray = [];
-      }
-      
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      return spawnsArray.map(s => `${dayNames[s.day]} at ${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")}`).join(", ");
-    }
-    return "";
-  };
 
   if (!user || !activeGuild) {
     return (
@@ -290,7 +301,7 @@ export default function BossSchedulePage() {
       .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
   };
 
-  // Events filtered by currently highlighted day column for the timeline panel on the right
+  // Events filtered by currently highlighted day column
   const dayEvents = selectedDate
     ? schedules
         .filter((s) => {
@@ -314,44 +325,14 @@ export default function BossSchedulePage() {
     .filter((s) => s.status !== "KILLED")
     .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
 
-  if (isLoading && schedules.length === 0) {
-    return (
-      <div className="space-y-6 max-w-full xl:max-w-[1600px] mx-auto px-2 md:px-4 lg:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-64 animate-pulse" />
-            <Skeleton className="h-4 w-96 animate-pulse" />
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-8 w-24 rounded-lg animate-pulse" />
-          </div>
-        </div>
-        <div className="h-[520px] rounded-2xl bg-[#111116]/40 border border-white/[0.04] backdrop-blur-md relative overflow-hidden animate-pulse shadow-[0_0_15px_rgba(139,92,246,0.03)] flex flex-col justify-between p-6">
-          <div className="flex items-center justify-between mb-6">
-            <Skeleton className="h-6 w-48" />
-            <div className="flex gap-2">
-              <Skeleton className="h-8 w-20 rounded-lg" />
-              <Skeleton className="h-8 w-16 rounded-lg" />
-              <Skeleton className="h-8 w-20 rounded-lg" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 flex-1">
-            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <div key={i} className="rounded-xl border border-white/[0.05] p-4 flex flex-col justify-between min-h-[380px] bg-white/[0.01]">
-                <div className="border-b border-white/[0.05] pb-2 mb-3 space-y-2">
-                  <Skeleton className="h-3 w-12" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
-                <div className="flex-1 flex flex-col justify-center items-center">
-                  <div className="h-10 w-10 rounded-full bg-white/[0.02] border border-dashed border-white/10" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Dynamic Grouping of Upcoming Schedules by Day (for Timeline View)
+  const groupedSchedules = upcomingSpawns.reduce<Record<string, BossScheduleData[]>>((acc, item) => {
+    const d = new Date(item.spawnTime);
+    const dayStr = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    if (!acc[dayStr]) acc[dayStr] = [];
+    acc[dayStr].push(item);
+    return acc;
+  }, {});
 
   return (
     <div className="relative max-w-full xl:max-w-[1600px] mx-auto w-full px-2 md:px-4 lg:px-6">
@@ -404,58 +385,360 @@ export default function BossSchedulePage() {
           }
         />
 
-        {/* Interactive Weekly Planner Calendar */}
-        <WeeklyCalendar
-          anchorDate={anchorDate}
-          setAnchorDate={setAnchorDate}
-          selectedDate={selectedDate}
-          setSelectedDate={setSelectedDate}
-          daysOfWeek={daysOfWeek}
-          getEventsForDay={getEventsForDay}
-          getCountdownText={getCountdownText}
-          isOfficer={isOfficer}
-          isLoading={isLoading}
-          setShowAddModal={setShowAddModal}
-          setSpawnDate={setSpawnDate}
-          setSpawnTime={setSpawnTime}
-          setShowKillModal={setShowKillModal}
-          setKillTimeInput={setKillTimeInput}
-        />
-
-        {/* 3-Column Split Details Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-up">
-          {/* Day Highlight Timeline Panel */}
-          <DaySpawnsTimeline
-            selectedDate={selectedDate}
-            dayEvents={dayEvents}
-            getCountdownText={getCountdownText}
-            isOfficer={isOfficer}
-            setShowKillModal={setShowKillModal}
-            setKillTimeInput={setKillTimeInput}
-            onEditSchedule={(item) => {
-              setEditingEvent(item);
-              setShowAddModal(true);
-            }}
-            onDeleteSchedule={handleDeleteSchedule}
-          />
-
-          {/* Upcoming Active Spawns Countdown Tracker Panel */}
-          <ActiveSpawnsQueue
-            upcomingSpawns={upcomingSpawns}
-            getCountdownText={getCountdownText}
-          />
-
-          {/* Killed History Logs panel */}
-          <KilledBossHistory
-            killedHistory={killedHistory}
-          />
+        {/* View Switcher Bar */}
+        <div className="flex items-center justify-between bg-white/[0.015] border border-white/[0.04] px-4 py-3 rounded-2xl glass-subtle">
+          <div className="text-xs font-semibold text-white/40 uppercase tracking-widest">
+            Raid Schedule Viewer
+          </div>
+          <div className="flex items-center border border-white/[0.06] rounded-xl bg-white/[0.015] p-1">
+            <button
+              onClick={() => setViewMode("CARD")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+                viewMode === "CARD"
+                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
+                  : "text-white/40 hover:text-white/70 border border-transparent"
+              }`}
+            >
+              Card View
+            </button>
+            <button
+              onClick={() => setViewMode("TIMELINE")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+                viewMode === "TIMELINE"
+                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
+                  : "text-white/40 hover:text-white/70 border border-transparent"
+              }`}
+            >
+              Timeline View
+            </button>
+          </div>
         </div>
 
-        {/* New Boss Respawn Tracker sub-module */}
-        <BossRespawnList
-          killedHistory={killedHistory}
-          bosses={bosses}
-        />
+        {/* ACTIVE VIEW MODES */}
+        {viewMode === "CARD" ? (
+          /* CARD GRID VIEW */
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-5 animate-scale-in">
+            {upcomingSpawns.length === 0 ? (
+              <div className="col-span-full py-12 text-center text-zinc-500 text-sm border border-dashed border-white/5 rounded-2xl bg-white/[0.005]">
+                No upcoming boss spawns scheduled.
+              </div>
+            ) : (
+              upcomingSpawns.map((item) => {
+                const tick = getCountdownText(item.spawnTime);
+                const isPriority = !tick.expired && tick.warning;
+                const claimGuild = item.guildTurn || "SAUSAGE";
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`group relative flex flex-col justify-between rounded-2xl bg-[#0c0c10] border p-4 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${
+                      isPriority
+                        ? "border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.12)] bg-amber-950/[0.02] animate-pulse"
+                        : "border-white/[0.05] hover:border-white/[0.12]"
+                    }`}
+                  >
+                    <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-zinc-950 border border-white/[0.06] mb-3 select-none">
+                      {item.bossImageUrl ? (
+                        <img
+                          src={item.bossImageUrl}
+                          alt={item.bossName}
+                          className="h-full w-full object-cover transform scale-100 group-hover:scale-110 transition-transform duration-700 ease-in-out"
+                        />
+                      ) : (
+                        <div className="h-full w-full bg-gradient-to-br from-zinc-800/40 to-black flex items-center justify-center">
+                          <svg className="h-8 w-8 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                          </svg>
+                        </div>
+                      )}
+                      {/* Active status indicator overlay */}
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-1.5">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            item.status === "SPAWNED"
+                              ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]"
+                              : "bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.6)]"
+                          }`}
+                        />
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-white/95">
+                          {item.status === "SPAWNED" ? "LIVE" : "CLAIMED"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 mb-4 select-none">
+                      <h4 className="font-bold text-white text-[14px] truncate leading-tight">
+                        {item.bossName}
+                      </h4>
+                      <div className="text-[9px] text-zinc-500 flex flex-col gap-0.5">
+                        <p className="truncate">📍 {item.location}</p>
+                      </div>
+
+                      {/* Spawn timer countdown */}
+                      <div className="pt-2">
+                        <span className="block text-[8px] text-zinc-500 uppercase tracking-widest mb-1">
+                          Respawning In
+                        </span>
+                        <span
+                          className={`block text-[13px] font-mono leading-none ${
+                            isPriority ? "text-amber-400 font-bold" : "text-emerald-400 font-medium"
+                          }`}
+                        >
+                          {tick.text}
+                        </span>
+                        <span className="block text-[9px] text-white/35 mt-1 font-sans">
+                          {new Date(item.spawnTime).toLocaleDateString("en-US", { weekday: "short" })}{" "}
+                          {new Date(item.spawnTime).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Taken By Badge */}
+                    <div className="mb-4">
+                      <span className="block text-[8px] text-zinc-500 uppercase tracking-widest leading-none mb-1.5 select-none">
+                        Taken By:
+                      </span>
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold ${
+                          GUILD_CONFIG[claimGuild.toUpperCase()]?.border || "border-zinc-800"
+                        } ${GUILD_CONFIG[claimGuild.toUpperCase()]?.bg || "bg-zinc-950"} ${
+                          GUILD_CONFIG[claimGuild.toUpperCase()]?.text || "text-zinc-400"
+                        }`}
+                      >
+                        <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                        {claimGuild.toUpperCase()}
+                      </div>
+                    </div>
+
+                    {/* Next Turn Badge with Gold Glow */}
+                    <div className="border-t border-white/[0.04] pt-3.5 space-y-1.5">
+                      <span className="block text-[8px] text-zinc-500 uppercase tracking-widest leading-none select-none">
+                        Next Guild Turn
+                      </span>
+                      <div className="flex items-center justify-between text-[11px] font-semibold px-2 py-1 rounded-lg bg-amber-500/[0.06] border border-amber-500/25 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.06)] animate-pulse">
+                        <span>{claimGuild.toUpperCase()}</span>
+                        <span className="text-[9px] uppercase tracking-wider text-amber-500 font-bold bg-amber-500/10 px-1 py-0.2 rounded">
+                          UP NEXT
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action buttons co-located with schedule */}
+                    {isOfficer && (
+                      <div className="mt-4 pt-1 flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => {
+                            setKillTimeInput(new Date().toTimeString().substring(0, 5));
+                            setShowKillModal(item);
+                          }}
+                          className="w-full text-[10px] uppercase font-bold tracking-wider hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/35"
+                        >
+                          Record Defeat
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* TIMELINE VIEW (Grouped Chronologically by Day) */
+          <div className="space-y-8 animate-scale-in">
+            {upcomingSpawns.length === 0 ? (
+              <div className="py-12 text-center text-zinc-500 text-sm border border-dashed border-white/5 rounded-2xl bg-white/[0.005]">
+                No upcoming boss spawns scheduled.
+              </div>
+            ) : (
+              Object.keys(groupedSchedules).map((dayStr) => (
+                <div key={dayStr} className="space-y-4">
+                  {/* Sticky Date Header */}
+                  <div className="sticky top-[80px] z-30 bg-[#08080a]/90 backdrop-blur px-4 py-2 border-y border-white/[0.04] text-xs font-bold text-amber-500/90 tracking-widest uppercase flex items-center gap-2">
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                    </svg>
+                    {dayStr}
+                  </div>
+
+                  <div className="relative border-l border-white/[0.06] pl-6 ml-4 space-y-4">
+                    {groupedSchedules[dayStr].map((item) => {
+                      const tick = getCountdownText(item.spawnTime);
+                      const claimGuild = item.guildTurn || "SAUSAGE";
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="relative flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-white/[0.04] bg-[#0c0c10]/40 backdrop-blur-md hover:border-white/[0.08] transition-colors"
+                        >
+                          {/* Timeline node */}
+                          <div className="absolute -left-[31px] top-1/2 -translate-y-1/2 h-4 w-4 rounded-full border-2 border-zinc-950 bg-[#08080a] flex items-center justify-center">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)]" />
+                          </div>
+
+                          {/* Spawn Time */}
+                          <div className="shrink-0 min-w-[80px] select-none text-left">
+                            <span className="block text-xs font-semibold text-white">
+                              {new Date(item.spawnTime).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                            <span className="block text-[9px] text-zinc-500 font-mono">
+                              Spawn Time
+                            </span>
+                          </div>
+
+                          {/* Identity */}
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+                              {item.bossImageUrl ? (
+                                <img src={item.bossImageUrl} alt={item.bossName} className="h-full w-full object-cover" />
+                              ) : (
+                                <svg className="h-4 w-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                </svg>
+                              )}
+                            </div>
+                            <div>
+                              <h5 className="font-bold text-white text-xs">{item.bossName}</h5>
+                              <p className="text-[10px] text-zinc-500">📍 {item.location}</p>
+                            </div>
+                          </div>
+
+                          {/* Ownership display */}
+                          <div className="flex flex-col">
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1 select-none">Taken By:</span>
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold border ${
+                              GUILD_CONFIG[claimGuild.toUpperCase()]?.border || "border-zinc-800"
+                            } ${GUILD_CONFIG[claimGuild.toUpperCase()]?.bg || "bg-zinc-950"} ${
+                              GUILD_CONFIG[claimGuild.toUpperCase()]?.text || "text-zinc-400"
+                            }`}>
+                              {claimGuild.toUpperCase()}
+                            </span>
+                          </div>
+
+                          {/* Respawn timer */}
+                          <div className="flex flex-col select-none text-left">
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Respawn countdown</span>
+                            <span className={`text-xs font-mono font-bold ${tick.warning ? "text-amber-400 animate-pulse" : "text-emerald-400"}`}>
+                              {tick.text}
+                            </span>
+                          </div>
+
+                          {/* Faction Indicator */}
+                          <div className="flex flex-col select-none text-left">
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Event Type</span>
+                            <span className="text-[10px] text-zinc-400 font-medium">
+                              {item.guildId ? "🛡️ Guild Event" : "🔱 Alliance Faction"}
+                            </span>
+                          </div>
+
+                          {/* Action Log Defeat */}
+                          {isOfficer && (
+                            <div className="shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => {
+                                  setKillTimeInput(new Date().toTimeString().substring(0, 5));
+                                  setShowKillModal(item);
+                                }}
+                                className="text-[10px] uppercase font-bold tracking-wider hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/35"
+                              >
+                                Record Defeat
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Global Status Legend Panel */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/[0.06] pt-5 text-white/50 text-xs select-none">
+          <div className="flex flex-wrap items-center gap-5">
+            <span className="font-semibold text-white/40 uppercase tracking-wider">Status Legend:</span>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
+              <span>🟢 Available (Spawned/LIVE)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
+              <span>🟡 Claimed (Upcoming Spawn)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
+              <span>🔴 Dead (Defeated logs)</span>
+            </div>
+          </div>
+          <div className="text-[10px] text-zinc-500 italic">
+            Times and schedules are synchronized with global server time.
+          </div>
+        </div>
+
+        {/* Interactive Weekly Planner Calendar */}
+        <div className="border-t border-white/[0.05] pt-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
+              📅 Planner Calendar & Historical Data
+            </h3>
+          </div>
+          
+          <WeeklyCalendar
+            anchorDate={anchorDate}
+            setAnchorDate={setAnchorDate}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            daysOfWeek={daysOfWeek}
+            getEventsForDay={getEventsForDay}
+            getCountdownText={getCountdownText}
+            isOfficer={isOfficer}
+            isLoading={isLoading}
+            setShowAddModal={setShowAddModal}
+            setSpawnDate={setSpawnDate}
+            setSpawnTime={setSpawnTime}
+            setShowKillModal={setShowKillModal}
+            setKillTimeInput={setKillTimeInput}
+          />
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-up pt-4">
+            <DaySpawnsTimeline
+              selectedDate={selectedDate}
+              dayEvents={dayEvents}
+              getCountdownText={getCountdownText}
+              isOfficer={isOfficer}
+              setShowKillModal={setShowKillModal}
+              setKillTimeInput={setKillTimeInput}
+              onEditSchedule={(item) => {
+                setEditingEvent(item);
+                setShowAddModal(true);
+              }}
+              onDeleteSchedule={handleDeleteSchedule}
+            />
+
+            <ActiveSpawnsQueue
+              upcomingSpawns={upcomingSpawns}
+              getCountdownText={getCountdownText}
+            />
+
+            <KilledBossHistory
+              killedHistory={killedHistory}
+            />
+          </div>
+
+          <BossRespawnList
+            killedHistory={killedHistory}
+            bosses={bosses}
+          />
+        </div>
 
         {/* Modal: Schedule / Edit Boss Spawn */}
         <AddScheduleModal

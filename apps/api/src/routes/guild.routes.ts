@@ -7,6 +7,9 @@ import * as applicationService from "../services/application.service";
 import type { ApiResponse } from "@guild/shared";
 import { GUILD_ROLES, type GuildRoleType } from "@guild/shared";
 import { prisma } from "@guild/db";
+import { broadcastToGuild } from "../lib/socket";
+
+
 
 const router: Router = Router();
 
@@ -79,6 +82,8 @@ router.patch(
         userAgent,
       );
 
+      broadcastToGuild(guildId, "member_role_updated", updated);
+
       const response: ApiResponse = {
         success: true,
         data: { member: updated },
@@ -134,6 +139,28 @@ router.post(
         weapon,
       );
 
+      const fullRequest = await prisma.guildJoinRequest.findUnique({
+        where: { id: result.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+              email: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      });
+
+      if (fullRequest) {
+        const serializedRequest = {
+          ...fullRequest,
+          createdAt: fullRequest.createdAt.toISOString(),
+        };
+        broadcastToGuild(result.guildId, "join_request_created", serializedRequest);
+      }
+
       const response: ApiResponse = {
         success: true,
         data: result,
@@ -173,6 +200,9 @@ router.delete(
     try {
       const requestId = req.params['requestId'] as string;
       const result = await applicationService.cancelJoinRequest(req.user!.userId, requestId);
+
+      broadcastToGuild(result.guildId, "join_request_cancelled", { requestId });
+
       const response: ApiResponse = {
         success: true,
         data: result,
@@ -240,6 +270,12 @@ router.patch(
         userAgent,
       );
 
+      broadcastToGuild(guildId, "join_request_processed", {
+        requestId,
+        action,
+        memberCode: result.memberCode,
+      });
+
       const response: ApiResponse = {
         success: true,
         data: result,
@@ -260,13 +296,10 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
-      const guild = await prisma.guild.findUnique({
-        where: { id: guildId },
-        select: { inviteCode: true },
-      });
+      const inviteCode = await guildService.getGuildInviteCode(guildId);
       const response: ApiResponse = {
         success: true,
-        data: { inviteCode: guild?.inviteCode || null },
+        data: { inviteCode },
       };
       res.json(response);
     } catch (error) {
@@ -292,6 +325,10 @@ router.post(
         ipAddress,
         userAgent,
       );
+
+      broadcastToGuild(guildId, "invite_code_updated", {
+        inviteCode: result.inviteCode,
+      });
 
       const response: ApiResponse = {
         success: true,
@@ -358,6 +395,90 @@ router.patch(
       const response: ApiResponse = {
         success: true,
         data: settings,
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ─── GET /:guildId/audit-logs ───────────────────
+// Returns paginated audit logs for a guild. Optional ?filter=boss for boss events only.
+router.get(
+  "/:guildId/audit-logs",
+  requireAuth,
+  requireGuildRole("MEMBER"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params['guildId'] as string;
+      const filter = req.query['filter'] as string | undefined; // e.g., "boss"
+      const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
+      const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 30;
+      const skip = (page - 1) * limit;
+
+      // Build action filter for boss-related events
+      let actionFilter: Record<string, unknown> | undefined;
+      if (filter === "boss") {
+        actionFilter = {
+          in: [
+            "BOSS_EVENT_SCHEDULED",
+            "BOSS_KILLED_LOGGED",
+            "BOSS_EVENT_UPDATED",
+            "BOSS_EVENT_DELETED",
+            "BOSS_KILL_RECORDED",
+          ],
+        };
+      }
+
+      const [logs, total] = await Promise.all([
+        prisma.auditLog.findMany({
+          where: {
+            guildId,
+            ...(actionFilter ? { action: actionFilter } : {}),
+          },
+          include: {
+            actor: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+        }),
+        prisma.auditLog.count({
+          where: {
+            guildId,
+            ...(actionFilter ? { action: actionFilter } : {}),
+          },
+        }),
+      ]);
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          logs: logs.map((log) => ({
+            id: log.id,
+            action: log.action,
+            target: log.target,
+            targetId: log.targetId,
+            detail: log.detail,
+            createdAt: log.createdAt.toISOString(),
+            actor: {
+              id: log.actor.id,
+              displayName: log.actor.displayName,
+              avatarUrl: log.actor.avatarUrl,
+            },
+          })),
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
       };
       res.json(response);
     } catch (error) {

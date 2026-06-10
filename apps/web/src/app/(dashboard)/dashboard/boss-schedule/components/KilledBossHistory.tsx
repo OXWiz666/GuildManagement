@@ -2,6 +2,7 @@
 
 import { type BossScheduleData } from "@/lib/api";
 import Card from "@/components/ui/Card";
+import { sanitizeUrl } from "@/lib/sanitize";
 
 export interface KilledBossHistoryProps {
   killedHistory: BossScheduleData[];
@@ -47,7 +48,7 @@ export default function KilledBossHistory({ killedHistory }: KilledBossHistoryPr
               {log.screenshotUrl && (
                 <div className="flex justify-end pt-0.5">
                   <a
-                    href={log.screenshotUrl}
+                    href={sanitizeUrl(log.screenshotUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors font-medium border border-white/[0.05] bg-white/[0.01] px-2 py-0.5 rounded"

@@ -8,6 +8,7 @@ import type { ApiResponse } from "@guild/shared";
 import { AttendanceType } from "@guild/db";
 import { cache } from "../lib/cache";
 import { broadcastToGuild } from "../lib/socket";
+import { checkInLimiter } from "../middleware/rateLimiter";
 
 const router: Router = Router();
 
@@ -63,6 +64,14 @@ router.post(
         bossScheduleId,
       );
 
+      // Invalidate attendance and schedule in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+        cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+        cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
       // Serialize Date fields for socket transmission compatibility
       const socketPayload = {
         ...session,
@@ -86,6 +95,7 @@ router.post(
 router.post(
   "/attendance/check-in",
   requireAuth,
+  checkInLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { code } = req.body as { code: string };
@@ -106,6 +116,14 @@ router.post(
         req.user!.userId,
         code,
       );
+
+      // Invalidate attendance and schedule in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:${result.guildId}:*`),
+        cache.invalidatePattern(`attendance:pending:${result.guildId}:*`),
+        cache.invalidatePattern(`attendance:stats:${result.guildId}:*`),
+        cache.invalidatePattern(`stats:${result.guildId}:*`),
+      ]);
 
       // Serialize Date fields for socket transmission compatibility
       const serializedRecord = {
@@ -139,10 +157,19 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
+      const cacheKey = `attendance:pending:${guildId}:user:${req.user!.userId}`;
+
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
       const result = await dashboardService.getGuildPendingAttendance(
         guildId,
         req.user!.userId,
       );
+
+      await cache.set(cacheKey, result, 15); // Cache for 15 seconds
 
       const response: ApiResponse = {
         success: true,
@@ -186,6 +213,14 @@ router.patch(
         userAgent,
       );
 
+      // Invalidate attendance and schedule in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+        cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+        cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
       // Serialize Date fields for socket transmission compatibility
       const serializedRecord = {
         ...result.record,
@@ -218,10 +253,19 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
+      const cacheKey = `attendance:stats:${guildId}:user:${req.user!.userId}`;
+
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
       const stats = await dashboardService.getMemberAttendanceStats(
         guildId,
         req.user!.userId,
       );
+
+      await cache.set(cacheKey, stats, 15); // Cache for 15 seconds
 
       const response: ApiResponse = {
         success: true,
@@ -275,11 +319,21 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
+      const cacheKey = `boss-schedule:${guildId}:user:${req.user?.userId || "anonymous"}`;
+
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
       const schedules = await dashboardService.getBossSchedules(guildId, req.user?.userId);
+      const data = { schedules };
+
+      await cache.set(cacheKey, data, 15); // Cache for 15 seconds
 
       const response: ApiResponse = {
         success: true,
-        data: { schedules },
+        data,
       };
       res.json(response);
     } catch (error) {
@@ -328,6 +382,12 @@ router.post(
         ipAddress,
         userAgent,
       );
+
+      // Invalidate schedule and dashboard stats in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:*`),
+        cache.invalidatePattern(`stats:${targetGuildId || guildId}:*`),
+      ]);
 
       // Serialize Date fields to ISO strings for socket transmission compatibility
       const socketPayload = {
@@ -378,7 +438,7 @@ router.patch(
 
       const { ipAddress, userAgent } = getClientInfo(req);
 
-      const result = await dashboardService.logBossKill(
+      const { updatedEvent, nextSchedule } = await dashboardService.logBossKill(
         guildId,
         scheduleId,
         killedAt,
@@ -389,19 +449,39 @@ router.patch(
         userAgent,
       );
 
+      // Invalidate schedule and stats in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
       // Serialize Date fields to ISO strings for socket transmission compatibility
       const socketPayload = {
-        ...result,
-        spawnTime: result.spawnTime.toISOString(),
-        killedAt: result.killedAt ? result.killedAt.toISOString() : null,
-        createdAt: result.createdAt.toISOString(),
+        ...updatedEvent,
+        spawnTime: updatedEvent.spawnTime.toISOString(),
+        killedAt: updatedEvent.killedAt ? updatedEvent.killedAt.toISOString() : null,
+        createdAt: updatedEvent.createdAt.toISOString(),
       };
 
-      broadcastToGuild(result.guildId || guildId, "boss_rotation_updated", socketPayload);
+      broadcastToGuild(updatedEvent.guildId || guildId, "boss_rotation_updated", socketPayload);
+
+      let serializedNextSchedule = null;
+      if (nextSchedule) {
+        serializedNextSchedule = {
+          ...nextSchedule,
+          spawnTime: nextSchedule.spawnTime.toISOString(),
+          killedAt: null,
+          createdAt: nextSchedule.createdAt.toISOString(),
+        };
+        broadcastToGuild(null, "boss_rotation_updated", serializedNextSchedule);
+      }
 
       const response: ApiResponse = {
         success: true,
-        data: { schedule: socketPayload },
+        data: { 
+          schedule: socketPayload,
+          nextSchedule: serializedNextSchedule
+        },
       };
       res.json(response);
     } catch (error) {
@@ -416,10 +496,21 @@ router.get(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const cacheKey = "bosses:registry";
+
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+
       const bosses = await dashboardService.getBosses();
+      const data = { bosses };
+
+      await cache.set(cacheKey, data, 300); // Cache for 5 minutes
+
       const response: ApiResponse = {
         success: true,
-        data: { bosses },
+        data,
       };
       res.json(response);
     } catch (error) {
@@ -455,6 +546,12 @@ router.patch(
         ipAddress,
         userAgent,
       );
+
+      // Invalidate schedule and stats in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
 
       // Serialize Date fields to ISO strings for socket transmission compatibility
       const socketPayload = {
@@ -496,6 +593,12 @@ router.delete(
         userAgent,
       );
 
+      // Invalidate schedule and stats in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
       broadcastToGuild(guildId, "boss_schedule_deleted", { scheduleId });
 
       const response: ApiResponse = {
@@ -534,6 +637,14 @@ router.patch(
         userAgent,
       );
 
+      // Invalidate attendance and schedule in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+        cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+        cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
       // Serialize Date fields for socket transmission compatibility
       const socketPayload = {
         ...session,
@@ -571,6 +682,14 @@ router.delete(
         ipAddress,
         userAgent,
       );
+
+      // Invalidate attendance and schedule in-memory caches
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+        cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+        cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
 
       broadcastToGuild(guildId, "attendance_session_deleted", { sessionId });
 

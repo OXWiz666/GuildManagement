@@ -71,9 +71,21 @@ export const changePasswordSchema = z
     path: ["confirmPassword"],
   });
 
+export const updateUserSchema = z.object({
+  displayName: displayNameSchema.optional(),
+  email: emailSchema.optional(),
+  avatarUrl: z.string().nullable().optional(),
+  password: passwordSchema.optional(),
+  ign: z.string().nullable().optional(),
+  cp: z.number().int().nonnegative().nullable().optional(),
+  class: z.string().nullable().optional(),
+  weapon: z.string().nullable().optional(),
+});
+
 // Infer types from schemas
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;

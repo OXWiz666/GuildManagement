@@ -4,7 +4,7 @@ import React from "react";
 import SettingsCard from "./SettingsCard";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { ImageUrlField, Magnetic } from "@/components/dashboard/DashboardHelpers";
+import { AvatarUploadField, Magnetic } from "@/components/dashboard/DashboardHelpers";
 
 export interface ProfileSectionProps {
   avatarUrl: string;
@@ -34,12 +34,10 @@ export default function ProfileSection({
       description="Your public-facing identity on ForgeKeep."
     >
       <form onSubmit={handleUpdateProfile} className="space-y-5">
-        <ImageUrlField
-          label="Avatar image URL"
+        <AvatarUploadField
+          label="Profile photo"
           value={avatarUrl}
           onChange={setAvatarUrl}
-          placeholder="https://example.com/avatar.png"
-          shape="circle"
           fallbackInitial={
             displayName
               ? displayName
@@ -50,7 +48,7 @@ export default function ProfileSection({
                   .slice(0, 2)
               : "?"
           }
-          helperText="Any absolute https:// URL"
+          helperText="Upload any local image from your PC (JPG, PNG, WEBP) or drag it onto the circle."
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/[0.06]">

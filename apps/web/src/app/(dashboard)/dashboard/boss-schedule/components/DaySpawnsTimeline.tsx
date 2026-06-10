@@ -114,7 +114,7 @@ export default function DaySpawnsTimeline({
                 {/* Actions inside timeline card */}
                 {isOfficer && (
                   <div className="flex gap-2 mt-1.5 pt-1.5 border-t border-white/[0.05]">
-                    {!isKilled && (tick.expired || tick.warning) && (
+                    {!isKilled && tick.expired && (
                       <Button
                         variant="danger"
                         size="xs"

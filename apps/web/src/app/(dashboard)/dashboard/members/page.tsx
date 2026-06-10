@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
 import { guildApi, type GuildMemberData, type JoinRequestData } from "@/lib/api";
@@ -9,6 +9,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { Skeleton, SkeletonAvatar } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
+import { useQuery, queryClient } from "@/lib/query";
 import {
   Reveal,
   ModuleHeader,
@@ -27,8 +28,6 @@ export default function MembersPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { socket } = useSocket();
-  const [members, setMembers] = useState<GuildMemberData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [confirmModal, setConfirmModal] = useState<{
@@ -44,74 +43,59 @@ export default function MembersPage() {
 
   // New admin flow state variables
   const [activeTab, setActiveTab] = useState<"members" | "applications" | "invites">("members");
-  const [applications, setApplications] = useState<JoinRequestData[]>([]);
-  const [isLoadingApps, setIsLoadingApps] = useState(false);
-  const [guildInviteCode, setGuildInviteCode] = useState<string | null>(null);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
-  const [isLoadingInvite, setIsLoadingInvite] = useState(false);
   const [isReviewingId, setIsReviewingId] = useState<string | null>(null);
 
   const activeGuild = user?.guilds[0];
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
   const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader;
 
-  const loadMembers = useCallback(async () => {
-    if (!activeGuild) return;
-    setIsLoading(true);
-    try {
+  // ─── Persistent Queries ────────────────────────────────
+  
+  // 1. Members Query
+  const {
+    data: membersRaw,
+    isLoading,
+  } = useQuery<GuildMemberData[]>(
+    activeGuild ? `guild_members:${activeGuild.guildId}` : "guild_members_empty",
+    async () => {
+      if (!activeGuild) return [];
       const result = await guildApi.getMembers(activeGuild.guildId);
-      if (result.success && result.data?.members) {
-        setMembers(result.data.members);
-      }
-    } catch {
-      addToast("error", "Failed to load members");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeGuild, addToast]);
+      return result.success && result.data?.members ? result.data.members : [];
+    },
+    { persist: true, staleTime: 30000 }
+  );
+  const members = membersRaw || [];
 
-  const loadApplications = useCallback(async () => {
-    if (!activeGuild || !isOfficer) return;
-    setIsLoadingApps(true);
-    try {
+  // 2. Applications Query
+  const {
+    data: applicationsRaw,
+    isLoading: isLoadingApps,
+    refetch: refetchApplications,
+  } = useQuery<JoinRequestData[]>(
+    activeGuild ? `guild_applications:${activeGuild.guildId}` : "guild_applications_empty",
+    async () => {
+      if (!activeGuild || !isOfficer) return [];
       const result = await guildApi.getGuildApplications(activeGuild.guildId);
-      if (result.success && result.data?.applications) {
-        setApplications(result.data.applications);
-      }
-    } catch {
-      addToast("error", "Failed to load applications");
-    } finally {
-      setIsLoadingApps(false);
-    }
-  }, [activeGuild, isOfficer, addToast]);
+      return result.success && result.data?.applications ? result.data.applications : [];
+    },
+    { persist: true, staleTime: 30000 }
+  );
+  const applications = applicationsRaw || [];
 
-  const loadInviteCode = useCallback(async () => {
-    if (!activeGuild || !isGuildLeader) return;
-    setIsLoadingInvite(true);
-    try {
+  // 3. Invite Code Query
+  const {
+    data: guildInviteCode,
+    isLoading: isLoadingInvite,
+  } = useQuery<string | null>(
+    activeGuild ? `guild_invite_code:${activeGuild.guildId}` : "guild_invite_code_empty",
+    async () => {
+      if (!activeGuild || !isGuildLeader) return null;
       const result = await guildApi.getInviteCode(activeGuild.guildId);
-      if (result.success) {
-        setGuildInviteCode(result.data?.inviteCode || null);
-      }
-    } catch {
-      // Quiet fail
-    } finally {
-      setIsLoadingInvite(false);
-    }
-  }, [activeGuild, isGuildLeader]);
-
-  useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
-
-  // Load apps or invite codes when tabs change
-  useEffect(() => {
-    if (activeTab === "applications") {
-      loadApplications();
-    } else if (activeTab === "invites") {
-      loadInviteCode();
-    }
-  }, [activeTab, loadApplications, loadInviteCode]);
+      return result.success ? result.data?.inviteCode || null : null;
+    },
+    { persist: true, staleTime: 60000 }
+  );
 
   // Listen to real-time events to refresh members list and pending join applications instantly
   useEffect(() => {
@@ -119,19 +103,19 @@ export default function MembersPage() {
 
     const handleRosterUpdate = () => {
       console.log("[Roster Socket]: Guild members updated. Refreshing members list...");
-      loadMembers();
+      queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
     };
 
     const handleApplicationsUpdate = () => {
       console.log("[Applications Socket]: Guild applications changed. Refreshing queues...");
       if (isOfficer) {
-        loadApplications();
+        queryClient.invalidateQueries(`guild_applications:${activeGuild.guildId}`);
       }
     };
 
     const handleInviteUpdate = (payload: { inviteCode: string }) => {
       console.log("[Invite Socket]: Invite code updated.");
-      setGuildInviteCode(payload.inviteCode);
+      queryClient.invalidateQueries(`guild_invite_code:${activeGuild.guildId}`);
     };
 
     socket.on("member_role_updated", handleRosterUpdate);
@@ -149,7 +133,7 @@ export default function MembersPage() {
       socket.off("join_request_processed", handleRosterUpdate);
       socket.off("invite_code_updated", handleInviteUpdate);
     };
-  }, [socket, activeGuild, loadMembers, loadApplications, isOfficer]);
+  }, [socket, activeGuild, isOfficer]);
 
   // Filter members
   const filteredMembers = members.filter((m) => {
@@ -188,8 +172,7 @@ export default function MembersPage() {
           ? `Transferred Guild Leader to ${confirmModal.memberName}`
           : `Updated ${confirmModal.memberName}'s role to ${confirmModal.newRole.replace("_", " ")}`;
         addToast("success", actionLabel);
-        // Reload members to reflect changes
-        await loadMembers();
+        queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
       } else {
         addToast("error", result.error?.message || "Failed to update role");
       }
@@ -212,8 +195,8 @@ export default function MembersPage() {
         } else {
           addToast("info", "Application declined");
         }
-        await loadApplications();
-        await loadMembers();
+        queryClient.invalidateQueries(`guild_applications:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
       } else {
         addToast("error", result.error?.message || "Failed to process application");
       }
@@ -230,7 +213,7 @@ export default function MembersPage() {
     try {
       const result = await guildApi.generateInviteCode(activeGuild.guildId);
       if (result.success && result.data?.inviteCode) {
-        setGuildInviteCode(result.data.inviteCode);
+        queryClient.invalidateQueries(`guild_invite_code:${activeGuild.guildId}`);
         addToast("success", "New Guild Invite Code generated!");
       } else {
         addToast("error", "Failed to generate invite code");
@@ -421,7 +404,7 @@ export default function MembersPage() {
             isLoadingApps={isLoadingApps}
             isReviewingId={isReviewingId}
             isGuildLeader={isGuildLeader}
-            loadApplications={loadApplications}
+            loadApplications={refetchApplications}
             handleReviewApplication={handleReviewApplication}
           />
         )}

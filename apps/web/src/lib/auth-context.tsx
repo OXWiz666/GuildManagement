@@ -37,6 +37,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isSessionReady: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (
     email: string,
@@ -50,22 +51,46 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const getCachedProfile = (): User | null => {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("auth_profile");
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch {
+      // quiet fail
+    }
+  }
+  return null;
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(getCachedProfile());
+  const [isLoading, setIsLoading] = useState(!getCachedProfile());
+  const [isSessionReady, setIsSessionReady] = useState(false);
 
   const refreshUser = useCallback(async () => {
     try {
       const result = await authApi.getMe();
       if (result.success && result.data?.user) {
         setUser(result.data.user);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("auth_profile", JSON.stringify(result.data.user));
+        }
       } else {
         setUser(null);
         setAccessToken(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("auth_profile");
+        }
       }
     } catch {
       setUser(null);
       setAccessToken(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth_profile");
+      }
     }
   }, []);
 
@@ -75,8 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const refreshed = await authApi.refreshToken();
       if (refreshed) {
         await refreshUser();
+      } else {
+        setUser(null);
+        setAccessToken(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("auth_profile");
+        }
       }
       setIsLoading(false);
+      setIsSessionReady(true);
     }
     init();
   }, [refreshUser]);
@@ -89,9 +121,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await authApi.login(email, password);
 
       if (result.success && result.data?.user) {
-        setUser({ ...result.data.user, guilds: [] });
+        const basicUser = { ...result.data.user, guilds: [] };
+        setUser(basicUser);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+        }
         // Fetch full user with guilds
         await refreshUser();
+        setIsSessionReady(true);
         return { success: true };
       }
 
@@ -118,7 +155,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
 
       if (result.success && result.data?.user) {
-        setUser({ ...result.data.user, guilds: [] });
+        const basicUser = { ...result.data.user, guilds: [] };
+        setUser(basicUser);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+        }
+        setIsSessionReady(true);
         return { success: true };
       }
 
@@ -143,6 +185,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setAccessToken(null);
       setUser(null);
+      setIsSessionReady(false);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth_profile");
+      }
     }
   }, []);
 
@@ -191,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
+        isSessionReady,
         login,
         register,
         logout,

@@ -24,16 +24,16 @@ const SocketContext = createContext<SocketContextType>({
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isSessionReady } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      // Disconnect and clean up if not authenticated
+    if (!isAuthenticated || !isSessionReady) {
+      // Disconnect and clean up if not authenticated or session checks aren't fully resolved yet
       if (socket) {
-        console.log("[Socket Client]: Disconnecting because user is unauthenticated");
+        console.log("[Socket Client]: Disconnecting because user session is not fully ready");
         socket.disconnect();
         setSocket(null);
         setIsConnected(false);
@@ -89,7 +89,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       console.log("[Socket Client]: Cleaning up connection on unmount");
       newSocket.disconnect();
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isSessionReady]);
 
   // Active Guild Room Subscription logic
   useEffect(() => {

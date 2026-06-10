@@ -1,16 +1,24 @@
-import { PrismaClient, GuildRole } from "@prisma/client";
-import * as crypto from "crypto";
+import { PrismaClient } from "../src/generated/client";
+
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding database...\n");
 
-  // ─── Clean existing data ─────────────────────────
-  await prisma.boss.deleteMany();
+  // ─── Truncate all tables (order matters for FK constraints) ───
+  // Children first, then parents
+  await prisma.lootSale.deleteMany();
+  await prisma.auctionBid.deleteMany();
+  await prisma.auctionItem.deleteMany();
+  await prisma.itemRequest.deleteMany();
+  await prisma.guildPointsSnapshot.deleteMany();
+  await prisma.attendanceRecord.deleteMany();
+  await prisma.attendanceSession.deleteMany();
   await prisma.bossSchedule.deleteMany();
+  await prisma.boss.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.ledgerEntry.deleteMany();
+  await prisma.guildJoinRequest.deleteMany();
   await prisma.guildMember.deleteMany();
   await prisma.guildSettings.deleteMany();
   await prisma.guild.deleteMany();
@@ -28,64 +36,88 @@ async function main() {
     data: {
       email: "admin@guildmaster.dev",
       passwordHash,
-      displayName: "Guild Admin",
-      avatarUrl: null,
+      displayName: "Mavis08",
+      avatarUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=256&auto=format&fit=crop", // Gorgeous cute anime PFP
+      ign: "Mavis08",
+      cp: 120000,
+      class: "Destroyer",
+      weapon: "Staff",
     },
   });
-  console.log(`✅ Created admin user: ${admin.email}`);
 
   const player1 = await prisma.user.create({
     data: {
-      email: "player1@guildmaster.dev",
+      email: "Dragz69@guildmaster.dev",
       passwordHash,
-      displayName: "DragonSlayer99",
+      displayName: "Dragz69",
+      avatarUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=256&auto=format&fit=crop",
+      ign: "Dragz69",
+      cp: 98000,
+      class: "Hunter",
+      weapon: "Sword and Shield",
     },
   });
-  console.log(`✅ Created player: ${player1.email}`);
 
   const player2 = await prisma.user.create({
     data: {
-      email: "player2@guildmaster.dev",
+      email: "Wiz@guildmaster.dev",
       passwordHash,
-      displayName: "ShadowMage",
+      displayName: "Wiz",
+      avatarUrl: "https://images.unsplash.com/photo-1566492031773-4f4e44671857?q=80&w=256&auto=format&fit=crop",
+      ign: "Wiz",
+      cp: 95000,
+      class: "Immortal Knight",
+      weapon: "Dual Dagger",
     },
   });
-  console.log(`✅ Created player: ${player2.email}`);
 
   const player3 = await prisma.user.create({
     data: {
-      email: "player3@guildmaster.dev",
+      email: "Daylili@guildmaster.dev",
       passwordHash,
-      displayName: "TankLord",
+      displayName: "Daylili",
+      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      ign: "Daylili",
+      cp: 75000,
+      class: "Striker",
+      weapon: "Greatsword",
     },
   });
-  console.log(`✅ Created player: ${player3.email}`);
 
   const player4 = await prisma.user.create({
     data: {
-      email: "player4@guildmaster.dev",
+      email: "Hou13@guildmaster.dev",
       passwordHash,
-      displayName: "HealerQueen",
+      displayName: "Hou13",
+      avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+      ign: "Hou13",
+      cp: 88000,
+      class: "Destroyer",
+      weapon: "XBow",
     },
   });
-  console.log(`✅ Created player: ${player4.email}`);
 
   const player5 = await prisma.user.create({
     data: {
-      email: "player5@guildmaster.dev",
+      email: "Lael@guildmaster.dev",
       passwordHash,
-      displayName: "StormArcher",
+      displayName: "Lael",
+      avatarUrl: "https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=256&auto=format&fit=crop",
+      ign: "Lael",
+      cp: 85000,
+      class: "Blitzblade",
+      weapon: "Dual Dagger",
     },
   });
-  console.log(`✅ Created player: ${player5.email}`);
 
   // ─── Guilds ──────────────────────────────────────
   const guild1 = await prisma.guild.create({
     data: {
-      name: "Dragon Knights",
-      slug: "dragon-knights",
+      name: "Valhalla",
+      slug: "valhalla",
       description:
-        "Elite PvE guild focused on boss raids and world events. Philippine-based.",
+        "Elite PvE and PVP guild focused on boss raids and world events. Philippine-based.",
+      inviteCode: "VAL-JOIN-9A21", // Testing code
       settings: {
         create: {
           currencyCode: "PHP",
@@ -107,13 +139,13 @@ async function main() {
       },
     },
   });
-  console.log(`✅ Created guild: ${guild1.name}`);
 
   const guild2 = await prisma.guild.create({
     data: {
-      name: "Shadow Alliance",
-      slug: "shadow-alliance",
+      name: "Sausage",
+      slug: "sausage",
       description: "Competitive PvP faction. Diamond-based economy.",
+      inviteCode: "SAU-JOIN-8B32", // Testing code
       settings: {
         create: {
           currencyCode: "DIAMOND",
@@ -134,257 +166,242 @@ async function main() {
       },
     },
   });
-  console.log(`✅ Created guild: ${guild2.name}`);
 
-  // ─── Guild Memberships ───────────────────────────
-  // admin is GUILD_LEADER in guild1, OFFICER in guild2 (multi-tenant roles)
-  await prisma.guildMember.createMany({
-    data: [
-      {
-        userId: admin.id,
-        guildId: guild1.id,
-        role: GuildRole.GUILD_LEADER,
-        rankName: "Guild Leader",
-        ign: "GuildAdmin",
-        cp: 85000,
-        class: "Paladin",
-        weapon: "Divine Sword",
-        memberCode: "DK-001",
-      },
-      {
-        userId: admin.id,
-        guildId: guild2.id,
-        role: GuildRole.OFFICER,
-        rankName: "Officer",
-        ign: "GuildAdmin",
-        cp: 82000,
-        class: "Paladin",
-        weapon: "Divine Sword",
-        memberCode: "SA-001",
-      },
-      {
-        userId: player1.id,
-        guildId: guild1.id,
-        role: GuildRole.OFFICER,
-        rankName: "Officer",
-        ign: "DragonSlyr",
-        cp: 72000,
-        class: "Berserker",
-        weapon: "Flame Axe",
-        memberCode: "DK-002",
-      },
-      {
-        userId: player1.id,
-        guildId: guild2.id,
-        role: GuildRole.GUILD_LEADER,
-        rankName: "Guild Leader",
-        ign: "DragonSlyr",
-        cp: 72000,
-        class: "Berserker",
-        weapon: "Flame Axe",
-        memberCode: "SA-002",
-      },
-      {
-        userId: player2.id,
-        guildId: guild1.id,
-        role: GuildRole.CORE_MEMBER,
-        rankName: "Core",
-        ign: "ShdwMage",
-        cp: 65000,
-        class: "Mage",
-        weapon: "Staff of Shadows",
-        memberCode: "DK-003",
-      },
-      {
-        userId: player3.id,
-        guildId: guild1.id,
-        role: GuildRole.MEMBER,
-        rankName: "Lower Rank",
-        ign: "TankLrd",
-        cp: 48000,
-        class: "Guardian",
-        weapon: "Aegis Shield",
-        memberCode: "DK-004",
-      },
-      {
-        userId: player3.id,
-        guildId: guild2.id,
-        role: GuildRole.MEMBER,
-        rankName: "Lower Rank",
-        ign: "TankLrd",
-        cp: 48000,
-        class: "Guardian",
-        weapon: "Aegis Shield",
-        memberCode: "SA-003",
-      },
-      {
-        userId: player4.id,
-        guildId: guild1.id,
-        role: GuildRole.ELITE_MEMBER,
-        rankName: "Higher Rank",
-        ign: "HealQueen",
-        cp: 55000,
-        class: "Priest",
-        weapon: "Holy Staff",
-        memberCode: "DK-005",
-      },
-      {
-        userId: player5.id,
-        guildId: guild1.id,
-        role: GuildRole.MEMBER,
-        rankName: "Lower Rank",
-        ign: "StrmArcher",
-        cp: 42000,
-        class: "Ranger",
-        weapon: "Windwalker Bow",
-        memberCode: "DK-006",
-      },
-    ],
+  // ─── Guild Members ────────────────────────────────
+  // Add admin (Mavis08) to Valhalla as GUILD_LEADER
+  await prisma.guildMember.create({
+    data: {
+      userId: admin.id,
+      guildId: guild1.id,
+      role: "GUILD_LEADER",
+      rankName: "Leader",
+      ign: "Mavis08",
+      cp: 120000,
+      class: "Destroyer",
+      weapon: "Staff",
+      isActive: true,
+      memberCode: "MEM-VAL-001",
+    },
   });
-  console.log("✅ Created guild memberships");
 
-  // ─── Sample Ledger Entries ───────────────────────
-  // Demonstrates immutable ledger — balances are derived from these
-  const ledgerData = [
-    // Guild1 boss kill payout: 10,000 PHP (100_00 cents) total
-    {
+  // Add Dragz69 to Valhalla as OFFICER
+  await prisma.guildMember.create({
+    data: {
+      userId: player1.id,
       guildId: guild1.id,
-      accountType: "GUILD_FUND" as const,
-      accountId: guild1.id,
-      currency: "PHP",
-      amount: BigInt(100000), // 1000.00 PHP in cents
-      entryType: "CREDIT" as const,
-      referenceType: "BOSS_KILL",
-      referenceId: "boss-event-001",
-      idempotencyKey: `boss-event-001-guild-fund`,
-      actorId: admin.id,
-      description: "World Boss: Ancient Dragon defeated — guild fund share",
+      role: "OFFICER",
+      rankName: "Officer",
+      ign: "Dragz69",
+      cp: 98000,
+      class: "Hunter",
+      weapon: "Sword and Shield",
+      isActive: true,
+      memberCode: "MEM-VAL-002",
     },
-    // Tax collected
-    {
-      guildId: guild1.id,
-      accountType: "TAX" as const,
-      accountId: guild1.id,
-      currency: "PHP",
-      amount: BigInt(10000), // 100.00 PHP
-      entryType: "CREDIT" as const,
-      referenceType: "BOSS_KILL",
-      referenceId: "boss-event-001",
-      idempotencyKey: `boss-event-001-tax`,
-      actorId: admin.id,
-      description: "10% tax on boss kill payout",
-    },
-    // Member payouts
-    {
-      guildId: guild1.id,
-      accountType: "MEMBER" as const,
-      accountId: player1.id,
-      currency: "PHP",
-      amount: BigInt(30000), // 300.00 PHP
-      entryType: "CREDIT" as const,
-      referenceType: "BOSS_KILL",
-      referenceId: "boss-event-001",
-      idempotencyKey: `boss-event-001-${player1.id}`,
-      actorId: admin.id,
-      description: "Boss kill share (Officer multiplier: 1.5x)",
-    },
-    {
-      guildId: guild1.id,
-      accountType: "MEMBER" as const,
-      accountId: player2.id,
-      currency: "PHP",
-      amount: BigInt(24000), // 240.00 PHP
-      entryType: "CREDIT" as const,
-      referenceType: "BOSS_KILL",
-      referenceId: "boss-event-001",
-      idempotencyKey: `boss-event-001-${player2.id}`,
-      actorId: admin.id,
-      description: "Boss kill share (Core multiplier: 1.2x)",
-    },
-    {
-      guildId: guild1.id,
-      accountType: "MEMBER" as const,
-      accountId: player3.id,
-      currency: "PHP",
-      amount: BigInt(20000), // 200.00 PHP
-      entryType: "CREDIT" as const,
-      referenceType: "BOSS_KILL",
-      referenceId: "boss-event-001",
-      idempotencyKey: `boss-event-001-${player3.id}`,
-      actorId: admin.id,
-      description: "Boss kill share (Member multiplier: 1.0x)",
-    },
-    // A payout/withdrawal from player1
-    {
-      guildId: guild1.id,
-      accountType: "MEMBER" as const,
-      accountId: player1.id,
-      currency: "PHP",
-      amount: BigInt(15000), // 150.00 PHP
-      entryType: "DEBIT" as const,
-      referenceType: "PAYOUT",
-      referenceId: "payout-001",
-      idempotencyKey: `payout-001-${player1.id}`,
-      actorId: player1.id,
-      description: "Cash out to GCash",
-    },
-  ];
+  });
 
-  for (const entry of ledgerData) {
-    await prisma.ledgerEntry.create({ data: entry });
-  }
-  console.log(`✅ Created ${ledgerData.length} ledger entries`);
+  // Add Wiz to Valhalla as OFFICER and Sausage as GUILD_LEADER
+  await prisma.guildMember.create({
+    data: {
+      userId: player2.id,
+      guildId: guild1.id,
+      role: "OFFICER",
+      rankName: "Officer",
+      ign: "Wiz",
+      cp: 95000,
+      class: "Immortal Knight",
+      weapon: "Dual Dagger",
+      isActive: true,
+      memberCode: "MEM-VAL-003",
+    },
+  });
 
-  // ─── Sample Audit Logs ───────────────────────────
-  const auditData = [
-    {
-      actorId: admin.id,
-      action: "GUILD_CREATED",
-      target: "Guild",
-      targetId: guild1.id,
-      detail: { guildName: guild1.name },
+  await prisma.guildMember.create({
+    data: {
+      userId: player2.id,
+      guildId: guild2.id,
+      role: "GUILD_LEADER",
+      rankName: "Guild Master",
+      ign: "Wiz",
+      cp: 95000,
+      class: "Immortal Knight",
+      weapon: "Dual Dagger",
+      isActive: true,
+      memberCode: "MEM-SAU-001",
     },
-    {
-      actorId: admin.id,
-      action: "GUILD_CREATED",
-      target: "Guild",
-      targetId: guild2.id,
-      detail: { guildName: guild2.name },
+  });
+
+  // Add Daylili to Valhalla as MEMBER
+  await prisma.guildMember.create({
+    data: {
+      userId: player3.id,
+      guildId: guild1.id,
+      role: "MEMBER",
+      rankName: "Lower Rank",
+      ign: "Daylili",
+      cp: 75000,
+      class: "Striker",
+      weapon: "Greatsword",
+      isActive: true,
+      memberCode: "MEM-VAL-004",
     },
-    {
+  });
+
+  // Add Hou13 to Valhalla as CORE_MEMBER
+  await prisma.guildMember.create({
+    data: {
+      userId: player4.id,
+      guildId: guild1.id,
+      role: "CORE_MEMBER",
+      rankName: "Core Member",
+      ign: "Hou13",
+      cp: 88000,
+      class: "Destroyer",
+      weapon: "XBow",
+      isActive: true,
+      memberCode: "MEM-VAL-005",
+    },
+  });
+
+  // Add Lael to Valhalla as ELITE_MEMBER
+  await prisma.guildMember.create({
+    data: {
+      userId: player5.id,
+      guildId: guild1.id,
+      role: "ELITE_MEMBER",
+      rankName: "Elite Member",
+      ign: "Lael",
+      cp: 85000,
+      class: "Blitzblade",
+      weapon: "Dual Dagger",
+      isActive: true,
+      memberCode: "MEM-VAL-006",
+    },
+  });
+
+  // ─── Initial Boss Schedules ─────────────────────────
+  const mockSchedule1 = await prisma.bossSchedule.create({
+    data: {
+      guildId: guild1.id,
+      bossName: "Viorent",
+      location: "Crescent Lake",
+      spawnTime: new Date(Date.now() - 2 * 3600 * 1000), // Spawned 2 hours ago
+      status: "KILLED",
+      killedAt: new Date(Date.now() - 1.5 * 3600 * 1000), // Killed 1.5 hours ago
+      creatorId: admin.id,
+      lootDrop: "Staff",
+    },
+  });
+
+  await prisma.bossSchedule.create({
+    data: {
+      guildId: guild1.id,
+      bossName: "Venatus",
+      location: "Corrupted Basin",
+      spawnTime: new Date(Date.now() + 4 * 3600 * 1000), // Spawns in 4 hours
+      status: "UPCOMING",
+      creatorId: admin.id,
+    },
+  });
+
+  // ─── Realistic Ledger Entries (PHP splits & Attendance) ─
+  // DKP Attendance Check-in points (ATTENDANCE referenceType)
+  await prisma.ledgerEntry.create({
+    data: {
+      guildId: guild1.id,
+      accountType: "MEMBER",
+      accountId: admin.id,
+      currency: "PHP",
+      amount: 150n, // 150 DKP points total
+      entryType: "CREDIT",
+      referenceType: "ATTENDANCE",
+      referenceId: "attendance-session-1",
+      idempotencyKey: "idem-att-admin-1",
+      actorId: admin.id,
+      description: "Attendance Check-In: Viorent Raid",
+    },
+  });
+
+  await prisma.ledgerEntry.create({
+    data: {
+      guildId: guild1.id,
+      accountType: "MEMBER",
+      accountId: player2.id, // Wiz
+      currency: "PHP",
+      amount: 120n,
+      entryType: "CREDIT",
+      referenceType: "ATTENDANCE",
+      referenceId: "attendance-session-1",
+      idempotencyKey: "idem-att-wiz-1",
+      actorId: admin.id,
+      description: "Attendance Check-In: Viorent Raid",
+    },
+  });
+
+  // Boss Kill loot sale payout splits (BOSS_KILL referenceType)
+  // Let's credit the admin 3500.50 PHP balance
+  await prisma.ledgerEntry.create({
+    data: {
+      guildId: guild1.id,
+      accountType: "MEMBER",
+      accountId: admin.id,
+      currency: "PHP",
+      amount: 350050n, // 3500.50 PHP
+      entryType: "CREDIT",
+      referenceType: "BOSS_KILL",
+      referenceId: mockSchedule1.id,
+      idempotencyKey: "idem-bk-admin-1",
+      actorId: admin.id,
+      description: "Boss Defeated Payout Split: Viorent",
+    },
+  });
+
+  await prisma.ledgerEntry.create({
+    data: {
+      guildId: guild1.id,
+      accountType: "MEMBER",
+      accountId: player2.id, // Wiz
+      currency: "PHP",
+      amount: 280020n, // 2800.20 PHP
+      entryType: "CREDIT",
+      referenceType: "BOSS_KILL",
+      referenceId: mockSchedule1.id,
+      idempotencyKey: "idem-bk-wiz-1",
+      actorId: admin.id,
+      description: "Boss Defeated Payout Split: Viorent",
+    },
+  });
+
+  // ─── Initial Audit Logs ────────────────────────────
+  await prisma.auditLog.create({
+    data: {
+      actorId: admin.id,
+      guildId: guild1.id,
+      action: "BOSS_KILLED_LOGGED",
+      target: "BossSchedule",
+      targetId: mockSchedule1.id,
+      detail: {
+        bossName: "Viorent",
+        killedAt: new Date(Date.now() - 1.5 * 3600 * 1000).toISOString(),
+        lootDrop: "Viorent Archmage Staff",
+      },
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
       actorId: admin.id,
       guildId: guild1.id,
       action: "MEMBER_ADDED",
       target: "GuildMember",
-      targetId: player1.id,
-      detail: { role: "OFFICER", displayName: "DragonSlayer99" },
-    },
-    {
-      actorId: admin.id,
-      guildId: guild1.id,
-      action: "BOSS_KILL_RECORDED",
-      target: "BossEvent",
-      targetId: "boss-event-001",
+      targetId: player2.id,
       detail: {
-        bossName: "Ancient Dragon",
-        totalLoot: 100000,
-        currency: "PHP",
+        displayName: "Wiz",
+        role: "OFFICER",
       },
     },
-    {
-      actorId: player1.id,
-      guildId: guild1.id,
-      action: "PAYOUT_REQUESTED",
-      target: "LedgerEntry",
-      targetId: "payout-001",
-      detail: { amount: 15000, currency: "PHP", method: "GCash" },
-    },
-  ];
+  });
 
-  for (const log of auditData) {
-    await prisma.auditLog.create({ data: log });
-  }
-  console.log(`✅ Created ${auditData.length} audit log entries`);
 
   // ─── Predefined Bosses ─────────────────────────────
   const predefinedBosses = [
@@ -570,42 +587,8 @@ async function main() {
       },
     });
   }
-  console.log(`✅ Seeded ${predefinedBosses.length} predefined bosses into registry`);
 
-  // ─── Verify derived balances ─────────────────────
-  console.log("\n📊 Verifying derived balances:\n");
-
-  const balances = await prisma.ledgerEntry.groupBy({
-    by: ["accountType", "accountId", "currency"],
-    _sum: { amount: true },
-    where: {
-      guildId: guild1.id,
-      entryType: "CREDIT",
-    },
-  });
-
-  const debits = await prisma.ledgerEntry.groupBy({
-    by: ["accountType", "accountId", "currency"],
-    _sum: { amount: true },
-    where: {
-      guildId: guild1.id,
-      entryType: "DEBIT",
-    },
-  });
-
-  console.log("Credits:", balances.map((b) => ({
-    account: `${b.accountType}:${b.accountId.slice(0, 8)}...`,
-    currency: b.currency,
-    total: `${Number(b._sum.amount ?? 0n) / 100}`,
-  })));
-
-  console.log("Debits:", debits.map((d) => ({
-    account: `${d.accountType}:${d.accountId.slice(0, 8)}...`,
-    currency: d.currency,
-    total: `${Number(d._sum.amount ?? 0n) / 100}`,
-  })));
-
-  console.log("\n✨ Seed complete!");
+  console.log("✅ Seed completed successfully!");
 }
 
 main()

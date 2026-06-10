@@ -177,10 +177,10 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
       {/* Alliance Context (Left Area) */}
       <div className="hidden sm:flex flex-col text-left">
         <span className="text-[10px] text-amber-500/80 font-bold uppercase tracking-[0.2em] font-display">
-          Legion Alliance
+           MegaCorp Alliance
         </span>
         <span className="text-[12px] text-white/50 font-medium tracking-wide">
-          Dominion of {activeGuild ? activeGuild.guildName : "Valhalla"}
+           Guild of {activeGuild ? activeGuild.guildName : "Valhalla"}
         </span>
       </div>
 
@@ -257,42 +257,6 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
 
       {/* Global Actions (Far-Right) */}
       <div className="flex items-center gap-2">
-        {/* Theme toggle */}
-        <button
-          onClick={() =>
-            setTheme(resolvedTheme === "dark" ? "light" : "dark")
-          }
-          className="p-2 rounded-md text-white/55 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer"
-          aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
-        >
-          {resolvedTheme === "dark" ? (
-            <svg
-              className="h-[18px] w-[18px]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="5" />
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-            </svg>
-          ) : (
-            <svg
-              className="h-[18px] w-[18px]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-            </svg>
-          )}
-        </button>
-
         {/* Notification bell */}
         <button
           className="p-2 rounded-md text-white/55 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer relative"
@@ -323,7 +287,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
               aria-expanded={isUserMenuOpen}
               aria-haspopup="menu"
             >
-              <Avatar name={user.displayName} size="sm" showStatus isOnline />
+              <Avatar src={user.avatarUrl} name={user.displayName} size="sm" showStatus isOnline />
               <span className="text-[13px] font-medium text-white/85 hidden md:block">
                 {user.displayName}
               </span>

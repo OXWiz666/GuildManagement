@@ -8,8 +8,7 @@ import type { ApiResponse } from "@guild/shared";
 import { GUILD_ROLES, type GuildRoleType } from "@guild/shared";
 import { prisma } from "@guild/db";
 import { broadcastToGuild } from "../lib/socket";
-
-
+import { auditLogLimiter } from "../middleware/rateLimiter";
 
 const router: Router = Router();
 
@@ -404,20 +403,349 @@ router.patch(
 );
 
 // ─── GET /:guildId/audit-logs ───────────────────
-// Returns paginated audit logs for a guild. Optional ?filter=boss for boss events only.
+// Returns paginated audit logs for a guild. Optional filters support advanced history features.
 router.get(
   "/:guildId/audit-logs",
   requireAuth,
   requireGuildRole("MEMBER"),
+  auditLogLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
-      const filter = req.query['filter'] as string | undefined; // e.g., "boss"
+      const filter = req.query['filter'] as string | undefined; // e.g., "boss", "items", "member-items", "currency"
       const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
       const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 30;
       const skip = (page - 1) * limit;
 
-      // Build action filter for boss-related events
+      // ──────────────────────────────────────────
+      // BRANCH 1: ITEMS DISTRIBUTED (filter === "items")
+      // ──────────────────────────────────────────
+      if (filter === "items") {
+        // Fetch fulfilled item requests
+        const itemRequests = await prisma.itemRequest.findMany({
+          where: {
+            guildId,
+            type: "ITEM",
+            status: "FULFILLED",
+          },
+          include: {
+            member: {
+              include: {
+                user: {
+                  select: { id: true, displayName: true, avatarUrl: true }
+                }
+              }
+            }
+          },
+          orderBy: { updatedAt: "desc" },
+        });
+
+        // Fetch completed auctions won by members
+        const auctions = await prisma.auctionItem.findMany({
+          where: {
+            guildId,
+            status: "ENDED",
+            winnerId: { not: null },
+          },
+          include: {
+            bids: {
+              orderBy: { bidAmount: "desc" },
+              take: 1,
+              include: {
+                member: {
+                  include: {
+                    user: {
+                      select: { id: true, displayName: true, avatarUrl: true }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          orderBy: { endsAt: "desc" },
+        });
+
+        // Merge them into a unified audit format
+        const itemsList = [
+          ...itemRequests.map(r => ({
+            id: r.id,
+            action: "ITEM_REQUEST_FULFILLED",
+            target: "ItemRequest",
+            targetId: r.id,
+            detail: {
+              itemName: r.itemName,
+              quantity: r.quantity,
+              category: r.itemCategory,
+              recipientName: r.member.ign || r.member.user.displayName,
+              recipientId: r.member.userId,
+            },
+            createdAt: r.updatedAt.toISOString(),
+            actor: {
+              id: r.reviewedById || "system",
+              displayName: "Guild Officer",
+              avatarUrl: null,
+            }
+          })),
+          ...auctions.map(a => {
+            const winningBid = a.bids[0];
+            const winner = winningBid?.member;
+            return {
+              id: a.id,
+              action: "AUCTION_WON",
+              target: "AuctionItem",
+              targetId: a.id,
+              detail: {
+                itemName: a.itemName,
+                quantity: 1,
+                category: a.category,
+                recipientName: winner ? (winner.ign || winner.user.displayName) : "Unknown Member",
+                recipientId: winner ? winner.userId : null,
+                bidAmount: a.currentBid,
+              },
+              createdAt: a.endsAt.toISOString(),
+              actor: {
+                id: a.creatorId,
+                displayName: "Auction System",
+                avatarUrl: null,
+              }
+            };
+          })
+        ];
+
+        // Sort items by date desc
+        itemsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        const total = itemsList.length;
+        const paginated = itemsList.slice(skip, skip + limit);
+
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            logs: paginated,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+          }
+        };
+        res.json(response);
+        return;
+      }
+
+      // ──────────────────────────────────────────
+      // BRANCH 2: ITEMS RECEIVED BY SPECIFIC MEMBER (filter === "member-items")
+      // ──────────────────────────────────────────
+      if (filter === "member-items") {
+        const memberId = req.query['memberId'] as string | undefined;
+        if (!memberId) {
+          const response: ApiResponse = {
+            success: false,
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "memberId query parameter is required for member-items filter",
+            }
+          };
+          res.status(400).json(response);
+          return;
+        }
+
+        // Fetch fulfilled item requests for member
+        const itemRequests = await prisma.itemRequest.findMany({
+          where: {
+            guildId,
+            memberId,
+            type: "ITEM",
+            status: "FULFILLED",
+          },
+          include: {
+            member: {
+              include: {
+                user: {
+                  select: { id: true, displayName: true, avatarUrl: true }
+                }
+              }
+            }
+          },
+          orderBy: { updatedAt: "desc" },
+        });
+
+        // Fetch completed auctions won by this member
+        const auctions = await prisma.auctionItem.findMany({
+          where: {
+            guildId,
+            status: "ENDED",
+            winnerId: memberId,
+          },
+          include: {
+            bids: {
+              orderBy: { bidAmount: "desc" },
+              take: 1,
+              include: {
+                member: {
+                  include: {
+                    user: {
+                      select: { id: true, displayName: true, avatarUrl: true }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          orderBy: { endsAt: "desc" },
+        });
+
+        // Merge them
+        const itemsList = [
+          ...itemRequests.map(r => ({
+            id: r.id,
+            action: "ITEM_REQUEST_FULFILLED",
+            target: "ItemRequest",
+            targetId: r.id,
+            detail: {
+              itemName: r.itemName,
+              quantity: r.quantity,
+              category: r.itemCategory,
+              recipientName: r.member.ign || r.member.user.displayName,
+              recipientId: r.member.userId,
+            },
+            createdAt: r.updatedAt.toISOString(),
+            actor: {
+              id: r.reviewedById || "system",
+              displayName: "Guild Officer",
+              avatarUrl: null,
+            }
+          })),
+          ...auctions.map(a => {
+            const winningBid = a.bids[0];
+            const winner = winningBid?.member;
+            return {
+              id: a.id,
+              action: "AUCTION_WON",
+              target: "AuctionItem",
+              targetId: a.id,
+              detail: {
+                itemName: a.itemName,
+                quantity: 1,
+                category: a.category,
+                recipientName: winner ? (winner.ign || winner.user.displayName) : "Unknown Member",
+                recipientId: winner ? winner.userId : null,
+                bidAmount: a.currentBid,
+              },
+              createdAt: a.endsAt.toISOString(),
+              actor: {
+                id: a.creatorId,
+                displayName: "Auction System",
+                avatarUrl: null,
+              }
+            };
+          })
+        ];
+
+        // Sort items by date desc
+        itemsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        const total = itemsList.length;
+        const paginated = itemsList.slice(skip, skip + limit);
+
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            logs: paginated,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+          }
+        };
+        res.json(response);
+        return;
+      }
+
+      // ──────────────────────────────────────────
+      // BRANCH 3: PHP/DIAMOND DISTRIBUTIONS (filter === "currency")
+      // ──────────────────────────────────────────
+      if (filter === "currency") {
+        const ledger = await prisma.ledgerEntry.findMany({
+          where: {
+            guildId,
+            currency: { in: ["PHP", "DIAMOND"] },
+            accountType: "MEMBER",
+          },
+          include: {
+            actor: {
+              select: { id: true, displayName: true, avatarUrl: true }
+            }
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        // Map to an AuditLog format
+        const distributions = ledger.map(entry => {
+          return {
+            id: entry.id,
+            action: entry.entryType === "CREDIT" ? "CURRENCY_DISTRIBUTION" : "CURRENCY_PAYOUT",
+            target: "LedgerEntry",
+            targetId: entry.id,
+            detail: {
+              amount: Number(entry.amount) / 100,
+              currency: entry.currency,
+              entryType: entry.entryType,
+              referenceType: entry.referenceType,
+              description: entry.description,
+              recipientId: entry.accountId,
+            },
+            createdAt: entry.createdAt.toISOString(),
+            actor: {
+              id: entry.actor.id,
+              displayName: entry.actor.displayName,
+              avatarUrl: entry.actor.avatarUrl,
+            }
+          };
+        });
+
+        // Enrich recipient display names
+        const recipientIds = Array.from(new Set(distributions.map(d => d.detail.recipientId)));
+        const membersList = await prisma.guildMember.findMany({
+          where: { userId: { in: recipientIds }, guildId },
+          include: {
+            user: {
+              select: { displayName: true }
+            }
+          }
+        });
+        const memberMap = new Map(membersList.map(m => [m.userId, m.ign || m.user.displayName]));
+
+        const enrichedDistributions = distributions.map(d => {
+          const recipientName = memberMap.get(d.detail.recipientId) || "Unknown Member";
+          return {
+            ...d,
+            detail: {
+              ...d.detail,
+              recipientName,
+            }
+          };
+        });
+
+        const total = enrichedDistributions.length;
+        const paginated = enrichedDistributions.slice(skip, skip + limit);
+
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            logs: paginated,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+          }
+        };
+        res.json(response);
+        return;
+      }
+
+      // ──────────────────────────────────────────
+      // BRANCH 4: STANDARD GUILD ACTIONS (default / boss / general logs)
+      // ──────────────────────────────────────────
       let actionFilter: Record<string, unknown> | undefined;
       if (filter === "boss") {
         actionFilter = {

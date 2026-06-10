@@ -5,6 +5,7 @@ import {
   registerSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  updateUserSchema,
 } from "@guild/shared";
 import { requireAuth } from "../middleware/auth";
 import { authLimiter } from "../middleware/rateLimiter";
@@ -157,7 +158,7 @@ router.post(
       res.clearCookie("refreshToken", {
         httpOnly: true,
         secure: process.env['NODE_ENV'] === "production",
-        sameSite: "lax",
+        sameSite: process.env['NODE_ENV'] === "production" ? "strict" : "lax",
         path: "/",
       });
 
@@ -186,7 +187,7 @@ router.post(
       res.clearCookie("refreshToken", {
         httpOnly: true,
         secure: process.env['NODE_ENV'] === "production",
-        sameSite: "lax",
+        sameSite: process.env['NODE_ENV'] === "production" ? "strict" : "lax",
         path: "/",
       });
 
@@ -278,9 +279,10 @@ router.put(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const data = updateUserSchema.parse(req.body);
       const user = await authService.updateUserProfile(
         req.user!.userId,
-        req.body
+        data
       );
 
       const response: ApiResponse = {
@@ -344,7 +346,7 @@ function setRefreshCookie(res: Response, token: string): void {
   res.cookie("refreshToken", token, {
     httpOnly: true,
     secure: process.env['NODE_ENV'] === "production",
-    sameSite: "lax",
+    sameSite: process.env['NODE_ENV'] === "production" ? "strict" : "lax",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });

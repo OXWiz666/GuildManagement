@@ -264,13 +264,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 {/* Active left indicator with glow */}
                 {isActive && (
                   <>
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-white shadow-[0_0_8px_2px_rgba(255,255,255,0.35)]" />
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-amber-400/90 shadow-[0_0_8px_2px_rgba(245,158,11,0.45)]" />
                     <span
                       aria-hidden
                       className="absolute inset-0 opacity-60 pointer-events-none"
                       style={{
                         background:
-                          "linear-gradient(90deg, oklch(0.62 0.035 234 / 0.10), transparent 60%)",
+                          "linear-gradient(90deg, rgba(245,158,11,0.10), transparent 60%)",
                       }}
                     />
                   </>
@@ -305,7 +305,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {user && (
           <div className="p-5 border-t border-white/[0.04]">
             <div className="flex items-center gap-3.5 px-1">
-              <Avatar name={user.displayName} size="sm" showStatus isOnline />
+              <Avatar src={user.avatarUrl} name={user.displayName} size="sm" showStatus isOnline />
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-zinc-300 truncate">
                   {user.displayName}

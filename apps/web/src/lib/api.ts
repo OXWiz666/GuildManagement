@@ -1,6 +1,7 @@
 import type { ApiResponse } from "@guild/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const JSON_CONTENT_TYPE = "application/json";
 
 // In-memory access token storage (never localStorage for security)
 let accessToken: string | null = null;
@@ -18,6 +19,39 @@ interface FetchOptions extends Omit<RequestInit, "body"> {
   skipAuth?: boolean;
 }
 
+function hasJsonBody(response: Response): boolean {
+  return response.headers.get("content-type")?.includes(JSON_CONTENT_TYPE) ?? false;
+}
+
+function createFallbackResponse<T>(response: Response, message: string): ApiResponse<T> {
+  return {
+    success: false,
+    error: {
+      code: response.ok ? "INVALID_RESPONSE" : `HTTP_${response.status}`,
+      message,
+    },
+  };
+}
+
+async function parseApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  if (response.status === 204) {
+    return { success: response.ok } as ApiResponse<T>;
+  }
+
+  if (!hasJsonBody(response)) {
+    return createFallbackResponse(
+      response,
+      response.ok ? "The server returned an empty response." : response.statusText || "Request failed.",
+    );
+  }
+
+  try {
+    return (await response.json()) as ApiResponse<T>;
+  } catch {
+    return createFallbackResponse(response, "The server returned malformed JSON.");
+  }
+}
+
 /**
  * API client with automatic token refresh on 401.
  * Access token is stored in memory, refresh token in httpOnly cookie.
@@ -29,9 +63,13 @@ async function apiFetch<T = unknown>(
   const { body, skipAuth, ...fetchOptions } = options;
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    Accept: JSON_CONTENT_TYPE,
     ...(fetchOptions.headers as Record<string, string>),
   };
+
+  if (body !== undefined) {
+    headers["Content-Type"] = JSON_CONTENT_TYPE;
+  }
 
   if (!skipAuth && accessToken) {
     headers["Authorization"] = `Bearer ${accessToken}`;
@@ -42,7 +80,7 @@ async function apiFetch<T = unknown>(
   let response = await fetch(url, {
     ...fetchOptions,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: "include", // Include cookies for refresh token
   });
 
@@ -54,14 +92,13 @@ async function apiFetch<T = unknown>(
       response = await fetch(url, {
         ...fetchOptions,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
         credentials: "include",
       });
     }
   }
 
-  const data = (await response.json()) as ApiResponse<T>;
-  return data;
+  return parseApiResponse<T>(response);
 }
 
 /**
@@ -478,6 +515,15 @@ export const dashboardApi = {
         createdAt: string;
         expiresAt: string;
       }>;
+      history: Array<{
+        sessionId: string;
+        title: string;
+        type: "GUILD" | "FACTION";
+        createdAt: string;
+        expiresAt: string;
+        status: "CONFIRMED" | "PENDING" | "MISSED" | "UNCHECKED";
+        joinedAt: string | null;
+      }>;
     }>(`/dashboard/attendance/stats/${guildId}`);
   },
 
@@ -599,6 +645,15 @@ export const dashboardApi = {
         detail: string;
         time: string;
       }>;
+      performanceHistory: Array<{
+        dayName: string;
+        amount: number;
+      }>;
+      factionClaims: Array<{
+        guildName: string;
+        claimsCount: number;
+        percentage: number;
+      }>;
     }>(`/dashboard/stats/${guildId}`);
   },
 
@@ -651,4 +706,3 @@ export interface AuditLogEntry {
     avatarUrl: string | null;
   };
 }
-

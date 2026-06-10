@@ -5,7 +5,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
-  title: "GuildMaster — Guild Management System",
+  title: "ForgeKeep — Guild Management System",
   description:
     "Manage your gaming guild with auditable ledgers, role-based access, and multi-tenant support.",
   icons: {

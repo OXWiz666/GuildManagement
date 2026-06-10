@@ -70,7 +70,7 @@ export default function RegisterPage() {
         displayName,
       );
       if (result.success) {
-        addToast("success", "Account created! Welcome to GuildMaster.");
+        addToast("success", "Account created! Welcome to ForgeKeep.");
         router.push("/dashboard");
       } else {
         setError(result.error || "Registration failed");

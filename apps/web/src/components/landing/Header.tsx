@@ -47,7 +47,7 @@ export default function Header() {
               </svg>
             </div>
             <span className="text-[15px] font-semibold text-white tracking-tight">
-              GuildMaster
+              ForgeKeep
             </span>
           </Link>
 

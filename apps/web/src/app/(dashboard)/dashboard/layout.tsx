@@ -60,7 +60,7 @@ export default function DashboardLayout({
 
         <div className="relative flex flex-col items-center gap-1">
           <h2 className="text-sm font-semibold text-white tracking-tight">
-            GuildMaster
+            ForgeKeep
           </h2>
           <p className="text-[10px] text-white/40 font-medium tracking-[0.3em] uppercase animate-pulse">
             Entering session!

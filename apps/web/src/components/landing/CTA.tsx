@@ -37,7 +37,7 @@ export default function CTA() {
               </h2>
 
               <p className="text-base text-white/55 max-w-xl mx-auto leading-relaxed">
-                Join 50+ guilds already running their treasury, attendance, and raids on GuildMaster.
+                Join 50+ guilds already running their treasury, attendance, and raids on ForgeKeep.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center items-center pt-2">

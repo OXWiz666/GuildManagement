@@ -15,7 +15,7 @@ export default function Footer() {
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="text-base font-semibold text-white tracking-tight">GuildMaster</span>
+              <span className="text-base font-semibold text-white tracking-tight">ForgeKeep</span>
             </div>
             <p className="text-sm text-white/45 leading-relaxed max-w-sm">
               The professional guild management platform for serious gaming organizations.
@@ -113,7 +113,7 @@ export default function Footer() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4">
           <p className="text-xs text-white/35">
-            © {new Date().getFullYear()} GuildMaster. Crafted for high-performance factions.
+            © {new Date().getFullYear()} ForgeKeep. Crafted for high-performance factions.
           </p>
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />

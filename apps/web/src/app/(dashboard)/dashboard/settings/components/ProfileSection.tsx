@@ -31,7 +31,7 @@ export default function ProfileSection({
     <SettingsCard
       eyebrow="Profile"
       title="User settings"
-      description="Your public-facing identity on GuildMaster."
+      description="Your public-facing identity on ForgeKeep."
     >
       <form onSubmit={handleUpdateProfile} className="space-y-5">
         <ImageUrlField

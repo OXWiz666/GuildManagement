@@ -114,7 +114,7 @@ function DashboardCard3D() {
             <div className="h-2.5 w-2.5 rounded-full bg-white/15" />
           </div>
           <div className="flex-1 mx-3 h-5 rounded-md text-[10px] text-white/30 flex items-center justify-center font-mono">
-            app.guildmaster.gg/dashboard
+            app.forgekeep.gg/dashboard
           </div>
           <div className="h-3.5 w-3.5 text-white/30">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

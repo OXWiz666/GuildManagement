@@ -100,7 +100,7 @@ export default function AuthLayout({
           </div>
           <div className="flex flex-col leading-none">
             <span className="text-sm font-semibold text-white tracking-tight">
-              GuildMaster
+              ForgeKeep
             </span>
             <span className="text-[9px] text-white/40 tracking-[0.22em] uppercase mt-0.5 transition-colors duration-300 group-hover:text-white/60">
               Command Center
@@ -204,7 +204,7 @@ export default function AuthLayout({
           animationDelay: "700ms",
         }}
       >
-        <span>© 2026 GuildMaster</span>
+        <span>© 2026 ForgeKeep</span>
         <div className="flex items-center gap-4">
           <Link href="/" className="hover:text-white/60 transition-colors">
             Privacy

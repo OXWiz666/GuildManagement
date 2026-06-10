@@ -51,6 +51,8 @@
   --animate-shimmer: shimmer 2.2s infinite linear;
   --animate-aurora: aurora 22s ease-in-out infinite;
   --animate-drift-slow: drift-slow 28s linear infinite;
+  --animate-spin: spin 1s linear infinite;
+  --animate-spin-slow: spin-slow 12s linear infinite;
 }
 
 /* ─── Keyframes ──────────────────────────────── */
@@ -115,6 +117,11 @@
 @keyframes float-reverse {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(8px); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes spin-slow {
@@ -334,10 +341,30 @@ input:-webkit-autofill:focus {
 
 /* ─── Reduced Motion ──────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
+  *:not(.animate-spin):not([class*="spin"]):not([style*="spin"]):not([class*="premium-loader"]) {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  * {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Premium Loader Classes ──────────────────── */
+.premium-loader-spin {
+  animation: spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+.premium-loader-spin-slow {
+  animation: spin-slow 8s linear infinite !important;
+}
+
+.premium-loader-spin-reverse {
+  animation: spin-slow 12s linear infinite reverse !important;
+}
+
+.premium-loader-pulse {
+  animation: pulse-soft 3s ease-in-out infinite !important;
+}
+

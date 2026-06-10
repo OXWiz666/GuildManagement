@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import { guildApi, dashboardApi } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { Magnetic } from "@/components/dashboard/DashboardHelpers";
+import { useQuery, queryClient } from "@/lib/query";
 
 export interface GuildSettingsSectionProps {
   guildId: string;
@@ -14,8 +15,6 @@ export interface GuildSettingsSectionProps {
 
 export default function GuildSettingsSection({ guildId }: GuildSettingsSectionProps) {
   const { addToast } = useToast();
-  const [settings, setSettings] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   // Form states
@@ -35,61 +34,62 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
   const [multElite, setMultElite] = useState("1.1");
   const [multMember, setMultMember] = useState("1.0");
 
-  // Leaderboard state
-  const [rankingData, setRankingData] = useState<any[]>([]);
-  const [isLoadingRanking, setIsLoadingRanking] = useState(true);
+  // ─── Persistent Queries ────────────────────────────────
 
-  const loadSettings = async () => {
-    setIsLoading(true);
-    try {
+  // 1. Settings Query
+  const {
+    data: guildSettings,
+    isLoading: isLoadingSettings,
+  } = useQuery<any | null>(
+    `guild_settings:${guildId}`,
+    async () => {
       const result = await guildApi.getSettings(guildId);
-      if (result.success && result.data) {
-        const s = result.data;
-        setSettings(s);
-        setTaxRatePercent(s.taxRatePercent.toString());
-        setAttendancePoints(s.attendancePoints.toString());
-        setBossKillPoints(s.bossKillPoints.toString());
-        setActiveShareModel(s.activeShareModel);
-        setCurrencyCode(s.currencyCode);
-        setCurrencySymbol(s.currencySymbol);
-        setSecondaryCurrencyCode(s.secondaryCurrencyCode || "");
-        setSecondaryCurrencySymbol(s.secondaryCurrencySymbol || "");
+      return result.success ? result.data : null;
+    },
+    { persist: true, staleTime: 300000 }
+  );
 
-        // Multipliers
-        const mult = s.rankMultipliers || {};
-        setMultGL((mult.GUILD_LEADER ?? 2.0).toString());
-        setMultOfficer((mult.OFFICER ?? 1.5).toString());
-        setMultCore((mult.CORE_MEMBER ?? 1.2).toString());
-        setMultElite((mult.ELITE_MEMBER ?? 1.1).toString());
-        setMultMember((mult.MEMBER ?? 1.0).toString());
-      }
-    } catch {
-      addToast("error", "Failed to load guild settings");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadRanking = async () => {
-    setIsLoadingRanking(true);
-    try {
-      const result = await dashboardApi.getAccountingDashboard(guildId);
-      if (result.success && result.data?.memberBalances) {
-        // Sort by DKP points descending for ranking
-        const sorted = [...result.data.memberBalances].sort((a, b) => b.dkp - a.dkp);
-        setRankingData(sorted);
-      }
-    } catch {
-      addToast("error", "Failed to load rankings");
-    } finally {
-      setIsLoadingRanking(false);
-    }
-  };
-
+  // Sync settings states
   useEffect(() => {
-    loadSettings();
-    loadRanking();
-  }, [guildId]);
+    if (guildSettings) {
+      setTaxRatePercent(guildSettings.taxRatePercent.toString());
+      setAttendancePoints(guildSettings.attendancePoints.toString());
+      setBossKillPoints(guildSettings.bossKillPoints.toString());
+      setActiveShareModel(guildSettings.activeShareModel);
+      setCurrencyCode(guildSettings.currencyCode);
+      setCurrencySymbol(guildSettings.currencySymbol);
+      setSecondaryCurrencyCode(guildSettings.secondaryCurrencyCode || "");
+      setSecondaryCurrencySymbol(guildSettings.secondaryCurrencySymbol || "");
+
+      // Multipliers
+      const mult = guildSettings.rankMultipliers || {};
+      setMultGL((mult.GUILD_LEADER ?? 2.0).toString());
+      setMultOfficer((mult.OFFICER ?? 1.5).toString());
+      setMultCore((mult.CORE_MEMBER ?? 1.2).toString());
+      setMultElite((mult.ELITE_MEMBER ?? 1.1).toString());
+      setMultMember((mult.MEMBER ?? 1.0).toString());
+    }
+  }, [guildSettings]);
+
+  // 2. Rankings Query
+  const {
+    data: accounting,
+    isLoading: isLoadingRanking,
+  } = useQuery<any | null>(
+    `accounting_dashboard:${guildId}:1`,
+    async () => {
+      const result = await dashboardApi.getAccountingDashboard(guildId, 1, 15);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 15000 }
+  );
+
+  const rankingData = React.useMemo(() => {
+    if (accounting?.memberBalances) {
+      return [...accounting.memberBalances].sort((a, b) => b.dkp - a.dkp);
+    }
+    return [];
+  }, [accounting]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,8 +116,8 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
       const result = await guildApi.updateSettings(guildId, payload);
       if (result.success) {
         addToast("success", "Guild configurations updated successfully!");
-        await loadSettings();
-        await loadRanking();
+        queryClient.invalidateQueries(`guild_settings:${guildId}`);
+        queryClient.invalidateQueries(`accounting_dashboard:${guildId}:1`);
       } else {
         addToast("error", result.error?.message || "Failed to save guild configurations");
       }
@@ -128,7 +128,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
     }
   };
 
-  if (isLoading) {
+  if (isLoadingSettings) {
     return (
       <div className="glass rounded-2xl p-6 border border-white/[0.06] animate-pulse h-96 flex items-center justify-center">
         <span className="text-white/40 text-sm font-semibold tracking-wider animate-pulse">Loading Leader Panel Configurations...</span>

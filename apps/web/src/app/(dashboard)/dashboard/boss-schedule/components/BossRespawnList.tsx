@@ -19,8 +19,28 @@ export default function BossRespawnList({ killedHistory, bosses }: BossRespawnLi
     return () => clearInterval(timer);
   }, []);
 
+  // Filter killedHistory to only keep the latest entry for each unique boss name (case-insensitive)
+  const uniqueHistoryMap = new Map<string, BossScheduleData>();
+  for (const item of killedHistory) {
+    const key = item.bossName.toLowerCase();
+    const existing = uniqueHistoryMap.get(key);
+    
+    const itemTime = item.killedAt ? new Date(item.killedAt).getTime() : new Date(item.spawnTime).getTime();
+    
+    if (!existing) {
+      uniqueHistoryMap.set(key, item);
+    } else {
+      const existingTime = existing.killedAt ? new Date(existing.killedAt).getTime() : new Date(existing.spawnTime).getTime();
+      if (itemTime > existingTime) {
+        uniqueHistoryMap.set(key, item);
+      }
+    }
+  }
+
+  const uniqueHistory = Array.from(uniqueHistoryMap.values());
+
   // Compute active respawns (where status is KILLED)
-  const activeRespawns = killedHistory.map((item) => {
+  const activeRespawns = uniqueHistory.map((item) => {
     const killedDate = item.killedAt ? new Date(item.killedAt) : new Date(item.spawnTime);
     const expectedRespawn = getNextBossSpawnTime(item.bossName, killedDate);
     const timeRemaining = expectedRespawn.getTime() - now;
@@ -55,7 +75,7 @@ export default function BossRespawnList({ killedHistory, bosses }: BossRespawnLi
       isExpired,
       isWarning,
     };
-  });
+  }).sort((a, b) => a.expectedRespawn.getTime() - b.expectedRespawn.getTime());
 
   return (
     <Card className="relative overflow-hidden border border-white/[0.06] bg-[#0c0d12]/60 backdrop-blur-md shadow-2xl p-6 rounded-3xl">

@@ -496,9 +496,10 @@ export async function logBossKill(
     },
   });
 
-  // Automatically calculate next spawn for audit logging (do not create schedule)
+  // Automatically calculate next spawn for audit logging (scheduling is done manually)
   const killDate = new Date(killedAt);
   const nextSpawnTime = getNextBossSpawnTime(schedule.bossName, killDate);
+  const nextSchedule: any = null;
 
   await writeAuditLog({
     actorId,
@@ -510,6 +511,7 @@ export async function logBossKill(
       bossName: schedule.bossName, 
       killedAt, 
       nextSpawnTime: nextSpawnTime.toISOString(),
+      nextGuildTurn: nextSchedule ? nextSchedule.guildTurn : undefined,
       lootDrop,
       screenshotUrl
     },
@@ -517,7 +519,7 @@ export async function logBossKill(
     userAgent,
   });
 
-  return updatedEvent;
+  return { updatedEvent, nextSchedule };
 }
 
 export async function updateBossSchedule(
@@ -821,12 +823,43 @@ export async function getMemberAttendanceStats(guildId: string, userId: string) 
     expiresAt: s.expiresAt.toISOString()
   }));
 
+  const history = sessions.map(session => {
+    const record = session.records[0];
+    let status: "CONFIRMED" | "PENDING" | "MISSED" | "UNCHECKED" = "UNCHECKED";
+    
+    if (record) {
+      if (record.status === AttendanceRecordStatus.CONFIRMED) {
+        status = "CONFIRMED";
+      } else {
+        status = "PENDING";
+      }
+    } else {
+      const isExpired = new Date(session.expiresAt).getTime() < Date.now();
+      if (isExpired) {
+        status = "MISSED";
+      } else {
+        status = "UNCHECKED";
+      }
+    }
+    
+    return {
+      sessionId: session.id,
+      title: session.title,
+      type: session.type,
+      createdAt: session.createdAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      status,
+      joinedAt: record ? record.joinedAt.toISOString() : null,
+    };
+  });
+
   return {
     presenceRate,
     currentStreak,
     participationCount,
     totalPoints,
-    missedAlerts
+    missedAlerts,
+    history
   };
 }
 
@@ -853,17 +886,158 @@ export async function getDashboardSummary(guildId: string, userId: string) {
   const currencySymbol = settings?.currencySymbol || "₱";
   const currencyCode = settings?.currencyCode || "PHP";
 
-  // 2. Fetch Balance and Balance change this week (last 7 days)
-  const ledgerEntries = await prisma.ledgerEntry.groupBy({
-    by: ["entryType"],
-    where: {
-      accountType: "MEMBER",
-      accountId: userId,
-      currency: currencyCode,
-      guildId,
-    },
-    _sum: { amount: true },
-  });
+  // 2. Fetch all other metrics in parallel to prevent database query blocking/latency
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
+  const sevenDaysAgoTime = new Date();
+  sevenDaysAgoTime.setDate(sevenDaysAgoTime.getDate() - 6);
+  sevenDaysAgoTime.setHours(0, 0, 0, 0);
+
+  const [
+    ledgerEntries,
+    weeklyCreditSum,
+    pointsSum,
+    weeklyPointsSum,
+    totalMembers,
+    onlineMembersCount,
+    bossKillsToday,
+    totalBossKills,
+    memberLedger,
+    guildAudit,
+    creditsHistory,
+    claims,
+  ] = await Promise.all([
+    // 1. Fetch Balance sum
+    prisma.ledgerEntry.groupBy({
+      by: ["entryType"],
+      where: {
+        accountType: "MEMBER",
+        accountId: userId,
+        currency: currencyCode,
+        guildId,
+      },
+      _sum: { amount: true },
+    }),
+    // 2. Fetch Balance change this week (last 7 days)
+    prisma.ledgerEntry.aggregate({
+      where: {
+        accountType: "MEMBER",
+        accountId: userId,
+        currency: currencyCode,
+        guildId,
+        entryType: "CREDIT",
+        createdAt: { gte: sevenDaysAgo },
+      },
+      _sum: { amount: true },
+    }),
+    // 3. Guild Points
+    prisma.ledgerEntry.aggregate({
+      where: {
+        guildId,
+        accountId: userId,
+        accountType: "MEMBER",
+        referenceType: "ATTENDANCE",
+      },
+      _sum: { amount: true },
+    }),
+    // 4. Weekly Guild Points
+    prisma.ledgerEntry.aggregate({
+      where: {
+        guildId,
+        accountId: userId,
+        accountType: "MEMBER",
+        referenceType: "ATTENDANCE",
+        createdAt: { gte: sevenDaysAgo },
+      },
+      _sum: { amount: true },
+    }),
+    // 5. Total Members count
+    prisma.guildMember.count({
+      where: { guildId, isActive: true },
+    }),
+    // 6. Online Members count
+    prisma.guildMember.count({
+      where: {
+        guildId,
+        isActive: true,
+        user: {
+          sessions: {
+            some: {
+              lastActive: { gte: fifteenMinutesAgo },
+            },
+          },
+        },
+      },
+    }),
+    // 7. Boss Kills Today count
+    prisma.bossSchedule.count({
+      where: {
+        OR: [
+          { guildId },
+          { guildId: null },
+        ],
+        status: BossEventStatus.KILLED,
+        killedAt: { gte: startOfToday },
+      },
+    }),
+    // 8. Total Boss Kills count
+    prisma.bossSchedule.count({
+      where: {
+        OR: [
+          { guildId },
+          { guildId: null },
+        ],
+        status: BossEventStatus.KILLED,
+      },
+    }),
+    // 9. Member Ledger timeline
+    prisma.ledgerEntry.findMany({
+      where: {
+        guildId,
+        accountId: userId,
+        accountType: "MEMBER",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    // 10. Guild Audit timeline
+    prisma.auditLog.findMany({
+      where: { guildId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    // 11. Performance credits history
+    prisma.ledgerEntry.findMany({
+      where: {
+        guildId,
+        accountId: userId,
+        accountType: "MEMBER",
+        entryType: "CREDIT",
+        createdAt: {
+          gte: sevenDaysAgoTime,
+        },
+      },
+      select: {
+        amount: true,
+        createdAt: true,
+      },
+    }),
+    // 12. Claims ratio by guild turn
+    prisma.bossSchedule.groupBy({
+      by: ["guildTurn"],
+      where: {
+        status: BossEventStatus.KILLED,
+        guildTurn: { not: null },
+      },
+      _count: {
+        id: true,
+      },
+    }),
+  ]);
 
   let credits = 0n;
   let debits = 0n;
@@ -877,112 +1051,20 @@ export async function getDashboardSummary(guildId: string, userId: string) {
   const balanceCents = credits - debits;
   const balanceValue = `${currencySymbol} ${(Number(balanceCents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const weeklyCreditSum = await prisma.ledgerEntry.aggregate({
-    where: {
-      accountType: "MEMBER",
-      accountId: userId,
-      currency: currencyCode,
-      guildId,
-      entryType: "CREDIT",
-      createdAt: { gte: sevenDaysAgo },
-    },
-    _sum: { amount: true },
-  });
   const weeklyCredit = Number(weeklyCreditSum._sum.amount || 0n) / 100;
   const balanceSub = `+${currencySymbol}${weeklyCredit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this week`;
 
-  // 3. Guild Points
-  const pointsSum = await prisma.ledgerEntry.aggregate({
-    where: {
-      guildId,
-      accountId: userId,
-      accountType: "MEMBER",
-      referenceType: "ATTENDANCE",
-    },
-    _sum: { amount: true },
-  });
   const totalPoints = Number(pointsSum._sum.amount || 0n);
   const guildPointsValue = totalPoints.toLocaleString();
 
-  const weeklyPointsSum = await prisma.ledgerEntry.aggregate({
-    where: {
-      guildId,
-      accountId: userId,
-      accountType: "MEMBER",
-      referenceType: "ATTENDANCE",
-      createdAt: { gte: sevenDaysAgo },
-    },
-    _sum: { amount: true },
-  });
   const weeklyPoints = Number(weeklyPointsSum._sum.amount || 0n);
   const guildPointsSub = `+${weeklyPoints.toLocaleString()} this week`;
 
-  // 4. Members
-  const totalMembers = await prisma.guildMember.count({
-    where: { guildId, isActive: true },
-  });
-
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-  const onlineMembersCount = await prisma.guildMember.count({
-    where: {
-      guildId,
-      isActive: true,
-      user: {
-        sessions: {
-          some: {
-            lastActive: { gte: fifteenMinutesAgo },
-          },
-        },
-      },
-    },
-  });
   const membersValue = totalMembers.toString();
   const membersSub = `${onlineMembersCount} online`;
 
-  // 5. Boss Today
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-
-  const bossKillsToday = await prisma.bossSchedule.count({
-    where: {
-      OR: [
-        { guildId },
-        { guildId: null },
-      ],
-      status: BossEventStatus.KILLED,
-      killedAt: { gte: startOfToday },
-    },
-  });
-
-  const totalBossKills = await prisma.bossSchedule.count({
-    where: {
-      OR: [
-        { guildId },
-        { guildId: null },
-      ],
-      status: BossEventStatus.KILLED,
-    },
-  });
   const bossTodayValue = bossKillsToday.toString();
   const bossTodaySub = `${totalBossKills} this season`;
-
-  // 6. Recent Activity Timeline
-  const memberLedger = await prisma.ledgerEntry.findMany({
-    where: {
-      guildId,
-      accountId: userId,
-      accountType: "MEMBER",
-    },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
-
-  const guildAudit = await prisma.auditLog.findMany({
-    where: { guildId },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
 
   const activities: Array<{
     type: "CREDIT" | "DEBIT" | "POINTS" | "INFO" | "CONFIG";
@@ -1081,6 +1163,48 @@ export async function getDashboardSummary(guildId: string, userId: string) {
     });
   }
 
+  // 7. Performance history (Ledger credit accumulations over the last 7 calendar days)
+  const performanceHistory: Array<{ dayName: string; amount: number }> = [];
+  const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const dailyAmounts: { [key: string]: number } = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toDateString();
+    dailyAmounts[dateStr] = 0;
+  }
+
+  for (const entry of creditsHistory) {
+    const dateStr = entry.createdAt.toDateString();
+    if (dailyAmounts[dateStr] !== undefined) {
+      dailyAmounts[dateStr] += Number(entry.amount) / 100;
+    }
+  }
+
+  const generatedPerformanceHistory = Object.keys(dailyAmounts).map((dateStr) => {
+    const d = new Date(dateStr);
+    return {
+      dayName: daysOfWeek[d.getDay()],
+      amount: dailyAmounts[dateStr],
+    };
+  });
+
+  // 8. Faction claim ratios (Group boss schedules by guild turn)
+
+  const totalClaimsCount = claims.reduce((acc, c) => acc + c._count.id, 0);
+  const factionClaims = claims
+    .map((c) => {
+      const claimsCount = c._count.id;
+      const percentage = totalClaimsCount > 0 ? Math.round((claimsCount / totalClaimsCount) * 100) : 0;
+      return {
+        guildName: c.guildTurn || "Unknown",
+        claimsCount,
+        percentage,
+      };
+    })
+    .sort((a, b) => b.claimsCount - a.claimsCount);
+
   return {
     balance: {
       raw: Number(balanceCents) / 100,
@@ -1106,6 +1230,8 @@ export async function getDashboardSummary(guildId: string, userId: string) {
       total: totalBossKills,
     },
     recentActivity: formattedActivities,
+    performanceHistory: generatedPerformanceHistory,
+    factionClaims: factionClaims,
   };
 }
 

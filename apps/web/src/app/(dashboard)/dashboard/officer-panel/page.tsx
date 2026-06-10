@@ -8,6 +8,7 @@ import { guildApi, dashboardApi, type JoinRequestData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader, Reveal } from "@/components/dashboard/DashboardHelpers";
+import { useQuery, queryClient } from "@/lib/query";
 import OfficerQuickLinks from "./components/OfficerQuickLinks";
 import ApplicationsQueue from "./components/ApplicationsQueue";
 import AttendanceVerification from "./components/AttendanceVerification";
@@ -27,13 +28,7 @@ export default function OfficerPanelPage() {
       activeGuild.role === "ADMIN");
 
   // State
-  const [applications, setApplications] = useState<JoinRequestData[]>([]);
-  const [isLoadingApps, setIsLoadingApps] = useState(false);
   const [isReviewingId, setIsReviewingId] = useState<string | null>(null);
-
-  const [activeSession, setActiveSession] = useState<any>(null);
-  const [pendingRecords, setPendingRecords] = useState<any[]>([]);
-  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
   const [isConfirmingRecordId, setIsConfirmingRecordId] = useState<string | null>(null);
 
   // Verification Check
@@ -43,58 +38,54 @@ export default function OfficerPanelPage() {
     }
   }, [isOfficer, authLoading, router]);
 
-  // Load Membership Applications
-  const loadApplications = useCallback(async () => {
-    if (!activeGuild) return;
-    setIsLoadingApps(true);
-    try {
+  // ─── Persistent Queries ────────────────────────────────
+
+  // 1. Applications Query (shares key!)
+  const {
+    data: applicationsRaw,
+    isLoading: isLoadingApps,
+    refetch: refetchApplications,
+  } = useQuery<JoinRequestData[]>(
+    activeGuild ? `guild_applications:${activeGuild.guildId}` : "guild_applications_empty",
+    async () => {
+      if (!activeGuild || !isOfficer) return [];
       const result = await guildApi.getGuildApplications(activeGuild.guildId);
-      if (result.success && result.data?.applications) {
-        setApplications(result.data.applications);
-      }
-    } catch {
-      addToast("error", "Failed to load guild applications");
-    } finally {
-      setIsLoadingApps(false);
-    }
-  }, [activeGuild, addToast]);
+      return result.success && result.data?.applications ? result.data.applications : [];
+    },
+    { persist: true, staleTime: 30000 }
+  );
+  const applications = applicationsRaw || [];
 
-  // Load Active Attendance and Pending Check-ins
-  const loadAttendanceQueue = useCallback(async () => {
-    if (!activeGuild) return;
-    setIsLoadingAttendance(true);
-    try {
+  // 2. Attendance Query (shares key!)
+  const {
+    data: pendingAttendanceRaw,
+    isLoading: isLoadingAttendance,
+    refetch: refetchAttendance,
+  } = useQuery<any>(
+    activeGuild && isOfficer ? `pending_attendance:${activeGuild.guildId}` : "pending_attendance_empty",
+    async () => {
+      if (!activeGuild || !isOfficer) return null;
       const result = await dashboardApi.getPendingAttendance(activeGuild.guildId);
-      if (result.success && result.data) {
-        setActiveSession(result.data.activeSession);
-        setPendingRecords(result.data.pendingRecords || []);
-      }
-    } catch {
-      addToast("error", "Failed to load active attendance portal");
-    } finally {
-      setIsLoadingAttendance(false);
-    }
-  }, [activeGuild, addToast]);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 15000 }
+  );
 
-  useEffect(() => {
-    if (isOfficer && activeGuild) {
-      loadApplications();
-      loadAttendanceQueue();
-    }
-  }, [isOfficer, activeGuild, loadApplications, loadAttendanceQueue]);
+  const activeSession = pendingAttendanceRaw?.activeSession || null;
+  const pendingRecords = pendingAttendanceRaw?.pendingRecords || [];
 
-  // Listen to real-time events to refresh applications queue and attendance verification queue instantly
+  // Listen to Socket.IO real-time events for instant cache invalidation
   useEffect(() => {
     if (!socket || !activeGuild || !isOfficer) return;
 
     const handleApplicationsUpdate = () => {
       console.log("[Officer Panel Socket]: Applications updated. Refreshing queue...");
-      loadApplications();
+      queryClient.invalidateQueries(`guild_applications:${activeGuild.guildId}`);
     };
 
     const handleAttendanceUpdate = () => {
-      console.log("[Officer Panel Socket]: Attendance record/session updated. Refreshing verification queue...");
-      loadAttendanceQueue();
+      console.log("[Officer Panel Socket]: Attendance record/session updated. Refreshing queue...");
+      queryClient.invalidateQueries(`pending_attendance:${activeGuild.guildId}`);
     };
 
     socket.on("join_request_created", handleApplicationsUpdate);
@@ -118,7 +109,7 @@ export default function OfficerPanelPage() {
       socket.off("attendance_record_created", handleAttendanceUpdate);
       socket.off("attendance_record_confirmed", handleAttendanceUpdate);
     };
-  }, [socket, activeGuild, isOfficer, loadApplications, loadAttendanceQueue]);
+  }, [socket, activeGuild, isOfficer]);
 
   // Review Application (Accept/Decline)
   async function handleReviewApplication(requestId: string, action: "ACCEPT" | "DECLINE") {
@@ -133,7 +124,8 @@ export default function OfficerPanelPage() {
             ? "Applicant accepted into the guild!"
             : "Application declined successfully."
         );
-        loadApplications();
+        queryClient.invalidateQueries(`guild_applications:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
       } else {
         addToast("error", result.error?.message || "Failed to review application");
       }
@@ -152,7 +144,9 @@ export default function OfficerPanelPage() {
       const result = await dashboardApi.confirmAttendance(recordId, activeGuild.guildId);
       if (result.success) {
         addToast("success", "Raid check-in verified successfully!");
-        loadAttendanceQueue();
+        queryClient.invalidateQueries(`pending_attendance:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`attendance_stats:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
       } else {
         addToast("error", result.error?.message || "Failed to confirm check-in");
       }
@@ -197,7 +191,7 @@ export default function OfficerPanelPage() {
               applications={applications}
               isLoading={isLoadingApps}
               isReviewingId={isReviewingId}
-              onRefresh={loadApplications}
+              onRefresh={refetchApplications}
               onReview={handleReviewApplication}
             />
           </div>
@@ -209,7 +203,7 @@ export default function OfficerPanelPage() {
               pendingRecords={pendingRecords}
               isLoading={isLoadingAttendance}
               isConfirmingRecordId={isConfirmingRecordId}
-              onRefresh={loadAttendanceQueue}
+              onRefresh={refetchAttendance}
               onConfirm={handleConfirmAttendance}
             />
           </div>

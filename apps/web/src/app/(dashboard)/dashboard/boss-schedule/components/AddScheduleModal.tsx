@@ -5,6 +5,14 @@ import { type BossData, type BossScheduleData } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import { getBossImageUrl } from "@guild/shared";
 
+const timeOptions = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2);
+  const m = (i % 2) * 30;
+  const hStr = String(h).padStart(2, "0");
+  const mStr = String(m).padStart(2, "0");
+  return `${hStr}:${mStr}`;
+});
+
 export interface BatchItem {
   id: string; // unique local ID (e.g. boss.id + index)
   bossName: string;
@@ -298,13 +306,30 @@ export default function AddScheduleModal({
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div>
                   <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">Spawn Time</label>
-                  <input
-                    type="time"
-                    value={editSpawnTime}
-                    onChange={(e) => setEditSpawnTime(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.02] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-white/20 font-mono"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="HH:MM"
+                      pattern="^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$"
+                      title="Please enter time in HH:MM format (24-hour style, e.g. 14:30)"
+                      value={editSpawnTime}
+                      onChange={(e) => setEditSpawnTime(e.target.value)}
+                      required
+                      className="flex-1 min-w-[70px] px-3 py-2 rounded-xl bg-white/[0.02] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-white/20 font-mono"
+                    />
+                    <select
+                      value={timeOptions.includes(editSpawnTime) ? editSpawnTime : ""}
+                      onChange={(e) => {
+                        if (e.target.value) setEditSpawnTime(e.target.value);
+                      }}
+                      className="w-[95px] px-2 py-2 rounded-xl bg-zinc-950/80 border border-white/[0.08] text-xs text-white/80 focus:outline-none focus:border-white/20 cursor-pointer font-mono"
+                    >
+                      <option value="" disabled>Select</option>
+                      {timeOptions.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -430,14 +455,32 @@ export default function AddScheduleModal({
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-[9px] font-bold text-white/30 uppercase tracking-wider mb-1">Local Time</label>
-                            <input
-                              type="time"
-                              value={item.spawnTime}
-                              onChange={(e) => handleUpdateItemField(item.id, "spawnTime", e.target.value)}
-                              disabled={item.isFixedSchedule}
-                              required
-                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#0c0d10] border border-white/5 text-[11px] text-white focus:outline-none font-mono disabled:opacity-50"
-                            />
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                placeholder="HH:MM"
+                                pattern="^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$"
+                                title="Please enter time in HH:MM format (24-hour style, e.g. 14:30)"
+                                value={item.spawnTime}
+                                onChange={(e) => handleUpdateItemField(item.id, "spawnTime", e.target.value)}
+                                disabled={item.isFixedSchedule}
+                                required
+                                className="flex-1 min-w-[55px] px-2 py-1 rounded-lg bg-[#0c0d10] border border-white/5 text-[11px] text-white focus:outline-none font-mono disabled:opacity-50"
+                              />
+                              <select
+                                value={timeOptions.includes(item.spawnTime) ? item.spawnTime : ""}
+                                onChange={(e) => {
+                                  if (e.target.value) handleUpdateItemField(item.id, "spawnTime", e.target.value);
+                                }}
+                                disabled={item.isFixedSchedule}
+                                className="w-[75px] px-1.5 py-1.5 rounded-lg bg-[#0c0d10] border border-white/5 text-[11px] text-white/80 focus:outline-none cursor-pointer font-mono disabled:opacity-30"
+                              >
+                                <option value="" disabled>Select</option>
+                                {timeOptions.map((t) => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
 
                           <div>

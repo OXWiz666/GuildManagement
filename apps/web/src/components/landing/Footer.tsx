@@ -106,7 +106,7 @@ export default function Footer() {
                 backgroundClip: "text",
               }}
             >
-              GUILDMASTER
+              FORGEKEEP
             </span>
           </div>
         </div>

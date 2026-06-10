@@ -14,6 +14,7 @@ import SoldItemsTable from "./components/SoldItemsTable";
 import AccountingTab from "./components/AccountingTab";
 import RecordSaleModal from "./components/RecordSaleModal";
 import TreasuryAdjModal from "./components/TreasuryAdjModal";
+import { useQuery, queryClient } from "@/lib/query";
 
 export default function GuildMarketPage() {
   const { user } = useAuth();
@@ -21,15 +22,10 @@ export default function GuildMarketPage() {
   const { socket } = useSocket();
 
   const [activeTab, setActiveTab] = useState<"loot" | "accounting">("loot");
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Guild configuration settings
-  const [settings, setSettings] = useState<any>(null);
-
-  // Loot & Accounting data
-  const [sales, setSales] = useState<any[]>([]);
-  const [accounting, setAccounting] = useState<any>(null);
-  const [schedules, setSchedules] = useState<BossScheduleData[]>([]);
+  // Loot & Accounting inputs
+  const [saleCurrency, setSaleCurrency] = useState("PHP");
+  const [adjCurrency, setAdjCurrency] = useState("PHP");
 
   // Search & Filter state
   const [lootSearch, setLootSearch] = useState("");
@@ -45,7 +41,6 @@ export default function GuildMarketPage() {
   const [saleCategory, setSaleCategory] = useState<string>("WEAPON");
   const [saleBossScheduleId, setSaleBossScheduleId] = useState<string>("");
   const [saleValue, setSaleValue] = useState("");
-  const [saleCurrency, setSaleCurrency] = useState("PHP");
 
   // Treasury Adjustment Modal states
   const [showAdjModal, setShowAdjModal] = useState(false);
@@ -54,7 +49,6 @@ export default function GuildMarketPage() {
   const [adjAccountType, setAdjAccountType] = useState<"MEMBER" | "GUILD_FUND" | "TAX">("GUILD_FUND");
   const [adjEntryType, setAdjEntryType] = useState<"CREDIT" | "DEBIT">("DEBIT");
   const [adjAmount, setAdjAmount] = useState("");
-  const [adjCurrency, setAdjCurrency] = useState("PHP");
   const [adjDescription, setAdjDescription] = useState("");
 
   // Active attendees for selected boss fight preview
@@ -65,53 +59,89 @@ export default function GuildMarketPage() {
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
   const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader;
 
-  // Blazing-fast parallel concurrent queries using Promise.all!
-  const loadData = useCallback(async () => {
-    if (!activeGuild) return;
-    setIsLoading(true);
-    try {
-      const [settingsRes, salesRes, accRes, schedRes] = await Promise.all([
-        guildApi.getSettings(activeGuild.guildId),
-        dashboardApi.getLootSales(activeGuild.guildId),
-        dashboardApi.getAccountingDashboard(activeGuild.guildId, ledgerPage, 15),
-        dashboardApi.getBossSchedules(activeGuild.guildId),
-      ]);
+  // ─── Persistent Queries ────────────────────────────────
 
-      if (settingsRes.success) {
-        setSettings(settingsRes.data);
-        setSaleCurrency(settingsRes.data.currencyCode);
-        setAdjCurrency(settingsRes.data.currencyCode);
-      }
+  // 1. Settings Query
+  const {
+    data: settings,
+  } = useQuery<any | null>(
+    activeGuild ? `guild_settings:${activeGuild.guildId}` : "guild_settings_empty",
+    async () => {
+      if (!activeGuild) return null;
+      const result = await guildApi.getSettings(activeGuild.guildId);
+      return result.success ? result.data : null;
+    },
+    { persist: true, staleTime: 300000 }
+  );
 
-      if (salesRes.success && salesRes.data?.sales) {
-        setSales(salesRes.data.sales);
-      }
-
-      if (accRes.success && accRes.data) {
-        setAccounting(accRes.data);
-      }
-
-      if (schedRes.success && schedRes.data?.schedules) {
-        setSchedules(schedRes.data.schedules);
-      }
-    } catch {
-      addToast("error", "Failed to load Guild Market statistics");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeGuild, ledgerPage, addToast]);
-
+  // Sync default currency from settings
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (settings) {
+      setSaleCurrency(settings.currencyCode);
+      setAdjCurrency(settings.currencyCode);
+    }
+  }, [settings]);
+
+  // 2. Loot Sales Query
+  const {
+    data: salesRaw,
+    isLoading: isLoadingSales,
+  } = useQuery<any[]>(
+    activeGuild ? `loot_sales:${activeGuild.guildId}` : "loot_sales_empty",
+    async () => {
+      if (!activeGuild) return [];
+      const result = await dashboardApi.getLootSales(activeGuild.guildId);
+      return result.success && result.data?.sales ? result.data.sales : [];
+    },
+    { persist: true, staleTime: 30000 }
+  );
+  const sales = salesRaw || [];
+
+  // 3. Accounting Dashboard Query
+  const {
+    data: accounting,
+    isLoading: isLoadingAccounting,
+  } = useQuery<any | null>(
+    activeGuild ? `accounting_dashboard:${activeGuild.guildId}:${ledgerPage}` : "accounting_dashboard_empty",
+    async () => {
+      if (!activeGuild) return null;
+      const result = await dashboardApi.getAccountingDashboard(activeGuild.guildId, ledgerPage, 15);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 15000 }
+  );
+
+  // 4. Boss Schedules Query (shares cache key!)
+  const {
+    data: schedulesRaw,
+    isLoading: isLoadingSchedules,
+  } = useQuery<BossScheduleData[]>(
+    activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty",
+    async () => {
+      if (!activeGuild) return [];
+      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
+      return result.success && result.data?.schedules ? result.data.schedules : [];
+    },
+    { persist: true, staleTime: 15000 }
+  );
+  const schedules = schedulesRaw || [];
+
+  const isLoading = isLoadingSales || isLoadingAccounting || isLoadingSchedules;
+
+  const invalidateAll = () => {
+    if (!activeGuild) return;
+    queryClient.invalidateQueries(`loot_sales:${activeGuild.guildId}`);
+    queryClient.invalidateQueries(`accounting_dashboard:${activeGuild.guildId}`);
+    queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+  };
 
   // Listen to real-time events to refresh Guild Market and Ledger history instantly
   useEffect(() => {
     if (!socket || !activeGuild) return;
 
     const handleMarketUpdate = () => {
-      console.log("[Market Socket]: Loot sale or treasury adjusted. Refreshing statistics...");
-      loadData();
+      console.log("[Market Socket]: Loot sale or treasury adjusted. Refreshing caches...");
+      invalidateAll();
     };
 
     socket.on("loot_sale_recorded", handleMarketUpdate);
@@ -121,7 +151,7 @@ export default function GuildMarketPage() {
       socket.off("loot_sale_recorded", handleMarketUpdate);
       socket.off("treasury_adjusted", handleMarketUpdate);
     };
-  }, [socket, activeGuild, loadData]);
+  }, [socket, activeGuild]);
 
   // Load preview attendees when boss fight changes in sale modal
   useEffect(() => {
@@ -133,17 +163,14 @@ export default function GuildMarketPage() {
     async function loadPreview() {
       setIsLoadingPreview(true);
       try {
-        const result = await dashboardApi.getBossSchedules(activeGuild!.guildId);
-        if (result.success && result.data?.schedules) {
-          const selected = result.data.schedules.find((s: any) => s.id === saleBossScheduleId);
-          if (selected && selected.attendanceSessions?.[0]?.records) {
-            const confirmed = selected.attendanceSessions[0].records.filter(
-              (r: any) => r.status === "CONFIRMED"
-            );
-            setPreviewAttendees(confirmed);
-          } else {
-            setPreviewAttendees([]);
-          }
+        const selected = schedules.find((s: any) => s.id === saleBossScheduleId);
+        if (selected && selected.attendanceSessions?.[0]?.records) {
+          const confirmed = selected.attendanceSessions[0].records.filter(
+            (r: any) => r.status === "CONFIRMED"
+          );
+          setPreviewAttendees(confirmed);
+        } else {
+          setPreviewAttendees([]);
         }
       } catch {
         setPreviewAttendees([]);
@@ -152,7 +179,7 @@ export default function GuildMarketPage() {
       }
     }
     loadPreview();
-  }, [saleBossScheduleId, activeGuild]);
+  }, [saleBossScheduleId, activeGuild, schedules]);
 
   // Submit sale handler
   const handleRecordSale = async (e: React.FormEvent) => {
@@ -184,7 +211,7 @@ export default function GuildMarketPage() {
         setSaleBossScheduleId("");
         setSaleValue("");
         setLedgerPage(1);
-        await loadData();
+        invalidateAll();
       } else {
         addToast("error", result.error?.message || "Failed to record loot sale");
       }
@@ -234,7 +261,7 @@ export default function GuildMarketPage() {
         setAdjAmount("");
         setAdjDescription("");
         setLedgerPage(1);
-        await loadData();
+        invalidateAll();
       } else {
         addToast("error", result.error?.message || "Failed to perform adjustment");
       }
@@ -330,7 +357,7 @@ export default function GuildMarketPage() {
                   </Magnetic>
                 </>
               )}
-              <Button variant="ghost" size="sm" onClick={loadData} isLoading={isLoading}>
+              <Button variant="ghost" size="sm" onClick={invalidateAll} isLoading={isLoading}>
                 Refresh
               </Button>
             </div>

@@ -11,7 +11,7 @@ import { initSocketServer } from "./lib/socket";
 };
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
-import { apiLimiter, authLimiter } from "./middleware/rateLimiter";
+import { apiLimiter } from "./middleware/rateLimiter";
 import healthRoutes from "./routes/health.routes";
 import authRoutes from "./routes/auth.routes";
 import guildRoutes from "./routes/guild.routes";
@@ -38,20 +38,34 @@ app.use("/api", apiLimiter);
 
 // ─── Routes ─────────────────────────────────────
 app.use("/api/health", healthRoutes);
-app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/guilds", guildRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+
+app.use("/api", (_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: "NOT_FOUND",
+      message: "API route not found",
+    },
+  });
+});
 
 // ─── Error Handler (must be last) ───────────────
 app.use(errorHandler);
 
 // Wrap Express app in HTTP server to enable WebSockets
 const server = http.createServer(app);
+server.requestTimeout = 30_000;
+server.headersTimeout = 35_000;
+server.keepAliveTimeout = 5_000;
 
 // Initialize our real-time socket server
 initSocketServer(server);
 
 // ─── Start Server ───────────────────────────────
+if (env.NODE_ENV !== "test") {
 server.listen(env.PORT, () => {
   console.log(`
   Guild Management API (Real-Time Enabled)
@@ -63,5 +77,6 @@ server.listen(env.PORT, () => {
   ────────────────────────
   `);
 });
+}
 
 export default app;

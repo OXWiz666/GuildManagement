@@ -318,15 +318,6 @@ export default function GuildMarketPage() {
     );
   }
 
-  if (isLoading && sales.length === 0) {
-    return (
-      <div className="space-y-6 max-w-7xl mx-auto w-full px-2 md:px-4">
-        <Skeleton className="h-10 w-96 animate-pulse" />
-        <Skeleton className="h-40 w-full animate-pulse" />
-      </div>
-    );
-  }
-
   return (
     <div className="relative max-w-7xl mx-auto w-full px-2 md:px-4 pb-12">
       <DashboardDecor />
@@ -393,34 +384,52 @@ export default function GuildMarketPage() {
         {/* Tab Content 1: LOOT SALES & HISTORY */}
         {activeTab === "loot" && (
           <div className="space-y-6">
-            <LootStatsGrid
-              currencySymbol={settings?.currencySymbol || "₱"}
-              totalLootSoldVal={totalLootSoldVal}
-              totalTaxVal={totalTaxVal}
-              totalDividendsVal={totalDividendsVal}
-              taxRatePercent={settings?.taxRatePercent ?? 10}
-            />
-            <SoldItemsTable
-              sales={filteredSales}
-              lootSearch={lootSearch}
-              onSearchChange={setLootSearch}
-              currencySymbol={settings?.currencySymbol || "₱"}
-              secondaryCurrencySymbol={settings?.secondaryCurrencySymbol || "💎"}
-            />
+            {isLoadingSales && sales.length === 0 ? (
+              <div className="space-y-4">
+                <Skeleton className="h-28 w-full rounded-2xl animate-pulse" />
+                <Skeleton className="h-64 w-full rounded-2xl animate-pulse" />
+              </div>
+            ) : (
+              <>
+                <LootStatsGrid
+                  currencySymbol={settings?.currencySymbol || "₱"}
+                  totalLootSoldVal={totalLootSoldVal}
+                  totalTaxVal={totalTaxVal}
+                  totalDividendsVal={totalDividendsVal}
+                  taxRatePercent={settings?.taxRatePercent ?? 10}
+                />
+                <SoldItemsTable
+                  sales={filteredSales}
+                  lootSearch={lootSearch}
+                  onSearchChange={setLootSearch}
+                  currencySymbol={settings?.currencySymbol || "₱"}
+                  secondaryCurrencySymbol={settings?.secondaryCurrencySymbol || "💎"}
+                />
+              </>
+            )}
           </div>
         )}
 
         {/* Tab Content 2: ACCOUNTING & LEDGER */}
         {activeTab === "accounting" && (
-          <AccountingTab
-            accounting={accounting}
-            settings={settings}
-            filteredMembers={filteredMembers}
-            memberSearch={memberSearch}
-            onSearchChange={setMemberSearch}
-            ledgerPage={ledgerPage}
-            onPageChange={setLedgerPage}
-          />
+          <>
+            {isLoadingAccounting && !accounting ? (
+              <div className="space-y-4">
+                <Skeleton className="h-28 w-full rounded-2xl animate-pulse" />
+                <Skeleton className="h-64 w-full rounded-2xl animate-pulse" />
+              </div>
+            ) : (
+              <AccountingTab
+                accounting={accounting}
+                settings={settings}
+                filteredMembers={filteredMembers}
+                memberSearch={memberSearch}
+                onSearchChange={setMemberSearch}
+                ledgerPage={ledgerPage}
+                onPageChange={setLedgerPage}
+              />
+            )}
+          </>
         )}
 
         {/* Modal: Record Drop Loot Sale */}

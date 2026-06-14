@@ -399,9 +399,10 @@ export const guildApi = {
     return api.patch<any>(`/guilds/${guildId}/settings`, payload);
   },
 
-  async getAuditLogs(guildId: string, filter?: string, page = 1, limit = 30) {
+  async getAuditLogs(guildId: string, filter?: string, page = 1, limit = 30, memberId?: string) {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (filter) params.set("filter", filter);
+    if (memberId) params.set("memberId", memberId);
     return api.get<{
       logs: AuditLogEntry[];
       total: number;

@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/auth-context";
 import { dashboardApi, type BossScheduleData, type BossData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { useSocket } from "@/components/providers/socket-provider";
-import ConfirmModal from "@/components/ui/ConfirmModal";
 import Button from "@/components/ui/Button";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { useQuery, queryClient } from "@/lib/query";
@@ -78,10 +77,6 @@ export default function BossSchedulePage() {
 
   // State for editing single event
   const [editingEvent, setEditingEvent] = useState<BossScheduleData | null>(null);
-
-  // Custom premium delete confirmation modal states
-  const [deleteConfirmEvent, setDeleteConfirmEvent] = useState<BossScheduleData | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Sync clocks every second
   useEffect(() => {
@@ -218,29 +213,28 @@ export default function BossSchedulePage() {
   // Delete boss schedule handler
   function handleDeleteSchedule(scheduleId: string) {
     const targetSchedule = schedules.find((s) => s.id === scheduleId);
-    if (targetSchedule) {
-      setDeleteConfirmEvent(targetSchedule);
-    }
-  }
+    if (!targetSchedule || !activeGuild) return;
 
-  // Actual deletion execution called by the custom ConfirmModal
-  async function executeDeleteSchedule() {
-    if (!activeGuild || !deleteConfirmEvent) return;
-    setIsDeleting(true);
-    const scheduleId = deleteConfirmEvent.id;
-    const bossName = deleteConfirmEvent.bossName;
-    try {
-      const result = await dashboardApi.deleteBossSchedule(activeGuild.guildId, scheduleId);
-      if (result.success) {
-        addToast("success", `Schedule for ${bossName} has been deleted.`);
-        queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
-        setDeleteConfirmEvent(null);
+    addToast(
+      "warning",
+      `Are you sure you want to delete the scheduled fight for ${targetSchedule.bossName}? This will also remove any associated DKP check-in data.`,
+      0, // stays until action or dismiss
+      {
+        label: "Delete",
+        variant: "danger",
+        onClick: async () => {
+          try {
+            const result = await dashboardApi.deleteBossSchedule(activeGuild.guildId, scheduleId);
+            if (result.success) {
+              addToast("success", `Schedule for ${targetSchedule.bossName} has been deleted.`);
+              queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+            }
+          } catch (err: any) {
+            addToast("error", err?.message || `Failed to delete schedule for ${targetSchedule.bossName}`);
+          }
+        },
       }
-    } catch (err: any) {
-      addToast("error", err?.message || `Failed to delete schedule for ${bossName}`);
-    } finally {
-      setIsDeleting(false);
-    }
+    );
   }
 
   // Submit boss death log
@@ -420,18 +414,18 @@ export default function BossSchedulePage() {
         {/* Global Status Legend Panel */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/[0.06] pt-5 text-white/50 text-xs select-none">
           <div className="flex flex-wrap items-center gap-5">
-            <span className="font-semibold text-white/40 uppercase tracking-wider">Status Legend:</span>
+            <span className="font-semibold text-white/40 uppercase tracking-wider">Status:</span>
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
-              <span>🟢 Available (Spawned)</span>
+              <span>Spawned</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
-              <span>🟡 Claimed (Upcoming Spawn)</span>
+              <span>Upcoming Spawn</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
-              <span>🔴 Dead (Killed)</span>
+              <span>Killed</span>
             </div>
           </div>
           <div className="text-[10px] text-zinc-500 italic">
@@ -524,19 +518,6 @@ export default function BossSchedulePage() {
           isLoggingKill={isLoggingKill}
           handleLogKill={handleLogKill}
           onClose={() => setShowKillModal(null)}
-        />
-
-        {/* Premium Styled Delete Confirmation Modal */}
-        <ConfirmModal
-          show={!!deleteConfirmEvent}
-          title="🗑️ Delete Scheduled Spawn"
-          message={`Are you sure you want to delete the scheduled fight for ${deleteConfirmEvent?.bossName}? This will also remove any associated DKP check-in data and cannot be undone.`}
-          confirmText="Delete Spawn"
-          cancelText="Cancel"
-          isDanger={true}
-          isSubmitting={isDeleting}
-          onConfirm={executeDeleteSchedule}
-          onCancel={() => setDeleteConfirmEvent(null)}
         />
       </div>
     </div>

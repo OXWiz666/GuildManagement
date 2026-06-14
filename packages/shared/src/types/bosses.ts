@@ -200,12 +200,12 @@ export function getNextBossSpawnTime(bossName: string, killedAt: Date): Date {
     // Check days starting from killedAt up to 7 days ahead
     for (let offset = 0; offset <= 7; offset++) {
       const candidateDay = new Date(killedAt.getTime() + offset * 24 * 60 * 60 * 1000);
-      const dayOfWeek = candidateDay.getDay();
+      const dayOfWeek = candidateDay.getUTCDay();
 
       for (const spawn of boss.fixedSpawns) {
         if (spawn.day === dayOfWeek) {
           const candidate = new Date(candidateDay);
-          candidate.setHours(spawn.hour, spawn.minute, 0, 0);
+          candidate.setUTCHours(spawn.hour, spawn.minute, 0, 0);
 
           if (candidate.getTime() > killedAt.getTime()) {
             if (!nextDate || candidate.getTime() < nextDate.getTime()) {

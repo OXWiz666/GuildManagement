@@ -236,19 +236,29 @@ export default function BossAttendancePage() {
   };
 
   // Delete attendance session (Officer)
-  const handleDeleteSession = async (sessionId: string) => {
+  const handleDeleteSession = (sessionId: string) => {
     if (!activeGuild) return;
-    if (!window.confirm("Are you sure you want to delete this attendance session? All pending check-in requests for this session will be removed.")) return;
 
-    try {
-      const result = await dashboardApi.deleteAttendanceSession(activeGuild.guildId, sessionId);
-      if (result.success) {
-        addToast("success", "Attendance session deleted successfully!");
-        invalidateAll();
+    addToast(
+      "warning",
+      "Are you sure you want to delete this attendance session? All pending check-in requests for this session will be removed.",
+      0, // stays until action or dismiss
+      {
+        label: "Delete",
+        variant: "danger",
+        onClick: async () => {
+          try {
+            const result = await dashboardApi.deleteAttendanceSession(activeGuild.guildId, sessionId);
+            if (result.success) {
+              addToast("success", "Attendance session deleted successfully!");
+              invalidateAll();
+            }
+          } catch (err: any) {
+            addToast("error", err?.message || "Failed to delete attendance session");
+          }
+        },
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to delete attendance session");
-    }
+    );
   };
 
   // Verify pending attendance record (Officer)
@@ -532,7 +542,7 @@ export default function BossAttendancePage() {
               }`}>
                 {stats ? `${stats.presenceRate}%` : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">guild battles</span>
+              <span className="text-[10px] text-zinc-650">participated</span>
             </div>
           </div>
 
@@ -543,7 +553,7 @@ export default function BossAttendancePage() {
               <h3 className="text-2xl font-bold tracking-tight text-amber-400">
                 {stats ? stats.currentStreak : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">raids in a row</span>
+              <span className="text-[10px] text-zinc-650">Attendance in a row</span>
             </div>
           </div>
 
@@ -554,7 +564,7 @@ export default function BossAttendancePage() {
               <h3 className="text-2xl font-bold tracking-tight text-cyan-400">
                 {stats ? `${stats.totalPoints} ₱` : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">ledger share</span>
+              <span className="text-[10px] text-zinc-650">guild share</span>
             </div>
           </div>
 
@@ -565,7 +575,7 @@ export default function BossAttendancePage() {
               <h3 className="text-2xl font-bold tracking-tight text-emerald-400">
                 {stats ? `${stats.participationCount} / ${stats.participationCount + (stats.missedAlerts?.length || 0)}` : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">total events</span>
+              <span className="text-[10px] text-zinc-650">activities</span>
             </div>
           </div>
         </div>

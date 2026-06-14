@@ -206,20 +206,26 @@ export default function InteractivePreview() {
   // --- Interactive Handlers ---
   // A. Cycle rotation queue
   const handleShiftTurn = (bossId: string) => {
+    const boss = bosses.find((b) => b.id === bossId);
+    if (!boss) return;
+
+    const nextQueue = [...boss.rotationQueue.slice(1), boss.rotationQueue[0]];
+    const nextOwner = nextQueue[0];
+
+    // Trigger side effects outside state updater callbacks
+    addToast("success", `Turn shifted! ${nextOwner} now has the claim for ${boss.name}.`);
+
+    // Add to recent logs
+    const logTime = "Just now";
+    setRecentLogs((logs) => [
+      { label: `${boss.name} Rotation Shift`, detail: `Turn moved to ${nextOwner}`, time: logTime, type: "info" },
+      ...logs,
+    ]);
+
+    // Update state
     setBosses((prev) =>
       prev.map((b) => {
         if (b.id === bossId) {
-          const nextQueue = [...b.rotationQueue.slice(1), b.rotationQueue[0]];
-          const nextOwner = nextQueue[0];
-          addToast("success", `Turn shifted! ${nextOwner} now has the claim for ${b.name}.`);
-          
-          // Add to recent logs
-          const logTime = "Just now";
-          setRecentLogs((logs) => [
-            { label: `${b.name} Rotation Shift`, detail: `Turn moved to ${nextOwner}`, time: logTime, type: "info" },
-            ...logs,
-          ]);
-
           return {
             ...b,
             status: "CLAIMED",
@@ -233,31 +239,36 @@ export default function InteractivePreview() {
 
   // B. Log Kill
   const handleLogKill = (scheduleId: string) => {
+    const sched = schedules.find((s) => s.id === scheduleId);
+    if (!sched) return;
+
+    // Trigger side effects outside state updater callbacks
+    addToast("success", `${sched.bossName} kill logged. expected respawn timer updated!`);
+
+    // Find matching boss in tracker and mark as DEAD (respawning from full cooldown offset)
+    setBosses((bossesPrev) =>
+      bossesPrev.map((b) => {
+        if (b.name === sched.bossName) {
+          return {
+            ...b,
+            status: "DEAD",
+            initialRemainingSeconds: elapsedSeconds + b.cooldownHours * 3600,
+          };
+        }
+        return b;
+      })
+    );
+
+    // Add to recent logs
+    setRecentLogs((logs) => [
+      { label: `${sched.bossName} Defeated`, detail: `Kill logged by Own. Respawn cycle started.`, time: "Just now", type: "info" },
+      ...logs,
+    ]);
+
+    // Update schedules state
     setSchedules((prev) =>
       prev.map((s) => {
         if (s.id === scheduleId) {
-          addToast("success", `${s.bossName} kill logged. expected respawn timer updated!`);
-          
-          // Find matching boss in tracker and mark as DEAD (respawning from full cooldown offset)
-          setBosses((bossesPrev) =>
-            bossesPrev.map((b) => {
-              if (b.name === s.bossName) {
-                return {
-                  ...b,
-                  status: "DEAD",
-                  initialRemainingSeconds: elapsedSeconds + b.cooldownHours * 3600,
-                };
-              }
-              return b;
-            })
-          );
-
-          // Add to recent logs
-          setRecentLogs((logs) => [
-            { label: `${s.bossName} Defeated`, detail: `Kill logged by Own. Respawn cycle started.`, time: "Just now", type: "info" },
-            ...logs,
-          ]);
-
           return { ...s, status: "KILLED" };
         }
         return s;

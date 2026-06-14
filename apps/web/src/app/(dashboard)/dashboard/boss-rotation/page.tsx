@@ -9,7 +9,7 @@ import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
-import { getBossImageUrl, getNextBossSpawnTime } from "@guild/shared";
+import { getBossImageUrl, getNextBossSpawnTime, PREDEFINED_BOSSES } from "@guild/shared";
 
 // Subcomponents
 import FiltersPanel from "./components/FiltersPanel";
@@ -17,6 +17,7 @@ import BossCardView from "./components/BossCardView";
 import BossTimelineView from "./components/BossTimelineView";
 import UpcomingSchedulesView from "./components/UpcomingSchedulesView";
 import ActivityLogsView from "./components/ActivityLogsView";
+import MaintenanceResetModal from "./components/MaintenanceResetModal";
 
 // Helpers & Types
 import { getGuildColor, getTickingCountdown, type RotationBoss } from "./utils/helpers";
@@ -41,6 +42,10 @@ export default function BossRotationPage() {
 
   // View Switcher for Boss Rotation (Card vs Timeline)
   const [viewMode, setViewMode] = useState<"CARD" | "TIMELINE">("CARD");
+
+  // Maintenance Reset Modal State
+  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
+  const [isMaintenanceProcessing, setIsMaintenanceProcessing] = useState(false);
 
   // Sync clocks every second
   useEffect(() => {
@@ -113,6 +118,9 @@ export default function BossRotationPage() {
 
     const knownGuildsSet = new Set<string>();
     knownGuildsSet.add(activeGuild.guildName.toUpperCase());
+    // Seed default competitive guilds on the server for rotation queue variety
+    knownGuildsSet.add("SAUSAGE");
+    knownGuildsSet.add("BZDK");
     schedules.forEach((s) => {
       if (s.guildTurn) knownGuildsSet.add(s.guildTurn.toUpperCase());
     });
@@ -242,6 +250,86 @@ export default function BossRotationPage() {
     }
   };
 
+  // ─── Maintenance Reset Handler ─────────────────────
+  // Resets spawn times for all LONG_CYCLE bosses to the maintenance end time.
+  // FIXED_SCHEDULE bosses are intentionally left untouched.
+  const handleMaintenanceReset = useCallback(async (maintenanceEndTime: Date) => {
+    if (!activeGuild) return;
+
+    setIsMaintenanceProcessing(true);
+    try {
+      // Identify which bosses are LONG_CYCLE (cycle-based)
+      const cycleBossNames = new Set(
+        PREDEFINED_BOSSES
+          .filter((b) => b.type === "LONG_CYCLE")
+          .map((b) => b.name.toLowerCase())
+      );
+
+      // Find all active (non-KILLED) schedules for cycle bosses
+      const cycleBossSchedules = schedules.filter(
+        (s) =>
+          s.status !== "KILLED" &&
+          cycleBossNames.has(s.bossName.toLowerCase())
+      );
+
+      const spawnTimeISO = maintenanceEndTime.toISOString();
+      let updatedCount = 0;
+      let failedCount = 0;
+
+      // Update each cycle boss schedule's spawn time to the maintenance end time
+      for (const sched of cycleBossSchedules) {
+        try {
+          const res = await dashboardApi.updateBossSchedule(
+            activeGuild.guildId,
+            sched.id,
+            { spawnTime: spawnTimeISO }
+          );
+          if (res.success) {
+            updatedCount++;
+          } else {
+            failedCount++;
+          }
+        } catch {
+          failedCount++;
+        }
+      }
+
+      // Also update local boss state for DEAD cycle bosses that don't have active schedules
+      // (their respawn countdown is derived locally from killedAt)
+      setBosses((prev) =>
+        prev.map((b) => {
+          if (cycleBossNames.has(b.name.toLowerCase()) && b.status === "DEAD" && !b.activeScheduleId) {
+            return { ...b, spawnTime: spawnTimeISO, status: "AVAILABLE" };
+          }
+          return b;
+        })
+      );
+
+      // Invalidate cache to reload fresh data
+      queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+      queryClient.invalidateQueries(`boss_audit_logs:${activeGuild.guildId}`);
+
+      if (failedCount > 0) {
+        addToast(
+          "warning",
+          `Maintenance reset partially done: ${updatedCount} updated, ${failedCount} failed.`
+        );
+      } else {
+        const totalReset = updatedCount + (cycleBossSchedules.length === 0 ? bosses.filter(b => cycleBossNames.has(b.name.toLowerCase())).length : 0);
+        addToast(
+          "success",
+          `Maintenance reset complete! ${updatedCount > 0 ? `${updatedCount} schedule(s) updated.` : "All cycle bosses set to spawn at maintenance end."}`
+        );
+      }
+
+      setIsMaintenanceModalOpen(false);
+    } catch (err) {
+      addToast("error", "Failed to reset boss spawns for maintenance.");
+    } finally {
+      setIsMaintenanceProcessing(false);
+    }
+  }, [activeGuild, schedules, bosses, addToast]);
+
   if (!user || !activeGuild) {
     return (
       <div className="flex items-center justify-center h-64 animate-fade-in">
@@ -280,6 +368,17 @@ export default function BossRotationPage() {
           description="Track claim sequences, dynamic queue hierarchy, and next guild turn statuses."
           right={
             <div className="flex items-center gap-2.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMaintenanceModalOpen(true)}
+                className="text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/25 border border-transparent"
+              >
+                <svg className="h-3.5 w-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
+                Maintenance Reset
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -426,6 +525,14 @@ export default function BossRotationPage() {
         )}
 
       </div>
+
+      {/* Maintenance Reset Modal */}
+      <MaintenanceResetModal
+        isOpen={isMaintenanceModalOpen}
+        onClose={() => setIsMaintenanceModalOpen(false)}
+        onConfirm={handleMaintenanceReset}
+        isProcessing={isMaintenanceProcessing}
+      />
     </div>
   );
 }

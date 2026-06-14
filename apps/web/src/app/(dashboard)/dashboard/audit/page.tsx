@@ -9,7 +9,8 @@ import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
-import { useQuery } from "@/lib/query";
+import { useQuery, queryClient } from "@/lib/query";
+import { useSocket } from "@/components/providers/socket-provider";
 
 type AuditTab = "all" | "items" | "member-items" | "currency";
 
@@ -27,9 +28,66 @@ interface AuditLogEntry {
   };
 }
 
+function formatLogDetails(action: string, detail: any): string {
+  if (!detail) return "No details logged";
+
+  switch (action) {
+    case "MEMBER_ATTENDANCE_CONFIRMED":
+      return `Attendance confirmed for ${detail.displayName || "Member"} (Session: ${detail.sessionTitle || "Unknown"})`;
+
+    case "ATTENDANCE_SESSION_STARTED":
+      return `Raid session started with code ${detail.code || "N/A"} - ${detail.title || "Untitled"} (${detail.type || "GUILD"})`;
+
+    case "ATTENDANCE_SESSION_DELETED":
+      return `Attendance session deleted: ${detail.title || "Untitled"}`;
+
+    case "BOSS_KILLED_LOGGED": {
+      const timeStr = detail.killedAt ? new Date(detail.killedAt).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }) : "N/A";
+      const nextTimeStr = detail.nextSpawnTime ? new Date(detail.nextSpawnTime).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }) : "N/A";
+      return `Killed ${detail.bossName || "Boss"} at ${timeStr}. Expected respawn cooldown: ${nextTimeStr}`;
+    }
+
+    case "BOSS_EVENT_SCHEDULED": {
+      const timeStr = detail.spawnTime ? new Date(detail.spawnTime).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }) : "N/A";
+      return `Scheduled spawn for ${detail.bossName || "Boss"} at ${timeStr} (${
+        detail.isFactionWide ? "Faction-wide" : "Guild only"
+      })`;
+    }
+
+    case "BOSS_EVENT_DELETED":
+      return `Deleted scheduled spawn for ${detail.bossName || "Boss"}`;
+
+    default:
+      // Fallback formatting: Remove raw ID keys
+      return Object.entries(detail)
+        .filter(([k]) => k !== "userId" && k !== "id" && !k.toLowerCase().endsWith("id"))
+        .map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()}: ${v}`)
+        .join(" · ");
+  }
+}
+
 export default function AuditLogPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { socket } = useSocket();
 
   const [activeTab, setActiveTab] = useState<AuditTab>("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,6 +95,38 @@ export default function AuditLogPage() {
 
   const activeGuild = user?.guilds?.[0];
   const itemsPerPage = 15;
+
+  // Listen to Socket.IO real-time events to refresh Audit Logs instantly
+  useEffect(() => {
+    if (!socket || !activeGuild) return;
+
+    const handleAuditUpdate = () => {
+      console.log("[Audit Socket]: Audit logs updated. Refreshing cache...");
+      queryClient.invalidateQueries(`audit_logs:${activeGuild.guildId}`);
+    };
+
+    socket.on("boss_rotation_updated", handleAuditUpdate);
+    socket.on("boss_schedule_deleted", handleAuditUpdate);
+    socket.on("attendance_session_created", handleAuditUpdate);
+    socket.on("attendance_session_updated", handleAuditUpdate);
+    socket.on("attendance_session_deleted", handleAuditUpdate);
+    socket.on("attendance_record_created", handleAuditUpdate);
+    socket.on("attendance_record_confirmed", handleAuditUpdate);
+    socket.on("loot_sale_recorded", handleAuditUpdate);
+    socket.on("treasury_adjusted", handleAuditUpdate);
+
+    return () => {
+      socket.off("boss_rotation_updated", handleAuditUpdate);
+      socket.off("boss_schedule_deleted", handleAuditUpdate);
+      socket.off("attendance_session_created", handleAuditUpdate);
+      socket.off("attendance_session_updated", handleAuditUpdate);
+      socket.off("attendance_session_deleted", handleAuditUpdate);
+      socket.off("attendance_record_created", handleAuditUpdate);
+      socket.off("attendance_record_confirmed", handleAuditUpdate);
+      socket.off("loot_sale_recorded", handleAuditUpdate);
+      socket.off("treasury_adjusted", handleAuditUpdate);
+    };
+  }, [socket, activeGuild]);
 
   // 1. Fetch guild members (for member receipt dropdown list) using cache
   const {
@@ -70,32 +160,14 @@ export default function AuditLogPage() {
       if (!activeGuild) return null;
       if (activeTab === "member-items" && !selectedMemberId) return null;
 
-      let queryParams: any = {
-        filter: activeTab,
-        page: currentPage,
-        limit: itemsPerPage,
-      };
-
-      if (activeTab === "member-items" && selectedMemberId) {
-        queryParams.memberId = selectedMemberId;
-      }
-
-      const params = new URLSearchParams();
-      Object.keys(queryParams).forEach((k) =>
-        params.set(k, String(queryParams[k]))
+      const result = await guildApi.getAuditLogs(
+        activeGuild.guildId,
+        activeTab,
+        currentPage,
+        itemsPerPage,
+        activeTab === "member-items" ? selectedMemberId : undefined
       );
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api"}/guilds/${activeGuild.guildId}/audit-logs?${params.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken") || ""}`, // Fallback token getter
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const result = await response.json();
       return result.success && result.data ? result.data : null;
     },
     { persist: true, staleTime: 30000 }
@@ -183,8 +255,8 @@ export default function AuditLogPage() {
         {/* Dynamic Log Table view */}
         <Card className="p-4 sm:p-6 overflow-hidden">
           <div className="overflow-x-auto">
-            {isLoading ? (
-              /* Shimmer Loading State */
+            {(isLoading && logs.length === 0) ? (
+              /* Shimmer Loading State (only on initial fetch when no cached data exists) */
               <div className="space-y-4 py-4">
                 <Skeleton className="h-6 w-full rounded animate-pulse" />
                 <Skeleton className="h-10 w-full rounded animate-pulse" />
@@ -276,13 +348,8 @@ export default function AuditLogPage() {
                               />
                               {log.action.replace(/_/g, " ")}
                             </td>
-                            <td className="py-3.5 text-zinc-400">
-                              {log.detail
-                                ? Object.entries(log.detail)
-                                    .slice(0, 3)
-                                    .map(([k, v]) => `${k}: ${v}`)
-                                    .join(" · ")
-                                : "No details logged"}
+                            <td className="py-3.5 text-zinc-400 max-w-[400px] truncate" title={formatLogDetails(log.action, log.detail)}>
+                              {formatLogDetails(log.action, log.detail)}
                             </td>
                             <td className="py-3.5 text-zinc-400">
                               {log.actor.displayName}

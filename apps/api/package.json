@@ -12,18 +12,13 @@
   "dependencies": {
     "@guild/db": "workspace:*",
     "@guild/shared": "workspace:*",
-    "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^2.4.3",
-    "cookie": "^1.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
-    "ioredis": "^5.11.0",
     "jsonwebtoken": "^9.0.2",
-    "rate-limiter-flexible": "^11.1.0",
-    "socket.io": "^4.8.3",
     "zod": "^3.24.0"
   },
   "devDependencies": {

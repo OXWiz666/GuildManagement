@@ -167,6 +167,10 @@ export default function BaseGuildDashboard({
 
   if (!user || !activeGuild) return null;
 
+  // Get next boss for the dedicated widget
+  const nextBoss = bossSchedules[0] || null;
+  const nextBossCountdown = nextBoss ? getTickingCountdown(nextBoss.spawnTime) : null;
+
   return (
     <div className="relative max-w-7xl mx-auto w-full">
       <DashboardDecor />
@@ -174,17 +178,17 @@ export default function BaseGuildDashboard({
       <div className="relative z-10 space-y-7 text-white/85">
         {/* Welcome Header */}
         <Reveal>
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-white/[0.06]">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[var(--metal-border)]">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] text-amber-500/70 uppercase tracking-[0.24em]">
+                <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.24em] font-medium">
                   Overview · {role.replace("_", " ")}
                 </span>
-                <span className="h-px w-12 bg-gradient-to-r from-amber-500/20 to-transparent" />
+                <span className="h-px w-12 bg-gradient-to-r from-[var(--forge-gold)]/25 to-transparent" />
               </div>
               <h1 className="text-[28px] sm:text-[32px] leading-tight font-semibold text-white tracking-tight">
                 Welcome back, {user.displayName}
-                <span className="text-white/40">.</span>
+                <span className="text-[var(--forge-gold-dim)]">.</span>
               </h1>
               <p className="text-sm text-white/50 mt-2">
                 {new Date().toLocaleDateString("en-US", {
@@ -196,7 +200,7 @@ export default function BaseGuildDashboard({
             </div>
             <div className="flex items-center gap-2.5">
               <div className="text-right">
-                <p className="text-[10px] text-white/40 uppercase tracking-[0.22em]">
+                <p className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.22em]">
                   Active guild
                 </p>
                 <p className="text-[13px] text-white font-medium">
@@ -233,6 +237,7 @@ export default function BaseGuildDashboard({
               decimals={2}
               sub={stats.balance.sub}
               tone="positive"
+              icon={<WalletIcon />}
               data={[
                 stats.balance.raw * 0.8,
                 stats.balance.raw * 0.9,
@@ -245,7 +250,8 @@ export default function BaseGuildDashboard({
               label="Guild Points"
               value={stats.guildPoints.raw}
               sub={stats.guildPoints.sub}
-              tone="neutral"
+              tone="warning"
+              icon={<StarIcon />}
               data={[
                 stats.guildPoints.raw * 0.8,
                 stats.guildPoints.raw * 0.85,
@@ -259,6 +265,7 @@ export default function BaseGuildDashboard({
               value={stats.members.raw}
               sub={`${stats.members.online} online now`}
               tone="neutral"
+              icon={<UsersIcon />}
               data={[
                 stats.members.raw > 4 ? stats.members.raw - 4 : 0,
                 stats.members.raw > 2 ? stats.members.raw - 2 : 0,
@@ -272,6 +279,7 @@ export default function BaseGuildDashboard({
               value={stats.bossToday.raw}
               sub={stats.bossToday.sub}
               tone="warning"
+              icon={<SkullIcon />}
               data={[
                 stats.bossToday.raw > 2 ? stats.bossToday.raw - 2 : 0,
                 stats.bossToday.raw > 1 ? stats.bossToday.raw - 1 : 0,
@@ -289,15 +297,7 @@ export default function BaseGuildDashboard({
           <div className="lg:col-span-2 space-y-6">
             {/* Boss Spawns */}
             <Reveal>
-              <section className="relative glass rounded-2xl p-6 border border-white/[0.06]">
-                <span
-                  aria-hidden
-                  className="absolute inset-x-6 top-0 h-px"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.14), transparent)",
-                  }}
-                />
+              <section className="relative card-obsidian rounded-2xl p-6">
                 <SectionHeader
                   eyebrow="Upcoming bosses"
                   title="Next spawns"
@@ -312,9 +312,9 @@ export default function BaseGuildDashboard({
                   </div>
                 ) : bossSchedules.length === 0 ? (
                   <div className="py-10 text-center">
-                    <div className="inline-flex h-12 w-12 rounded-full border border-white/[0.06] bg-white/[0.02] items-center justify-center mb-3">
+                    <div className="inline-flex h-12 w-12 rounded-full border border-[var(--metal-border)] bg-[var(--forge-glow)] items-center justify-center mb-3">
                       <svg
-                        className="h-5 w-5 text-white/30"
+                        className="h-5 w-5 text-[var(--forge-gold-dim)]"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -360,15 +360,7 @@ export default function BaseGuildDashboard({
 
             {/* Your Guilds */}
             <Reveal>
-              <section className="relative glass rounded-2xl p-6 border border-white/[0.06]">
-                <span
-                  aria-hidden
-                  className="absolute inset-x-6 top-0 h-px"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.14), transparent)",
-                  }}
-                />
+              <section className="relative card-obsidian rounded-2xl p-6">
                 <SectionHeader
                   eyebrow="Affiliations"
                   title="Your guilds"
@@ -382,18 +374,18 @@ export default function BaseGuildDashboard({
                   {user.guilds.map((guild) => (
                     <div
                       key={guild.guildId}
-                      className="group relative flex items-center justify-between px-5 py-4 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.12] transition-all duration-300 cursor-pointer overflow-hidden"
+                      className="group relative flex items-center justify-between px-5 py-4 rounded-xl bg-[var(--obsidian-deep)]/50 border border-white/[0.05] hover:bg-[var(--forge-glow)] hover:border-[var(--metal-border)] transition-all duration-300 cursor-pointer overflow-hidden"
                     >
                       <span
                         aria-hidden
                         className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none"
                         style={{
                           background:
-                            "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.04), transparent)",
+                            "linear-gradient(90deg, transparent, rgba(212,168,83,0.04), transparent)",
                         }}
                       />
                       <div className="flex items-center gap-3.5 min-w-0 relative">
-                        <div className="h-11 w-11 rounded-lg bg-white/[0.06] border border-white/[0.10] flex items-center justify-center font-semibold text-white/85 text-sm transition-transform duration-300 group-hover:scale-[1.04]">
+                        <div className="h-11 w-11 rounded-lg bg-[var(--forge-glow)] border border-[var(--metal-border)] flex items-center justify-center font-semibold text-[var(--forge-gold)] text-sm transition-transform duration-300 group-hover:scale-[1.04]">
                           {guild.guildName[0]}
                         </div>
                         <div className="min-w-0">
@@ -411,7 +403,7 @@ export default function BaseGuildDashboard({
                       </div>
 
                       <svg
-                        className="h-4 w-4 text-white/30 shrink-0 relative transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-white/80"
+                        className="h-4 w-4 text-white/30 shrink-0 relative transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-[var(--forge-gold)]"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -426,84 +418,161 @@ export default function BaseGuildDashboard({
             </Reveal>
           </div>
 
-          {/* Right Column — Activity Feed */}
-          <Reveal from="right">
-            <section className="relative glass rounded-2xl p-6 border border-white/[0.06]">
-              <span
-                aria-hidden
-                className="absolute inset-x-6 top-0 h-px"
-                style={{
-                  background:
-                    "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.14), transparent)",
-                }}
-              />
-              <SectionHeader
-                eyebrow="Recent"
-                title="Activity"
-                meta={
-                  <span className="inline-flex items-center gap-1.5">
-                    <LiveDot tone="emerald" size={5} />
-                    Live
-                  </span>
-                }
-              />
-              {isLoadingStats || !stats ? (
-                <StaggerReveal
-                  baseDelay={120}
-                  stagger={75}
-                  className="space-y-1"
+          {/* Right Column */}
+          <div className="space-y-6">
+            {/* Next Boss Spawn Widget */}
+            {nextBoss && nextBossCountdown && (
+              <Reveal from="right">
+                <section
+                  className={`relative card-obsidian rounded-2xl p-5 transition-all duration-500 ${
+                    nextBossCountdown.warning || nextBossCountdown.expired
+                      ? "border-[var(--forge-gold)]/25"
+                      : ""
+                  }`}
+                  style={
+                    nextBossCountdown.warning || nextBossCountdown.expired
+                      ? { animation: "glow-pulse 3s ease-in-out infinite" }
+                      : undefined
+                  }
                 >
-                  <ActivityItemSkeleton />
-                  <ActivityItemSkeleton />
-                  <ActivityItemSkeleton />
-                  <ActivityItemSkeleton />
-                  <ActivityItemSkeleton />
-                </StaggerReveal>
-              ) : (
-                <StaggerReveal
-                  baseDelay={120}
-                  stagger={75}
-                  className="space-y-1"
-                >
-                  {stats.recentActivity.map((activity, index) => {
-                    let icon = <InfoIcon />;
-                    if (activity.type === "CREDIT") icon = <CreditIcon />;
-                    else if (activity.type === "DEBIT") icon = <DebitIcon />;
-                    else if (activity.type === "POINTS") icon = <PointsIcon />;
-                    else if (activity.type === "CONFIG") icon = <ConfigIcon />;
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.22em] font-medium">
+                      Next boss spawn
+                    </span>
+                    <span className="h-px flex-1 bg-gradient-to-r from-[var(--forge-gold)]/20 to-transparent" />
+                  </div>
 
-                    const tone = (activity.type === "CREDIT" || activity.type === "POINTS") ? "positive" : "neutral";
+                  <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 rounded-xl bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_12px_rgba(212,168,83,0.08)]">
+                      {nextBoss.bossImageUrl ? (
+                        <img
+                          src={nextBoss.bossImageUrl}
+                          alt={nextBoss.bossName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <svg className="h-7 w-7 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                          <path d="M2 17l10 5 10-5" />
+                          <path d="M2 12l10 5 10-5" />
+                        </svg>
+                      )}
+                    </div>
 
-                    return (
-                      <ActivityItem
-                        key={index}
-                        icon={icon}
-                        action={activity.action}
-                        detail={activity.detail}
-                        time={activity.time}
-                        tone={tone}
-                      />
-                    );
-                  })}
-                </StaggerReveal>
-              )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] font-semibold text-white truncate">
+                        {nextBoss.bossName}
+                      </p>
+                      <p className="text-[11px] text-white/40 truncate mt-0.5">
+                        {nextBoss.location}
+                      </p>
+                      {nextBoss.guildTurn && (
+                        <p className="text-[10px] text-[var(--forge-gold-dim)] mt-1">
+                          Turn: {nextBoss.guildTurn}
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
-              <div className="mt-5 pt-4 border-t border-white/[0.06] text-center">
-                <button className="group inline-flex items-center gap-1.5 text-[11px] text-white/40 hover:text-white transition-colors uppercase tracking-[0.18em] font-medium">
-                  View all
-                  <svg
-                    className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-0.5"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
+                  {/* Countdown */}
+                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                    <p
+                      className={`text-center text-[28px] font-mono font-bold tracking-tight tabular-nums ${
+                        nextBossCountdown.expired
+                          ? "text-red-400"
+                          : nextBossCountdown.warning
+                            ? "text-[var(--forge-gold-bright)]"
+                            : "text-[var(--forge-gold)]"
+                      }`}
+                    >
+                      {nextBossCountdown.text}
+                    </p>
+                    <p className="text-center text-[10px] text-white/30 uppercase tracking-[0.2em] mt-1">
+                      {nextBossCountdown.expired ? "Boss is live" : "Until spawn"}
+                    </p>
+                  </div>
+
+                  {/* Status badge */}
+                  <div className="mt-3 flex justify-center">
+                    <BossStatusBadge
+                      expired={nextBossCountdown.expired}
+                      warning={nextBossCountdown.warning}
+                      status={nextBoss.status}
+                    />
+                  </div>
+                </section>
+              </Reveal>
+            )}
+
+            {/* Activity Feed */}
+            <Reveal from="right">
+              <section className="relative card-obsidian rounded-2xl p-6">
+                <SectionHeader
+                  eyebrow="Recent"
+                  title="Activity"
+                  meta={
+                    <span className="inline-flex items-center gap-1.5">
+                      <LiveDot tone="emerald" size={5} />
+                      Live
+                    </span>
+                  }
+                />
+                {isLoadingStats || !stats ? (
+                  <StaggerReveal
+                    baseDelay={120}
+                    stagger={75}
+                    className="space-y-1"
                   >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            </section>
-          </Reveal>
+                    <ActivityItemSkeleton />
+                    <ActivityItemSkeleton />
+                    <ActivityItemSkeleton />
+                    <ActivityItemSkeleton />
+                    <ActivityItemSkeleton />
+                  </StaggerReveal>
+                ) : (
+                  <StaggerReveal
+                    baseDelay={120}
+                    stagger={75}
+                    className="space-y-1"
+                  >
+                    {stats.recentActivity.map((activity, index) => {
+                      let icon = <InfoIcon />;
+                      if (activity.type === "CREDIT") icon = <CreditIcon />;
+                      else if (activity.type === "DEBIT") icon = <DebitIcon />;
+                      else if (activity.type === "POINTS") icon = <PointsIcon />;
+                      else if (activity.type === "CONFIG") icon = <ConfigIcon />;
+
+                      return (
+                        <ActivityItem
+                          key={index}
+                          icon={icon}
+                          action={activity.action}
+                          detail={activity.detail}
+                          time={activity.time}
+                          type={activity.type}
+                        />
+                      );
+                    })}
+                  </StaggerReveal>
+                )}
+
+                <div className="mt-5 pt-4 border-t border-white/[0.06] text-center">
+                  <button className="group inline-flex items-center gap-1.5 text-[11px] text-[var(--forge-gold-dim)] hover:text-[var(--forge-gold)] transition-colors uppercase tracking-[0.18em] font-medium cursor-pointer">
+                    View all
+                    <svg
+                      className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-0.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </section>
+            </Reveal>
+          </div>
         </div>
       </div>
 
@@ -515,7 +584,7 @@ export default function BaseGuildDashboard({
             onClick={() => !isLoggingKill && setShowKillModal(null)}
           />
           <div
-            className="relative glass-strong border border-white/[0.10] rounded-2xl p-6 max-w-sm w-full shadow-[0_40px_90px_-25px_rgba(0,0,0,0.8)] z-50 animate-scale-in"
+            className="relative glass-strong border border-[var(--metal-border)] rounded-2xl p-6 max-w-sm w-full shadow-[0_40px_90px_-25px_rgba(0,0,0,0.8)] z-50 animate-scale-in"
             style={{ animationDuration: "320ms" }}
           >
             <span
@@ -523,7 +592,7 @@ export default function BaseGuildDashboard({
               className="absolute inset-x-6 top-0 h-px"
               style={{
                 background:
-                  "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.24), transparent)",
+                  "linear-gradient(90deg, transparent, rgba(212,168,83,0.30), transparent)",
               }}
             />
             <div className="flex items-center gap-3 mb-4">
@@ -568,7 +637,7 @@ export default function BaseGuildDashboard({
                   value={killTimeInput}
                   onChange={(e) => setKillTimeInput(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-white/25 font-mono text-center tracking-[0.18em]"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40 font-mono text-center tracking-[0.18em]"
                 />
               </div>
 
@@ -600,13 +669,56 @@ export default function BaseGuildDashboard({
   );
 }
 
-// ─── Stat Card Component ───
+// ─── MMORPG Boss Status Badge ───
+function BossStatusBadge({
+  expired,
+  warning,
+  status,
+}: {
+  expired: boolean;
+  warning: boolean;
+  status: string;
+}) {
+  if (expired) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.15em] bg-red-500/10 text-red-400 border border-red-500/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+        Live Now
+      </span>
+    );
+  }
+  if (warning) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.15em] bg-[var(--forge-gold)]/10 text-[var(--forge-gold-bright)] border border-[var(--forge-gold)]/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-[var(--forge-gold-bright)] animate-pulse" />
+        Spawning Soon
+      </span>
+    );
+  }
+  if (status === "CONTESTED") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.15em] bg-purple-500/10 text-purple-400 border border-purple-500/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+        Contested
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.15em] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+      Available
+    </span>
+  );
+}
+
+// ─── Stat Card Component (Enhanced) ───
 function StatCard({
   label,
   value,
   sub,
   tone,
   data,
+  icon,
   prefix = "",
   decimals = 0,
 }: {
@@ -615,6 +727,7 @@ function StatCard({
   sub: string;
   tone: "neutral" | "positive" | "warning" | "negative";
   data: number[];
+  icon: React.ReactNode;
   prefix?: string;
   decimals?: number;
 }) {
@@ -629,41 +742,47 @@ function StatCard({
         })
       : Math.round(animated).toLocaleString();
 
-  const dotColor = {
-    neutral: "bg-white/60",
-    positive: "bg-emerald-400",
-    warning: "bg-amber-400",
-    negative: "bg-red-400",
-  }[tone];
+  const iconBgMap = {
+    neutral: "bg-white/[0.05] border-white/[0.08] text-white/50",
+    positive: "bg-emerald-500/[0.08] border-emerald-500/20 text-emerald-400",
+    warning: "bg-[var(--forge-gold)]/[0.08] border-[var(--forge-gold)]/20 text-[var(--forge-gold)]",
+    negative: "bg-red-500/[0.08] border-red-500/20 text-red-400",
+  };
 
   return (
     <div ref={ref}>
       <TiltCard intensity={4}>
-        <div className="relative glass rounded-2xl p-5 border border-white/[0.06] hover:border-white/[0.14] transition-colors duration-500 overflow-hidden">
-          <span
-            aria-hidden
-            className="absolute inset-x-5 top-0 h-px"
+        <div className="relative card-obsidian rounded-2xl p-5 hover:border-[var(--metal-border)] transition-all duration-500 overflow-hidden group">
+          {/* Hover gold glow */}
+          <div
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
             style={{
-              background:
-                "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.18), transparent)",
+              background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(212,168,83,0.06), transparent 70%)",
             }}
           />
 
-          <div className="flex items-center gap-2 mb-3">
-            <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-            <p className="text-[10px] font-medium text-white/50 uppercase tracking-[0.22em]">
-              {label}
-            </p>
-          </div>
+          <div className="relative">
+            {/* Icon + Label Row */}
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className={`h-8 w-8 rounded-lg border flex items-center justify-center shrink-0 ${iconBgMap[tone]}`}>
+                {icon}
+              </div>
+              <p className="text-[10px] font-medium text-white/50 uppercase tracking-[0.22em]">
+                {label}
+              </p>
+            </div>
 
-          <h3 className="text-[26px] lg:text-[28px] font-semibold tracking-tight text-white font-mono leading-none">
-            {prefix}
-            {display}
-          </h3>
-          <p className="text-[11px] text-white/40 mt-1.5">{sub}</p>
+            {/* Value */}
+            <h3 className="text-[26px] lg:text-[28px] font-semibold tracking-tight text-white font-mono leading-none">
+              {prefix}
+              {display}
+            </h3>
+            <p className="text-[11px] text-white/40 mt-1.5">{sub}</p>
 
-          <div className="mt-4">
-            <Sparkline data={data} tone={tone} height={28} />
+            {/* Sparkline */}
+            <div className="mt-4">
+              <Sparkline data={data} tone={tone} height={28} />
+            </div>
           </div>
         </div>
       </TiltCard>
@@ -686,8 +805,8 @@ function BossRow({
   const borderTone = tick.expired
     ? "border-red-500/20 bg-red-500/[0.04]"
     : tick.warning
-      ? "border-amber-500/20 bg-amber-500/[0.03]"
-      : "border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04]";
+      ? "border-[var(--forge-gold)]/20 bg-[var(--forge-gold)]/[0.03]"
+      : "border-white/[0.05] bg-[var(--obsidian-deep)]/50 hover:bg-[var(--forge-glow)]";
 
   const dotTone: "emerald" | "amber" | "red" | "neutral" = tick.expired
     ? "red"
@@ -698,7 +817,7 @@ function BossRow({
   const valueColor = tick.expired
     ? "text-red-300"
     : tick.warning
-      ? "text-amber-300"
+      ? "text-[var(--forge-gold-bright)]"
       : "text-white/85";
 
   return (
@@ -712,7 +831,7 @@ function BossRow({
           style={{
             background: tick.expired
               ? "radial-gradient(ellipse 40% 100% at 0% 50%, oklch(0.62 0.18 22 / 0.15), transparent 70%)"
-              : "radial-gradient(ellipse 40% 100% at 0% 50%, oklch(0.78 0.13 80 / 0.15), transparent 70%)",
+              : "radial-gradient(ellipse 40% 100% at 0% 50%, rgba(212,168,83,0.12), transparent 70%)",
             animation: "pulse-soft 2.4s ease-in-out infinite",
           }}
         />
@@ -726,10 +845,12 @@ function BossRow({
               {boss.bossName}
             </p>
             {boss.guildId === null && (
-              <span className="px-2 py-0.5 rounded text-[9px] text-white/70 font-medium bg-white/[0.05] border border-white/[0.08] shrink-0 uppercase tracking-[0.18em]">
+              <span className="px-2 py-0.5 rounded text-[9px] text-[var(--forge-gold)] font-medium bg-[var(--forge-glow)] border border-[var(--metal-border)] shrink-0 uppercase tracking-[0.18em]">
                 Faction
               </span>
             )}
+            {/* Status Badge */}
+            <BossStatusBadge expired={tick.expired} warning={tick.warning} status={boss.status} />
           </div>
           <p className="text-[11px] text-white/40 truncate mt-1">
             {boss.location}
@@ -772,13 +893,9 @@ function BossRow({
 function StatCardSkeleton() {
   return (
     <TiltCard intensity={4}>
-      <div className="relative glass rounded-2xl p-5 border border-white/[0.06] overflow-hidden">
-        <span
-          aria-hidden
-          className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"
-        />
-        <div className="flex items-center gap-2 mb-3">
-          <span className="h-1.5 w-1.5 rounded-full bg-white/20 animate-pulse" />
+      <div className="relative card-obsidian rounded-2xl p-5 overflow-hidden">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="h-8 w-8 rounded-lg bg-white/[0.04] animate-pulse" />
           <div className="h-3 w-16 bg-white/10 rounded animate-pulse" />
         </div>
         <div className="h-7 w-28 bg-white/10 rounded animate-pulse" />
@@ -804,31 +921,41 @@ function ActivityItemSkeleton() {
   );
 }
 
+// ─── Activity Item (Color-coded) ───
 function ActivityItem({
   icon,
   action,
   detail,
   time,
-  tone,
+  type,
 }: {
   icon: React.ReactNode;
   action: string;
   detail: string;
   time: string;
-  tone: "positive" | "neutral";
+  type: "CREDIT" | "DEBIT" | "POINTS" | "INFO" | "CONFIG";
 }) {
-  const dotColor = tone === "positive" ? "bg-emerald-400/80" : "bg-white/30";
+  const typeStyles: Record<string, { bg: string; indicator: string }> = {
+    CREDIT: { bg: "bg-emerald-500/[0.06] border-emerald-500/15 text-emerald-400", indicator: "bg-emerald-400" },
+    DEBIT: { bg: "bg-rose-500/[0.06] border-rose-500/15 text-rose-400", indicator: "bg-rose-400" },
+    POINTS: { bg: "bg-[var(--forge-gold)]/[0.06] border-[var(--forge-gold)]/15 text-[var(--forge-gold)]", indicator: "bg-[var(--forge-gold)]" },
+    INFO: { bg: "bg-blue-500/[0.06] border-blue-500/15 text-blue-400", indicator: "bg-blue-400" },
+    CONFIG: { bg: "bg-purple-500/[0.06] border-purple-500/15 text-purple-400", indicator: "bg-purple-400" },
+  };
+
+  const style = typeStyles[type] || typeStyles.INFO!;
+
   return (
-    <div className="flex items-start gap-3.5 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.01] px-2 rounded-xl transition-all duration-200">
-      <div className="mt-0.5 shrink-0 h-8 w-8 rounded-lg border border-white/[0.06] bg-white/[0.02] text-white/50 flex items-center justify-center">
+    <div className="flex items-start gap-3.5 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.01] px-2 rounded-xl transition-all duration-200 relative">
+      {/* Colored left edge indicator */}
+      <span className={`absolute left-0 top-3 bottom-3 w-[2px] rounded-full ${style.indicator} opacity-40`} />
+
+      <div className={`mt-0.5 shrink-0 h-8 w-8 rounded-lg border flex items-center justify-center ${style.bg}`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
-            <h4 className="text-[13px] font-semibold text-white truncate">{action}</h4>
-          </div>
+          <h4 className="text-[13px] font-semibold text-white truncate">{action}</h4>
           <span className="text-[10px] text-white/40 shrink-0 font-mono">{time}</span>
         </div>
         <p className="text-[11px] text-white/50 leading-relaxed break-words">{detail}</p>
@@ -837,7 +964,47 @@ function ActivityItem({
   );
 }
 
-// Icons
+// ─── Stat Card Icons ───
+function WalletIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 010-4h14v4" />
+      <path d="M3 5v14a2 2 0 002 2h16v-5" />
+      <path d="M18 12a2 2 0 100 4 2 2 0 000-4z" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  );
+}
+
+function SkullIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
+    </svg>
+  );
+}
+
+// ─── Activity Icons ───
 function CreditIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

@@ -126,7 +126,7 @@ export default function AuthLayout({
   if (isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-[#08080a] relative overflow-hidden selection:bg-white/15 selection:text-white">
+    <div className="min-h-screen w-full flex flex-col bg-[#050608] relative overflow-hidden selection:bg-white/15 selection:text-white">
       <SceneBackground />
       <ScrollProgress />
 
@@ -151,7 +151,7 @@ export default function AuthLayout({
               className="absolute -inset-1 rounded-xl border border-white/[0.08] transition-opacity duration-500 group-hover:border-white/20"
               style={{ animation: "spin-slow 14s linear infinite" }}
             >
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1 w-1 rounded-full bg-amber-400 shadow-[0_0_6px_2px_rgba(245,158,11,0.5)]" />
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1 w-1 rounded-full bg-[#F5B841] shadow-[0_0_6px_2px_rgba(245,184,65,0.5)]" />
             </div>
             <div className="absolute inset-0 rounded-lg border border-white/10 bg-white/[0.03] backdrop-blur flex items-center justify-center transition-colors group-hover:border-white/30 group-hover:bg-white/[0.07]">
               <svg
@@ -167,7 +167,7 @@ export default function AuthLayout({
             <span className="text-sm font-semibold text-white tracking-tight">
               ForgeKeep
             </span>
-            <span className="text-[9px] text-amber-500/60 tracking-[0.22em] uppercase mt-0.5 transition-colors duration-300 group-hover:text-amber-400/80">
+            <span className="text-[9px] text-[#F5B841]/60 tracking-[0.22em] uppercase mt-0.5 transition-colors duration-300 group-hover:text-[#F5B841]/80">
               Enter Guild Dashboard
             </span>
           </div>
@@ -207,8 +207,8 @@ export default function AuthLayout({
             className="absolute -inset-10 rounded-[2.2rem] pointer-events-none"
             style={{
               background:
-                "radial-gradient(ellipse 80% 60% at 50% 0%, oklch(0.62 0.035 234 / 0.16) 0%, transparent 70%)",
-              filter: "blur(28px)",
+                "radial-gradient(circle 320px at 50% 50%, rgba(245, 184, 65, 0.045) 0%, transparent 100%)",
+              filter: "blur(32px)",
               animation: "pulse-soft 6s ease-in-out infinite",
             }}
           />
@@ -216,8 +216,8 @@ export default function AuthLayout({
             className="absolute -inset-16 rounded-[2.6rem] pointer-events-none opacity-60"
             style={{
               background:
-                "radial-gradient(ellipse 60% 50% at 50% 100%, oklch(0.56 0.028 74 / 0.10) 0%, transparent 70%)",
-              filter: "blur(36px)",
+                "radial-gradient(circle 220px at 10% 25%, rgba(16, 217, 154, 0.05) 0%, transparent 100%), radial-gradient(circle 220px at 90% 75%, rgba(16, 217, 154, 0.04) 0%, transparent 100%)",
+              filter: "blur(40px)",
             }}
           />
 

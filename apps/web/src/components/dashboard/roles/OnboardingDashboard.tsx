@@ -15,18 +15,6 @@ import {
   LiveDot,
 } from "@/components/dashboard/DashboardHelpers";
 
-const CLASS_OPTIONS = [
-  "Destroyer",
-  "Paladin",
-  "Hunter",
-  "Mage",
-  "Sorcerer",
-  "Blitzblade",
-  "Archer",
-  "Venom",
-  "Immortal Knight",
-] as const;
-
 export default function OnboardingDashboard() {
   const { user, refreshUser } = useAuth();
   const { addToast } = useToast();
@@ -436,15 +424,15 @@ export default function OnboardingDashboard() {
                               );
                             }}
                           />
-                          <FormSelect
+                           <FormField
                             label="Class"
+                            placeholder="e.g. Hunter"
                             value={classType}
                             onChange={setClassType}
-                            options={CLASS_OPTIONS}
                           />
                           <FormField
                             label="Weapon"
-                            placeholder="e.g. Divine Axe"
+                            placeholder="e.g. Dual Dagger"
                             value={weapon}
                             onChange={setWeapon}
                           />
@@ -570,39 +558,6 @@ function FormField({
         required
         className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/25 focus:outline-none focus:border-white/25 transition-colors"
       />
-    </div>
-  );
-}
-
-function FormSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: readonly string[];
-}) {
-  return (
-    <div className="text-left">
-      <label className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em] mb-1.5">
-        {label}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required
-        className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-white/25 transition-colors appearance-none cursor-pointer"
-      >
-        <option value="">Select…</option>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

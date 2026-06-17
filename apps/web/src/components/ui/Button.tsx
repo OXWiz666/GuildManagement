@@ -3,7 +3,7 @@
 import { type ButtonHTMLAttributes, forwardRef } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger" | "accent";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "accent" | "auth";
   size?: "xs" | "sm" | "md" | "lg";
   isLoading?: boolean;
   fullWidth?: boolean;
@@ -37,6 +37,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         "bg-red-600 text-white hover:bg-red-500 shadow-sm shadow-red-500/10",
       accent:
         "bg-accent-600 text-white hover:bg-accent-500 shadow-sm shadow-accent-500/10",
+      auth:
+        "bg-gradient-to-b from-[#1C2635] to-[#121924] text-white border border-[#1E232B] hover:border-[#F5B841]/50 shadow-[0_0_0_1px_rgba(245,184,65,0.06),_inset_0_1px_0_rgba(255,255,255,0.08)] hover:shadow-[0_0_15px_rgba(245,184,65,0.25),_inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-300",
     };
 
     const spinnerColors = {
@@ -45,6 +47,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ghost: "text-primary-400",
       danger: "text-white",
       accent: "text-white",
+      auth: "text-[#F5B841]",
     };
 
     const sizes = {

@@ -13,6 +13,8 @@ const envSchema = z.object({
   BCRYPT_ROUNDS: z.coerce.number().min(10).max(15).default(12),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
   REDIS_URL: z.string().optional(),
+  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
+  SUPABASE_KEY: z.string().min(1, "SUPABASE_KEY is required"),
 });
 
 function validateEnv() {

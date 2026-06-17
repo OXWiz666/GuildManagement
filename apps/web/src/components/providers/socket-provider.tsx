@@ -5,14 +5,18 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from "react";
-import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/lib/auth-context";
-import { getAccessToken } from "@/lib/api";
+import { createClient } from "@/utils/supabase/client";
 
 interface SocketContextType {
-  socket: Socket | null;
+  socket: {
+    on: (event: string, cb: Function) => void;
+    off: (event: string, cb: Function) => void;
+    emit: (event: string, ...args: any[]) => void;
+  } | null;
   isConnected: boolean;
   error: string | null;
 }
@@ -25,93 +29,92 @@ const SocketContext = createContext<SocketContextType>({
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isSessionReady } = useAuth();
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const listeners = useRef<Record<string, Set<Function>>>({});
+
+  // Re-create the Socket.IO client interface for backward compatibility
+  const socketRef = useRef<SocketContextType["socket"]>({
+    on: (event, cb) => {
+      if (!listeners.current[event]) {
+        listeners.current[event] = new Set();
+      }
+      listeners.current[event].add(cb);
+    },
+    off: (event, cb) => {
+      listeners.current[event]?.delete(cb);
+    },
+    emit: (event, ...args) => {
+      console.log(`[Realtime Client]: emit("${event}")`, args);
+    },
+  });
 
   useEffect(() => {
-    if (!isAuthenticated || !isSessionReady) {
-      // Disconnect and clean up if not authenticated or session checks aren't fully resolved yet
-      if (socket) {
-        console.log("[Socket Client]: Disconnecting because user session is not fully ready");
-        socket.disconnect();
-        setSocket(null);
-        setIsConnected(false);
-      }
+    if (!isAuthenticated || !isSessionReady || !user) {
+      setIsConnected(false);
       return;
     }
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-    // Connect to the base domain where the Express server listens.
-    // Standardizing paths so Socket.IO works cleanly over the single Express port.
-    const socketUrl = API_URL.replace("/api", "");
-
-    console.log(`[Socket Client]: Initializing WebSocket connection to: ${socketUrl}`);
-
-    const newSocket = io(socketUrl, {
-      auth: (cb) => {
-        // Send the fresh JWT access token in handshake payload
-        cb({ token: getAccessToken() });
-      },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-    });
-
-    newSocket.on("connect", () => {
-      console.log(`[Socket Client]: Connected. ID: ${newSocket.id}`);
-      setIsConnected(true);
-      setError(null);
-    });
-
-    newSocket.on("disconnect", (reason) => {
-      console.log(`[Socket Client]: Disconnected. Reason: ${reason}`);
-      setIsConnected(false);
-    });
-
-    newSocket.on("connect_error", (err) => {
-      console.error("[Socket Client Connection Error]:", err.message);
-      setError(err.message);
-      setIsConnected(false);
-    });
-
-    newSocket.on("error", (err: { code?: string; message?: string }) => {
-      console.error("[Socket Client General Error]:", err);
-      setError(err.message || "An unexpected websocket error occurred");
-    });
-
-    setSocket(newSocket);
-
-    return () => {
-      console.log("[Socket Client]: Cleaning up connection on unmount");
-      newSocket.disconnect();
+    const supabase = createClient();
+    
+    const handleBroadcast = (event: string, payload: any) => {
+      console.log(`[Realtime Client]: Received broadcast "${event}"`, payload);
+      listeners.current[event]?.forEach((cb) => cb(payload));
     };
-  }, [isAuthenticated, isSessionReady]);
 
-  // Active Guild Room Subscription logic
-  useEffect(() => {
-    if (!socket || !isConnected || !user) return;
+    console.log("[Realtime Client]: Initializing Supabase Realtime subscriptions");
 
+    // 1. Subscribe to the global updates channel
+    const globalChannel = supabase.channel("guild-global", {
+      config: { broadcast: { self: true } },
+    });
+
+    globalChannel
+      .on("broadcast", { event: "*" }, ({ event, payload }: { event: string; payload: any }) => {
+        handleBroadcast(event, payload);
+      })
+      .subscribe((status: string) => {
+        console.log(`[Realtime Client]: Global channel status: ${status}`);
+        if (status === "SUBSCRIBED") {
+          setIsConnected(true);
+        }
+      });
+
+    // 2. Subscribe to the specific guild channel if user has a guild
     const activeGuild = user.guilds?.[0];
-    if (!activeGuild) return;
+    let guildChannel: any = null;
 
-    console.log(`[Socket Client]: Automatically joining guild room "guild:${activeGuild.guildId}"`);
-    socket.emit("join_guild", activeGuild.guildId);
+    if (activeGuild) {
+      const guildId = activeGuild.guildId;
+      console.log(`[Realtime Client]: Subscribing to guild room: guild-${guildId}`);
+      
+      guildChannel = supabase.channel(`guild-${guildId}`, {
+        config: { broadcast: { self: true } },
+      });
 
-    socket.on("joined_guild_room", (data) => {
-      console.log(`[Socket Client]: Confirmed subscription to room: guild:${data.guildId}`);
-    });
+      guildChannel
+        .on("broadcast", { event: "*" }, ({ event, payload }: { event: string; payload: any }) => {
+          handleBroadcast(event, payload);
+        })
+        .subscribe((status: string) => {
+          console.log(`[Realtime Client]: Guild channel status: ${status}`);
+          // Trigger the 'joined_guild_room' event for backward compatibility
+          if (status === "SUBSCRIBED") {
+            handleBroadcast("joined_guild_room", { guildId });
+          }
+        });
+    }
 
     return () => {
-      socket.off("joined_guild_room");
+      console.log("[Realtime Client]: Cleaning up Supabase subscriptions");
+      if (globalChannel) supabase.removeChannel(globalChannel);
+      if (guildChannel) supabase.removeChannel(guildChannel);
     };
-  }, [socket, isConnected, user]);
+  }, [isAuthenticated, isSessionReady, user]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, error }}>
+    <SocketContext.Provider value={{ socket: socketRef.current, isConnected, error }}>
       {children}
     </SocketContext.Provider>
   );

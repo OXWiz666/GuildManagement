@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { authApi, setAccessToken } from "./api";
+import { createClient } from "@/utils/supabase/client";
 
 interface User {
   id: string;
@@ -44,7 +45,7 @@ interface AuthContextType {
     password: string,
     confirmPassword: string,
     displayName: string,
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; requiresVerification?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -118,23 +119,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string,
       password: string,
     ): Promise<{ success: boolean; error?: string }> => {
-      const result = await authApi.login(email, password);
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (result.success && result.data?.user) {
-        const basicUser = { ...result.data.user, guilds: [] };
-        setUser(basicUser);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+      if (error) {
+        // Fallback to local database login if Supabase auth fails (e.g. for seed accounts)
+        try {
+          const localResult = await authApi.login(email, password);
+          if (localResult.success && localResult.data?.user) {
+            const basicUser = { ...localResult.data.user, guilds: [] };
+            setUser(basicUser);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+            }
+            await refreshUser();
+            setIsSessionReady(true);
+            return { success: true };
+          }
+        } catch (localError) {
+          console.error("Local login fallback failed:", localError);
         }
-        // Fetch full user with guilds
-        await refreshUser();
-        setIsSessionReady(true);
-        return { success: true };
+
+        return {
+          success: false,
+          error: error.message === "Invalid login credentials" ? "Invalid email or password." : error.message,
+        };
+      }
+
+      if (data.session) {
+        const syncResult = await authApi.supabaseSync(data.session.access_token);
+        if (syncResult.success && syncResult.data?.user) {
+          const basicUser = { ...syncResult.data.user, guilds: [] };
+          setUser(basicUser);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+          }
+          await refreshUser();
+          setIsSessionReady(true);
+          return { success: true };
+        }
+        return {
+          success: false,
+          error: syncResult.error?.message || "Sync failed",
+        };
       }
 
       return {
         success: false,
-        error: result.error?.message || "Login failed",
+        error: "Session could not be established.",
       };
     },
     [refreshUser],
@@ -146,38 +181,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string,
       confirmPassword: string,
       displayName: string,
-    ): Promise<{ success: boolean; error?: string }> => {
-      const result = await authApi.register(
+    ): Promise<{ success: boolean; error?: string; requiresVerification?: boolean }> => {
+      if (password !== confirmPassword) {
+        return { success: false, error: "Passwords do not match" };
+      }
+
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        confirmPassword,
-        displayName,
-      );
+        options: {
+          data: {
+            display_name: displayName,
+          },
+        },
+      });
 
-      if (result.success && result.data?.user) {
-        const basicUser = { ...result.data.user, guilds: [] };
-        setUser(basicUser);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+      if (error) {
+        return {
+          success: false,
+          error: error.message,
+        };
+      }
+
+      if (data.user && !data.session) {
+        return {
+          success: true,
+          requiresVerification: true,
+        };
+      }
+
+      if (data.session) {
+        const syncResult = await authApi.supabaseSync(data.session.access_token);
+        if (syncResult.success && syncResult.data?.user) {
+          const basicUser = { ...syncResult.data.user, guilds: [] };
+          setUser(basicUser);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+          }
+          await refreshUser();
+          setIsSessionReady(true);
+          return { success: true };
         }
-        setIsSessionReady(true);
-        return { success: true };
+        return {
+          success: false,
+          error: syncResult.error?.message || "Sync failed",
+        };
       }
 
-      let errorMsg = result.error?.message || "Registration failed";
-      if (result.error?.details && Array.isArray(result.error.details)) {
-        errorMsg = result.error.details.map((d: any) => d.message).join(". ");
-      }
-
-      return {
-        success: false,
-        error: errorMsg,
-      };
+      return { success: true };
     },
-    [],
+    [refreshUser],
   );
 
   const logout = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Supabase signout failed:", err);
+    }
+
     try {
       await authApi.logout();
     } catch (err) {

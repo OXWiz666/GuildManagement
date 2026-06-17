@@ -279,6 +279,19 @@ export const authApi = {
     );
   },
 
+  async supabaseSync(token: string) {
+    const result = await api.post<{
+      user: { id: string; email: string; displayName: string; avatarUrl: string | null; createdAt: string };
+      accessToken: string;
+    }>("/auth/supabase-sync", { token }, { skipAuth: true });
+
+    if (result.success && result.data?.accessToken) {
+      setAccessToken(result.data.accessToken);
+    }
+
+    return result;
+  },
+
   async refreshToken() {
     const success = await refreshAccessToken();
     return success;

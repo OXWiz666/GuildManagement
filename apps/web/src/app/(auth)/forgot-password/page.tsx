@@ -34,14 +34,14 @@ export default function ForgotPasswordPage() {
         {/* Success ring with orbit */}
         <div className="relative mx-auto mb-6 h-16 w-16">
           <div
-            className="absolute -inset-2 rounded-full border border-emerald-500/15"
+            className="absolute -inset-2 rounded-full border border-[#10D99A]/15"
             style={{ animation: "spin-slow 8s linear infinite" }}
           >
-            <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_2px_rgba(52,211,153,0.5)]" />
+            <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-[#10D99A] shadow-[0_0_8px_2px_rgba(16,217,154,0.6)]" />
           </div>
-          <div className="absolute inset-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full border border-[#10D99A]/30 bg-[#10D99A]/10 flex items-center justify-center">
             <svg
-              className="h-6 w-6 text-emerald-400"
+              className="h-6 w-6 text-[#10D99A]"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -52,13 +52,13 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
 
-        <div className="text-[10px] text-white/40 uppercase tracking-[0.24em] mb-3">
+        <div className="text-[10px] text-[#10D99A] font-bold uppercase tracking-[0.24em] mb-3">
           Email sent
         </div>
-        <h1 className="text-[24px] font-semibold text-white tracking-tight mb-3">
+        <h1 className="text-[24px] font-extrabold text-white tracking-tight mb-3">
           Check your inbox
         </h1>
-        <p className="text-sm text-white/50 leading-relaxed mb-7 max-w-sm mx-auto">
+        <p className="text-sm text-[#8B8F98] leading-relaxed mb-7 max-w-sm mx-auto">
           If an account exists for{" "}
           <span className="text-white font-medium">{email}</span>, we&apos;ve
           sent password reset instructions. The link expires in 1 hour.
@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
         <MagneticPress strength={4} className="inline-block">
           <Link
             href="/login"
-            className="group inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm text-white/70 hover:text-white border border-white/[0.08] hover:border-white/25 bg-white/[0.02] hover:bg-white/[0.05] transition-all duration-300"
+            className="group inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs text-[#8B8F98] hover:text-[#F5B841] border border-white/[0.04] hover:border-[#F5B841]/20 bg-white/[0.02] hover:bg-white/[0.05] transition-all duration-300 font-semibold"
           >
             <svg
               className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-x-0.5"
@@ -90,16 +90,16 @@ export default function ForgotPasswordPage() {
       <AuthStagger baseDelay={260} stagger={90}>
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-[10px] text-white/40 uppercase tracking-[0.24em]">
+            <span className="text-[10px] text-[#F5B841] font-bold uppercase tracking-[0.24em]">
               Recovery
             </span>
-            <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
+            <span className="h-px flex-1 bg-gradient-to-r from-[#F5B841]/25 to-transparent" />
           </div>
-          <h1 className="text-[28px] leading-tight font-semibold text-white tracking-tight">
+          <h1 className="text-[28px] leading-tight font-extrabold text-white tracking-tight">
             Reset password
-            <span className="text-white/40">.</span>
+            <span className="text-[#F5B841]">.</span>
           </h1>
-          <p className="text-sm text-white/50 mt-2 leading-relaxed">
+          <p className="text-sm text-[#8B8F98] mt-2 leading-relaxed">
             We&apos;ll email you a secure reset link.
           </p>
         </div>
@@ -111,6 +111,7 @@ export default function ForgotPasswordPage() {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            variant="auth"
             required
             autoComplete="email"
             icon={
@@ -127,12 +128,23 @@ export default function ForgotPasswordPage() {
             }
           />
 
-          <MagneticPress strength={5} className="block mt-3">
-            <Button type="submit" fullWidth isLoading={isLoading} size="lg">
-              <span className="inline-flex items-center gap-2">
-                Send reset link
+          <MagneticPress strength={5} className="block mt-4">
+            <Button type="submit" fullWidth isLoading={isLoading} size="lg" variant="auth" className="group">
+              <span className="inline-flex items-center justify-center w-full">
+                {/* Shield icon */}
                 <svg
-                  className="h-3.5 w-3.5"
+                  className="h-4 w-4 mr-2 text-[#F5B841]/90 transition-transform duration-300 group-hover:scale-110"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Send reset link
+                {/* Right arrow icon */}
+                <svg
+                  className="h-3.5 w-3.5 ml-2 text-white/80 transition-transform duration-300 group-hover:translate-x-1"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -145,10 +157,10 @@ export default function ForgotPasswordPage() {
           </MagneticPress>
         </form>
 
-        <div className="mt-7 pt-5 border-t border-white/[0.06] text-center">
+        <div className="mt-7 pt-5 border-t border-white/[0.04] text-center">
           <Link
             href="/login"
-            className="group inline-flex items-center gap-2 text-xs text-white/50 hover:text-white transition-colors"
+            className="group inline-flex items-center gap-2 text-xs text-[#8B8F98] hover:text-[#F5B841] transition-colors font-semibold"
           >
             <svg
               className="h-3 w-3 transition-transform duration-300 group-hover:-translate-x-0.5"

@@ -441,10 +441,10 @@ export function SectionHeader({
     <div className="flex items-end justify-between gap-4 mb-5">
       <div className="min-w-0">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] text-white/40 uppercase tracking-[0.22em]">
+          <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.22em] font-medium">
             {eyebrow}
           </span>
-          <span className="h-px w-8 bg-gradient-to-r from-white/15 to-transparent" />
+          <span className="h-px w-8 bg-gradient-to-r from-[var(--forge-gold)]/25 to-transparent" />
         </div>
         {title && (
           <h2 className="text-base font-semibold text-white tracking-tight">
@@ -474,17 +474,17 @@ export function ModuleHeader({
 }) {
   return (
     <Reveal>
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[var(--metal-border)]">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-[10px] text-white/40 uppercase tracking-[0.24em]">
+            <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.24em] font-medium">
               {eyebrow}
             </span>
-            <span className="h-px w-12 bg-gradient-to-r from-white/15 to-transparent" />
+            <span className="h-px w-12 bg-gradient-to-r from-[var(--forge-gold)]/25 to-transparent" />
           </div>
           <h1 className="text-[26px] sm:text-[30px] leading-tight font-semibold text-white tracking-tight">
             {title}
-            <span className="text-white/40">.</span>
+            <span className="text-[var(--forge-gold-dim)]">.</span>
           </h1>
           {description && (
             <p className="text-sm text-white/50 mt-2 leading-relaxed">

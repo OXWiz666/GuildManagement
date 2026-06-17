@@ -142,24 +142,24 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     <header
       className={`sticky top-0 z-40 h-20 flex items-center px-6 lg:px-8 gap-4 transition-all duration-300 ${
         scrolled
-          ? "bg-[#08080a]/90 backdrop-blur-xl border-b border-white/[0.08] shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)]"
-          : "bg-[#08080a]/60 backdrop-blur-lg border-b border-white/[0.04]"
+          ? "bg-[var(--obsidian-deep)]/90 backdrop-blur-xl border-b border-[var(--metal-border)] shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)]"
+          : "bg-[var(--obsidian-deep)]/60 backdrop-blur-lg border-b border-white/[0.04]"
       }`}
     >
-      {/* Animated bottom hairline */}
+      {/* Animated bottom hairline — gold forge shimmer */}
       <span
         aria-hidden
         className="absolute inset-x-0 bottom-0 h-px pointer-events-none"
         style={{
           background:
-            "linear-gradient(90deg, transparent, oklch(0.78 0.024 78 / 0.12), transparent)",
+            "linear-gradient(90deg, transparent, rgba(212,168,83,0.18), transparent)",
         }}
       />
       
       {/* Mobile menu button */}
       <button
         onClick={onMenuToggle}
-        className="lg:hidden relative text-white/55 hover:text-white transition-colors p-2 rounded-md hover:bg-white/[0.05] cursor-pointer"
+        className="lg:hidden relative text-white/55 hover:text-[var(--forge-gold)] transition-colors p-2 rounded-md hover:bg-[var(--forge-glow)] cursor-pointer"
         aria-label="Open menu"
       >
         <svg
@@ -176,7 +176,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
 
       {/* Alliance Context (Left Area) */}
       <div className="hidden sm:flex flex-col text-left">
-        <span className="text-[10px] text-amber-500/80 font-bold uppercase tracking-[0.2em] font-display">
+        <span className="text-[10px] text-[var(--forge-gold)] font-bold uppercase tracking-[0.2em] font-fantasy">
            MegaCorp Alliance
         </span>
         <span className="text-[12px] text-white/50 font-medium tracking-wide">
@@ -188,17 +188,18 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
       <div className="flex-1" />
 
       {/* COMMAND CENTER WIDGETS (Middle-Right area) */}
-      <div className="hidden md:flex items-center gap-6">
+      <div className="hidden md:flex items-center gap-5">
         {/* Next Boss Spawn Widget */}
         {nextBoss && countdown && (
           <div
-            className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all duration-300 bg-white/[0.015] ${
+            className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all duration-300 bg-[var(--obsidian-surface)] ${
               countdown.warning
-                ? "border-amber-500/35 bg-amber-500/[0.03] shadow-[0_0_15px_rgba(245,158,11,0.08)] animate-pulse"
-                : "border-white/[0.05]"
+                ? "border-[var(--forge-gold)]/30 shadow-[0_0_18px_rgba(212,168,83,0.10)]"
+                : "border-[var(--metal-border)]"
             }`}
+            style={countdown.warning ? { animation: "glow-pulse 3s ease-in-out infinite" } : undefined}
           >
-            <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="h-9 w-9 rounded-lg bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0">
               {nextBoss.bossImageUrl ? (
                 <img
                   src={nextBoss.bossImageUrl}
@@ -206,7 +207,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <svg className="h-5 w-5 text-white/45" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <svg className="h-5 w-5 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M12 2L2 7l10 5 10-5-10-5z" />
                   <path d="M2 17l10 5 10-5" />
                   <path d="M2 12l10 5 10-5" />
@@ -214,7 +215,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
               )}
             </div>
             <div className="text-left select-none">
-              <span className="block text-[8px] text-white/40 uppercase tracking-[0.25em] font-bold">
+              <span className="block text-[8px] text-[var(--forge-gold-dim)] uppercase tracking-[0.25em] font-bold">
                 Next Boss Spawn
               </span>
               <span className="block text-xs font-semibold text-white/95 leading-tight">
@@ -223,7 +224,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
               <span
                 className={`block text-[11px] font-mono leading-none mt-0.5 ${
                   countdown.warning
-                    ? "text-amber-400 font-bold animate-pulse"
+                    ? "text-[var(--forge-gold-bright)] font-bold"
                     : "text-emerald-400/90 font-medium"
                 }`}
               >
@@ -234,15 +235,15 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         )}
 
         {/* Current Date & Time Widget */}
-        <div className="flex items-center gap-3 px-4 py-2 rounded-xl border border-white/[0.05] bg-white/[0.015]">
-          <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center shrink-0">
-            <svg className="h-4 w-4 text-amber-500/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <div className="flex items-center gap-3 px-4 py-2 rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-surface)]">
+          <div className="h-9 w-9 rounded-lg bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center shrink-0">
+            <svg className="h-4 w-4 text-[var(--forge-gold)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
           <div className="text-left select-none">
-            <span className="block text-[8px] text-white/40 uppercase tracking-[0.25em] font-bold">
+            <span className="block text-[8px] text-[var(--forge-gold-dim)] uppercase tracking-[0.25em] font-bold">
               Server Time
             </span>
             <span className="block text-xs font-semibold text-white/90 leading-tight">
@@ -259,7 +260,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
       <div className="flex items-center gap-2">
         {/* Notification bell */}
         <button
-          className="p-2 rounded-md text-white/55 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer relative"
+          className="p-2 rounded-md text-white/55 hover:text-[var(--forge-gold)] hover:bg-[var(--forge-glow)] transition-colors cursor-pointer relative"
           aria-label="Notifications"
         >
           <svg
@@ -273,8 +274,8 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           >
             <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
           </svg>
-          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_1px_rgba(245,158,11,0.5)]">
-            <span className="absolute inset-0 rounded-full bg-amber-500 animate-ping opacity-60" />
+          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[var(--forge-gold)] shadow-[0_0_6px_1px_rgba(212,168,83,0.5)]">
+            <span className="absolute inset-0 rounded-full bg-[var(--forge-gold)] animate-ping opacity-60" />
           </span>
         </button>
 
@@ -283,7 +284,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/[0.05] transition-all duration-200 cursor-pointer ml-1 border border-transparent hover:border-white/[0.06]"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--forge-glow)] transition-all duration-200 cursor-pointer ml-1 border border-transparent hover:border-[var(--metal-border)]"
               aria-expanded={isUserMenuOpen}
               aria-haspopup="menu"
             >
@@ -305,7 +306,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
             {isUserMenuOpen && (
               <div
                 role="menu"
-                className="absolute top-full right-0 mt-2 w-56 glass-strong rounded-xl border border-white/[0.08] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.7)] py-1.5 animate-scale-in z-50"
+                className="absolute top-full right-0 mt-2 w-56 glass-strong rounded-xl border border-[var(--metal-border)] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.7)] py-1.5 animate-scale-in z-50"
               >
                 <div className="px-3.5 py-2.5 border-b border-white/[0.06]">
                   <p className="text-[12px] font-medium text-white">
@@ -319,7 +320,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                 <a
                   href="/dashboard/settings"
                   role="menuitem"
-                  className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] text-white/60 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer mt-1"
+                  className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] text-white/60 hover:text-[var(--forge-gold)] hover:bg-[var(--forge-glow)] transition-colors cursor-pointer mt-1"
                   onClick={() => setIsUserMenuOpen(false)}
                 >
                   <svg

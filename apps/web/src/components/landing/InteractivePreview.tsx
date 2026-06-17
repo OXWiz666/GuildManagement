@@ -254,8 +254,8 @@ export default function InteractivePreview() {
       <div className="animate-fade-in space-y-6">
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.04]">
           <div>
-            <h3 className="text-base font-bold text-white tracking-wide uppercase">Operational Commands Dashboard</h3>
-            <p className="text-xs text-[#8B8F98] mt-0.5">Tactical real-time indicators for active guild operations.</p>
+            <h3 className="text-base font-bold text-white tracking-wide uppercase">Guild Dashboard</h3>
+            <p className="text-xs text-[#8B8F98] mt-0.5">Real-time indicators for active guild operations.</p>
           </div>
           <span className="px-2.5 py-0.5 rounded border border-[#10D99A]/30 bg-[#10D99A]/5 text-[9px] text-[#10D99A] font-extrabold uppercase tracking-wider">
             Live Feed Sync

@@ -146,6 +146,82 @@ export async function login(
   };
 }
 
+// ─── Supabase Session Syncing ───────────────────
+
+export async function supabaseSync(
+  supabaseUser: { id: string; email: string; displayName: string },
+  ipAddress?: string,
+  userAgent?: string,
+): Promise<AuthResponse> {
+  // Find user by email
+  let user = await prisma.user.findUnique({
+    where: { email: supabaseUser.email.toLowerCase() },
+  });
+
+  if (!user) {
+    // Create new user using the Supabase ID to keep them aligned
+    user = await prisma.user.create({
+      data: {
+        id: supabaseUser.id,
+        email: supabaseUser.email.toLowerCase(),
+        passwordHash: "", // Empty hash for Supabase users
+        displayName: supabaseUser.displayName,
+      },
+    });
+
+    // Write registration audit log
+    await writeAuditLog({
+      actorId: user.id,
+      action: AUDIT_ACTIONS.USER_REGISTERED,
+      target: "User",
+      targetId: user.id,
+      detail: { email: user.email, displayName: user.displayName, provider: "supabase" },
+      ipAddress,
+      userAgent,
+    });
+  } else {
+    // Optionally update display name if it changed
+    if (user.displayName !== supabaseUser.displayName) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { displayName: supabaseUser.displayName },
+      });
+    }
+  }
+
+  // Generate tokens for Express API
+  const tokens = await createTokenPair(
+    user.id,
+    user.email,
+    ipAddress,
+    userAgent,
+  );
+
+  // Create session
+  await prisma.session.create({
+    data: {
+      userId: user.id,
+      deviceInfo: userAgent ?? null,
+      ipAddress: ipAddress ?? null,
+    },
+  });
+
+  // Audit log login
+  await writeAuditLog({
+    actorId: user.id,
+    action: AUDIT_ACTIONS.USER_LOGIN,
+    target: "User",
+    targetId: user.id,
+    ipAddress,
+    userAgent,
+  });
+
+  return {
+    user: toUserPublic(user),
+    tokens,
+  };
+}
+
 // ─── Token Refresh with Rotation ────────────────
 
 export async function refreshTokens(

@@ -7,27 +7,58 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
   icon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  variant?: "default" | "auth";
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, icon, rightIcon, className = "", type, id, ...props }, ref) => {
+  ({ label, error, icon, rightIcon, className = "", type, id, variant = "default", ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
     const isPassword = type === "password";
     const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+
+    const labelClass = variant === "auth"
+      ? "block text-[10px] font-bold uppercase tracking-[0.2em] text-[#8B8F98] mb-2"
+      : "block text-sm font-medium text-gray-300 mb-1.5";
+
+    const inputClass = variant === "auth"
+      ? `
+        w-full rounded-xl bg-[#11141A] border border-[#1E232B]
+        text-[#F4F4F5] placeholder-[#8B8F98]
+        transition-all duration-300
+        focus:outline-none focus:border-[#F5B841]/60 focus:ring-4 focus:ring-[#F5B841]/10
+        focus:bg-[#0B0D10]
+        hover:border-white/[0.12]
+        ${icon ? "pl-10" : "px-4"}
+        ${isPassword || rightIcon ? "pr-10" : "pr-4"}
+        py-3 text-sm
+        ${error ? "border-[#D94A4A]/60 focus:border-[#D94A4A]/60 focus:ring-[#D94A4A]/20" : ""}
+      `
+      : `
+        w-full rounded-xl bg-surface-100 border border-white/8
+        text-white placeholder-gray-500
+        transition-all duration-200
+        focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20
+        focus:bg-surface-200
+        hover:border-white/12
+        ${icon ? "pl-10" : "px-4"}
+        ${isPassword || rightIcon ? "pr-10" : "pr-4"}
+        py-3 text-sm
+        ${error ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20" : ""}
+      `;
 
     return (
       <div className="w-full">
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-gray-300 mb-1.5"
+            className={labelClass}
           >
             {label}
           </label>
         )}
         <div className="relative">
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+            <div className={`absolute left-3 top-1/2 -translate-y-1/2 ${variant === "auth" ? "text-[#8B8F98]" : "text-gray-500"}`}>
               {icon}
             </div>
           )}
@@ -35,19 +66,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             type={isPassword && showPassword ? "text" : type}
-            className={`
-              w-full rounded-xl bg-surface-100 border border-white/8
-              text-white placeholder-gray-500
-              transition-all duration-200
-              focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20
-              focus:bg-surface-200
-              hover:border-white/12
-              ${icon ? "pl-10" : "px-4"}
-              ${isPassword || rightIcon ? "pr-10" : "pr-4"}
-              py-3 text-sm
-              ${error ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20" : ""}
-              ${className}
-            `}
+            className={`${inputClass} ${className}`}
             {...props}
           />
           {isPassword && (

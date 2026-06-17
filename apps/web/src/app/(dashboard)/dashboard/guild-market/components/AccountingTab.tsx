@@ -71,8 +71,8 @@ export default function AccountingTab({
       <Card className="p-6 border border-white/[0.05] bg-[#0c0d12]/40 backdrop-blur rounded-3xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-4 mb-4">
           <div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">⚖️ Member Balance board</h3>
-            <p className="text-[10px] text-white/40 mt-1">DKP values (attendance accumulated DKP points) and derived ledger net balances.</p>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Member Balance board</h3>
+            <p className="text-[10px] text-white/40 mt-1">Guild Points and net ledger balances.</p>
           </div>
           <div className="relative max-w-xs w-full">
             <input
@@ -82,7 +82,7 @@ export default function AccountingTab({
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
             />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs">🔍</span>
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs"></span>
           </div>
         </div>
 
@@ -96,7 +96,7 @@ export default function AccountingTab({
                   <th className="px-4 py-3">In-Game Name</th>
                   <th className="px-4 py-3">Class</th>
                   <th className="px-4 py-3 text-center">Combat Power</th>
-                  <th className="px-4 py-3 text-center">DKP (Guild Points)</th>
+                  <th className="px-4 py-3 text-center">Guild Points</th>
                   <th className="px-4 py-3 text-right">Total Payouts PHP</th>
                   <th className="px-4 py-3 text-right">Net Balance PHP</th>
                   {accounting?.treasury?.secondary?.currencyCode && (
@@ -146,14 +146,14 @@ export default function AccountingTab({
       <Card className="p-6 border border-white/[0.05] bg-[#0c0d12]/40 backdrop-blur rounded-3xl mt-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-4 mb-4">
           <div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">📖 Treasury ledger logs</h3>
-            <p className="text-[10px] text-white/40 mt-1">Audit log of double-entry debit/credit ledger records.</p>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Guild Treasury logs</h3>
+            <p className="text-[10px] text-white/40 mt-1">Audit log of double-entry debit/credit member records.</p>
           </div>
         </div>
 
         {!accounting?.transactions || accounting.transactions.length === 0 ? (
           <div className="py-12 text-center text-xs text-white/35 italic">
-            No treasury transaction ledger records found.
+            No guild treasury transaction ledger records found.
           </div>
         ) : (
           <div className="space-y-4">

@@ -2,8 +2,6 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import http from "http";
-import { initSocketServer } from "./lib/socket";
 
 // Global BigInt JSON serialization override to prevent Express JSON serialization crashes
 (BigInt.prototype as any).toJSON = function () {
@@ -55,28 +53,19 @@ app.use("/api", (_req, res) => {
 // ─── Error Handler (must be last) ───────────────
 app.use(errorHandler);
 
-// Wrap Express app in HTTP server to enable WebSockets
-const server = http.createServer(app);
-server.requestTimeout = 30_000;
-server.headersTimeout = 35_000;
-server.keepAliveTimeout = 5_000;
-
-// Initialize our real-time socket server
-initSocketServer(server);
-
 // ─── Start Server ───────────────────────────────
 if (env.NODE_ENV !== "test") {
-server.listen(env.PORT, () => {
-  console.log(`
-  Guild Management API (Real-Time Enabled)
-  ────────────────────────
-  Status:  Running
-  Port:    ${env.PORT}
-  Env:     ${env.NODE_ENV}
-  CORS:    ${env.CORS_ORIGIN}
-  ────────────────────────
-  `);
-});
+  app.listen(env.PORT, () => {
+    console.log(`
+    Guild Management API (Serverless Ready)
+    ────────────────────────
+    Status:  Running
+    Port:    ${env.PORT}
+    Env:     ${env.NODE_ENV}
+    CORS:    ${env.CORS_ORIGIN}
+    ────────────────────────
+    `);
+  });
 }
 
 export default app;

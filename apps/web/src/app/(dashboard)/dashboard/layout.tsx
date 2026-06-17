@@ -29,14 +29,14 @@ export default function DashboardLayout({
 
   if (!mounted || isLoading || !isAuthenticated || !isSessionReady) {
     return (
-      <div className="min-h-screen bg-[#08080a] flex flex-col items-center justify-center gap-6 animate-fade-in relative overflow-hidden">
+      <div className="min-h-screen bg-[var(--obsidian-deep)] flex flex-col items-center justify-center gap-6 animate-fade-in relative overflow-hidden">
         {/* Ambient background glows */}
         <div
           aria-hidden
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(circle 350px at 50% 50%, rgba(245,158,11,0.08) 0%, transparent 100%)",
+              "radial-gradient(circle 350px at 50% 50%, rgba(212,168,83,0.08) 0%, transparent 100%)",
             filter: "blur(60px)",
           }}
         />
@@ -48,11 +48,11 @@ export default function DashboardLayout({
           <div className="relative h-24 w-24 flex items-center justify-center">
             
             {/* Outer Slow Ambient Orbit */}
-            <div className="absolute -inset-3.5 rounded-full border border-amber-500/5 premium-loader-spin-slow" />
+            <div className="absolute -inset-3.5 rounded-full border border-[var(--forge-gold)]/5 premium-loader-spin-slow" />
             
             {/* Outer Orbiting Dot (butter smooth) */}
             <div className="absolute -inset-3.5 rounded-full premium-loader-spin-reverse pointer-events-none">
-              <span className="absolute h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_12px_3px_rgba(245,158,11,0.7)] top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+              <span className="absolute h-1.5 w-1.5 rounded-full bg-[var(--forge-gold)] shadow-[0_0_12px_3px_rgba(212,168,83,0.7)] top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </div>
 
             {/* Inner Ring Glass Shield */}
@@ -62,9 +62,9 @@ export default function DashboardLayout({
             <svg className="absolute inset-0 h-full w-full premium-loader-spin" viewBox="0 0 100 100">
               <defs>
                 <linearGradient id="spinner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#f59e0b" stopOpacity="1" />
-                  <stop offset="60%" stopColor="#f59e0b" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                  <stop offset="0%" stopColor="var(--forge-gold)" stopOpacity="1" />
+                  <stop offset="60%" stopColor="var(--forge-gold)" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="var(--forge-gold)" stopOpacity="0" />
                 </linearGradient>
               </defs>
               <circle
@@ -81,7 +81,7 @@ export default function DashboardLayout({
 
             {/* Center Brand Icon (Breathing Shield) */}
             <svg
-              className="h-7 w-7 text-amber-400 premium-loader-pulse relative z-10"
+              className="h-7 w-7 text-[var(--forge-gold)] premium-loader-pulse relative z-10"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -100,7 +100,7 @@ export default function DashboardLayout({
             <h2
               className="text-[17px] font-extrabold uppercase tracking-[0.16em] leading-none"
               style={{
-                background: "linear-gradient(90deg, #fff, #f6e3a9, #f59e0b)",
+                background: "linear-gradient(90deg, #fff, #f6e3a9, var(--forge-gold))",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -109,14 +109,14 @@ export default function DashboardLayout({
               ForgeKeep
             </h2>
             <div className="relative">
-              <p className="text-[10px] text-amber-500/50 font-bold tracking-[0.35em] uppercase premium-loader-pulse">
+              <p className="text-[10px] text-[var(--forge-gold-dim)] font-bold tracking-[0.35em] uppercase premium-loader-pulse">
                 Entering Session
               </p>
               {/* Gold dots loading indicator */}
               <span className="absolute -right-6 bottom-0.5 flex gap-1 items-center">
-                <span className="h-1 w-1 rounded-full bg-amber-400/80 animate-ping animate-duration-1000" style={{ animationDelay: '0ms' }} />
-                <span className="h-1 w-1 rounded-full bg-amber-400/80 animate-ping animate-duration-1000" style={{ animationDelay: '300ms' }} />
-                <span className="h-1 w-1 rounded-full bg-amber-400/80 animate-ping animate-duration-1000" style={{ animationDelay: '600ms' }} />
+                <span className="h-1 w-1 rounded-full bg-[var(--forge-gold)]/80 animate-ping animate-duration-1000" style={{ animationDelay: '0ms' }} />
+                <span className="h-1 w-1 rounded-full bg-[var(--forge-gold)]/80 animate-ping animate-duration-1000" style={{ animationDelay: '300ms' }} />
+                <span className="h-1 w-1 rounded-full bg-[var(--forge-gold)]/80 animate-ping animate-duration-1000" style={{ animationDelay: '600ms' }} />
               </span>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function DashboardLayout({
 
   return (
     <SocketProvider>
-      <div className="min-h-screen bg-[#08080a] flex">
+      <div className="min-h-screen bg-[var(--obsidian-deep)] flex">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col min-w-0 relative">
           <TopBar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />

@@ -43,14 +43,14 @@ function StatItem({
       ? `${Math.floor(count / 1000)}K`
       : count.toString();
   return (
-    <div className="lg:px-10 first:pl-0 last:pr-0">
-      <div className="flex items-baseline gap-1.5">
-        <div className="text-3xl sm:text-4xl font-semibold text-white tracking-tight tabular-nums">
+    <div className="lg:px-10 first:pl-0 last:pr-0 text-center lg:text-left">
+      <div className="flex items-baseline justify-center lg:justify-start gap-1.5">
+        <div className="text-3xl sm:text-4xl font-bold text-gold-gradient tracking-tight tabular-nums font-mono">
           {display}
         </div>
-        <span className="text-2xl font-light text-white/35">{stat.suffix}</span>
+        <span className="text-xl font-medium text-[#f5c542]/70">{stat.suffix}</span>
       </div>
-      <div className="text-xs text-white/45 mt-2 uppercase tracking-[0.16em]">
+      <div className="text-[10px] text-[#8B8F98] mt-2 uppercase tracking-[0.2em] font-semibold">
         {stat.label}
       </div>
     </div>
@@ -60,15 +60,15 @@ function StatItem({
 export default function Stats() {
   const { ref, visible } = useReveal();
   return (
-    <section ref={ref} className="py-16 relative">
+    <section id="stats" ref={ref} className="py-16 relative bg-[#050608]/40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="hr-shine mb-12" />
+        <div className="hr-shine mb-12 opacity-60" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-0 lg:divide-x lg:divide-white/[0.06]">
           {STATS.map((stat, i) => (
             <StatItem key={stat.label} stat={stat} index={i} enabled={visible} />
           ))}
         </div>
-        <div className="hr-shine mt-12" />
+        <div className="hr-shine mt-12 opacity-60" />
       </div>
     </section>
   );

@@ -4,22 +4,34 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/[0.06] pt-16 pb-10 relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 mb-12">
+    <footer className="border-t border-white/[0.06] pt-20 pb-10 relative bg-[#050608] overflow-hidden">
+      <div className="absolute inset-0 bg-grid opacity-[0.03] bg-grid-fade pointer-events-none" />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 mb-16">
           {/* Brand */}
           <div className="md:col-span-5 space-y-5">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg border border-white/10 bg-white/[0.04] flex items-center justify-center">
-                <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
+              <div className="relative h-8 w-8 rounded-lg border border-white/10 bg-white/[0.03] flex items-center justify-center transition-all group-hover:border-[#d4a853]/40 group-hover:bg-[#d4a853]/5">
+                {/* Spinning outer accent dot */}
+                <div className="absolute -inset-0.5 rounded-lg border border-transparent group-hover:border-t-[#d4a853]/30 animate-spin-slow pointer-events-none" />
+                <svg className="h-4 w-4 text-[#f5c542] transition-transform duration-500 group-hover:rotate-12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="text-base font-semibold text-white tracking-tight">ForgeKeep</span>
-            </div>
-            <p className="text-sm text-white/45 leading-relaxed max-w-sm">
-              The professional guild management platform for serious gaming organizations.
-              Built for leaders who demand accountability.
+              <div className="flex flex-col leading-none">
+                <span className="text-sm font-semibold text-white tracking-tight group-hover:text-[#f5c542] transition-colors">
+                  ForgeKeep
+                </span>
+                <span className="text-[8px] text-[#d4a853]/60 tracking-[0.2em] uppercase mt-0.5 font-mono">
+                  Guild Management
+                </span>
+              </div>
+            </Link>
+            
+            <p className="text-xs text-[#8B8F98] leading-relaxed max-w-sm">
+              The professional guild management platform for competitive MMORPG guilds.
+              Built for guild leaders who want absolute operations control.
             </p>
             <div className="flex items-center gap-3 pt-2">
               {[
@@ -42,7 +54,7 @@ export default function Footer() {
                 <a
                   key={s.label}
                   href="#"
-                  className="h-8 w-8 rounded-full border border-white/[0.08] hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.05] text-white/55 hover:text-white flex items-center justify-center transition-all"
+                  className="h-8 w-8 rounded-lg border border-white/[0.08] hover:border-[#d4a853]/30 bg-white/[0.02] hover:bg-[#d4a853]/5 text-white/55 hover:text-[#f5c542] flex items-center justify-center transition-all duration-300"
                   aria-label={s.label}
                 >
                   {s.icon}
@@ -53,15 +65,15 @@ export default function Footer() {
 
           {/* Product */}
           <div className="md:col-span-2 space-y-4">
-            <p className="text-[10px] font-medium text-white/50 uppercase tracking-[0.22em]">Product</p>
+            <p className="text-[10px] font-bold text-[#d4a853] uppercase tracking-[0.2em] font-mono">Product</p>
             <div className="space-y-2.5">
               {[
-                { label: "Features", href: "#features" },
-                { label: "Preview", href: "#preview" },
-                { label: "Process", href: "#how-it-works" },
-                { label: "Pricing", href: "#pricing" },
+                { label: "Features Matrix", href: "#features" },
+                { label: "Interactive Preview", href: "#preview" },
+                { label: "Process Flow", href: "#how-it-works" },
+                { label: "Citadel Pricing", href: "#pricing" },
               ].map((l) => (
-                <a key={l.label} href={l.href} className="block text-sm text-white/55 hover:text-white transition-colors">
+                <a key={l.label} href={l.href} className="block text-xs text-white/55 hover:text-white transition-colors duration-200">
                   {l.label}
                 </a>
               ))}
@@ -70,21 +82,20 @@ export default function Footer() {
 
           {/* Account */}
           <div className="md:col-span-2 space-y-4">
-            <p className="text-[10px] font-medium text-white/50 uppercase tracking-[0.22em]">Account</p>
+            <p className="text-[10px] font-bold text-[#d4a853] uppercase tracking-[0.2em] font-mono">Account</p>
             <div className="space-y-2.5">
-              <Link href="/login" className="block text-sm text-white/55 hover:text-white transition-colors">Sign in</Link>
-              <Link href="/register" className="block text-sm text-white/55 hover:text-white transition-colors">Register</Link>
-              <Link href="/dashboard" className="block text-sm text-white/55 hover:text-white transition-colors">Dashboard</Link>
+              <Link href="/login" className="block text-xs text-white/55 hover:text-white transition-colors duration-200">Sign In</Link>
+              <Link href="/register" className="block text-xs text-white/55 hover:text-white transition-colors duration-200">Register</Link>
+              <Link href="/dashboard" className="block text-xs text-white/55 hover:text-white transition-colors duration-200">Guild Command</Link>
             </div>
           </div>
 
           {/* Legal */}
           <div className="md:col-span-3 space-y-4">
-            <p className="text-[10px] font-medium text-white/50 uppercase tracking-[0.22em]">Legal</p>
+            <p className="text-[10px] font-bold text-[#d4a853] uppercase tracking-[0.2em] font-mono">Legal</p>
             <div className="space-y-2.5">
-              <a href="#" className="block text-sm text-white/55 hover:text-white transition-colors">Privacy policy</a>
-              <a href="#" className="block text-sm text-white/55 hover:text-white transition-colors">Terms of service</a>
-              <a href="#" className="block text-sm text-white/55 hover:text-white transition-colors">Security</a>
+              <a href="#" className="block text-xs text-white/55 hover:text-white transition-colors duration-200">Privacy Policy</a>
+              <a href="#" className="block text-xs text-white/55 hover:text-white transition-colors duration-200">Terms of Service</a>
             </div>
           </div>
         </div>
@@ -97,10 +108,10 @@ export default function Footer() {
             className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center select-none pointer-events-none"
           >
             <span
-              className="text-[clamp(64px,16vw,220px)] font-semibold tracking-[-0.04em] leading-none"
+              className="text-[clamp(64px,16vw,220px)] font-black tracking-[-0.04em] leading-none font-fantasy select-none pointer-events-none"
               style={{
                 background:
-                  "linear-gradient(180deg, oklch(1 0 0 / 0.05) 0%, transparent 70%)",
+                  "linear-gradient(180deg, rgba(212, 168, 83, 0.08) 0%, transparent 75%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -111,16 +122,17 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4">
-          <p className="text-xs text-white/35">
-            © {new Date().getFullYear()} ForgeKeep. Crafted for high-performance factions.
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-6 border-t border-white/[0.04]">
+          <p className="text-xs text-white/35 font-mono">
+            © {new Date().getFullYear()} FORGEKEEP · ALL RIGHTS RESERVED
           </p>
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-white/35">All systems operational</span>
+            <span className="text-[10px] font-mono text-white/35 uppercase tracking-wider">All systems operational</span>
           </div>
         </div>
       </div>
     </footer>
   );
 }
+

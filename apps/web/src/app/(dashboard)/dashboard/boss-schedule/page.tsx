@@ -72,7 +72,7 @@ export default function BossSchedulePage() {
 
   const activeGuild = user?.guilds?.[0];
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
-  const isFactionLeader = activeGuild?.role === "ALLIANCE_LEADER" || activeGuild?.role === "ADMIN";
+  const isFactionLeader = activeGuild?.role === "FACTION_LEADER" || activeGuild?.role === "ADMIN";
   const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader || isFactionLeader;
 
   // State for editing single event

@@ -10,8 +10,8 @@ async function requireLeaderOrOfficer(guildId: string, actorId: string, minRole:
 
   const allowedRoles =
     minRole === "GUILD_LEADER"
-      ? ["GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"]
-      : ["OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"];
+      ? ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"]
+      : ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
 
   if (!membership || !membership.isActive || !allowedRoles.includes(membership.role)) {
     throw new ForbiddenError(`This action requires ${minRole} or higher`);

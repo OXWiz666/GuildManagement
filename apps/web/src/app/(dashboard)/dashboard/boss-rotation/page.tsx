@@ -1,334 +1,375 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { dashboardApi, guildApi, type BossScheduleData, type BossData, type AuditLogEntry } from "@/lib/api";
+import {
+  dashboardApi,
+  guildApi,
+  type AuditLogEntry,
+  type BossKilledHistoryResponse,
+  type BossRotationItem,
+  type BossRotationResponse,
+  type BossScheduleData,
+  type FactionGuildData,
+} from "@/lib/api";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
-import { getBossImageUrl, getNextBossSpawnTime, PREDEFINED_BOSSES } from "@guild/shared";
-
-// Subcomponents
-import FiltersPanel from "./components/FiltersPanel";
-import BossCardView from "./components/BossCardView";
-import BossTimelineView from "./components/BossTimelineView";
-import UpcomingSchedulesView from "./components/UpcomingSchedulesView";
-import ActivityLogsView from "./components/ActivityLogsView";
-import MaintenanceResetModal from "./components/MaintenanceResetModal";
-
-// Helpers & Types
-import { getGuildColor, getTickingCountdown, type RotationBoss } from "./utils/helpers";
-
 import { useQuery, queryClient } from "@/lib/query";
+import { getGuildColor } from "./utils/helpers";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime } from "@guild/shared";
+
+type RotationTab = "LIVE" | "UPCOMING" | "ACTIVITY" | "HISTORY";
+
+type AuditLogPage = {
+  logs: AuditLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+const CONFIRM_TAKEN_TIMEOUT_MS = 30000;
+
+function toDateTimeInputValue(date: Date) {
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 16);
+}
+
+function getCountdown(spawnTime: string, nowMs: number) {
+  const diff = new Date(spawnTime).getTime() - nowMs;
+  if (diff <= 0) return { text: "LIVE", warning: true, expired: true };
+  const hrs = Math.floor(diff / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  const secs = Math.floor((diff % 60000) / 1000);
+  return {
+    text: `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`,
+    warning: diff <= 60 * 60 * 1000,
+    expired: false,
+  };
+}
 
 export default function BossRotationPage() {
   const { user } = useAuth();
   const { socket } = useSocket();
   const { addToast } = useToast();
+  const activeGuild = user?.guilds?.[0];
 
-  const [currentTime, setCurrentTime] = useState(Date.now());
-
-  // Tabs state: ROTATION (Boss cards), UPCOMING (Upcoming timeline), ACTIVITY (Activity logs)
-  const [activeTab, setActiveTab] = useState<"ROTATION" | "UPCOMING" | "ACTIVITY">("ROTATION");
-
-  // Filters State (only applies to ROTATION tab)
-  const [selectedBossFilter, setSelectedBossFilter] = useState("ALL");
-  const [selectedGuildFilter, setSelectedGuildFilter] = useState("ALL");
-  const [availableOnly, setAvailableOnly] = useState(false);
+  const [activeTab, setActiveTab] = useState<RotationTab>("LIVE");
+  const [activityPage, setActivityPage] = useState(1);
+  const [historyMonth, setHistoryMonth] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTakingGuildId, setSelectedTakingGuildId] = useState("ALL");
+  const [now, setNow] = useState<number | null>(null);
+  const [killTarget, setKillTarget] = useState<BossRotationItem | null>(null);
+  const [killTime, setKillTime] = useState("");
+  const [selectedTakenGuildId, setSelectedTakenGuildId] = useState("");
+  const [isKilling, setIsKilling] = useState(false);
+  const isKillingRef = useRef(false);
+  const rotationQueryKey = activeGuild ? `boss_rotation_v2:${activeGuild.guildId}` : "boss_rotation_empty";
 
-  // View Switcher for Boss Rotation (Card vs Timeline)
-  const [viewMode, setViewMode] = useState<"CARD" | "TIMELINE">("CARD");
-
-  // Maintenance Reset Modal State
-  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
-  const [isMaintenanceProcessing, setIsMaintenanceProcessing] = useState(false);
-
-  // Sync clocks every second
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const activeGuild = user?.guilds?.[0];
-
-  // ─── Persistent Queries ────────────────────────────────
-
-  // 1. Boss Registry Query
   const {
-    data: bossRegistryRaw,
-    isLoading: isLoadingRegistry,
-  } = useQuery<BossData[]>(
-    "boss_registry",
+    data: rotationData,
+    isLoading,
+    refetch: refetchRotation,
+  } = useQuery<BossRotationResponse>(
+    rotationQueryKey,
     async () => {
-      const result = await dashboardApi.getBosses();
-      return result.success && result.data?.bosses ? result.data.bosses : [];
+      if (!activeGuild) {
+        return { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", guilds: [], rotations: [] };
+      }
+      const result = await dashboardApi.getBossRotation(activeGuild.guildId);
+      return result.success && result.data
+        ? result.data
+        : { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", guilds: [], rotations: [] };
     },
-    { persist: true, staleTime: 300000 }
+    { persist: true, staleTime: 10000 },
   );
-  const bossRegistry = bossRegistryRaw || [];
 
-  // 2. Boss Schedules Query (shares cache key with main dashboard page!)
-  const {
-    data: schedulesRaw,
-    isLoading: isLoadingSchedules,
-  } = useQuery<BossScheduleData[]>(
+  const { data: schedulesRaw } = useQuery<BossScheduleData[]>(
     activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty",
     async () => {
       if (!activeGuild) return [];
       const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
       return result.success && result.data?.schedules ? result.data.schedules : [];
     },
-    { persist: true, staleTime: 15000 }
+    { persist: true, staleTime: 15000 },
   );
-  const schedules = schedulesRaw || [];
 
-  const isLoading = isLoadingRegistry || isLoadingSchedules;
-
-  // 3. Boss Audit Logs Query
   const {
     data: auditLogsRaw,
     isLoading: isLoadingLogs,
     refetch: refetchAuditLogs,
-  } = useQuery<AuditLogEntry[]>(
-    activeGuild ? `boss_audit_logs:${activeGuild.guildId}` : "boss_audit_logs_empty",
+  } = useQuery<AuditLogPage>(
+    activeGuild ? `boss_rotation_audit:${activeGuild.guildId}:p${activityPage}` : "boss_rotation_audit_empty",
     async () => {
-      if (!activeGuild) return [];
-      const result = await guildApi.getAuditLogs(activeGuild.guildId, "boss", 1, 50);
-      return result.success && result.data?.logs ? result.data.logs : [];
+      if (!activeGuild) return { logs: [], total: 0, page: 1, limit: 10, totalPages: 1 };
+      const result = await guildApi.getAuditLogs(activeGuild.guildId, "boss-rotation", activityPage, 10);
+      return result.success && result.data
+        ? result.data
+        : { logs: [], total: 0, page: activityPage, limit: 10, totalPages: 1 };
     },
-    { persist: true, staleTime: 30000 }
+    { persist: true, staleTime: 30000 },
   );
-  const auditLogs = auditLogsRaw || [];
 
-  // Triggers log fetch when tab shifts
+  const {
+    data: killedHistoryRaw,
+    isLoading: isLoadingHistory,
+    refetch: refetchKilledHistory,
+  } = useQuery<BossKilledHistoryResponse>(
+    activeGuild ? `boss_killed_history:${activeGuild.guildId}:${historyMonth || "current"}` : "boss_killed_history_empty",
+    async () => {
+      if (!activeGuild) return { month: "", total: 0, days: [] };
+      const result = await dashboardApi.getBossKilledHistory(activeGuild.guildId, historyMonth || undefined);
+      return result.success && result.data ? result.data : { month: historyMonth, total: 0, days: [] };
+    },
+    { persist: true, staleTime: 30000 },
+  );
+
   useEffect(() => {
     if (activeTab === "ACTIVITY") {
       refetchAuditLogs();
     }
-  }, [activeTab, refetchAuditLogs]);
+    if (activeTab === "HISTORY") {
+      refetchKilledHistory();
+    }
+  }, [activeTab, refetchAuditLogs, refetchKilledHistory]);
 
-  // Derived state: Reconstruct boss rotation list whenever schedules, registry or guild turn updates
-  const [bosses, setBosses] = useState<RotationBoss[]>([]);
-  useEffect(() => {
-    if (!activeGuild || bossRegistry.length === 0) return;
-
-    const knownGuildsSet = new Set<string>();
-    knownGuildsSet.add(activeGuild.guildName.toUpperCase());
-    // Seed default competitive guilds on the server for rotation queue variety
-    knownGuildsSet.add("SAUSAGE");
-    knownGuildsSet.add("BZDK");
-    schedules.forEach((s) => {
-      if (s.guildTurn) knownGuildsSet.add(s.guildTurn.toUpperCase());
-    });
-    const knownGuilds = Array.from(knownGuildsSet);
-
-    const constructed: RotationBoss[] = bossRegistry.map((boss) => {
-      const activeSched = schedules.find(
-        (s) => s.bossName.toLowerCase() === boss.name.toLowerCase() && s.status !== "KILLED"
-      );
-
-      const latestKilled = schedules
-        .filter((s) => s.bossName.toLowerCase() === boss.name.toLowerCase() && s.status === "KILLED")
-        .sort((a, b) => new Date(b.spawnTime).getTime() - new Date(a.spawnTime).getTime())[0];
-
-      let status: "AVAILABLE" | "CLAIMED" | "DEAD" | "LOCKED" = "AVAILABLE";
-      let spawnTime = new Date().toISOString();
-      let claimedBy = activeGuild.guildName;
-      let activeScheduleId = null;
-
-      if (activeSched) {
-        spawnTime = activeSched.spawnTime;
-        claimedBy = activeSched.guildTurn || (latestKilled?.guildTurn) || activeGuild.guildName;
-        activeScheduleId = activeSched.id;
-        
-        if (activeSched.status === "SPAWNED") {
-          status = "AVAILABLE";
-        } else {
-          status = "CLAIMED";
-        }
-      } else {
-        if (latestKilled) {
-          status = "DEAD";
-          claimedBy = latestKilled.guildTurn || activeGuild.guildName;
-          if (latestKilled.killedAt) {
-            spawnTime = getNextBossSpawnTime(boss.name, new Date(latestKilled.killedAt)).toISOString();
-          }
-        } else {
-          status = "AVAILABLE";
-          spawnTime = new Date().toISOString();
-        }
-      }
-
-      const upperClaimed = claimedBy.toUpperCase();
-      const baseGuilds = knownGuilds.includes(upperClaimed)
-        ? knownGuilds
-        : [...knownGuilds, upperClaimed];
-      
-      const claimedIdx = baseGuilds.indexOf(upperClaimed);
-      const rotationQueue = [
-        ...baseGuilds.slice(claimedIdx),
-        ...baseGuilds.slice(0, claimedIdx)
-      ].slice(0, baseGuilds.length);
-
-      return {
-        id: boss.id,
-        name: boss.name,
-        level: boss.level,
-        location: boss.location,
-        status,
-        imageUrl: getBossImageUrl(boss.name),
-        spawnTime,
-        claimedBy,
-        rotationQueue,
-        cooldownHours: boss.cooldownHours || 12,
-        activeScheduleId,
-      };
-    });
-
-    setBosses(constructed);
-  }, [schedules, bossRegistry, activeGuild]);
-
-  // Listen to Socket.IO real-time events for instant cache invalidation
   useEffect(() => {
     if (!socket || !activeGuild) return;
-
-    const handleBossRotationUpdated = () => {
-      console.log("[Socket Real-time]: Invalidating schedules and audit logs cache...");
+    const handleRotationUpdate = () => {
+      queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
       queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
-      queryClient.invalidateQueries(`boss_audit_logs:${activeGuild.guildId}`);
+      queryClient.invalidateQueries(`boss_rotation_audit:${activeGuild.guildId}`);
+      queryClient.invalidateQueries(`boss_killed_history:${activeGuild.guildId}`);
     };
-
-    socket.on("boss_rotation_updated", handleBossRotationUpdated);
-    socket.on("boss_schedule_deleted", handleBossRotationUpdated);
-
+    socket.on("boss_rotation_updated", handleRotationUpdate);
+    socket.on("boss_schedule_deleted", handleRotationUpdate);
     return () => {
-      socket.off("boss_rotation_updated", handleBossRotationUpdated);
-      socket.off("boss_schedule_deleted", handleBossRotationUpdated);
+      socket.off("boss_rotation_updated", handleRotationUpdate);
+      socket.off("boss_schedule_deleted", handleRotationUpdate);
     };
   }, [socket, activeGuild]);
 
-  // Handle Rotation Turn shift (saves to database if active schedule exists)
-  const handleShiftTurn = async (bossId: string) => {
-    const targetBoss = bosses.find((b) => b.id === bossId);
-    if (!targetBoss) return;
-    
-    const nextOwner = targetBoss.rotationQueue[1] || targetBoss.rotationQueue[0];
-    
-    if (targetBoss.activeScheduleId && activeGuild) {
-      try {
-        const res = await dashboardApi.updateBossSchedule(activeGuild.guildId, targetBoss.activeScheduleId, {
-          guildTurn: nextOwner,
+  const serverNow = now ?? new Date(rotationData?.serverTime || 0).getTime();
+  const canManage = rotationData?.canManage || false;
+  const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
+  const auditLogPage = auditLogsRaw || { logs: [], total: 0, page: activityPage, limit: 10, totalPages: 1 };
+  const auditLogs = auditLogPage.logs;
+  const killedHistory = killedHistoryRaw || { month: historyMonth, total: 0, days: [] };
+
+  const fallbackGuilds = useMemo<FactionGuildData[]>(() => {
+    const guildMap = new Map<string, FactionGuildData>();
+    for (const guild of rotationData?.guilds || []) {
+      guildMap.set(guild.id, guild);
+    }
+    if (activeGuild) {
+      guildMap.set(activeGuild.guildId, {
+        id: activeGuild.guildId,
+        name: activeGuild.guildName,
+        slug: activeGuild.guildSlug,
+        avatarUrl: activeGuild.guildAvatarUrl,
+      });
+    }
+    for (const schedule of schedules) {
+      if (schedule.guildTurnGuildId && schedule.guildTurnGuildName && !guildMap.has(schedule.guildTurnGuildId)) {
+        guildMap.set(schedule.guildTurnGuildId, {
+          id: schedule.guildTurnGuildId,
+          name: schedule.guildTurnGuildName,
+          slug: schedule.guildTurnGuildName.toLowerCase().replace(/\s+/g, "-"),
+          avatarUrl: null,
         });
-        if (res.success) {
-          addToast("success", `Turn shifted! Next owner for ${targetBoss.name} is now ${nextOwner}.`);
-          queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
-        } else {
-          addToast("error", "Failed to update rotation turn in database");
-        }
-      } catch (e) {
-        addToast("error", "Error shifting rotation turn");
       }
-    } else {
-      addToast("success", `Turn shifted locally! Next owner for ${targetBoss.name} is now ${nextOwner}.`);
-      setBosses((prev) =>
-        prev.map((b) => {
-          if (b.id === bossId) {
-            const shiftedQueue = [...b.rotationQueue.slice(1), b.rotationQueue[0]];
-            return {
-              ...b,
-              claimedBy: nextOwner,
-              rotationQueue: shiftedQueue,
-            };
-          }
-          return b;
-        })
-      );
     }
-  };
+    return Array.from(guildMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeGuild, rotationData?.guilds, schedules]);
 
-  // ─── Maintenance Reset Handler ─────────────────────
-  // Resets spawn times for all LONG_CYCLE bosses to the maintenance end time.
-  // FIXED_SCHEDULE bosses are intentionally left untouched.
-  const handleMaintenanceReset = useCallback(async (maintenanceEndTime: Date) => {
-    if (!activeGuild) return;
+  const fallbackRotations = useMemo<BossRotationItem[]>(() => {
+    if ((rotationData?.rotations?.length || 0) > 0 || schedules.length === 0) return [];
+    const guildMap = new Map(fallbackGuilds.map((guild) => [guild.id, guild]));
+    const queue = fallbackGuilds;
 
-    setIsMaintenanceProcessing(true);
+    return PREDEFINED_BOSSES.map((boss) => {
+      const bossSchedules = schedules.filter((schedule) => schedule.bossName.toLowerCase() === boss.name.toLowerCase());
+      const activeSchedule = bossSchedules
+        .filter((schedule) => schedule.status !== "KILLED")
+        .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime())[0] || null;
+      const latestKilled = bossSchedules
+        .filter((schedule) => schedule.status === "KILLED")
+        .sort((a, b) => new Date(b.killedAt || b.spawnTime).getTime() - new Date(a.killedAt || a.spawnTime).getTime())[0] || null;
+
+      const currentGuild =
+        (activeSchedule?.guildTurnGuildId ? guildMap.get(activeSchedule.guildTurnGuildId) : null) ||
+        queue[0] ||
+        null;
+      const currentIndex = currentGuild ? Math.max(0, queue.findIndex((guild) => guild.id === currentGuild.id)) : 0;
+      const nextGuild = queue.length ? queue[(currentIndex + 1) % queue.length] || currentGuild : null;
+
+      return {
+        id: `fallback:${boss.name}`,
+        bossName: boss.name,
+        bossImageUrl: activeSchedule?.bossImageUrl || getBossImageUrl(boss.name),
+        level: boss.level,
+        type: boss.type,
+        cooldownHours: boss.cooldownHours || null,
+        location: activeSchedule?.location || boss.location,
+        currentIndex,
+        queue,
+        currentGuild,
+        nextGuild,
+        spawnTime: activeSchedule?.spawnTime ||
+          (boss.type === "FIXED_SCHEDULE"
+            ? getNextBossSpawnTime(boss.name, latestKilled?.killedAt ? new Date(latestKilled.killedAt) : new Date()).toISOString()
+            : (latestKilled?.spawnTime || new Date().toISOString())),
+        status: activeSchedule?.status || latestKilled?.status || "UPCOMING",
+        activeSchedule,
+        latestKilled,
+      };
+    });
+  }, [fallbackGuilds, rotationData?.rotations?.length, schedules]);
+
+  const rotations = useMemo(
+    () => (rotationData?.rotations?.length ? rotationData.rotations : fallbackRotations),
+    [fallbackRotations, rotationData],
+  );
+
+  const takingGuilds = useMemo(() => {
+    const guildMap = new Map<string, FactionGuildData>();
+    for (const guild of fallbackGuilds) {
+      guildMap.set(guild.id, guild);
+    }
+    for (const rotation of rotations) {
+      for (const guild of rotation.queue) {
+        guildMap.set(guild.id, guild);
+      }
+      if (rotation.currentGuild) guildMap.set(rotation.currentGuild.id, rotation.currentGuild);
+      if (rotation.nextGuild) guildMap.set(rotation.nextGuild.id, rotation.nextGuild);
+    }
+    return Array.from(guildMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [fallbackGuilds, rotations]);
+
+  const filteredRotations = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    return rotations.filter((rotation) => {
+      const matchesSearch = !needle ||
+        rotation.bossName.toLowerCase().includes(needle) ||
+        rotation.location.toLowerCase().includes(needle) ||
+        rotation.currentGuild?.name.toLowerCase().includes(needle) ||
+        rotation.nextGuild?.name.toLowerCase().includes(needle) ||
+        rotation.queue.some((guild) => guild.name.toLowerCase().includes(needle));
+
+      const takingGuildId = rotation.currentGuild?.id || rotation.activeSchedule?.guildTurnGuildId || "";
+      const matchesGuild =
+        selectedTakingGuildId === "ALL" ||
+        (selectedTakingGuildId === "UNASSIGNED" && !takingGuildId) ||
+        takingGuildId === selectedTakingGuildId;
+
+      return matchesSearch && matchesGuild;
+    });
+  }, [rotations, searchQuery, selectedTakingGuildId]);
+
+  const upcomingSchedules = schedules
+    .filter((schedule) => schedule.status !== "KILLED")
+    .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime())
+    .slice(0, 24);
+
+  const modalGuildQueue = useMemo(() => {
+    if (!killTarget) return [];
+    const guildMap = new Map<string, FactionGuildData>();
+    for (const guild of killTarget.queue) {
+      guildMap.set(guild.id, guild);
+    }
+    for (const guild of takingGuilds) {
+      if (!guildMap.has(guild.id)) {
+        guildMap.set(guild.id, guild);
+      }
+    }
+    return Array.from(guildMap.values());
+  }, [killTarget, takingGuilds]);
+
+  const selectedTakenGuild = modalGuildQueue.find((guild) => guild.id === selectedTakenGuildId) || null;
+  const previewNextGuild = selectedTakenGuild && modalGuildQueue.length > 0
+    ? modalGuildQueue[(modalGuildQueue.findIndex((guild) => guild.id === selectedTakenGuild.id) + 1) % modalGuildQueue.length] || null
+    : null;
+  const canConfirmTaken = Boolean(killTarget && killTime && selectedTakenGuild && !isKilling);
+
+  function openKillModal(rotation: BossRotationItem) {
+    isKillingRef.current = false;
+    setIsKilling(false);
+    const defaultGuildId =
+      rotation.activeSchedule?.guildTurnGuildId ||
+      rotation.currentGuild?.id ||
+      rotation.queue[0]?.id ||
+      takingGuilds[0]?.id ||
+      "";
+    setKillTarget(rotation);
+    setKillTime(toDateTimeInputValue(new Date()));
+    setSelectedTakenGuildId(defaultGuildId);
+  }
+
+  async function confirmKill() {
+    if (isKillingRef.current || !activeGuild || !killTarget || !killTime || !selectedTakenGuild) return;
+    isKillingRef.current = true;
+    setIsKilling(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), CONFIRM_TAKEN_TIMEOUT_MS);
     try {
-      // Identify which bosses are LONG_CYCLE (cycle-based)
-      const cycleBossNames = new Set(
-        PREDEFINED_BOSSES
-          .filter((b) => b.type === "LONG_CYCLE")
-          .map((b) => b.name.toLowerCase())
-      );
-
-      // Find all active (non-KILLED) schedules for cycle bosses
-      const cycleBossSchedules = schedules.filter(
-        (s) =>
-          s.status !== "KILLED" &&
-          cycleBossNames.has(s.bossName.toLowerCase())
-      );
-
-      const spawnTimeISO = maintenanceEndTime.toISOString();
-      let updatedCount = 0;
-      let failedCount = 0;
-
-      // Update each cycle boss schedule's spawn time to the maintenance end time
-      for (const sched of cycleBossSchedules) {
-        try {
-          const res = await dashboardApi.updateBossSchedule(
+      const killedAt = new Date(killTime).toISOString();
+      const result = killTarget.activeSchedule
+        ? await dashboardApi.markBossRotationKilled(
             activeGuild.guildId,
-            sched.id,
-            { spawnTime: spawnTimeISO }
+            killTarget.activeSchedule.id,
+            killedAt,
+            selectedTakenGuild.id,
+            controller.signal,
+          )
+        : await dashboardApi.markBossRotationKilledByName(
+            activeGuild.guildId,
+            killTarget.bossName,
+            killedAt,
+            selectedTakenGuild.id,
+            controller.signal,
           );
-          if (res.success) {
-            updatedCount++;
-          } else {
-            failedCount++;
-          }
-        } catch {
-          failedCount++;
-        }
-      }
-
-      // Also update local boss state for DEAD cycle bosses that don't have active schedules
-      // (their respawn countdown is derived locally from killedAt)
-      setBosses((prev) =>
-        prev.map((b) => {
-          if (cycleBossNames.has(b.name.toLowerCase()) && b.status === "DEAD" && !b.activeScheduleId) {
-            return { ...b, spawnTime: spawnTimeISO, status: "AVAILABLE" };
-          }
-          return b;
-        })
-      );
-
-      // Invalidate cache to reload fresh data
-      queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
-      queryClient.invalidateQueries(`boss_audit_logs:${activeGuild.guildId}`);
-
-      if (failedCount > 0) {
-        addToast(
-          "warning",
-          `Maintenance reset partially done: ${updatedCount} updated, ${failedCount} failed.`
-        );
+      window.clearTimeout(timeoutId);
+      if (result.success) {
+        addToast("success", `${killTarget.bossName} taken by ${selectedTakenGuild?.name || "selected guild"}. Next spawn has been calculated.`);
+        setKillTarget(null);
+        setSelectedTakenGuildId("");
+        queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_rotation_audit:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_killed_history:${activeGuild.guildId}`);
+        void refetchRotation();
       } else {
-        const totalReset = updatedCount + (cycleBossSchedules.length === 0 ? bosses.filter(b => cycleBossNames.has(b.name.toLowerCase())).length : 0);
-        addToast(
-          "success",
-          `Maintenance reset complete! ${updatedCount > 0 ? `${updatedCount} schedule(s) updated.` : "All cycle bosses set to spawn at maintenance end."}`
-        );
+        addToast("error", result.error?.message || "Failed to mark boss taken");
       }
-
-      setIsMaintenanceModalOpen(false);
-    } catch (err) {
-      addToast("error", "Failed to reset boss spawns for maintenance.");
+    } catch (error) {
+      window.clearTimeout(timeoutId);
+      if (error instanceof DOMException && error.name === "AbortError") {
+        addToast("error", "Confirm taken timed out. Refreshing boss rotation status.");
+        if (activeGuild) {
+          queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
+          queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+          void refetchRotation();
+        }
+      } else {
+        addToast("error", "Failed to mark boss taken");
+      }
     } finally {
-      setIsMaintenanceProcessing(false);
+      window.clearTimeout(timeoutId);
+      isKillingRef.current = false;
+      setIsKilling(false);
     }
-  }, [activeGuild, schedules, bosses, addToast]);
+  }
 
   if (!user || !activeGuild) {
     return (
@@ -338,201 +379,735 @@ export default function BossRotationPage() {
     );
   }
 
-  // Filter Logic (applies only to the ROTATION tab)
-  const filteredBosses = bosses.filter((boss) => {
-    if (searchQuery.trim() && !boss.name.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-    if (selectedBossFilter !== "ALL" && boss.name.toLowerCase() !== selectedBossFilter.toLowerCase()) {
-      return false;
-    }
-    if (selectedGuildFilter !== "ALL" && boss.claimedBy.toUpperCase() !== selectedGuildFilter.toUpperCase()) {
-      return false;
-    }
-    if (availableOnly && (boss.status === "DEAD" || boss.status === "LOCKED")) {
-      return false;
-    }
-    return true;
-  });
+  const tabs: Array<{ id: RotationTab; label: string; count?: number; hidden?: boolean }> = [
+    { id: "LIVE", label: "Boss Rotation", count: filteredRotations.length },
+    { id: "UPCOMING", label: "Upcoming", count: upcomingSchedules.length },
+    { id: "ACTIVITY", label: "Activity", count: auditLogPage.total },
+    { id: "HISTORY", label: "Killed History", count: killedHistory.total },
+  ];
 
   return (
     <div className="relative max-w-full xl:max-w-[1600px] mx-auto w-full px-2 md:px-4 lg:px-6">
       <DashboardDecor />
-
-      <div className="relative z-10 space-y-7 text-white/85">
-        
-        {/* Module Header */}
+      <div className="relative z-10 space-y-6 text-white/85">
         <ModuleHeader
-          eyebrow="Raid Strategy"
-          title="Boss Rotation"
-          description="Track claim sequences, dynamic queue hierarchy, and next guild turn statuses."
+          eyebrow="Faction Operations"
+          title="Faction Boss Rotation"
+          description="Server-owned rotation queues, realtime timers, and guild leader notifications."
           right={
-            <div className="flex items-center gap-2.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsMaintenanceModalOpen(true)}
-                className="text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/25 border border-transparent"
-              >
-                <svg className="h-3.5 w-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-                Maintenance Reset
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (activeGuild) {
-                    queryClient.invalidateQueries("boss_registry");
-                    queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
-                    queryClient.invalidateQueries(`boss_audit_logs:${activeGuild.guildId}`);
-                  }
-                }}
-                isLoading={isLoading}
-              >
-                Refresh
-              </Button>
-            </div>
+            <Button variant="ghost" size="sm" onClick={refetchRotation} isLoading={isLoading}>
+              Refresh
+            </Button>
           }
         />
 
-        {/* Tab system selector — pill style */}
-        <div className="inline-flex items-center glass-subtle border border-white/[0.06] rounded-xl p-1 gap-1 animate-scale-in">
-          {[
-            { id: "ROTATION", label: "Boss Rotation", count: filteredBosses.length },
-            { id: "UPCOMING", label: "Upcoming Schedule", count: schedules.filter(s => s.status !== "KILLED").length },
-            { id: "ACTIVITY", label: "Activity Logs", count: null }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id as any);
-              }}
-              className={`relative px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
-                activeTab === tab.id
-                  ? "bg-amber-500/10 border border-amber-500/25 text-amber-400"
-                  : "text-white/40 hover:text-white/70 border border-transparent hover:bg-white/[0.03]"
-              }`}
-            >
-              <span className="flex items-center gap-2">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="inline-flex flex-wrap items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-xl p-1 gap-1">
+            {tabs.filter((tab) => !tab.hidden).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer focus-ring ${
+                  activeTab === tab.id
+                    ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] shadow-[0_0_12px_rgba(212,168,83,0.1)]"
+                    : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
+                }`}
+              >
                 {tab.label}
-                {tab.count !== null && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                    activeTab === tab.id ? "bg-amber-500/20 text-amber-300" : "bg-white/5 text-white/40"
+                {typeof tab.count === "number" && (
+                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${
+                    activeTab === tab.id
+                      ? "bg-[var(--forge-gold)]/15 text-[var(--forge-gold)]"
+                      : "bg-white/5 text-white/45"
                   }`}>
                     {tab.count}
                   </span>
                 )}
-              </span>
-            </button>
-          ))}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(180px,240px)_minmax(220px,320px)] gap-2 w-full lg:w-auto">
+            <label className="relative block">
+              <span className="sr-only">Filter taking guild</span>
+              <select
+                value={selectedTakingGuildId}
+                onChange={(event) => setSelectedTakingGuildId(event.target.value)}
+                className="w-full h-[42px] px-3.5 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-[13px] text-white/90 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors cursor-pointer"
+              >
+                <option className="bg-[#0c0d12]" value="ALL">All taking guilds</option>
+                <option className="bg-[#0c0d12]" value="UNASSIGNED">Unassigned</option>
+                {takingGuilds.map((guild) => (
+                  <option className="bg-[#0c0d12]" key={guild.id} value={guild.id}>
+                    {guild.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="relative block">
+              <span className="sr-only">Search rotations</span>
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search boss or guild..."
+                className="w-full h-[42px] pl-10 pr-4 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-sm text-white/90 placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors"
+              />
+            </label>
+          </div>
         </div>
 
-        {/* ─── TAB 1: BOSS ROTATION ────────────────────────────────────────── */}
-        {activeTab === "ROTATION" && (
-          <>
-            {/* Filters panel */}
-            <FiltersPanel
-              selectedBossFilter={selectedBossFilter}
-              setSelectedBossFilter={setSelectedBossFilter}
-              selectedGuildFilter={selectedGuildFilter}
-              setSelectedGuildFilter={setSelectedGuildFilter}
-              availableOnly={availableOnly}
-              setAvailableOnly={setAvailableOnly}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              viewMode={viewMode}
-              setViewMode={setViewMode}
-              bosses={bosses}
-            />
+        {activeTab === "LIVE" && (
+          isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-72 rounded-xl" />)}
+            </div>
+          ) : filteredRotations.length === 0 ? (
+            <EmptyState title="No rotations found" body="Try a different boss or guild search." />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              {filteredRotations.map((rotation) => (
+                <RotationCard
+                  key={rotation.id}
+                  rotation={rotation}
+                  serverNow={serverNow}
+                  canManage={canManage}
+                  onKilled={() => openKillModal(rotation)}
+                />
+              ))}
+            </div>
+          )
+        )}
 
-            {/* LOADING STATE */}
-            {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-5">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <Skeleton key={i} className="h-96 rounded-2xl animate-pulse" />
+        {activeTab === "UPCOMING" && (
+          <div>
+            {upcomingSchedules.length === 0 ? (
+              <EmptyState title="No upcoming schedules" body="Killed bosses will automatically create their next spawn here." />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {upcomingSchedules.map((schedule) => (
+                  <UpcomingCard key={schedule.id} schedule={schedule} serverNow={serverNow} />
                 ))}
               </div>
-            ) : filteredBosses.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-80 rounded-2xl bg-white/[0.01] border border-white/[0.04] p-10 text-center animate-scale-in">
-                <svg className="h-10 w-10 text-white/20 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
-                  <path d="M12 16V12" />
-                  <path d="M12 8H12.01" />
-                </svg>
-                <h3 className="text-sm font-semibold text-white/80">No Rotation Bosses Found</h3>
-                <p className="text-xs text-white/45 mt-1 max-w-sm">No active bosses match your filters. Try disabling Available Only or changing your search query.</p>
-              </div>
-            ) : viewMode === "CARD" ? (
-              /* CARD GRID VIEW */
-              <BossCardView
-                filteredBosses={filteredBosses}
-                currentTime={currentTime}
-                selectedGuildFilter={selectedGuildFilter}
-                setSelectedGuildFilter={setSelectedGuildFilter}
-                handleShiftTurn={handleShiftTurn}
-              />
-            ) : (
-              /* TIMELINE LIST VIEW */
-              <BossTimelineView
-                filteredBosses={filteredBosses}
-                currentTime={currentTime}
-                selectedGuildFilter={selectedGuildFilter}
-                setSelectedGuildFilter={setSelectedGuildFilter}
-                handleShiftTurn={handleShiftTurn}
-              />
             )}
-
-            {/* Global Status Legend Panel */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/[0.06] pt-5 text-white/50 text-xs select-none">
-              <div className="flex flex-wrap items-center gap-5">
-                <span className="font-semibold text-white/40 uppercase tracking-wider">Status Legend:</span>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
-                  <span>🟢 Available (Alive)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
-                  <span>🟡 Taken (Owned)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
-                  <span>🔴 Dead (Respawning)</span>
-                </div>
-              </div>
-              <div className="text-[10px] text-zinc-550 italic">
-                All respawn times are calculated dynamically based on kill events.
-              </div>
-            </div>
-          </>
+          </div>
         )}
 
-        {/* ─── TAB 2: UPCOMING SCHEDULE ────────────────────────────────────── */}
-        {activeTab === "UPCOMING" && (
-          <UpcomingSchedulesView
-            schedules={schedules}
-            currentTime={currentTime}
-          />
-        )}
-
-        {/* ─── TAB 3: ACTIVITY LOGS ────────────────────────────────────────── */}
         {activeTab === "ACTIVITY" && (
-          <ActivityLogsView
-            auditLogs={auditLogs}
-            isLoadingLogs={isLoadingLogs}
-          />
+          isLoadingLogs ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((item) => <Skeleton key={item} className="h-16 rounded-xl" />)}
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <EmptyState title="No rotation activity" body="Kill confirmations and queue edits will appear here." />
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex flex-col md:flex-row md:items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">{log.action.replaceAll("_", " ")}</p>
+                      <p className="text-xs text-white/45 mt-1 truncate">
+                        {typeof log.detail?.bossName === "string" ? log.detail.bossName : log.target || "Boss Rotation"}
+                      </p>
+                      <p className="text-[11px] text-white/35 mt-2">
+                        Recorded by <span className="text-white/65 font-semibold">{log.actor.displayName}</span>
+                      </p>
+                    </div>
+                    <span className="text-[11px] text-white/35 shrink-0 font-mono">
+                      {new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <PaginationControls
+                page={auditLogPage.page}
+                totalPages={Math.max(1, auditLogPage.totalPages)}
+                total={auditLogPage.total}
+                onPrevious={() => setActivityPage((page) => Math.max(1, page - 1))}
+                onNext={() => setActivityPage((page) => Math.min(Math.max(1, auditLogPage.totalPages), page + 1))}
+              />
+            </div>
+          )
         )}
 
+        {activeTab === "HISTORY" && (
+          <div className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-white">Boss Killed History</p>
+                <p className="text-xs text-white/45 mt-1">Daily kill record by month, including the user who recorded each kill.</p>
+              </div>
+              <label className="w-full md:w-[180px]">
+                <span className="sr-only">History month</span>
+                <input
+                  type="month"
+                  value={historyMonth || killedHistory.month}
+                  onChange={(event) => setHistoryMonth(event.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40"
+                />
+              </label>
+            </div>
+
+            {isLoadingHistory ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((item) => <Skeleton key={item} className="h-24 rounded-xl" />)}
+              </div>
+            ) : killedHistory.days.length === 0 ? (
+              <EmptyState title="No kills recorded for this month" body="Confirmed boss kills will be grouped here by day." />
+            ) : (
+              <div className="space-y-3">
+                {killedHistory.days.map((day) => (
+                  <section key={day.date} className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] px-4 py-3">
+                      <h3 className="text-sm font-semibold text-white">
+                        {new Date(`${day.date}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                      </h3>
+                      <span className="text-[11px] px-2 py-1 rounded-md border border-emerald-400/20 bg-emerald-400/10 text-emerald-300 font-semibold">
+                        {day.total} killed
+                      </span>
+                    </div>
+                    <div className="divide-y divide-white/[0.05]">
+                      {day.kills.map((kill) => (
+                        <div key={kill.id} className="px-4 py-3 grid grid-cols-1 lg:grid-cols-[1fr_160px_180px_180px] gap-2 lg:gap-4 items-center">
+                          <div className="min-w-0 flex items-center gap-3">
+                            <BossAvatar src={kill.bossImageUrl} name={kill.bossName} />
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white truncate">{kill.bossName}</p>
+                              <p className="text-[11px] text-white/40 mt-1">
+                                {kill.action.replaceAll("_", " ")}
+                              </p>
+                            </div>
+                          </div>
+                          <HistoryMeta label="Killed" value={new Date(kill.killedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} />
+                          <HistoryMeta label="Recorded by" value={kill.recordedBy.displayName} />
+                          <HistoryMeta label="Next guild" value={kill.nextGuildName || "Unassigned"} tone="amber" />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Maintenance Reset Modal */}
-      <MaintenanceResetModal
-        isOpen={isMaintenanceModalOpen}
-        onClose={() => setIsMaintenanceModalOpen(false)}
-        onConfirm={handleMaintenanceReset}
-        isProcessing={isMaintenanceProcessing}
-      />
+      {killTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={() => !isKilling && setKillTarget(null)} />
+          <div className="relative w-full max-w-md rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)] shadow-[0_40px_90px_-25px_rgba(0,0,0,0.8)] p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative p-0.5 rounded-xl border border-emerald-500/30 glow-gold-active">
+                <BossAvatar src={killTarget.bossImageUrl || getBossImageUrl(killTarget.bossName)} name={killTarget.bossName} />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-emerald-300">Confirm taken</p>
+                <h3 className="text-base font-semibold text-white">{killTarget.bossName}</h3>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/60 p-3 space-y-2 mb-4">
+              <ModalLine label="Taking guild" value={selectedTakenGuild?.name || "Select a guild"} tone="emerald" />
+              <ModalLine label="Next guild" value={previewNextGuild?.name || "Unassigned"} tone="amber" />
+              <ModalLine label="Next spawn source" value="Calculated from taken time" />
+            </div>
+
+            {!killTarget.activeSchedule && (
+              <p className="mb-4 rounded-lg border border-[var(--forge-gold)]/20 bg-[var(--forge-glow)]/20 px-3 py-2 text-xs leading-5 text-[var(--forge-gold-dim)]">
+                This boss has no active schedule yet. Confirming will import the latest killed time and calculate the next spawn.
+              </p>
+            )}
+
+            <label className="block mb-4">
+              <span className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em] mb-2">
+                Taking guild
+              </span>
+              <select
+                value={selectedTakenGuildId}
+                onChange={(event) => setSelectedTakenGuildId(event.target.value)}
+                disabled={isKilling}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--obsidian-elevated)]/60 border border-[var(--metal-border)] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <option className="bg-[#0c0d12]" value="">Select taking guild</option>
+                {modalGuildQueue.map((guild) => (
+                  <option className="bg-[#0c0d12]" key={guild.id} value={guild.id}>
+                    {guild.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block mb-5">
+              <span className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em] mb-2">
+                Taken time
+              </span>
+              <input
+                type="datetime-local"
+                value={killTime}
+                onChange={(event) => setKillTime(event.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--obsidian-elevated)]/60 border border-[var(--metal-border)] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40"
+              />
+            </label>
+
+            <div className="flex justify-end gap-2 border-t border-white/[0.06] pt-4">
+              <Button variant="ghost" size="sm" onClick={() => setKillTarget(null)} disabled={isKilling}>
+                Cancel
+              </Button>
+              <Button variant="accent" size="sm" onClick={confirmKill} isLoading={isKilling} disabled={!canConfirmTaken}>
+                Confirm taken
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function RotationCard({
+  rotation,
+  serverNow,
+  canManage,
+  onKilled,
+}: {
+  rotation: BossRotationItem;
+  serverNow: number;
+  canManage: boolean;
+  onKilled: () => void;
+}) {
+  const tick = getCountdown(rotation.spawnTime, serverNow);
+  const currentColor = getGuildColor(rotation.currentGuild?.name || "");
+  const nextColor = getGuildColor(rotation.nextGuild?.name || "");
+  const canKill = canManage;
+  const spawnLabel = new Date(rotation.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <article className={`relative min-h-[300px] rounded-2xl transition-all duration-300 bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] ${
+      tick.expired 
+        ? "hover:border-emerald-500/35 hover:shadow-[0_0_25px_rgba(16,185,129,0.08)]" 
+        : tick.warning 
+          ? "hover:border-[var(--forge-gold)]/40 hover:shadow-[0_0_25px_rgba(212,168,83,0.12)]" 
+          : "hover:border-white/15 hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)]"
+    }`}>
+      {/* Top indicator bar matching state */}
+      <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${
+        tick.expired 
+          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50" 
+          : tick.warning 
+            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50" 
+            : "from-white/5 via-white/15 to-white/5"
+      }`} />
+
+      <div className="p-4 space-y-3.5">
+        {/* Boss info & badge */}
+        <div className="flex items-start gap-3">
+          <div className={`relative p-0.5 rounded-xl border transition-all duration-300 ${
+            tick.expired 
+              ? "border-emerald-500/30 glow-gold-active" 
+              : tick.warning 
+                ? "border-[var(--forge-gold)]/30 shadow-[0_0_12px_rgba(212,168,83,0.2)]" 
+                : "border-white/10"
+          }`}>
+            <BossAvatar src={rotation.bossImageUrl || getBossImageUrl(rotation.bossName)} name={rotation.bossName} />
+          </div>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white truncate">{rotation.bossName}</h3>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] font-fantasy shrink-0">
+                Lvl {rotation.level}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-white/40 mt-1">
+              <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2a8 8 0 00-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 00-8-8z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span className="text-[11px] truncate">{rotation.location}</span>
+            </div>
+          </div>
+          <StatusDot expired={tick.expired} warning={tick.warning} />
+        </div>
+
+        {/* Timer Box */}
+        <div className={`relative overflow-hidden rounded-xl border p-3 ${
+          tick.expired 
+            ? "border-emerald-500/25 bg-emerald-950/15 shadow-[inset_0_0_12px_rgba(16,185,129,0.08)]" 
+            : tick.warning 
+              ? "border-[var(--forge-gold)]/20 bg-[var(--forge-glow)]/40 shadow-[inset_0_0_12px_rgba(212,168,83,0.05)]" 
+              : "border-white/[0.05] bg-white/[0.01]"
+        }`}>
+          {(tick.expired || tick.warning) && (
+            <div className={`absolute inset-0 opacity-10 bg-gradient-to-r ${
+              tick.expired ? "from-emerald-500 via-transparent to-emerald-500 animate-pulse-soft" : "from-[var(--forge-gold)] via-transparent to-[var(--forge-gold)] animate-pulse-soft"
+            }`} />
+          )}
+
+          <div className="relative z-10 flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30">Rotation Timer</span>
+            <span className={`text-[9px] font-bold uppercase tracking-[0.12em] inline-flex items-center gap-1 ${
+              tick.expired ? "text-emerald-400" : tick.warning ? "text-[var(--forge-gold)]" : "text-white/45"
+            }`}>
+              {tick.expired ? (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  Live
+                </>
+              ) : tick.warning ? (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--forge-gold)]" />
+                  Soon
+                </>
+              ) : (
+                "Next Spawn"
+              )}
+            </span>
+          </div>
+          <p className={`relative z-10 mt-1.5 font-mono text-lg font-bold leading-none tracking-wider ${
+            tick.expired ? "text-emerald-400 text-gold-gradient" : tick.warning ? "text-[var(--forge-gold-bright)] text-gold-gradient-light" : "text-white"
+          }`}>
+            {tick.text}
+          </p>
+          <div className="relative z-10 mt-2 flex items-center gap-1 text-[10px] text-white/35 border-t border-white/[0.04] pt-2">
+            <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span>Est. Spawn: {spawnLabel}</span>
+          </div>
+        </div>
+
+        {/* Current & Next progress */}
+        <div className="relative flex items-center justify-between gap-2 rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/30 p-2">
+          <div className="min-w-0 flex-1">
+            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1">Current Holder</span>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: currentColor.dot }} />
+              <p className={`text-[12px] font-bold truncate ${currentColor.text}`}>{rotation.currentGuild?.name || "Unassigned"}</p>
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center justify-center px-1">
+            <svg className="h-4 w-4 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1 text-right">
+            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1">Up Next</span>
+            <div className="flex items-center gap-1.5 justify-end">
+              <p className={`text-[12px] font-bold truncate ${nextColor.text}`}>{rotation.nextGuild?.name || "Unassigned"}</p>
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: nextColor.dot }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Queue Flow */}
+        <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/20 p-3 min-h-[66px]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30">Queue Flow</span>
+            <span className="text-[9px] text-white/35 font-mono">{rotation.queue.length} Guilds</span>
+          </div>
+          {rotation.queue.length === 0 ? (
+            <div className="flex items-center justify-center py-2">
+              <p className="text-[10px] text-white/30 italic">No guilds in queue</p>
+            </div>
+          ) : (
+            <div className="flex items-center flex-wrap gap-1">
+              {rotation.queue.map((guild, index) => {
+                const color = getGuildColor(guild.name);
+                const isCurrent = rotation.currentGuild?.id === guild.id;
+                
+                return (
+                  <div key={guild.id} className="flex items-center gap-1">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-all ${
+                        isCurrent 
+                          ? "border-[var(--forge-gold)]/45 bg-[var(--forge-glow)] text-[var(--forge-gold-bright)] shadow-[0_0_8px_rgba(212,168,83,0.15)]" 
+                          : `${color.border} ${color.bg} ${color.text} hover:opacity-90`
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${isCurrent ? "animate-pulse" : ""}`} style={{ backgroundColor: isCurrent ? "var(--forge-gold)" : color.dot }} />
+                      <span className="font-mono text-[9px] opacity-65">{index + 1}.</span>
+                      <span className="truncate max-w-[80px]">{guild.name}</span>
+                    </span>
+                    {index < rotation.queue.length - 1 && (
+                      <span className="text-white/15 text-[8px] font-bold shrink-0 mx-0.5">
+                        •
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.04] pt-3">
+          <div className="flex items-center gap-1.5 text-[10px] text-white/45">
+            <span className={`h-2 w-2 rounded-full ${
+              rotation.activeSchedule
+                ? "bg-emerald-400"
+                : rotation.type === "FIXED_SCHEDULE"
+                  ? "bg-emerald-400"
+                  : "bg-amber-400"
+            }`} />
+            <span>{
+              rotation.activeSchedule
+                ? "Active schedule"
+                : rotation.type === "FIXED_SCHEDULE"
+                  ? "Fixed schedule"
+                  : "Import needed"
+            }</span>
+          </div>
+          {canManage && (
+            <button
+              type="button"
+              onClick={onKilled}
+              disabled={!canKill}
+              aria-label={`Mark ${rotation.bossName} taken`}
+              title={rotation.activeSchedule ? "Taken" : "Import killed time"}
+              className="h-9 px-4 inline-flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed transition-all duration-300 cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.05)] hover:shadow-[0_0_16px_rgba(16,185,129,0.15)] focus-ring"
+            >
+              <svg className="h-3.5 w-3.5 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                <path d="M22 4L12 14.01l-3-3" />
+              </svg>
+              Taken
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function UpcomingCard({ schedule, serverNow }: { schedule: BossScheduleData; serverNow: number }) {
+  const tick = getCountdown(schedule.spawnTime, serverNow);
+  const color = getGuildColor(schedule.guildTurnGuildName || schedule.guildTurn || "");
+  const spawnLabel = new Date(schedule.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const isLive = tick.expired || schedule.status === "SPAWNED";
+
+  return (
+    <article className={`relative min-h-[220px] rounded-2xl transition-all duration-300 bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] ${
+      isLive 
+        ? "hover:border-emerald-500/35 hover:shadow-[0_0_25px_rgba(16,185,129,0.08)]" 
+        : tick.warning 
+          ? "hover:border-[var(--forge-gold)]/40 hover:shadow-[0_0_25px_rgba(212,168,83,0.12)]" 
+          : "hover:border-white/15 hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)]"
+    }`}>
+      {/* Top indicator bar */}
+      <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${
+        isLive 
+          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50" 
+          : tick.warning 
+            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50" 
+            : "from-white/5 via-white/15 to-white/5"
+      }`} />
+
+      <div className="p-4 space-y-3.5">
+        <div className="flex items-start gap-3">
+          <div className={`relative p-0.5 rounded-xl border transition-all duration-300 ${
+            isLive 
+              ? "border-emerald-500/30 glow-gold-active" 
+              : tick.warning 
+                ? "border-[var(--forge-gold)]/30 shadow-[0_0_12px_rgba(212,168,83,0.2)]" 
+                : "border-white/10"
+          }`}>
+            <BossAvatar src={schedule.bossImageUrl || getBossImageUrl(schedule.bossName)} name={schedule.bossName} />
+          </div>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <h3 className="text-sm font-bold text-white truncate">{schedule.bossName}</h3>
+            <div className="flex items-center gap-1 text-white/40 mt-1">
+              <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2a8 8 0 00-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 00-8-8z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span className="text-[11px] truncate">{schedule.location}</span>
+            </div>
+          </div>
+          <StatusDot expired={isLive} warning={tick.warning} />
+        </div>
+
+        <div className={`relative overflow-hidden rounded-xl border p-3 ${
+          isLive 
+            ? "border-emerald-500/25 bg-emerald-950/15 shadow-[inset_0_0_12px_rgba(16,185,129,0.08)]" 
+            : tick.warning 
+              ? "border-[var(--forge-gold)]/20 bg-[var(--forge-glow)]/40 shadow-[inset_0_0_12px_rgba(212,168,83,0.05)]" 
+              : "border-white/[0.05] bg-white/[0.01]"
+        }`}>
+          {(isLive || tick.warning) && (
+            <div className={`absolute inset-0 opacity-10 bg-gradient-to-r ${
+              isLive ? "from-emerald-500 via-transparent to-emerald-500 animate-pulse-soft" : "from-[var(--forge-gold)] via-transparent to-[var(--forge-gold)] animate-pulse-soft"
+            }`} />
+          )}
+
+          <div className="relative z-10 flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30">Timer</span>
+            <span className={`text-[9px] font-semibold uppercase tracking-[0.14em] ${isLive ? "text-emerald-300" : tick.warning ? "text-[var(--forge-gold)]" : "text-white/45"}`}>
+              {schedule.status === "SPAWNED" ? "Live" : tick.warning ? "Soon" : "Upcoming"}
+            </span>
+          </div>
+          <p className={`relative z-10 mt-1.5 font-mono text-lg font-bold leading-none ${isLive ? "text-emerald-300" : tick.warning ? "text-[var(--forge-gold-bright)] text-gold-gradient-light" : "text-white"}`}>
+            {schedule.status === "SPAWNED" ? "LIVE" : tick.text}
+          </p>
+          <div className="relative z-10 mt-2 flex items-center gap-1 text-[10px] text-white/35 border-t border-white/[0.04] pt-2">
+            <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span>Spawn: {spawnLabel}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.04] pt-3">
+          <div className="min-w-0">
+            <p className="text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1">Taking Guild</p>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
+              <p className={`text-[12px] font-bold truncate ${color.text}`}>
+                {schedule.guildTurnGuildName || schedule.guildTurn || "Unassigned"}
+              </p>
+            </div>
+          </div>
+          <span className={`h-6 px-2.5 inline-flex items-center justify-center rounded-lg border text-[10px] font-bold uppercase tracking-wider ${color.border} ${color.bg} ${color.text}`}>
+            {schedule.status}
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function StatusDot({ expired, warning }: { expired: boolean; warning: boolean }) {
+  return (
+    <span
+      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+        expired
+          ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]"
+          : warning
+            ? "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.75)]"
+            : "bg-white/25"
+      }`}
+      aria-hidden="true"
+    />
+  );
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  total,
+  onPrevious,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+      <p className="text-[11px] text-white/40">
+        Showing page <span className="text-white/70 font-semibold">{page}</span> of{" "}
+        <span className="text-white/70 font-semibold">{totalPages}</span> for {total} records
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPrevious}
+          disabled={page <= 1}
+          aria-label="Previous activity page"
+          className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 disabled:opacity-35 disabled:cursor-not-allowed transition-colors focus-ring"
+        >
+          <ChevronLeftIcon />
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={page >= totalPages}
+          aria-label="Next activity page"
+          className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 disabled:opacity-35 disabled:cursor-not-allowed transition-colors focus-ring"
+        >
+          <ChevronRightIcon />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HistoryMeta({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "amber" }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[9px] uppercase tracking-[0.16em] text-white/35">{label}</p>
+      <p className={`text-[12px] font-semibold truncate mt-1 ${tone === "amber" ? "text-amber-300" : "text-white/75"}`}>{value}</p>
+    </div>
+  );
+}
+
+function BossAvatar({ src, name }: { src: string; name: string }) {
+  return (
+    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-zinc-950">
+      <img
+        src={src}
+        alt={name}
+        className="h-full w-full object-cover"
+        loading="lazy"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+    </div>
+  );
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-72 rounded-xl bg-white/[0.015] border border-white/[0.05] p-8 text-center">
+      <svg className="h-10 w-10 text-white/20 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v4" />
+        <path d="M12 16h.01" />
+      </svg>
+      <h3 className="text-sm font-semibold text-white/80">{title}</h3>
+      <p className="text-xs text-white/45 mt-1 max-w-sm">{body}</p>
+    </div>
+  );
+}
+
+function ModalLine({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "amber" | "emerald" }) {
+  const toneClass = tone === "amber"
+    ? "text-amber-300"
+    : tone === "emerald"
+      ? "text-emerald-300"
+      : "text-white/80";
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[11px] text-white/40">{label}</span>
+      <span className={`text-[12px] font-semibold text-right ${toneClass}`}>{value}</span>
+    </div>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18l6-6-6-6" />
+    </svg>
   );
 }

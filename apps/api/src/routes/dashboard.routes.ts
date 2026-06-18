@@ -312,6 +312,185 @@ router.get(
 
 // ─── Boss Schedules Endpoints ────────────────────
 
+router.get(
+  "/boss-rotation/:guildId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const data = await dashboardService.getBossRotation(guildId, req.user!.userId);
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.get(
+  "/boss-rotation/:guildId/killed-history",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const month = typeof req.query["month"] === "string" ? req.query["month"] : undefined;
+      const data = await dashboardService.getBossKilledHistory(guildId, req.user!.userId, month);
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/boss-rotation/:guildId/:bossName/queue",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const bossName = decodeURIComponent(req.params["bossName"] as string);
+      const { queueGuildIds } = req.body as { queueGuildIds: string[] };
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const data = await dashboardService.updateBossRotationQueue(
+        guildId,
+        bossName,
+        queueGuildIds,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      await cache.invalidatePattern(`boss-schedule:*`);
+      broadcastToGuild(null, "boss_rotation_updated", data);
+
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/boss-rotation/:guildId/boss/:bossName/killed",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const bossName = decodeURIComponent(req.params["bossName"] as string);
+      const { killedAt, takenGuildId } = req.body as { killedAt: string; takenGuildId: string };
+
+      if (!killedAt) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Killed timestamp is required",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+      if (!takenGuildId) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Taking guild is required",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+      const data = await dashboardService.markBossRotationKilledByName(
+        guildId,
+        bossName,
+        killedAt,
+        takenGuildId,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
+      broadcastToGuild(null, "boss_rotation_updated", data);
+      broadcastToGuild(guildId, "boss_rotation_updated", data);
+
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/boss-rotation/:guildId/:scheduleId/killed",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const scheduleId = req.params["scheduleId"] as string;
+      const { killedAt, takenGuildId } = req.body as { killedAt: string; takenGuildId: string };
+
+      if (!killedAt) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Killed timestamp is required",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+      if (!takenGuildId) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Taking guild is required",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+      const data = await dashboardService.markBossRotationKilled(
+        guildId,
+        scheduleId,
+        killedAt,
+        takenGuildId,
+        req.user!.userId,
+        ipAddress,
+        userAgent,
+      );
+
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
+
+      broadcastToGuild(null, "boss_rotation_updated", data);
+      broadcastToGuild(guildId, "boss_rotation_updated", data);
+
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // Get boss schedule list. Requires auth.
 router.get(
   "/boss-schedule/:guildId",
@@ -349,12 +528,13 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
-      const { bossName, bossImageUrl, spawnTime, location, guildTurn, isFaction } = req.body as {
+      const { bossName, bossImageUrl, spawnTime, location, guildTurn, guildTurnGuildId, isFaction } = req.body as {
         bossName: string;
         bossImageUrl?: string;
         spawnTime: string;
         location: string;
         guildTurn?: string;
+        guildTurnGuildId?: string | null;
         isFaction?: boolean;
       };
 
@@ -377,7 +557,7 @@ router.post(
 
       const schedule = await dashboardService.createBossSchedule(
         targetGuildId,
-        { bossName, bossImageUrl, spawnTime, location, guildTurn },
+        { bossName, bossImageUrl, spawnTime, location, guildTurn, guildTurnGuildId },
         req.user!.userId,
         ipAddress,
         userAgent,
@@ -533,6 +713,7 @@ router.patch(
         spawnTime?: string;
         location?: string;
         guildTurn?: string;
+        guildTurnGuildId?: string | null;
         isFaction?: boolean;
       };
 

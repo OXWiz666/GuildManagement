@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import Avatar from "../ui/Avatar";
-import { dashboardApi, type BossScheduleData } from "@/lib/api";
+import { dashboardApi, notificationApi, type BossScheduleData, type NotificationData } from "@/lib/api";
 import { useSocket } from "@/components/providers/socket-provider";
 
 interface TopBarProps {
@@ -16,12 +16,16 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const { socket } = useSocket();
   const { resolvedTheme, setTheme } = useTheme();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const notificationMenuRef = useRef<HTMLDivElement>(null);
 
   // Dynamic Header State
   const [nextBoss, setNextBoss] = useState<BossScheduleData | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -30,6 +34,12 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         !userMenuRef.current.contains(e.target as Node)
       ) {
         setIsUserMenuOpen(false);
+      }
+      if (
+        notificationMenuRef.current &&
+        !notificationMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsNotificationsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -53,6 +63,53 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   }, []);
 
   const activeGuild = user?.guilds?.[0];
+
+  useEffect(() => {
+    if (!user) return;
+
+    async function loadNotifications() {
+      const result = await notificationApi.getNotifications(20);
+      if (result.success && result.data) {
+        setNotifications(result.data.notifications);
+        setUnreadCount(result.data.unreadCount);
+      }
+    }
+
+    loadNotifications();
+  }, [user]);
+
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const handleNotification = (payload: NotificationData) => {
+      setNotifications((prev) => [payload, ...prev.filter((item) => item.id !== payload.id)].slice(0, 20));
+      setUnreadCount((prev) => prev + (payload.readAt ? 0 : 1));
+    };
+
+    socket.on("notification_created", handleNotification);
+    return () => {
+      socket.off("notification_created", handleNotification);
+    };
+  }, [socket, user]);
+
+  async function markNotificationRead(notificationId: string) {
+    const result = await notificationApi.markRead(notificationId);
+    if (result.success && result.data?.notification) {
+      setNotifications((prev) =>
+        prev.map((item) => item.id === notificationId ? result.data!.notification : item),
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    const result = await notificationApi.markAllRead();
+    if (result.success) {
+      const readAt = new Date().toISOString();
+      setNotifications((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || readAt })));
+      setUnreadCount(0);
+    }
+  }
 
   // Fetch next upcoming boss schedule
   useEffect(() => {
@@ -259,25 +316,98 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
       {/* Global Actions (Far-Right) */}
       <div className="flex items-center gap-2">
         {/* Notification bell */}
-        <button
-          className="p-2 rounded-md text-white/55 hover:text-[var(--forge-gold)] hover:bg-[var(--forge-glow)] transition-colors cursor-pointer relative"
-          aria-label="Notifications"
-        >
-          <svg
-            className="h-[18px] w-[18px]"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="relative" ref={notificationMenuRef}>
+          <button
+            onClick={() => setIsNotificationsOpen((prev) => !prev)}
+            className="p-2 rounded-md text-white/55 hover:text-[var(--forge-gold)] hover:bg-[var(--forge-glow)] transition-colors cursor-pointer relative focus-ring"
+            aria-label="Notifications"
+            aria-expanded={isNotificationsOpen}
+            aria-haspopup="menu"
           >
-            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-          </svg>
-          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[var(--forge-gold)] shadow-[0_0_6px_1px_rgba(212,168,83,0.5)]">
-            <span className="absolute inset-0 rounded-full bg-[var(--forge-gold)] animate-ping opacity-60" />
-          </span>
-        </button>
+            <svg
+              className="h-[18px] w-[18px]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[var(--forge-gold)] text-black text-[9px] font-bold flex items-center justify-center shadow-[0_0_6px_1px_rgba(212,168,83,0.5)]">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {isNotificationsOpen && (
+            <div
+              role="menu"
+              className="absolute top-full right-0 mt-2 w-[340px] max-w-[calc(100vw-2rem)] glass-strong rounded-xl border border-[var(--metal-border)] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.7)] animate-scale-in z-50 overflow-hidden"
+            >
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.06]">
+                <div>
+                  <p className="text-[12px] font-semibold text-white">Notifications</p>
+                  <p className="text-[10px] text-white/40">{unreadCount} unread</p>
+                </div>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllNotificationsRead}
+                    className="text-[10px] uppercase tracking-[0.16em] text-[var(--forge-gold-dim)] hover:text-[var(--forge-gold)] cursor-pointer"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-[360px] overflow-y-auto p-1.5">
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-[12px] text-white/45">No notifications yet</p>
+                  </div>
+                ) : (
+                  notifications.map((notification) => {
+                    const unread = !notification.readAt;
+                    return (
+                      <button
+                        key={notification.id}
+                        role="menuitem"
+                        onClick={() => unread && markNotificationRead(notification.id)}
+                        className={`w-full text-left px-3 py-3 rounded-lg border transition-colors cursor-pointer ${
+                          unread
+                            ? "bg-[var(--forge-glow)] border-[var(--forge-gold)]/18"
+                            : "bg-transparent border-transparent hover:bg-white/[0.03]"
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${unread ? "bg-[var(--forge-gold)]" : "bg-white/15"}`} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12px] font-semibold text-white truncate">
+                              {notification.title}
+                            </span>
+                            <span className="block text-[11px] text-white/50 leading-relaxed mt-1">
+                              {notification.body}
+                            </span>
+                            <span className="block text-[10px] text-white/30 mt-2 font-mono">
+                              {new Date(notification.createdAt).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User Menu */}
         {user && (

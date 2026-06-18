@@ -747,7 +747,14 @@ router.get(
       // BRANCH 4: STANDARD GUILD ACTIONS (default / boss / general logs)
       // ──────────────────────────────────────────
       let actionFilter: Record<string, unknown> | undefined;
-      if (filter === "boss") {
+      if (filter === "boss-rotation") {
+        actionFilter = {
+          in: [
+            "BOSS_ROTATION_QUEUE_UPDATED",
+            "BOSS_ROTATION_KILLED",
+          ],
+        };
+      } else if (filter === "boss") {
         actionFilter = {
           in: [
             "BOSS_EVENT_SCHEDULED",
@@ -755,6 +762,8 @@ router.get(
             "BOSS_EVENT_UPDATED",
             "BOSS_EVENT_DELETED",
             "BOSS_KILL_RECORDED",
+            "BOSS_ROTATION_QUEUE_UPDATED",
+            "BOSS_ROTATION_KILLED",
           ],
         };
       }

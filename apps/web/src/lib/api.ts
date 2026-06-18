@@ -473,6 +473,8 @@ export interface BossScheduleData {
   spawnTime: string;
   location: string;
   guildTurn: string | null;
+  guildTurnGuildId?: string | null;
+  guildTurnGuildName?: string | null;
   status: "UPCOMING" | "SPAWNED" | "KILLED";
   killedAt: string | null;
   creatorId: string;
@@ -481,6 +483,78 @@ export interface BossScheduleData {
   attendanceSessions?: AttendanceSessionData[];
   lootDrop?: string | null;
   screenshotUrl?: string | null;
+}
+
+export interface FactionGuildData {
+  id: string;
+  name: string;
+  slug: string;
+  avatarUrl: string | null;
+}
+
+export interface BossRotationItem {
+  id: string;
+  bossName: string;
+  bossImageUrl: string | null;
+  level: number;
+  type: "LONG_CYCLE" | "FIXED_SCHEDULE" | string;
+  cooldownHours: number | null;
+  location: string;
+  currentIndex: number;
+  queue: FactionGuildData[];
+  currentGuild: FactionGuildData | null;
+  nextGuild: FactionGuildData | null;
+  spawnTime: string;
+  status: "UPCOMING" | "SPAWNED" | "KILLED";
+  activeSchedule: BossScheduleData | null;
+  latestKilled: BossScheduleData | null;
+}
+
+export interface BossRotationResponse {
+  serverTime: string;
+  canManage: boolean;
+  viewerRole: string;
+  guilds: FactionGuildData[];
+  rotations: BossRotationItem[];
+}
+
+export interface BossKilledHistoryEntry {
+  id: string;
+  action: string;
+  bossName: string;
+  bossImageUrl: string;
+  killedAt: string;
+  recordedAt: string;
+  recordedBy: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  nextGuildName: string | null;
+  nextSpawnTime: string | null;
+}
+
+export interface BossKilledHistoryDay {
+  date: string;
+  total: number;
+  kills: BossKilledHistoryEntry[];
+}
+
+export interface BossKilledHistoryResponse {
+  month: string;
+  total: number;
+  days: BossKilledHistoryDay[];
+}
+
+export interface NotificationData {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  metadata: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
 }
 
 export const dashboardApi = {
@@ -547,6 +621,50 @@ export const dashboardApi = {
     );
   },
 
+  async getBossRotation(guildId: string) {
+    return api.get<BossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}`,
+    );
+  },
+
+  async getBossKilledHistory(guildId: string, month?: string) {
+    const params = month ? `?${new URLSearchParams({ month }).toString()}` : "";
+    return api.get<BossKilledHistoryResponse>(
+      `/dashboard/boss-rotation/${guildId}/killed-history${params}`,
+    );
+  },
+
+  async updateBossRotationQueue(guildId: string, bossName: string, queueGuildIds: string[]) {
+    return api.post<BossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}/${encodeURIComponent(bossName)}/queue`,
+      { queueGuildIds },
+    );
+  },
+
+  async markBossRotationKilled(guildId: string, scheduleId: string, killedAt: string, takenGuildId: string, signal?: AbortSignal) {
+    return api.post<{
+      schedule: BossScheduleData | null;
+      nextSchedule: BossScheduleData | null;
+      rotationId: string;
+    }>(
+      `/dashboard/boss-rotation/${guildId}/${scheduleId}/killed`,
+      { killedAt, takenGuildId },
+      signal ? { signal } : undefined,
+    );
+  },
+
+  async markBossRotationKilledByName(guildId: string, bossName: string, killedAt: string, takenGuildId: string, signal?: AbortSignal) {
+    return api.post<{
+      schedule: BossScheduleData | null;
+      nextSchedule: BossScheduleData | null;
+      rotationId: string;
+    }>(
+      `/dashboard/boss-rotation/${guildId}/boss/${encodeURIComponent(bossName)}/killed`,
+      { killedAt, takenGuildId },
+      signal ? { signal } : undefined,
+    );
+  },
+
   async getBosses() {
     return api.get<{ bosses: BossData[] }>(
       `/dashboard/bosses`,
@@ -561,6 +679,7 @@ export const dashboardApi = {
       spawnTime: string;
       location: string;
       guildTurn?: string;
+      guildTurnGuildId?: string | null;
       isFaction?: boolean;
     },
   ) {
@@ -592,6 +711,7 @@ export const dashboardApi = {
       spawnTime?: string;
       location?: string;
       guildTurn?: string;
+      guildTurnGuildId?: string | null;
       isFaction?: boolean;
     },
   ) {
@@ -704,6 +824,95 @@ export const dashboardApi = {
     },
   ) {
     return api.post<any>(`/dashboard/accounting/adjustment/${guildId}`, payload);
+  },
+};
+
+export const notificationApi = {
+  async getNotifications(limit = 20) {
+    return api.get<{ notifications: NotificationData[]; unreadCount: number }>(
+      `/notifications?limit=${limit}`,
+    );
+  },
+
+  async markRead(notificationId: string) {
+    return api.patch<{ notification: NotificationData }>(
+      `/notifications/${notificationId}/read`,
+    );
+  },
+
+  async markAllRead() {
+    return api.patch<{ success: boolean }>(`/notifications/read-all`);
+  },
+};
+
+export interface FactionAnnouncementData {
+  id: string;
+  title: string;
+  body: string;
+  priority: string;
+  status: string;
+  creatorId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FactionEventData {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  location: string | null;
+  status: string;
+  creatorId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FactionMemberData = GuildMemberData & {
+  guild?: {
+    id: string;
+    name: string;
+    slug: string;
+    avatarUrl: string | null;
+  };
+};
+
+export const factionApi = {
+  async getMembers() {
+    return api.get<{ members: FactionMemberData[] }>(`/faction/members`);
+  },
+
+  async getAnnouncements() {
+    return api.get<{ announcements: FactionAnnouncementData[] }>(`/faction/announcements`);
+  },
+
+  async createAnnouncement(payload: { title: string; body: string; priority?: string; status?: string }) {
+    return api.post<{ announcement: FactionAnnouncementData }>(`/faction/announcements`, payload);
+  },
+
+  async updateAnnouncement(id: string, payload: Partial<{ title: string; body: string; priority: string; status: string }>) {
+    return api.patch<{ announcement: FactionAnnouncementData }>(`/faction/announcements/${id}`, payload);
+  },
+
+  async deleteAnnouncement(id: string) {
+    return api.delete<{ success: boolean }>(`/faction/announcements/${id}`);
+  },
+
+  async getEvents() {
+    return api.get<{ events: FactionEventData[] }>(`/faction/events`);
+  },
+
+  async createEvent(payload: { title: string; description?: string; startsAt: string; endsAt?: string | null; location?: string; status?: string }) {
+    return api.post<{ event: FactionEventData }>(`/faction/events`, payload);
+  },
+
+  async updateEvent(id: string, payload: Partial<{ title: string; description: string; startsAt: string; endsAt: string | null; location: string; status: string }>) {
+    return api.patch<{ event: FactionEventData }>(`/faction/events/${id}`, payload);
+  },
+
+  async deleteEvent(id: string) {
+    return api.delete<{ success: boolean }>(`/faction/events/${id}`);
   },
 };
 

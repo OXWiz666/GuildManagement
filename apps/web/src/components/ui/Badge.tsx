@@ -6,7 +6,7 @@ interface BadgeProps {
 
 const roleStyles: Record<string, string> = {
   ADMIN: "bg-red-500/10 text-red-400 border-red-500/25",
-  ALLIANCE_LEADER: "bg-[var(--forge-gold)]/10 text-[var(--forge-gold-bright)] border-[var(--forge-gold)]/25",
+  FACTION_LEADER: "bg-[var(--forge-gold)]/10 text-[var(--forge-gold-bright)] border-[var(--forge-gold)]/25",
   GUILD_LEADER: "bg-purple-500/10 text-purple-400 border-purple-500/25",
   OFFICER: "bg-blue-500/10 text-blue-400 border-blue-500/25",
   CORE_MEMBER: "bg-cyan-500/10 text-cyan-400 border-cyan-500/25",
@@ -16,7 +16,7 @@ const roleStyles: Record<string, string> = {
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
-  ALLIANCE_LEADER: "Alliance Leader",
+  FACTION_LEADER: "Faction Leader",
   GUILD_LEADER: "Guild Leader",
   OFFICER: "Officer",
   CORE_MEMBER: "Core Member",
@@ -35,7 +35,7 @@ function RoleIcon({ role, className }: { role: string; className?: string }) {
           <path d="M12 8v4M12 16h.01" />
         </svg>
       );
-    case "ALLIANCE_LEADER":
+    case "FACTION_LEADER":
       return (
         <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />

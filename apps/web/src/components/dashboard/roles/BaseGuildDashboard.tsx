@@ -170,6 +170,10 @@ export default function BaseGuildDashboard({
   // Get next boss for the dedicated widget
   const nextBoss = bossSchedules[0] || null;
   const nextBossCountdown = nextBoss ? getTickingCountdown(nextBoss.spawnTime) : null;
+  const canManageBossRotations =
+    activeGuild.role === "GUILD_LEADER" ||
+    activeGuild.role === "FACTION_LEADER" ||
+    activeGuild.role === "ADMIN";
 
   return (
     <div className="relative max-w-7xl mx-auto w-full">
@@ -342,7 +346,7 @@ export default function BaseGuildDashboard({
                         key={boss.id}
                         boss={boss}
                         tick={getTickingCountdown(boss.spawnTime)}
-                        canLogKill={isOfficer}
+                        canLogKill={canManageBossRotations}
                         onLogKill={() => {
                           setShowKillModal(boss);
                           setKillTimeInput(

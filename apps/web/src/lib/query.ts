@@ -46,9 +46,11 @@ export function useQuery<T>(
         const stored = localStorage.getItem(lsKey);
         if (stored) {
           const parsed = JSON.parse(stored);
-          // Pre-populate memory cache to speed up next checks
-          globalQueryCache.set(cacheKey, { data: parsed.data, timestamp: parsed.timestamp });
-          return parsed.data as T;
+          if (Date.now() - parsed.timestamp < staleTime) {
+            // Pre-populate memory cache to speed up next checks
+            globalQueryCache.set(cacheKey, { data: parsed.data, timestamp: parsed.timestamp });
+            return parsed.data as T;
+          }
         }
       } catch (e) {
         console.warn(`[Query Cache] Failed to read cached data for key "${key}":`, e);

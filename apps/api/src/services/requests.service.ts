@@ -8,7 +8,7 @@ const DEFAULT_ITEM_LIMITS: Record<string, number> = {
   ELITE_MEMBER: 7,
   OFFICER: 5,
   GUILD_LEADER: 5,
-  ALLIANCE_LEADER: 5,
+  FACTION_LEADER: 5,
   ADMIN: 5,
   MEMBER: 5,
 };
@@ -183,7 +183,7 @@ export async function getGuildRequests(
     where: { userId_guildId: { userId: actorId, guildId } },
   });
 
-  const isOfficer = member && ["OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"].includes(member.role);
+  const isOfficer = member && ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].includes(member.role);
   if (!member || !member.isActive || !isOfficer) {
     throw new ForbiddenError("Only officers and above can view all requests");
   }
@@ -268,8 +268,8 @@ export async function reviewRequest(
   });
 
   const allowedRoles = action === "FULFILLED"
-    ? ["GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"]
-    : ["OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"];
+    ? ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"]
+    : ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
 
   if (!actor || !actor.isActive || !allowedRoles.includes(actor.role)) {
     throw new ForbiddenError(`Only ${allowedRoles.join("/")} can ${action.toLowerCase()} requests`);
@@ -343,7 +343,7 @@ export async function notifyItemAvailable(
     where: { userId_guildId: { userId: actorId, guildId } },
   });
 
-  if (!actor || !actor.isActive || !["OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"].includes(actor.role)) {
+  if (!actor || !actor.isActive || !["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].includes(actor.role)) {
     throw new ForbiddenError("Only officers and above can post item availability notices");
   }
 

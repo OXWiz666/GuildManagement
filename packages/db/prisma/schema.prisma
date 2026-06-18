@@ -39,6 +39,10 @@ model User {
   passwordResetTokens PasswordResetToken[]
   guildJoinRequests   GuildJoinRequest[]
   attendanceRecords   AttendanceRecord[]
+  factionAnnouncements FactionAnnouncement[] @relation("FactionAnnouncementCreator")
+  factionEvents        FactionEvent[]        @relation("FactionEventCreator")
+  notifications        Notification[]
+  bossRotationsUpdated BossRotation[]        @relation("BossRotationUpdater")
 
   @@map("users")
 }
@@ -114,6 +118,7 @@ model Guild {
   joinRequests  GuildJoinRequest[]
   attendanceSessions AttendanceSession[]
   bossSchedules      BossSchedule[]
+  bossTurnSchedules  BossSchedule[] @relation("BossTurnGuild")
   lootSales          LootSale[]
   pointsSnapshots    GuildPointsSnapshot[]
   auctionItems       AuctionItem[]
@@ -192,7 +197,7 @@ model GuildMember {
 
 enum GuildRole {
   ADMIN
-  ALLIANCE_LEADER
+  FACTION_LEADER
   GUILD_LEADER
   OFFICER
   CORE_MEMBER
@@ -408,6 +413,56 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model FactionAnnouncement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  priority  String   @default("NORMAL")
+  status    String   @default("ACTIVE")
+  creatorId String   @map("creator_id")
+  creator   User     @relation("FactionAnnouncementCreator", fields: [creatorId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("faction_announcements")
+}
+
+model FactionEvent {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  startsAt    DateTime  @map("starts_at")
+  endsAt      DateTime? @map("ends_at")
+  location    String?
+  status      String    @default("ACTIVE")
+  creatorId   String    @map("creator_id")
+  creator     User      @relation("FactionEventCreator", fields: [creatorId], references: [id])
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([startsAt])
+  @@map("faction_events")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  metadata  Json?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
 enum JoinRequestStatus {
   PENDING
   ACCEPTED
@@ -494,6 +549,8 @@ model BossSchedule {
   spawnTime          DateTime            @map("spawn_time")
   location           String
   guildTurn          String?             @map("guild_turn")
+  guildTurnGuildId   String?             @map("guild_turn_guild_id")
+  guildTurnGuild     Guild?              @relation("BossTurnGuild", fields: [guildTurnGuildId], references: [id], onDelete: SetNull)
   status             BossEventStatus     @default(UPCOMING)
   killedAt           DateTime?           @map("killed_at")
   creatorId          String              @map("creator_id")
@@ -505,10 +562,26 @@ model BossSchedule {
   lootSales          LootSale[]
 
   @@index([guildId])
+  @@index([guildTurnGuildId])
   @@index([spawnTime])
   @@index([status])
   @@index([guildId, status, killedAt])
   @@map("boss_schedules")
+}
+
+model BossRotation {
+  id             String    @id @default(cuid())
+  bossName       String    @unique @map("boss_name")
+  queueGuildIds  Json      @map("queue_guild_ids")
+  currentIndex   Int       @default(0) @map("current_index")
+  nextSpawnTime  DateTime? @map("next_spawn_time")
+  updatedById    String?   @map("updated_by_id")
+  updatedBy      User?     @relation("BossRotationUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([bossName])
+  @@map("boss_rotations")
 }
 
 model Boss {

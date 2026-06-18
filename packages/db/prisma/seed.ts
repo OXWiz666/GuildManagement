@@ -45,6 +45,19 @@ async function main() {
     },
   });
 
+  const factionLeader = await prisma.user.create({
+    data: {
+      email: "faction.leader@guildmaster.dev",
+      passwordHash,
+      displayName: "FactionLead",
+      avatarUrl: "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=256&auto=format&fit=crop",
+      ign: "FactionLead",
+      cp: 115000,
+      class: "Destroyer",
+      weapon: "Greatsword",
+    },
+  });
+
   const player1 = await prisma.user.create({
     data: {
       email: "Dragz69@guildmaster.dev",
@@ -168,19 +181,35 @@ async function main() {
   });
 
   // ─── Guild Members ────────────────────────────────
-  // Add admin (Mavis08) to Valhalla as GUILD_LEADER
+  // Add admin (Mavis08) to Valhalla as ADMIN
   await prisma.guildMember.create({
     data: {
       userId: admin.id,
       guildId: guild1.id,
-      role: "GUILD_LEADER",
-      rankName: "Leader",
+      role: "ADMIN",
+      rankName: "Admin",
       ign: "Mavis08",
       cp: 120000,
       class: "Destroyer",
       weapon: "Staff",
       isActive: true,
       memberCode: "MEM-VAL-001",
+    },
+  });
+
+  // Add FactionLead to Valhalla as FACTION_LEADER
+  await prisma.guildMember.create({
+    data: {
+      userId: factionLeader.id,
+      guildId: guild1.id,
+      role: "FACTION_LEADER",
+      rankName: "Faction Leader",
+      ign: "FactionLead",
+      cp: 115000,
+      class: "Warlord",
+      weapon: "Greatsword",
+      isActive: true,
+      memberCode: "MEM-VAL-FACTION-001",
     },
   });
 

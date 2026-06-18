@@ -79,6 +79,21 @@ export type LedgerEntry = $Result.DefaultSelection<Prisma.$LedgerEntryPayload>
  */
 export type AuditLog = $Result.DefaultSelection<Prisma.$AuditLogPayload>
 /**
+ * Model FactionAnnouncement
+ * 
+ */
+export type FactionAnnouncement = $Result.DefaultSelection<Prisma.$FactionAnnouncementPayload>
+/**
+ * Model FactionEvent
+ * 
+ */
+export type FactionEvent = $Result.DefaultSelection<Prisma.$FactionEventPayload>
+/**
+ * Model Notification
+ * 
+ */
+export type Notification = $Result.DefaultSelection<Prisma.$NotificationPayload>
+/**
  * Model GuildJoinRequest
  * 
  */
@@ -99,6 +114,11 @@ export type AttendanceRecord = $Result.DefaultSelection<Prisma.$AttendanceRecord
  */
 export type BossSchedule = $Result.DefaultSelection<Prisma.$BossSchedulePayload>
 /**
+ * Model BossRotation
+ * 
+ */
+export type BossRotation = $Result.DefaultSelection<Prisma.$BossRotationPayload>
+/**
  * Model Boss
  * 
  */
@@ -115,7 +135,7 @@ export type LootSale = $Result.DefaultSelection<Prisma.$LootSalePayload>
 export namespace $Enums {
   export const GuildRole: {
   ADMIN: 'ADMIN',
-  ALLIANCE_LEADER: 'ALLIANCE_LEADER',
+  FACTION_LEADER: 'FACTION_LEADER',
   GUILD_LEADER: 'GUILD_LEADER',
   OFFICER: 'OFFICER',
   CORE_MEMBER: 'CORE_MEMBER',
@@ -494,6 +514,36 @@ export class PrismaClient<
   get auditLog(): Prisma.AuditLogDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.factionAnnouncement`: Exposes CRUD operations for the **FactionAnnouncement** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FactionAnnouncements
+    * const factionAnnouncements = await prisma.factionAnnouncement.findMany()
+    * ```
+    */
+  get factionAnnouncement(): Prisma.FactionAnnouncementDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.factionEvent`: Exposes CRUD operations for the **FactionEvent** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FactionEvents
+    * const factionEvents = await prisma.factionEvent.findMany()
+    * ```
+    */
+  get factionEvent(): Prisma.FactionEventDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.notification`: Exposes CRUD operations for the **Notification** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Notifications
+    * const notifications = await prisma.notification.findMany()
+    * ```
+    */
+  get notification(): Prisma.NotificationDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.guildJoinRequest`: Exposes CRUD operations for the **GuildJoinRequest** model.
     * Example usage:
     * ```ts
@@ -532,6 +582,16 @@ export class PrismaClient<
     * ```
     */
   get bossSchedule(): Prisma.BossScheduleDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.bossRotation`: Exposes CRUD operations for the **BossRotation** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more BossRotations
+    * const bossRotations = await prisma.bossRotation.findMany()
+    * ```
+    */
+  get bossRotation(): Prisma.BossRotationDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.boss`: Exposes CRUD operations for the **Boss** model.
@@ -1006,10 +1066,14 @@ export namespace Prisma {
     ItemRequest: 'ItemRequest',
     LedgerEntry: 'LedgerEntry',
     AuditLog: 'AuditLog',
+    FactionAnnouncement: 'FactionAnnouncement',
+    FactionEvent: 'FactionEvent',
+    Notification: 'Notification',
     GuildJoinRequest: 'GuildJoinRequest',
     AttendanceSession: 'AttendanceSession',
     AttendanceRecord: 'AttendanceRecord',
     BossSchedule: 'BossSchedule',
+    BossRotation: 'BossRotation',
     Boss: 'Boss',
     LootSale: 'LootSale'
   };
@@ -1030,7 +1094,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "refreshToken" | "session" | "passwordResetToken" | "guild" | "guildSettings" | "guildMember" | "guildPointsSnapshot" | "auctionItem" | "auctionBid" | "itemRequest" | "ledgerEntry" | "auditLog" | "guildJoinRequest" | "attendanceSession" | "attendanceRecord" | "bossSchedule" | "boss" | "lootSale"
+      modelProps: "user" | "refreshToken" | "session" | "passwordResetToken" | "guild" | "guildSettings" | "guildMember" | "guildPointsSnapshot" | "auctionItem" | "auctionBid" | "itemRequest" | "ledgerEntry" | "auditLog" | "factionAnnouncement" | "factionEvent" | "notification" | "guildJoinRequest" | "attendanceSession" | "attendanceRecord" | "bossSchedule" | "bossRotation" | "boss" | "lootSale"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1996,6 +2060,228 @@ export namespace Prisma {
           }
         }
       }
+      FactionAnnouncement: {
+        payload: Prisma.$FactionAnnouncementPayload<ExtArgs>
+        fields: Prisma.FactionAnnouncementFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FactionAnnouncementFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FactionAnnouncementFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>
+          }
+          findFirst: {
+            args: Prisma.FactionAnnouncementFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FactionAnnouncementFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>
+          }
+          findMany: {
+            args: Prisma.FactionAnnouncementFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>[]
+          }
+          create: {
+            args: Prisma.FactionAnnouncementCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>
+          }
+          createMany: {
+            args: Prisma.FactionAnnouncementCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FactionAnnouncementCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>[]
+          }
+          delete: {
+            args: Prisma.FactionAnnouncementDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>
+          }
+          update: {
+            args: Prisma.FactionAnnouncementUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>
+          }
+          deleteMany: {
+            args: Prisma.FactionAnnouncementDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FactionAnnouncementUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FactionAnnouncementUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>[]
+          }
+          upsert: {
+            args: Prisma.FactionAnnouncementUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionAnnouncementPayload>
+          }
+          aggregate: {
+            args: Prisma.FactionAnnouncementAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFactionAnnouncement>
+          }
+          groupBy: {
+            args: Prisma.FactionAnnouncementGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FactionAnnouncementGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FactionAnnouncementCountArgs<ExtArgs>
+            result: $Utils.Optional<FactionAnnouncementCountAggregateOutputType> | number
+          }
+        }
+      }
+      FactionEvent: {
+        payload: Prisma.$FactionEventPayload<ExtArgs>
+        fields: Prisma.FactionEventFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FactionEventFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FactionEventFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>
+          }
+          findFirst: {
+            args: Prisma.FactionEventFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FactionEventFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>
+          }
+          findMany: {
+            args: Prisma.FactionEventFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>[]
+          }
+          create: {
+            args: Prisma.FactionEventCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>
+          }
+          createMany: {
+            args: Prisma.FactionEventCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FactionEventCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>[]
+          }
+          delete: {
+            args: Prisma.FactionEventDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>
+          }
+          update: {
+            args: Prisma.FactionEventUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>
+          }
+          deleteMany: {
+            args: Prisma.FactionEventDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FactionEventUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FactionEventUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>[]
+          }
+          upsert: {
+            args: Prisma.FactionEventUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FactionEventPayload>
+          }
+          aggregate: {
+            args: Prisma.FactionEventAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFactionEvent>
+          }
+          groupBy: {
+            args: Prisma.FactionEventGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FactionEventGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FactionEventCountArgs<ExtArgs>
+            result: $Utils.Optional<FactionEventCountAggregateOutputType> | number
+          }
+        }
+      }
+      Notification: {
+        payload: Prisma.$NotificationPayload<ExtArgs>
+        fields: Prisma.NotificationFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.NotificationFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.NotificationFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>
+          }
+          findFirst: {
+            args: Prisma.NotificationFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.NotificationFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>
+          }
+          findMany: {
+            args: Prisma.NotificationFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>[]
+          }
+          create: {
+            args: Prisma.NotificationCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>
+          }
+          createMany: {
+            args: Prisma.NotificationCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.NotificationCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>[]
+          }
+          delete: {
+            args: Prisma.NotificationDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>
+          }
+          update: {
+            args: Prisma.NotificationUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>
+          }
+          deleteMany: {
+            args: Prisma.NotificationDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.NotificationUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.NotificationUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>[]
+          }
+          upsert: {
+            args: Prisma.NotificationUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotificationPayload>
+          }
+          aggregate: {
+            args: Prisma.NotificationAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateNotification>
+          }
+          groupBy: {
+            args: Prisma.NotificationGroupByArgs<ExtArgs>
+            result: $Utils.Optional<NotificationGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.NotificationCountArgs<ExtArgs>
+            result: $Utils.Optional<NotificationCountAggregateOutputType> | number
+          }
+        }
+      }
       GuildJoinRequest: {
         payload: Prisma.$GuildJoinRequestPayload<ExtArgs>
         fields: Prisma.GuildJoinRequestFieldRefs
@@ -2292,6 +2578,80 @@ export namespace Prisma {
           }
         }
       }
+      BossRotation: {
+        payload: Prisma.$BossRotationPayload<ExtArgs>
+        fields: Prisma.BossRotationFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.BossRotationFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.BossRotationFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>
+          }
+          findFirst: {
+            args: Prisma.BossRotationFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.BossRotationFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>
+          }
+          findMany: {
+            args: Prisma.BossRotationFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>[]
+          }
+          create: {
+            args: Prisma.BossRotationCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>
+          }
+          createMany: {
+            args: Prisma.BossRotationCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.BossRotationCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>[]
+          }
+          delete: {
+            args: Prisma.BossRotationDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>
+          }
+          update: {
+            args: Prisma.BossRotationUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>
+          }
+          deleteMany: {
+            args: Prisma.BossRotationDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.BossRotationUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.BossRotationUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>[]
+          }
+          upsert: {
+            args: Prisma.BossRotationUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BossRotationPayload>
+          }
+          aggregate: {
+            args: Prisma.BossRotationAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateBossRotation>
+          }
+          groupBy: {
+            args: Prisma.BossRotationGroupByArgs<ExtArgs>
+            result: $Utils.Optional<BossRotationGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.BossRotationCountArgs<ExtArgs>
+            result: $Utils.Optional<BossRotationCountAggregateOutputType> | number
+          }
+        }
+      }
       Boss: {
         payload: Prisma.$BossPayload<ExtArgs>
         fields: Prisma.BossFieldRefs
@@ -2549,10 +2909,14 @@ export namespace Prisma {
     itemRequest?: ItemRequestOmit
     ledgerEntry?: LedgerEntryOmit
     auditLog?: AuditLogOmit
+    factionAnnouncement?: FactionAnnouncementOmit
+    factionEvent?: FactionEventOmit
+    notification?: NotificationOmit
     guildJoinRequest?: GuildJoinRequestOmit
     attendanceSession?: AttendanceSessionOmit
     attendanceRecord?: AttendanceRecordOmit
     bossSchedule?: BossScheduleOmit
+    bossRotation?: BossRotationOmit
     boss?: BossOmit
     lootSale?: LootSaleOmit
   }
@@ -2643,6 +3007,10 @@ export namespace Prisma {
     passwordResetTokens: number
     guildJoinRequests: number
     attendanceRecords: number
+    factionAnnouncements: number
+    factionEvents: number
+    notifications: number
+    bossRotationsUpdated: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2654,6 +3022,10 @@ export namespace Prisma {
     passwordResetTokens?: boolean | UserCountOutputTypeCountPasswordResetTokensArgs
     guildJoinRequests?: boolean | UserCountOutputTypeCountGuildJoinRequestsArgs
     attendanceRecords?: boolean | UserCountOutputTypeCountAttendanceRecordsArgs
+    factionAnnouncements?: boolean | UserCountOutputTypeCountFactionAnnouncementsArgs
+    factionEvents?: boolean | UserCountOutputTypeCountFactionEventsArgs
+    notifications?: boolean | UserCountOutputTypeCountNotificationsArgs
+    bossRotationsUpdated?: boolean | UserCountOutputTypeCountBossRotationsUpdatedArgs
   }
 
   // Custom InputTypes
@@ -2723,6 +3095,34 @@ export namespace Prisma {
     where?: AttendanceRecordWhereInput
   }
 
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountFactionAnnouncementsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FactionAnnouncementWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountFactionEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FactionEventWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountNotificationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: NotificationWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountBossRotationsUpdatedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: BossRotationWhereInput
+  }
+
 
   /**
    * Count Type GuildCountOutputType
@@ -2735,6 +3135,7 @@ export namespace Prisma {
     joinRequests: number
     attendanceSessions: number
     bossSchedules: number
+    bossTurnSchedules: number
     lootSales: number
     pointsSnapshots: number
     auctionItems: number
@@ -2748,6 +3149,7 @@ export namespace Prisma {
     joinRequests?: boolean | GuildCountOutputTypeCountJoinRequestsArgs
     attendanceSessions?: boolean | GuildCountOutputTypeCountAttendanceSessionsArgs
     bossSchedules?: boolean | GuildCountOutputTypeCountBossSchedulesArgs
+    bossTurnSchedules?: boolean | GuildCountOutputTypeCountBossTurnSchedulesArgs
     lootSales?: boolean | GuildCountOutputTypeCountLootSalesArgs
     pointsSnapshots?: boolean | GuildCountOutputTypeCountPointsSnapshotsArgs
     auctionItems?: boolean | GuildCountOutputTypeCountAuctionItemsArgs
@@ -2804,6 +3206,13 @@ export namespace Prisma {
    * GuildCountOutputType without action
    */
   export type GuildCountOutputTypeCountBossSchedulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: BossScheduleWhereInput
+  }
+
+  /**
+   * GuildCountOutputType without action
+   */
+  export type GuildCountOutputTypeCountBossTurnSchedulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: BossScheduleWhereInput
   }
 
@@ -3244,6 +3653,10 @@ export namespace Prisma {
     passwordResetTokens?: boolean | User$passwordResetTokensArgs<ExtArgs>
     guildJoinRequests?: boolean | User$guildJoinRequestsArgs<ExtArgs>
     attendanceRecords?: boolean | User$attendanceRecordsArgs<ExtArgs>
+    factionAnnouncements?: boolean | User$factionAnnouncementsArgs<ExtArgs>
+    factionEvents?: boolean | User$factionEventsArgs<ExtArgs>
+    notifications?: boolean | User$notificationsArgs<ExtArgs>
+    bossRotationsUpdated?: boolean | User$bossRotationsUpdatedArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -3302,6 +3715,10 @@ export namespace Prisma {
     passwordResetTokens?: boolean | User$passwordResetTokensArgs<ExtArgs>
     guildJoinRequests?: boolean | User$guildJoinRequestsArgs<ExtArgs>
     attendanceRecords?: boolean | User$attendanceRecordsArgs<ExtArgs>
+    factionAnnouncements?: boolean | User$factionAnnouncementsArgs<ExtArgs>
+    factionEvents?: boolean | User$factionEventsArgs<ExtArgs>
+    notifications?: boolean | User$notificationsArgs<ExtArgs>
+    bossRotationsUpdated?: boolean | User$bossRotationsUpdatedArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type UserIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -3318,6 +3735,10 @@ export namespace Prisma {
       passwordResetTokens: Prisma.$PasswordResetTokenPayload<ExtArgs>[]
       guildJoinRequests: Prisma.$GuildJoinRequestPayload<ExtArgs>[]
       attendanceRecords: Prisma.$AttendanceRecordPayload<ExtArgs>[]
+      factionAnnouncements: Prisma.$FactionAnnouncementPayload<ExtArgs>[]
+      factionEvents: Prisma.$FactionEventPayload<ExtArgs>[]
+      notifications: Prisma.$NotificationPayload<ExtArgs>[]
+      bossRotationsUpdated: Prisma.$BossRotationPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -3734,6 +4155,10 @@ export namespace Prisma {
     passwordResetTokens<T extends User$passwordResetTokensArgs<ExtArgs> = {}>(args?: Subset<T, User$passwordResetTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PasswordResetTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     guildJoinRequests<T extends User$guildJoinRequestsArgs<ExtArgs> = {}>(args?: Subset<T, User$guildJoinRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$GuildJoinRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     attendanceRecords<T extends User$attendanceRecordsArgs<ExtArgs> = {}>(args?: Subset<T, User$attendanceRecordsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AttendanceRecordPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    factionAnnouncements<T extends User$factionAnnouncementsArgs<ExtArgs> = {}>(args?: Subset<T, User$factionAnnouncementsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    factionEvents<T extends User$factionEventsArgs<ExtArgs> = {}>(args?: Subset<T, User$factionEventsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    notifications<T extends User$notificationsArgs<ExtArgs> = {}>(args?: Subset<T, User$notificationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    bossRotationsUpdated<T extends User$bossRotationsUpdatedArgs<ExtArgs> = {}>(args?: Subset<T, User$bossRotationsUpdatedArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -4352,6 +4777,102 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: AttendanceRecordScalarFieldEnum | AttendanceRecordScalarFieldEnum[]
+  }
+
+  /**
+   * User.factionAnnouncements
+   */
+  export type User$factionAnnouncementsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    where?: FactionAnnouncementWhereInput
+    orderBy?: FactionAnnouncementOrderByWithRelationInput | FactionAnnouncementOrderByWithRelationInput[]
+    cursor?: FactionAnnouncementWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FactionAnnouncementScalarFieldEnum | FactionAnnouncementScalarFieldEnum[]
+  }
+
+  /**
+   * User.factionEvents
+   */
+  export type User$factionEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    where?: FactionEventWhereInput
+    orderBy?: FactionEventOrderByWithRelationInput | FactionEventOrderByWithRelationInput[]
+    cursor?: FactionEventWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FactionEventScalarFieldEnum | FactionEventScalarFieldEnum[]
+  }
+
+  /**
+   * User.notifications
+   */
+  export type User$notificationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    where?: NotificationWhereInput
+    orderBy?: NotificationOrderByWithRelationInput | NotificationOrderByWithRelationInput[]
+    cursor?: NotificationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: NotificationScalarFieldEnum | NotificationScalarFieldEnum[]
+  }
+
+  /**
+   * User.bossRotationsUpdated
+   */
+  export type User$bossRotationsUpdatedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    where?: BossRotationWhereInput
+    orderBy?: BossRotationOrderByWithRelationInput | BossRotationOrderByWithRelationInput[]
+    cursor?: BossRotationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: BossRotationScalarFieldEnum | BossRotationScalarFieldEnum[]
   }
 
   /**
@@ -7836,6 +8357,7 @@ export namespace Prisma {
     joinRequests?: boolean | Guild$joinRequestsArgs<ExtArgs>
     attendanceSessions?: boolean | Guild$attendanceSessionsArgs<ExtArgs>
     bossSchedules?: boolean | Guild$bossSchedulesArgs<ExtArgs>
+    bossTurnSchedules?: boolean | Guild$bossTurnSchedulesArgs<ExtArgs>
     lootSales?: boolean | Guild$lootSalesArgs<ExtArgs>
     pointsSnapshots?: boolean | Guild$pointsSnapshotsArgs<ExtArgs>
     auctionItems?: boolean | Guild$auctionItemsArgs<ExtArgs>
@@ -7891,6 +8413,7 @@ export namespace Prisma {
     joinRequests?: boolean | Guild$joinRequestsArgs<ExtArgs>
     attendanceSessions?: boolean | Guild$attendanceSessionsArgs<ExtArgs>
     bossSchedules?: boolean | Guild$bossSchedulesArgs<ExtArgs>
+    bossTurnSchedules?: boolean | Guild$bossTurnSchedulesArgs<ExtArgs>
     lootSales?: boolean | Guild$lootSalesArgs<ExtArgs>
     pointsSnapshots?: boolean | Guild$pointsSnapshotsArgs<ExtArgs>
     auctionItems?: boolean | Guild$auctionItemsArgs<ExtArgs>
@@ -7910,6 +8433,7 @@ export namespace Prisma {
       joinRequests: Prisma.$GuildJoinRequestPayload<ExtArgs>[]
       attendanceSessions: Prisma.$AttendanceSessionPayload<ExtArgs>[]
       bossSchedules: Prisma.$BossSchedulePayload<ExtArgs>[]
+      bossTurnSchedules: Prisma.$BossSchedulePayload<ExtArgs>[]
       lootSales: Prisma.$LootSalePayload<ExtArgs>[]
       pointsSnapshots: Prisma.$GuildPointsSnapshotPayload<ExtArgs>[]
       auctionItems: Prisma.$AuctionItemPayload<ExtArgs>[]
@@ -8327,6 +8851,7 @@ export namespace Prisma {
     joinRequests<T extends Guild$joinRequestsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$joinRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$GuildJoinRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     attendanceSessions<T extends Guild$attendanceSessionsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$attendanceSessionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AttendanceSessionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     bossSchedules<T extends Guild$bossSchedulesArgs<ExtArgs> = {}>(args?: Subset<T, Guild$bossSchedulesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BossSchedulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    bossTurnSchedules<T extends Guild$bossTurnSchedulesArgs<ExtArgs> = {}>(args?: Subset<T, Guild$bossTurnSchedulesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BossSchedulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     lootSales<T extends Guild$lootSalesArgs<ExtArgs> = {}>(args?: Subset<T, Guild$lootSalesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LootSalePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     pointsSnapshots<T extends Guild$pointsSnapshotsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$pointsSnapshotsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$GuildPointsSnapshotPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     auctionItems<T extends Guild$auctionItemsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$auctionItemsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AuctionItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -8900,6 +9425,30 @@ export namespace Prisma {
    * Guild.bossSchedules
    */
   export type Guild$bossSchedulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossSchedule
+     */
+    select?: BossScheduleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossSchedule
+     */
+    omit?: BossScheduleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossScheduleInclude<ExtArgs> | null
+    where?: BossScheduleWhereInput
+    orderBy?: BossScheduleOrderByWithRelationInput | BossScheduleOrderByWithRelationInput[]
+    cursor?: BossScheduleWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: BossScheduleScalarFieldEnum | BossScheduleScalarFieldEnum[]
+  }
+
+  /**
+   * Guild.bossTurnSchedules
+   */
+  export type Guild$bossTurnSchedulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the BossSchedule
      */
@@ -18600,6 +19149,3319 @@ export namespace Prisma {
 
 
   /**
+   * Model FactionAnnouncement
+   */
+
+  export type AggregateFactionAnnouncement = {
+    _count: FactionAnnouncementCountAggregateOutputType | null
+    _min: FactionAnnouncementMinAggregateOutputType | null
+    _max: FactionAnnouncementMaxAggregateOutputType | null
+  }
+
+  export type FactionAnnouncementMinAggregateOutputType = {
+    id: string | null
+    title: string | null
+    body: string | null
+    priority: string | null
+    status: string | null
+    creatorId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FactionAnnouncementMaxAggregateOutputType = {
+    id: string | null
+    title: string | null
+    body: string | null
+    priority: string | null
+    status: string | null
+    creatorId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FactionAnnouncementCountAggregateOutputType = {
+    id: number
+    title: number
+    body: number
+    priority: number
+    status: number
+    creatorId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FactionAnnouncementMinAggregateInputType = {
+    id?: true
+    title?: true
+    body?: true
+    priority?: true
+    status?: true
+    creatorId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FactionAnnouncementMaxAggregateInputType = {
+    id?: true
+    title?: true
+    body?: true
+    priority?: true
+    status?: true
+    creatorId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FactionAnnouncementCountAggregateInputType = {
+    id?: true
+    title?: true
+    body?: true
+    priority?: true
+    status?: true
+    creatorId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FactionAnnouncementAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FactionAnnouncement to aggregate.
+     */
+    where?: FactionAnnouncementWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionAnnouncements to fetch.
+     */
+    orderBy?: FactionAnnouncementOrderByWithRelationInput | FactionAnnouncementOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FactionAnnouncementWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionAnnouncements from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionAnnouncements.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FactionAnnouncements
+    **/
+    _count?: true | FactionAnnouncementCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FactionAnnouncementMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FactionAnnouncementMaxAggregateInputType
+  }
+
+  export type GetFactionAnnouncementAggregateType<T extends FactionAnnouncementAggregateArgs> = {
+        [P in keyof T & keyof AggregateFactionAnnouncement]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFactionAnnouncement[P]>
+      : GetScalarType<T[P], AggregateFactionAnnouncement[P]>
+  }
+
+
+
+
+  export type FactionAnnouncementGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FactionAnnouncementWhereInput
+    orderBy?: FactionAnnouncementOrderByWithAggregationInput | FactionAnnouncementOrderByWithAggregationInput[]
+    by: FactionAnnouncementScalarFieldEnum[] | FactionAnnouncementScalarFieldEnum
+    having?: FactionAnnouncementScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FactionAnnouncementCountAggregateInputType | true
+    _min?: FactionAnnouncementMinAggregateInputType
+    _max?: FactionAnnouncementMaxAggregateInputType
+  }
+
+  export type FactionAnnouncementGroupByOutputType = {
+    id: string
+    title: string
+    body: string
+    priority: string
+    status: string
+    creatorId: string
+    createdAt: Date
+    updatedAt: Date
+    _count: FactionAnnouncementCountAggregateOutputType | null
+    _min: FactionAnnouncementMinAggregateOutputType | null
+    _max: FactionAnnouncementMaxAggregateOutputType | null
+  }
+
+  type GetFactionAnnouncementGroupByPayload<T extends FactionAnnouncementGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FactionAnnouncementGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FactionAnnouncementGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FactionAnnouncementGroupByOutputType[P]>
+            : GetScalarType<T[P], FactionAnnouncementGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FactionAnnouncementSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    body?: boolean
+    priority?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["factionAnnouncement"]>
+
+  export type FactionAnnouncementSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    body?: boolean
+    priority?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["factionAnnouncement"]>
+
+  export type FactionAnnouncementSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    body?: boolean
+    priority?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["factionAnnouncement"]>
+
+  export type FactionAnnouncementSelectScalar = {
+    id?: boolean
+    title?: boolean
+    body?: boolean
+    priority?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FactionAnnouncementOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "title" | "body" | "priority" | "status" | "creatorId" | "createdAt" | "updatedAt", ExtArgs["result"]["factionAnnouncement"]>
+  export type FactionAnnouncementInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type FactionAnnouncementIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type FactionAnnouncementIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+  export type $FactionAnnouncementPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FactionAnnouncement"
+    objects: {
+      creator: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      title: string
+      body: string
+      priority: string
+      status: string
+      creatorId: string
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["factionAnnouncement"]>
+    composites: {}
+  }
+
+  type FactionAnnouncementGetPayload<S extends boolean | null | undefined | FactionAnnouncementDefaultArgs> = $Result.GetResult<Prisma.$FactionAnnouncementPayload, S>
+
+  type FactionAnnouncementCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FactionAnnouncementFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FactionAnnouncementCountAggregateInputType | true
+    }
+
+  export interface FactionAnnouncementDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FactionAnnouncement'], meta: { name: 'FactionAnnouncement' } }
+    /**
+     * Find zero or one FactionAnnouncement that matches the filter.
+     * @param {FactionAnnouncementFindUniqueArgs} args - Arguments to find a FactionAnnouncement
+     * @example
+     * // Get one FactionAnnouncement
+     * const factionAnnouncement = await prisma.factionAnnouncement.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FactionAnnouncementFindUniqueArgs>(args: SelectSubset<T, FactionAnnouncementFindUniqueArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FactionAnnouncement that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FactionAnnouncementFindUniqueOrThrowArgs} args - Arguments to find a FactionAnnouncement
+     * @example
+     * // Get one FactionAnnouncement
+     * const factionAnnouncement = await prisma.factionAnnouncement.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FactionAnnouncementFindUniqueOrThrowArgs>(args: SelectSubset<T, FactionAnnouncementFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FactionAnnouncement that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionAnnouncementFindFirstArgs} args - Arguments to find a FactionAnnouncement
+     * @example
+     * // Get one FactionAnnouncement
+     * const factionAnnouncement = await prisma.factionAnnouncement.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FactionAnnouncementFindFirstArgs>(args?: SelectSubset<T, FactionAnnouncementFindFirstArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FactionAnnouncement that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionAnnouncementFindFirstOrThrowArgs} args - Arguments to find a FactionAnnouncement
+     * @example
+     * // Get one FactionAnnouncement
+     * const factionAnnouncement = await prisma.factionAnnouncement.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FactionAnnouncementFindFirstOrThrowArgs>(args?: SelectSubset<T, FactionAnnouncementFindFirstOrThrowArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FactionAnnouncements that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionAnnouncementFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FactionAnnouncements
+     * const factionAnnouncements = await prisma.factionAnnouncement.findMany()
+     * 
+     * // Get first 10 FactionAnnouncements
+     * const factionAnnouncements = await prisma.factionAnnouncement.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const factionAnnouncementWithIdOnly = await prisma.factionAnnouncement.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FactionAnnouncementFindManyArgs>(args?: SelectSubset<T, FactionAnnouncementFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FactionAnnouncement.
+     * @param {FactionAnnouncementCreateArgs} args - Arguments to create a FactionAnnouncement.
+     * @example
+     * // Create one FactionAnnouncement
+     * const FactionAnnouncement = await prisma.factionAnnouncement.create({
+     *   data: {
+     *     // ... data to create a FactionAnnouncement
+     *   }
+     * })
+     * 
+     */
+    create<T extends FactionAnnouncementCreateArgs>(args: SelectSubset<T, FactionAnnouncementCreateArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FactionAnnouncements.
+     * @param {FactionAnnouncementCreateManyArgs} args - Arguments to create many FactionAnnouncements.
+     * @example
+     * // Create many FactionAnnouncements
+     * const factionAnnouncement = await prisma.factionAnnouncement.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FactionAnnouncementCreateManyArgs>(args?: SelectSubset<T, FactionAnnouncementCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FactionAnnouncements and returns the data saved in the database.
+     * @param {FactionAnnouncementCreateManyAndReturnArgs} args - Arguments to create many FactionAnnouncements.
+     * @example
+     * // Create many FactionAnnouncements
+     * const factionAnnouncement = await prisma.factionAnnouncement.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FactionAnnouncements and only return the `id`
+     * const factionAnnouncementWithIdOnly = await prisma.factionAnnouncement.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FactionAnnouncementCreateManyAndReturnArgs>(args?: SelectSubset<T, FactionAnnouncementCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FactionAnnouncement.
+     * @param {FactionAnnouncementDeleteArgs} args - Arguments to delete one FactionAnnouncement.
+     * @example
+     * // Delete one FactionAnnouncement
+     * const FactionAnnouncement = await prisma.factionAnnouncement.delete({
+     *   where: {
+     *     // ... filter to delete one FactionAnnouncement
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FactionAnnouncementDeleteArgs>(args: SelectSubset<T, FactionAnnouncementDeleteArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FactionAnnouncement.
+     * @param {FactionAnnouncementUpdateArgs} args - Arguments to update one FactionAnnouncement.
+     * @example
+     * // Update one FactionAnnouncement
+     * const factionAnnouncement = await prisma.factionAnnouncement.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FactionAnnouncementUpdateArgs>(args: SelectSubset<T, FactionAnnouncementUpdateArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FactionAnnouncements.
+     * @param {FactionAnnouncementDeleteManyArgs} args - Arguments to filter FactionAnnouncements to delete.
+     * @example
+     * // Delete a few FactionAnnouncements
+     * const { count } = await prisma.factionAnnouncement.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FactionAnnouncementDeleteManyArgs>(args?: SelectSubset<T, FactionAnnouncementDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FactionAnnouncements.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionAnnouncementUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FactionAnnouncements
+     * const factionAnnouncement = await prisma.factionAnnouncement.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FactionAnnouncementUpdateManyArgs>(args: SelectSubset<T, FactionAnnouncementUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FactionAnnouncements and returns the data updated in the database.
+     * @param {FactionAnnouncementUpdateManyAndReturnArgs} args - Arguments to update many FactionAnnouncements.
+     * @example
+     * // Update many FactionAnnouncements
+     * const factionAnnouncement = await prisma.factionAnnouncement.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FactionAnnouncements and only return the `id`
+     * const factionAnnouncementWithIdOnly = await prisma.factionAnnouncement.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FactionAnnouncementUpdateManyAndReturnArgs>(args: SelectSubset<T, FactionAnnouncementUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FactionAnnouncement.
+     * @param {FactionAnnouncementUpsertArgs} args - Arguments to update or create a FactionAnnouncement.
+     * @example
+     * // Update or create a FactionAnnouncement
+     * const factionAnnouncement = await prisma.factionAnnouncement.upsert({
+     *   create: {
+     *     // ... data to create a FactionAnnouncement
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FactionAnnouncement we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FactionAnnouncementUpsertArgs>(args: SelectSubset<T, FactionAnnouncementUpsertArgs<ExtArgs>>): Prisma__FactionAnnouncementClient<$Result.GetResult<Prisma.$FactionAnnouncementPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FactionAnnouncements.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionAnnouncementCountArgs} args - Arguments to filter FactionAnnouncements to count.
+     * @example
+     * // Count the number of FactionAnnouncements
+     * const count = await prisma.factionAnnouncement.count({
+     *   where: {
+     *     // ... the filter for the FactionAnnouncements we want to count
+     *   }
+     * })
+    **/
+    count<T extends FactionAnnouncementCountArgs>(
+      args?: Subset<T, FactionAnnouncementCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FactionAnnouncementCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FactionAnnouncement.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionAnnouncementAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FactionAnnouncementAggregateArgs>(args: Subset<T, FactionAnnouncementAggregateArgs>): Prisma.PrismaPromise<GetFactionAnnouncementAggregateType<T>>
+
+    /**
+     * Group by FactionAnnouncement.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionAnnouncementGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FactionAnnouncementGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FactionAnnouncementGroupByArgs['orderBy'] }
+        : { orderBy?: FactionAnnouncementGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FactionAnnouncementGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFactionAnnouncementGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FactionAnnouncement model
+   */
+  readonly fields: FactionAnnouncementFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FactionAnnouncement.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FactionAnnouncementClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    creator<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FactionAnnouncement model
+   */
+  interface FactionAnnouncementFieldRefs {
+    readonly id: FieldRef<"FactionAnnouncement", 'String'>
+    readonly title: FieldRef<"FactionAnnouncement", 'String'>
+    readonly body: FieldRef<"FactionAnnouncement", 'String'>
+    readonly priority: FieldRef<"FactionAnnouncement", 'String'>
+    readonly status: FieldRef<"FactionAnnouncement", 'String'>
+    readonly creatorId: FieldRef<"FactionAnnouncement", 'String'>
+    readonly createdAt: FieldRef<"FactionAnnouncement", 'DateTime'>
+    readonly updatedAt: FieldRef<"FactionAnnouncement", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FactionAnnouncement findUnique
+   */
+  export type FactionAnnouncementFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionAnnouncement to fetch.
+     */
+    where: FactionAnnouncementWhereUniqueInput
+  }
+
+  /**
+   * FactionAnnouncement findUniqueOrThrow
+   */
+  export type FactionAnnouncementFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionAnnouncement to fetch.
+     */
+    where: FactionAnnouncementWhereUniqueInput
+  }
+
+  /**
+   * FactionAnnouncement findFirst
+   */
+  export type FactionAnnouncementFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionAnnouncement to fetch.
+     */
+    where?: FactionAnnouncementWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionAnnouncements to fetch.
+     */
+    orderBy?: FactionAnnouncementOrderByWithRelationInput | FactionAnnouncementOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FactionAnnouncements.
+     */
+    cursor?: FactionAnnouncementWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionAnnouncements from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionAnnouncements.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FactionAnnouncements.
+     */
+    distinct?: FactionAnnouncementScalarFieldEnum | FactionAnnouncementScalarFieldEnum[]
+  }
+
+  /**
+   * FactionAnnouncement findFirstOrThrow
+   */
+  export type FactionAnnouncementFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionAnnouncement to fetch.
+     */
+    where?: FactionAnnouncementWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionAnnouncements to fetch.
+     */
+    orderBy?: FactionAnnouncementOrderByWithRelationInput | FactionAnnouncementOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FactionAnnouncements.
+     */
+    cursor?: FactionAnnouncementWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionAnnouncements from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionAnnouncements.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FactionAnnouncements.
+     */
+    distinct?: FactionAnnouncementScalarFieldEnum | FactionAnnouncementScalarFieldEnum[]
+  }
+
+  /**
+   * FactionAnnouncement findMany
+   */
+  export type FactionAnnouncementFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionAnnouncements to fetch.
+     */
+    where?: FactionAnnouncementWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionAnnouncements to fetch.
+     */
+    orderBy?: FactionAnnouncementOrderByWithRelationInput | FactionAnnouncementOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FactionAnnouncements.
+     */
+    cursor?: FactionAnnouncementWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionAnnouncements from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionAnnouncements.
+     */
+    skip?: number
+    distinct?: FactionAnnouncementScalarFieldEnum | FactionAnnouncementScalarFieldEnum[]
+  }
+
+  /**
+   * FactionAnnouncement create
+   */
+  export type FactionAnnouncementCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FactionAnnouncement.
+     */
+    data: XOR<FactionAnnouncementCreateInput, FactionAnnouncementUncheckedCreateInput>
+  }
+
+  /**
+   * FactionAnnouncement createMany
+   */
+  export type FactionAnnouncementCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FactionAnnouncements.
+     */
+    data: FactionAnnouncementCreateManyInput | FactionAnnouncementCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FactionAnnouncement createManyAndReturn
+   */
+  export type FactionAnnouncementCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * The data used to create many FactionAnnouncements.
+     */
+    data: FactionAnnouncementCreateManyInput | FactionAnnouncementCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FactionAnnouncement update
+   */
+  export type FactionAnnouncementUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FactionAnnouncement.
+     */
+    data: XOR<FactionAnnouncementUpdateInput, FactionAnnouncementUncheckedUpdateInput>
+    /**
+     * Choose, which FactionAnnouncement to update.
+     */
+    where: FactionAnnouncementWhereUniqueInput
+  }
+
+  /**
+   * FactionAnnouncement updateMany
+   */
+  export type FactionAnnouncementUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FactionAnnouncements.
+     */
+    data: XOR<FactionAnnouncementUpdateManyMutationInput, FactionAnnouncementUncheckedUpdateManyInput>
+    /**
+     * Filter which FactionAnnouncements to update
+     */
+    where?: FactionAnnouncementWhereInput
+    /**
+     * Limit how many FactionAnnouncements to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FactionAnnouncement updateManyAndReturn
+   */
+  export type FactionAnnouncementUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * The data used to update FactionAnnouncements.
+     */
+    data: XOR<FactionAnnouncementUpdateManyMutationInput, FactionAnnouncementUncheckedUpdateManyInput>
+    /**
+     * Filter which FactionAnnouncements to update
+     */
+    where?: FactionAnnouncementWhereInput
+    /**
+     * Limit how many FactionAnnouncements to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FactionAnnouncement upsert
+   */
+  export type FactionAnnouncementUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FactionAnnouncement to update in case it exists.
+     */
+    where: FactionAnnouncementWhereUniqueInput
+    /**
+     * In case the FactionAnnouncement found by the `where` argument doesn't exist, create a new FactionAnnouncement with this data.
+     */
+    create: XOR<FactionAnnouncementCreateInput, FactionAnnouncementUncheckedCreateInput>
+    /**
+     * In case the FactionAnnouncement was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FactionAnnouncementUpdateInput, FactionAnnouncementUncheckedUpdateInput>
+  }
+
+  /**
+   * FactionAnnouncement delete
+   */
+  export type FactionAnnouncementDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+    /**
+     * Filter which FactionAnnouncement to delete.
+     */
+    where: FactionAnnouncementWhereUniqueInput
+  }
+
+  /**
+   * FactionAnnouncement deleteMany
+   */
+  export type FactionAnnouncementDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FactionAnnouncements to delete
+     */
+    where?: FactionAnnouncementWhereInput
+    /**
+     * Limit how many FactionAnnouncements to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FactionAnnouncement without action
+   */
+  export type FactionAnnouncementDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionAnnouncement
+     */
+    select?: FactionAnnouncementSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionAnnouncement
+     */
+    omit?: FactionAnnouncementOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionAnnouncementInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FactionEvent
+   */
+
+  export type AggregateFactionEvent = {
+    _count: FactionEventCountAggregateOutputType | null
+    _min: FactionEventMinAggregateOutputType | null
+    _max: FactionEventMaxAggregateOutputType | null
+  }
+
+  export type FactionEventMinAggregateOutputType = {
+    id: string | null
+    title: string | null
+    description: string | null
+    startsAt: Date | null
+    endsAt: Date | null
+    location: string | null
+    status: string | null
+    creatorId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FactionEventMaxAggregateOutputType = {
+    id: string | null
+    title: string | null
+    description: string | null
+    startsAt: Date | null
+    endsAt: Date | null
+    location: string | null
+    status: string | null
+    creatorId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FactionEventCountAggregateOutputType = {
+    id: number
+    title: number
+    description: number
+    startsAt: number
+    endsAt: number
+    location: number
+    status: number
+    creatorId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FactionEventMinAggregateInputType = {
+    id?: true
+    title?: true
+    description?: true
+    startsAt?: true
+    endsAt?: true
+    location?: true
+    status?: true
+    creatorId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FactionEventMaxAggregateInputType = {
+    id?: true
+    title?: true
+    description?: true
+    startsAt?: true
+    endsAt?: true
+    location?: true
+    status?: true
+    creatorId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FactionEventCountAggregateInputType = {
+    id?: true
+    title?: true
+    description?: true
+    startsAt?: true
+    endsAt?: true
+    location?: true
+    status?: true
+    creatorId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FactionEventAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FactionEvent to aggregate.
+     */
+    where?: FactionEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionEvents to fetch.
+     */
+    orderBy?: FactionEventOrderByWithRelationInput | FactionEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FactionEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FactionEvents
+    **/
+    _count?: true | FactionEventCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FactionEventMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FactionEventMaxAggregateInputType
+  }
+
+  export type GetFactionEventAggregateType<T extends FactionEventAggregateArgs> = {
+        [P in keyof T & keyof AggregateFactionEvent]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFactionEvent[P]>
+      : GetScalarType<T[P], AggregateFactionEvent[P]>
+  }
+
+
+
+
+  export type FactionEventGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FactionEventWhereInput
+    orderBy?: FactionEventOrderByWithAggregationInput | FactionEventOrderByWithAggregationInput[]
+    by: FactionEventScalarFieldEnum[] | FactionEventScalarFieldEnum
+    having?: FactionEventScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FactionEventCountAggregateInputType | true
+    _min?: FactionEventMinAggregateInputType
+    _max?: FactionEventMaxAggregateInputType
+  }
+
+  export type FactionEventGroupByOutputType = {
+    id: string
+    title: string
+    description: string | null
+    startsAt: Date
+    endsAt: Date | null
+    location: string | null
+    status: string
+    creatorId: string
+    createdAt: Date
+    updatedAt: Date
+    _count: FactionEventCountAggregateOutputType | null
+    _min: FactionEventMinAggregateOutputType | null
+    _max: FactionEventMaxAggregateOutputType | null
+  }
+
+  type GetFactionEventGroupByPayload<T extends FactionEventGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FactionEventGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FactionEventGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FactionEventGroupByOutputType[P]>
+            : GetScalarType<T[P], FactionEventGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FactionEventSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    location?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["factionEvent"]>
+
+  export type FactionEventSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    location?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["factionEvent"]>
+
+  export type FactionEventSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    location?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["factionEvent"]>
+
+  export type FactionEventSelectScalar = {
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    location?: boolean
+    status?: boolean
+    creatorId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FactionEventOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "title" | "description" | "startsAt" | "endsAt" | "location" | "status" | "creatorId" | "createdAt" | "updatedAt", ExtArgs["result"]["factionEvent"]>
+  export type FactionEventInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type FactionEventIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type FactionEventIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    creator?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+  export type $FactionEventPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FactionEvent"
+    objects: {
+      creator: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      title: string
+      description: string | null
+      startsAt: Date
+      endsAt: Date | null
+      location: string | null
+      status: string
+      creatorId: string
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["factionEvent"]>
+    composites: {}
+  }
+
+  type FactionEventGetPayload<S extends boolean | null | undefined | FactionEventDefaultArgs> = $Result.GetResult<Prisma.$FactionEventPayload, S>
+
+  type FactionEventCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FactionEventFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FactionEventCountAggregateInputType | true
+    }
+
+  export interface FactionEventDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FactionEvent'], meta: { name: 'FactionEvent' } }
+    /**
+     * Find zero or one FactionEvent that matches the filter.
+     * @param {FactionEventFindUniqueArgs} args - Arguments to find a FactionEvent
+     * @example
+     * // Get one FactionEvent
+     * const factionEvent = await prisma.factionEvent.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FactionEventFindUniqueArgs>(args: SelectSubset<T, FactionEventFindUniqueArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FactionEvent that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FactionEventFindUniqueOrThrowArgs} args - Arguments to find a FactionEvent
+     * @example
+     * // Get one FactionEvent
+     * const factionEvent = await prisma.factionEvent.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FactionEventFindUniqueOrThrowArgs>(args: SelectSubset<T, FactionEventFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FactionEvent that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionEventFindFirstArgs} args - Arguments to find a FactionEvent
+     * @example
+     * // Get one FactionEvent
+     * const factionEvent = await prisma.factionEvent.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FactionEventFindFirstArgs>(args?: SelectSubset<T, FactionEventFindFirstArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FactionEvent that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionEventFindFirstOrThrowArgs} args - Arguments to find a FactionEvent
+     * @example
+     * // Get one FactionEvent
+     * const factionEvent = await prisma.factionEvent.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FactionEventFindFirstOrThrowArgs>(args?: SelectSubset<T, FactionEventFindFirstOrThrowArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FactionEvents that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionEventFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FactionEvents
+     * const factionEvents = await prisma.factionEvent.findMany()
+     * 
+     * // Get first 10 FactionEvents
+     * const factionEvents = await prisma.factionEvent.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const factionEventWithIdOnly = await prisma.factionEvent.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FactionEventFindManyArgs>(args?: SelectSubset<T, FactionEventFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FactionEvent.
+     * @param {FactionEventCreateArgs} args - Arguments to create a FactionEvent.
+     * @example
+     * // Create one FactionEvent
+     * const FactionEvent = await prisma.factionEvent.create({
+     *   data: {
+     *     // ... data to create a FactionEvent
+     *   }
+     * })
+     * 
+     */
+    create<T extends FactionEventCreateArgs>(args: SelectSubset<T, FactionEventCreateArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FactionEvents.
+     * @param {FactionEventCreateManyArgs} args - Arguments to create many FactionEvents.
+     * @example
+     * // Create many FactionEvents
+     * const factionEvent = await prisma.factionEvent.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FactionEventCreateManyArgs>(args?: SelectSubset<T, FactionEventCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FactionEvents and returns the data saved in the database.
+     * @param {FactionEventCreateManyAndReturnArgs} args - Arguments to create many FactionEvents.
+     * @example
+     * // Create many FactionEvents
+     * const factionEvent = await prisma.factionEvent.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FactionEvents and only return the `id`
+     * const factionEventWithIdOnly = await prisma.factionEvent.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FactionEventCreateManyAndReturnArgs>(args?: SelectSubset<T, FactionEventCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FactionEvent.
+     * @param {FactionEventDeleteArgs} args - Arguments to delete one FactionEvent.
+     * @example
+     * // Delete one FactionEvent
+     * const FactionEvent = await prisma.factionEvent.delete({
+     *   where: {
+     *     // ... filter to delete one FactionEvent
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FactionEventDeleteArgs>(args: SelectSubset<T, FactionEventDeleteArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FactionEvent.
+     * @param {FactionEventUpdateArgs} args - Arguments to update one FactionEvent.
+     * @example
+     * // Update one FactionEvent
+     * const factionEvent = await prisma.factionEvent.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FactionEventUpdateArgs>(args: SelectSubset<T, FactionEventUpdateArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FactionEvents.
+     * @param {FactionEventDeleteManyArgs} args - Arguments to filter FactionEvents to delete.
+     * @example
+     * // Delete a few FactionEvents
+     * const { count } = await prisma.factionEvent.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FactionEventDeleteManyArgs>(args?: SelectSubset<T, FactionEventDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FactionEvents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionEventUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FactionEvents
+     * const factionEvent = await prisma.factionEvent.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FactionEventUpdateManyArgs>(args: SelectSubset<T, FactionEventUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FactionEvents and returns the data updated in the database.
+     * @param {FactionEventUpdateManyAndReturnArgs} args - Arguments to update many FactionEvents.
+     * @example
+     * // Update many FactionEvents
+     * const factionEvent = await prisma.factionEvent.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FactionEvents and only return the `id`
+     * const factionEventWithIdOnly = await prisma.factionEvent.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FactionEventUpdateManyAndReturnArgs>(args: SelectSubset<T, FactionEventUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FactionEvent.
+     * @param {FactionEventUpsertArgs} args - Arguments to update or create a FactionEvent.
+     * @example
+     * // Update or create a FactionEvent
+     * const factionEvent = await prisma.factionEvent.upsert({
+     *   create: {
+     *     // ... data to create a FactionEvent
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FactionEvent we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FactionEventUpsertArgs>(args: SelectSubset<T, FactionEventUpsertArgs<ExtArgs>>): Prisma__FactionEventClient<$Result.GetResult<Prisma.$FactionEventPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FactionEvents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionEventCountArgs} args - Arguments to filter FactionEvents to count.
+     * @example
+     * // Count the number of FactionEvents
+     * const count = await prisma.factionEvent.count({
+     *   where: {
+     *     // ... the filter for the FactionEvents we want to count
+     *   }
+     * })
+    **/
+    count<T extends FactionEventCountArgs>(
+      args?: Subset<T, FactionEventCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FactionEventCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FactionEvent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionEventAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FactionEventAggregateArgs>(args: Subset<T, FactionEventAggregateArgs>): Prisma.PrismaPromise<GetFactionEventAggregateType<T>>
+
+    /**
+     * Group by FactionEvent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FactionEventGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FactionEventGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FactionEventGroupByArgs['orderBy'] }
+        : { orderBy?: FactionEventGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FactionEventGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFactionEventGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FactionEvent model
+   */
+  readonly fields: FactionEventFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FactionEvent.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FactionEventClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    creator<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FactionEvent model
+   */
+  interface FactionEventFieldRefs {
+    readonly id: FieldRef<"FactionEvent", 'String'>
+    readonly title: FieldRef<"FactionEvent", 'String'>
+    readonly description: FieldRef<"FactionEvent", 'String'>
+    readonly startsAt: FieldRef<"FactionEvent", 'DateTime'>
+    readonly endsAt: FieldRef<"FactionEvent", 'DateTime'>
+    readonly location: FieldRef<"FactionEvent", 'String'>
+    readonly status: FieldRef<"FactionEvent", 'String'>
+    readonly creatorId: FieldRef<"FactionEvent", 'String'>
+    readonly createdAt: FieldRef<"FactionEvent", 'DateTime'>
+    readonly updatedAt: FieldRef<"FactionEvent", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FactionEvent findUnique
+   */
+  export type FactionEventFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionEvent to fetch.
+     */
+    where: FactionEventWhereUniqueInput
+  }
+
+  /**
+   * FactionEvent findUniqueOrThrow
+   */
+  export type FactionEventFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionEvent to fetch.
+     */
+    where: FactionEventWhereUniqueInput
+  }
+
+  /**
+   * FactionEvent findFirst
+   */
+  export type FactionEventFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionEvent to fetch.
+     */
+    where?: FactionEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionEvents to fetch.
+     */
+    orderBy?: FactionEventOrderByWithRelationInput | FactionEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FactionEvents.
+     */
+    cursor?: FactionEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FactionEvents.
+     */
+    distinct?: FactionEventScalarFieldEnum | FactionEventScalarFieldEnum[]
+  }
+
+  /**
+   * FactionEvent findFirstOrThrow
+   */
+  export type FactionEventFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionEvent to fetch.
+     */
+    where?: FactionEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionEvents to fetch.
+     */
+    orderBy?: FactionEventOrderByWithRelationInput | FactionEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FactionEvents.
+     */
+    cursor?: FactionEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FactionEvents.
+     */
+    distinct?: FactionEventScalarFieldEnum | FactionEventScalarFieldEnum[]
+  }
+
+  /**
+   * FactionEvent findMany
+   */
+  export type FactionEventFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * Filter, which FactionEvents to fetch.
+     */
+    where?: FactionEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FactionEvents to fetch.
+     */
+    orderBy?: FactionEventOrderByWithRelationInput | FactionEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FactionEvents.
+     */
+    cursor?: FactionEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FactionEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FactionEvents.
+     */
+    skip?: number
+    distinct?: FactionEventScalarFieldEnum | FactionEventScalarFieldEnum[]
+  }
+
+  /**
+   * FactionEvent create
+   */
+  export type FactionEventCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FactionEvent.
+     */
+    data: XOR<FactionEventCreateInput, FactionEventUncheckedCreateInput>
+  }
+
+  /**
+   * FactionEvent createMany
+   */
+  export type FactionEventCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FactionEvents.
+     */
+    data: FactionEventCreateManyInput | FactionEventCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FactionEvent createManyAndReturn
+   */
+  export type FactionEventCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * The data used to create many FactionEvents.
+     */
+    data: FactionEventCreateManyInput | FactionEventCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FactionEvent update
+   */
+  export type FactionEventUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FactionEvent.
+     */
+    data: XOR<FactionEventUpdateInput, FactionEventUncheckedUpdateInput>
+    /**
+     * Choose, which FactionEvent to update.
+     */
+    where: FactionEventWhereUniqueInput
+  }
+
+  /**
+   * FactionEvent updateMany
+   */
+  export type FactionEventUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FactionEvents.
+     */
+    data: XOR<FactionEventUpdateManyMutationInput, FactionEventUncheckedUpdateManyInput>
+    /**
+     * Filter which FactionEvents to update
+     */
+    where?: FactionEventWhereInput
+    /**
+     * Limit how many FactionEvents to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FactionEvent updateManyAndReturn
+   */
+  export type FactionEventUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * The data used to update FactionEvents.
+     */
+    data: XOR<FactionEventUpdateManyMutationInput, FactionEventUncheckedUpdateManyInput>
+    /**
+     * Filter which FactionEvents to update
+     */
+    where?: FactionEventWhereInput
+    /**
+     * Limit how many FactionEvents to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FactionEvent upsert
+   */
+  export type FactionEventUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FactionEvent to update in case it exists.
+     */
+    where: FactionEventWhereUniqueInput
+    /**
+     * In case the FactionEvent found by the `where` argument doesn't exist, create a new FactionEvent with this data.
+     */
+    create: XOR<FactionEventCreateInput, FactionEventUncheckedCreateInput>
+    /**
+     * In case the FactionEvent was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FactionEventUpdateInput, FactionEventUncheckedUpdateInput>
+  }
+
+  /**
+   * FactionEvent delete
+   */
+  export type FactionEventDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+    /**
+     * Filter which FactionEvent to delete.
+     */
+    where: FactionEventWhereUniqueInput
+  }
+
+  /**
+   * FactionEvent deleteMany
+   */
+  export type FactionEventDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FactionEvents to delete
+     */
+    where?: FactionEventWhereInput
+    /**
+     * Limit how many FactionEvents to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FactionEvent without action
+   */
+  export type FactionEventDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FactionEvent
+     */
+    select?: FactionEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FactionEvent
+     */
+    omit?: FactionEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FactionEventInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model Notification
+   */
+
+  export type AggregateNotification = {
+    _count: NotificationCountAggregateOutputType | null
+    _min: NotificationMinAggregateOutputType | null
+    _max: NotificationMaxAggregateOutputType | null
+  }
+
+  export type NotificationMinAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    type: string | null
+    title: string | null
+    body: string | null
+    readAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type NotificationMaxAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    type: string | null
+    title: string | null
+    body: string | null
+    readAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type NotificationCountAggregateOutputType = {
+    id: number
+    userId: number
+    type: number
+    title: number
+    body: number
+    metadata: number
+    readAt: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type NotificationMinAggregateInputType = {
+    id?: true
+    userId?: true
+    type?: true
+    title?: true
+    body?: true
+    readAt?: true
+    createdAt?: true
+  }
+
+  export type NotificationMaxAggregateInputType = {
+    id?: true
+    userId?: true
+    type?: true
+    title?: true
+    body?: true
+    readAt?: true
+    createdAt?: true
+  }
+
+  export type NotificationCountAggregateInputType = {
+    id?: true
+    userId?: true
+    type?: true
+    title?: true
+    body?: true
+    metadata?: true
+    readAt?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type NotificationAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Notification to aggregate.
+     */
+    where?: NotificationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Notifications to fetch.
+     */
+    orderBy?: NotificationOrderByWithRelationInput | NotificationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: NotificationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Notifications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Notifications.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned Notifications
+    **/
+    _count?: true | NotificationCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: NotificationMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: NotificationMaxAggregateInputType
+  }
+
+  export type GetNotificationAggregateType<T extends NotificationAggregateArgs> = {
+        [P in keyof T & keyof AggregateNotification]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateNotification[P]>
+      : GetScalarType<T[P], AggregateNotification[P]>
+  }
+
+
+
+
+  export type NotificationGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: NotificationWhereInput
+    orderBy?: NotificationOrderByWithAggregationInput | NotificationOrderByWithAggregationInput[]
+    by: NotificationScalarFieldEnum[] | NotificationScalarFieldEnum
+    having?: NotificationScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: NotificationCountAggregateInputType | true
+    _min?: NotificationMinAggregateInputType
+    _max?: NotificationMaxAggregateInputType
+  }
+
+  export type NotificationGroupByOutputType = {
+    id: string
+    userId: string
+    type: string
+    title: string
+    body: string
+    metadata: JsonValue | null
+    readAt: Date | null
+    createdAt: Date
+    _count: NotificationCountAggregateOutputType | null
+    _min: NotificationMinAggregateOutputType | null
+    _max: NotificationMaxAggregateOutputType | null
+  }
+
+  type GetNotificationGroupByPayload<T extends NotificationGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<NotificationGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof NotificationGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], NotificationGroupByOutputType[P]>
+            : GetScalarType<T[P], NotificationGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type NotificationSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    type?: boolean
+    title?: boolean
+    body?: boolean
+    metadata?: boolean
+    readAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["notification"]>
+
+  export type NotificationSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    type?: boolean
+    title?: boolean
+    body?: boolean
+    metadata?: boolean
+    readAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["notification"]>
+
+  export type NotificationSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    type?: boolean
+    title?: boolean
+    body?: boolean
+    metadata?: boolean
+    readAt?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["notification"]>
+
+  export type NotificationSelectScalar = {
+    id?: boolean
+    userId?: boolean
+    type?: boolean
+    title?: boolean
+    body?: boolean
+    metadata?: boolean
+    readAt?: boolean
+    createdAt?: boolean
+  }
+
+  export type NotificationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "type" | "title" | "body" | "metadata" | "readAt" | "createdAt", ExtArgs["result"]["notification"]>
+  export type NotificationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type NotificationIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+  export type NotificationIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+  export type $NotificationPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Notification"
+    objects: {
+      user: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      userId: string
+      type: string
+      title: string
+      body: string
+      metadata: Prisma.JsonValue | null
+      readAt: Date | null
+      createdAt: Date
+    }, ExtArgs["result"]["notification"]>
+    composites: {}
+  }
+
+  type NotificationGetPayload<S extends boolean | null | undefined | NotificationDefaultArgs> = $Result.GetResult<Prisma.$NotificationPayload, S>
+
+  type NotificationCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<NotificationFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: NotificationCountAggregateInputType | true
+    }
+
+  export interface NotificationDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Notification'], meta: { name: 'Notification' } }
+    /**
+     * Find zero or one Notification that matches the filter.
+     * @param {NotificationFindUniqueArgs} args - Arguments to find a Notification
+     * @example
+     * // Get one Notification
+     * const notification = await prisma.notification.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends NotificationFindUniqueArgs>(args: SelectSubset<T, NotificationFindUniqueArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Notification that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {NotificationFindUniqueOrThrowArgs} args - Arguments to find a Notification
+     * @example
+     * // Get one Notification
+     * const notification = await prisma.notification.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends NotificationFindUniqueOrThrowArgs>(args: SelectSubset<T, NotificationFindUniqueOrThrowArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Notification that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {NotificationFindFirstArgs} args - Arguments to find a Notification
+     * @example
+     * // Get one Notification
+     * const notification = await prisma.notification.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends NotificationFindFirstArgs>(args?: SelectSubset<T, NotificationFindFirstArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Notification that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {NotificationFindFirstOrThrowArgs} args - Arguments to find a Notification
+     * @example
+     * // Get one Notification
+     * const notification = await prisma.notification.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends NotificationFindFirstOrThrowArgs>(args?: SelectSubset<T, NotificationFindFirstOrThrowArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Notifications that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {NotificationFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Notifications
+     * const notifications = await prisma.notification.findMany()
+     * 
+     * // Get first 10 Notifications
+     * const notifications = await prisma.notification.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const notificationWithIdOnly = await prisma.notification.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends NotificationFindManyArgs>(args?: SelectSubset<T, NotificationFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Notification.
+     * @param {NotificationCreateArgs} args - Arguments to create a Notification.
+     * @example
+     * // Create one Notification
+     * const Notification = await prisma.notification.create({
+     *   data: {
+     *     // ... data to create a Notification
+     *   }
+     * })
+     * 
+     */
+    create<T extends NotificationCreateArgs>(args: SelectSubset<T, NotificationCreateArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Notifications.
+     * @param {NotificationCreateManyArgs} args - Arguments to create many Notifications.
+     * @example
+     * // Create many Notifications
+     * const notification = await prisma.notification.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends NotificationCreateManyArgs>(args?: SelectSubset<T, NotificationCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many Notifications and returns the data saved in the database.
+     * @param {NotificationCreateManyAndReturnArgs} args - Arguments to create many Notifications.
+     * @example
+     * // Create many Notifications
+     * const notification = await prisma.notification.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many Notifications and only return the `id`
+     * const notificationWithIdOnly = await prisma.notification.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends NotificationCreateManyAndReturnArgs>(args?: SelectSubset<T, NotificationCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a Notification.
+     * @param {NotificationDeleteArgs} args - Arguments to delete one Notification.
+     * @example
+     * // Delete one Notification
+     * const Notification = await prisma.notification.delete({
+     *   where: {
+     *     // ... filter to delete one Notification
+     *   }
+     * })
+     * 
+     */
+    delete<T extends NotificationDeleteArgs>(args: SelectSubset<T, NotificationDeleteArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Notification.
+     * @param {NotificationUpdateArgs} args - Arguments to update one Notification.
+     * @example
+     * // Update one Notification
+     * const notification = await prisma.notification.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends NotificationUpdateArgs>(args: SelectSubset<T, NotificationUpdateArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Notifications.
+     * @param {NotificationDeleteManyArgs} args - Arguments to filter Notifications to delete.
+     * @example
+     * // Delete a few Notifications
+     * const { count } = await prisma.notification.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends NotificationDeleteManyArgs>(args?: SelectSubset<T, NotificationDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Notifications.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {NotificationUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Notifications
+     * const notification = await prisma.notification.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends NotificationUpdateManyArgs>(args: SelectSubset<T, NotificationUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Notifications and returns the data updated in the database.
+     * @param {NotificationUpdateManyAndReturnArgs} args - Arguments to update many Notifications.
+     * @example
+     * // Update many Notifications
+     * const notification = await prisma.notification.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more Notifications and only return the `id`
+     * const notificationWithIdOnly = await prisma.notification.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends NotificationUpdateManyAndReturnArgs>(args: SelectSubset<T, NotificationUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one Notification.
+     * @param {NotificationUpsertArgs} args - Arguments to update or create a Notification.
+     * @example
+     * // Update or create a Notification
+     * const notification = await prisma.notification.upsert({
+     *   create: {
+     *     // ... data to create a Notification
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Notification we want to update
+     *   }
+     * })
+     */
+    upsert<T extends NotificationUpsertArgs>(args: SelectSubset<T, NotificationUpsertArgs<ExtArgs>>): Prisma__NotificationClient<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Notifications.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {NotificationCountArgs} args - Arguments to filter Notifications to count.
+     * @example
+     * // Count the number of Notifications
+     * const count = await prisma.notification.count({
+     *   where: {
+     *     // ... the filter for the Notifications we want to count
+     *   }
+     * })
+    **/
+    count<T extends NotificationCountArgs>(
+      args?: Subset<T, NotificationCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], NotificationCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Notification.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {NotificationAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends NotificationAggregateArgs>(args: Subset<T, NotificationAggregateArgs>): Prisma.PrismaPromise<GetNotificationAggregateType<T>>
+
+    /**
+     * Group by Notification.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {NotificationGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends NotificationGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: NotificationGroupByArgs['orderBy'] }
+        : { orderBy?: NotificationGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, NotificationGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetNotificationGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the Notification model
+   */
+  readonly fields: NotificationFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for Notification.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__NotificationClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the Notification model
+   */
+  interface NotificationFieldRefs {
+    readonly id: FieldRef<"Notification", 'String'>
+    readonly userId: FieldRef<"Notification", 'String'>
+    readonly type: FieldRef<"Notification", 'String'>
+    readonly title: FieldRef<"Notification", 'String'>
+    readonly body: FieldRef<"Notification", 'String'>
+    readonly metadata: FieldRef<"Notification", 'Json'>
+    readonly readAt: FieldRef<"Notification", 'DateTime'>
+    readonly createdAt: FieldRef<"Notification", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * Notification findUnique
+   */
+  export type NotificationFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * Filter, which Notification to fetch.
+     */
+    where: NotificationWhereUniqueInput
+  }
+
+  /**
+   * Notification findUniqueOrThrow
+   */
+  export type NotificationFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * Filter, which Notification to fetch.
+     */
+    where: NotificationWhereUniqueInput
+  }
+
+  /**
+   * Notification findFirst
+   */
+  export type NotificationFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * Filter, which Notification to fetch.
+     */
+    where?: NotificationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Notifications to fetch.
+     */
+    orderBy?: NotificationOrderByWithRelationInput | NotificationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Notifications.
+     */
+    cursor?: NotificationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Notifications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Notifications.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Notifications.
+     */
+    distinct?: NotificationScalarFieldEnum | NotificationScalarFieldEnum[]
+  }
+
+  /**
+   * Notification findFirstOrThrow
+   */
+  export type NotificationFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * Filter, which Notification to fetch.
+     */
+    where?: NotificationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Notifications to fetch.
+     */
+    orderBy?: NotificationOrderByWithRelationInput | NotificationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Notifications.
+     */
+    cursor?: NotificationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Notifications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Notifications.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Notifications.
+     */
+    distinct?: NotificationScalarFieldEnum | NotificationScalarFieldEnum[]
+  }
+
+  /**
+   * Notification findMany
+   */
+  export type NotificationFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * Filter, which Notifications to fetch.
+     */
+    where?: NotificationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Notifications to fetch.
+     */
+    orderBy?: NotificationOrderByWithRelationInput | NotificationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing Notifications.
+     */
+    cursor?: NotificationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Notifications from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Notifications.
+     */
+    skip?: number
+    distinct?: NotificationScalarFieldEnum | NotificationScalarFieldEnum[]
+  }
+
+  /**
+   * Notification create
+   */
+  export type NotificationCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * The data needed to create a Notification.
+     */
+    data: XOR<NotificationCreateInput, NotificationUncheckedCreateInput>
+  }
+
+  /**
+   * Notification createMany
+   */
+  export type NotificationCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many Notifications.
+     */
+    data: NotificationCreateManyInput | NotificationCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * Notification createManyAndReturn
+   */
+  export type NotificationCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * The data used to create many Notifications.
+     */
+    data: NotificationCreateManyInput | NotificationCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Notification update
+   */
+  export type NotificationUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * The data needed to update a Notification.
+     */
+    data: XOR<NotificationUpdateInput, NotificationUncheckedUpdateInput>
+    /**
+     * Choose, which Notification to update.
+     */
+    where: NotificationWhereUniqueInput
+  }
+
+  /**
+   * Notification updateMany
+   */
+  export type NotificationUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update Notifications.
+     */
+    data: XOR<NotificationUpdateManyMutationInput, NotificationUncheckedUpdateManyInput>
+    /**
+     * Filter which Notifications to update
+     */
+    where?: NotificationWhereInput
+    /**
+     * Limit how many Notifications to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * Notification updateManyAndReturn
+   */
+  export type NotificationUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * The data used to update Notifications.
+     */
+    data: XOR<NotificationUpdateManyMutationInput, NotificationUncheckedUpdateManyInput>
+    /**
+     * Filter which Notifications to update
+     */
+    where?: NotificationWhereInput
+    /**
+     * Limit how many Notifications to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Notification upsert
+   */
+  export type NotificationUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * The filter to search for the Notification to update in case it exists.
+     */
+    where: NotificationWhereUniqueInput
+    /**
+     * In case the Notification found by the `where` argument doesn't exist, create a new Notification with this data.
+     */
+    create: XOR<NotificationCreateInput, NotificationUncheckedCreateInput>
+    /**
+     * In case the Notification was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<NotificationUpdateInput, NotificationUncheckedUpdateInput>
+  }
+
+  /**
+   * Notification delete
+   */
+  export type NotificationDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+    /**
+     * Filter which Notification to delete.
+     */
+    where: NotificationWhereUniqueInput
+  }
+
+  /**
+   * Notification deleteMany
+   */
+  export type NotificationDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Notifications to delete
+     */
+    where?: NotificationWhereInput
+    /**
+     * Limit how many Notifications to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * Notification without action
+   */
+  export type NotificationDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Notification
+     */
+    select?: NotificationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Notification
+     */
+    omit?: NotificationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NotificationInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Model GuildJoinRequest
    */
 
@@ -22015,6 +25877,7 @@ export namespace Prisma {
     spawnTime: Date | null
     location: string | null
     guildTurn: string | null
+    guildTurnGuildId: string | null
     status: $Enums.BossEventStatus | null
     killedAt: Date | null
     creatorId: string | null
@@ -22031,6 +25894,7 @@ export namespace Prisma {
     spawnTime: Date | null
     location: string | null
     guildTurn: string | null
+    guildTurnGuildId: string | null
     status: $Enums.BossEventStatus | null
     killedAt: Date | null
     creatorId: string | null
@@ -22047,6 +25911,7 @@ export namespace Prisma {
     spawnTime: number
     location: number
     guildTurn: number
+    guildTurnGuildId: number
     status: number
     killedAt: number
     creatorId: number
@@ -22065,6 +25930,7 @@ export namespace Prisma {
     spawnTime?: true
     location?: true
     guildTurn?: true
+    guildTurnGuildId?: true
     status?: true
     killedAt?: true
     creatorId?: true
@@ -22081,6 +25947,7 @@ export namespace Prisma {
     spawnTime?: true
     location?: true
     guildTurn?: true
+    guildTurnGuildId?: true
     status?: true
     killedAt?: true
     creatorId?: true
@@ -22097,6 +25964,7 @@ export namespace Prisma {
     spawnTime?: true
     location?: true
     guildTurn?: true
+    guildTurnGuildId?: true
     status?: true
     killedAt?: true
     creatorId?: true
@@ -22186,6 +26054,7 @@ export namespace Prisma {
     spawnTime: Date
     location: string
     guildTurn: string | null
+    guildTurnGuildId: string | null
     status: $Enums.BossEventStatus
     killedAt: Date | null
     creatorId: string
@@ -22219,6 +26088,7 @@ export namespace Prisma {
     spawnTime?: boolean
     location?: boolean
     guildTurn?: boolean
+    guildTurnGuildId?: boolean
     status?: boolean
     killedAt?: boolean
     creatorId?: boolean
@@ -22226,6 +26096,7 @@ export namespace Prisma {
     lootDrop?: boolean
     screenshotUrl?: boolean
     guild?: boolean | BossSchedule$guildArgs<ExtArgs>
+    guildTurnGuild?: boolean | BossSchedule$guildTurnGuildArgs<ExtArgs>
     attendanceSessions?: boolean | BossSchedule$attendanceSessionsArgs<ExtArgs>
     lootSales?: boolean | BossSchedule$lootSalesArgs<ExtArgs>
     _count?: boolean | BossScheduleCountOutputTypeDefaultArgs<ExtArgs>
@@ -22239,6 +26110,7 @@ export namespace Prisma {
     spawnTime?: boolean
     location?: boolean
     guildTurn?: boolean
+    guildTurnGuildId?: boolean
     status?: boolean
     killedAt?: boolean
     creatorId?: boolean
@@ -22246,6 +26118,7 @@ export namespace Prisma {
     lootDrop?: boolean
     screenshotUrl?: boolean
     guild?: boolean | BossSchedule$guildArgs<ExtArgs>
+    guildTurnGuild?: boolean | BossSchedule$guildTurnGuildArgs<ExtArgs>
   }, ExtArgs["result"]["bossSchedule"]>
 
   export type BossScheduleSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
@@ -22256,6 +26129,7 @@ export namespace Prisma {
     spawnTime?: boolean
     location?: boolean
     guildTurn?: boolean
+    guildTurnGuildId?: boolean
     status?: boolean
     killedAt?: boolean
     creatorId?: boolean
@@ -22263,6 +26137,7 @@ export namespace Prisma {
     lootDrop?: boolean
     screenshotUrl?: boolean
     guild?: boolean | BossSchedule$guildArgs<ExtArgs>
+    guildTurnGuild?: boolean | BossSchedule$guildTurnGuildArgs<ExtArgs>
   }, ExtArgs["result"]["bossSchedule"]>
 
   export type BossScheduleSelectScalar = {
@@ -22273,6 +26148,7 @@ export namespace Prisma {
     spawnTime?: boolean
     location?: boolean
     guildTurn?: boolean
+    guildTurnGuildId?: boolean
     status?: boolean
     killedAt?: boolean
     creatorId?: boolean
@@ -22281,24 +26157,28 @@ export namespace Prisma {
     screenshotUrl?: boolean
   }
 
-  export type BossScheduleOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "bossName" | "bossImageUrl" | "spawnTime" | "location" | "guildTurn" | "status" | "killedAt" | "creatorId" | "createdAt" | "lootDrop" | "screenshotUrl", ExtArgs["result"]["bossSchedule"]>
+  export type BossScheduleOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "bossName" | "bossImageUrl" | "spawnTime" | "location" | "guildTurn" | "guildTurnGuildId" | "status" | "killedAt" | "creatorId" | "createdAt" | "lootDrop" | "screenshotUrl", ExtArgs["result"]["bossSchedule"]>
   export type BossScheduleInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     guild?: boolean | BossSchedule$guildArgs<ExtArgs>
+    guildTurnGuild?: boolean | BossSchedule$guildTurnGuildArgs<ExtArgs>
     attendanceSessions?: boolean | BossSchedule$attendanceSessionsArgs<ExtArgs>
     lootSales?: boolean | BossSchedule$lootSalesArgs<ExtArgs>
     _count?: boolean | BossScheduleCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type BossScheduleIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     guild?: boolean | BossSchedule$guildArgs<ExtArgs>
+    guildTurnGuild?: boolean | BossSchedule$guildTurnGuildArgs<ExtArgs>
   }
   export type BossScheduleIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     guild?: boolean | BossSchedule$guildArgs<ExtArgs>
+    guildTurnGuild?: boolean | BossSchedule$guildTurnGuildArgs<ExtArgs>
   }
 
   export type $BossSchedulePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "BossSchedule"
     objects: {
       guild: Prisma.$GuildPayload<ExtArgs> | null
+      guildTurnGuild: Prisma.$GuildPayload<ExtArgs> | null
       attendanceSessions: Prisma.$AttendanceSessionPayload<ExtArgs>[]
       lootSales: Prisma.$LootSalePayload<ExtArgs>[]
     }
@@ -22310,6 +26190,7 @@ export namespace Prisma {
       spawnTime: Date
       location: string
       guildTurn: string | null
+      guildTurnGuildId: string | null
       status: $Enums.BossEventStatus
       killedAt: Date | null
       creatorId: string
@@ -22711,6 +26592,7 @@ export namespace Prisma {
   export interface Prisma__BossScheduleClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     guild<T extends BossSchedule$guildArgs<ExtArgs> = {}>(args?: Subset<T, BossSchedule$guildArgs<ExtArgs>>): Prisma__GuildClient<$Result.GetResult<Prisma.$GuildPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    guildTurnGuild<T extends BossSchedule$guildTurnGuildArgs<ExtArgs> = {}>(args?: Subset<T, BossSchedule$guildTurnGuildArgs<ExtArgs>>): Prisma__GuildClient<$Result.GetResult<Prisma.$GuildPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     attendanceSessions<T extends BossSchedule$attendanceSessionsArgs<ExtArgs> = {}>(args?: Subset<T, BossSchedule$attendanceSessionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AttendanceSessionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     lootSales<T extends BossSchedule$lootSalesArgs<ExtArgs> = {}>(args?: Subset<T, BossSchedule$lootSalesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LootSalePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
@@ -22749,6 +26631,7 @@ export namespace Prisma {
     readonly spawnTime: FieldRef<"BossSchedule", 'DateTime'>
     readonly location: FieldRef<"BossSchedule", 'String'>
     readonly guildTurn: FieldRef<"BossSchedule", 'String'>
+    readonly guildTurnGuildId: FieldRef<"BossSchedule", 'String'>
     readonly status: FieldRef<"BossSchedule", 'BossEventStatus'>
     readonly killedAt: FieldRef<"BossSchedule", 'DateTime'>
     readonly creatorId: FieldRef<"BossSchedule", 'String'>
@@ -23170,6 +27053,25 @@ export namespace Prisma {
   }
 
   /**
+   * BossSchedule.guildTurnGuild
+   */
+  export type BossSchedule$guildTurnGuildArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Guild
+     */
+    select?: GuildSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Guild
+     */
+    omit?: GuildOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: GuildInclude<ExtArgs> | null
+    where?: GuildWhereInput
+  }
+
+  /**
    * BossSchedule.attendanceSessions
    */
   export type BossSchedule$attendanceSessionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -23233,6 +27135,1152 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: BossScheduleInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model BossRotation
+   */
+
+  export type AggregateBossRotation = {
+    _count: BossRotationCountAggregateOutputType | null
+    _avg: BossRotationAvgAggregateOutputType | null
+    _sum: BossRotationSumAggregateOutputType | null
+    _min: BossRotationMinAggregateOutputType | null
+    _max: BossRotationMaxAggregateOutputType | null
+  }
+
+  export type BossRotationAvgAggregateOutputType = {
+    currentIndex: number | null
+  }
+
+  export type BossRotationSumAggregateOutputType = {
+    currentIndex: number | null
+  }
+
+  export type BossRotationMinAggregateOutputType = {
+    id: string | null
+    bossName: string | null
+    currentIndex: number | null
+    nextSpawnTime: Date | null
+    updatedById: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BossRotationMaxAggregateOutputType = {
+    id: string | null
+    bossName: string | null
+    currentIndex: number | null
+    nextSpawnTime: Date | null
+    updatedById: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BossRotationCountAggregateOutputType = {
+    id: number
+    bossName: number
+    queueGuildIds: number
+    currentIndex: number
+    nextSpawnTime: number
+    updatedById: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type BossRotationAvgAggregateInputType = {
+    currentIndex?: true
+  }
+
+  export type BossRotationSumAggregateInputType = {
+    currentIndex?: true
+  }
+
+  export type BossRotationMinAggregateInputType = {
+    id?: true
+    bossName?: true
+    currentIndex?: true
+    nextSpawnTime?: true
+    updatedById?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BossRotationMaxAggregateInputType = {
+    id?: true
+    bossName?: true
+    currentIndex?: true
+    nextSpawnTime?: true
+    updatedById?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BossRotationCountAggregateInputType = {
+    id?: true
+    bossName?: true
+    queueGuildIds?: true
+    currentIndex?: true
+    nextSpawnTime?: true
+    updatedById?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type BossRotationAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which BossRotation to aggregate.
+     */
+    where?: BossRotationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BossRotations to fetch.
+     */
+    orderBy?: BossRotationOrderByWithRelationInput | BossRotationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: BossRotationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BossRotations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BossRotations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned BossRotations
+    **/
+    _count?: true | BossRotationCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: BossRotationAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: BossRotationSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: BossRotationMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: BossRotationMaxAggregateInputType
+  }
+
+  export type GetBossRotationAggregateType<T extends BossRotationAggregateArgs> = {
+        [P in keyof T & keyof AggregateBossRotation]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateBossRotation[P]>
+      : GetScalarType<T[P], AggregateBossRotation[P]>
+  }
+
+
+
+
+  export type BossRotationGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: BossRotationWhereInput
+    orderBy?: BossRotationOrderByWithAggregationInput | BossRotationOrderByWithAggregationInput[]
+    by: BossRotationScalarFieldEnum[] | BossRotationScalarFieldEnum
+    having?: BossRotationScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: BossRotationCountAggregateInputType | true
+    _avg?: BossRotationAvgAggregateInputType
+    _sum?: BossRotationSumAggregateInputType
+    _min?: BossRotationMinAggregateInputType
+    _max?: BossRotationMaxAggregateInputType
+  }
+
+  export type BossRotationGroupByOutputType = {
+    id: string
+    bossName: string
+    queueGuildIds: JsonValue
+    currentIndex: number
+    nextSpawnTime: Date | null
+    updatedById: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: BossRotationCountAggregateOutputType | null
+    _avg: BossRotationAvgAggregateOutputType | null
+    _sum: BossRotationSumAggregateOutputType | null
+    _min: BossRotationMinAggregateOutputType | null
+    _max: BossRotationMaxAggregateOutputType | null
+  }
+
+  type GetBossRotationGroupByPayload<T extends BossRotationGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<BossRotationGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof BossRotationGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], BossRotationGroupByOutputType[P]>
+            : GetScalarType<T[P], BossRotationGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type BossRotationSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bossName?: boolean
+    queueGuildIds?: boolean
+    currentIndex?: boolean
+    nextSpawnTime?: boolean
+    updatedById?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    updatedBy?: boolean | BossRotation$updatedByArgs<ExtArgs>
+  }, ExtArgs["result"]["bossRotation"]>
+
+  export type BossRotationSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bossName?: boolean
+    queueGuildIds?: boolean
+    currentIndex?: boolean
+    nextSpawnTime?: boolean
+    updatedById?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    updatedBy?: boolean | BossRotation$updatedByArgs<ExtArgs>
+  }, ExtArgs["result"]["bossRotation"]>
+
+  export type BossRotationSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bossName?: boolean
+    queueGuildIds?: boolean
+    currentIndex?: boolean
+    nextSpawnTime?: boolean
+    updatedById?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    updatedBy?: boolean | BossRotation$updatedByArgs<ExtArgs>
+  }, ExtArgs["result"]["bossRotation"]>
+
+  export type BossRotationSelectScalar = {
+    id?: boolean
+    bossName?: boolean
+    queueGuildIds?: boolean
+    currentIndex?: boolean
+    nextSpawnTime?: boolean
+    updatedById?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type BossRotationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bossName" | "queueGuildIds" | "currentIndex" | "nextSpawnTime" | "updatedById" | "createdAt" | "updatedAt", ExtArgs["result"]["bossRotation"]>
+  export type BossRotationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    updatedBy?: boolean | BossRotation$updatedByArgs<ExtArgs>
+  }
+  export type BossRotationIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    updatedBy?: boolean | BossRotation$updatedByArgs<ExtArgs>
+  }
+  export type BossRotationIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    updatedBy?: boolean | BossRotation$updatedByArgs<ExtArgs>
+  }
+
+  export type $BossRotationPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "BossRotation"
+    objects: {
+      updatedBy: Prisma.$UserPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      bossName: string
+      queueGuildIds: Prisma.JsonValue
+      currentIndex: number
+      nextSpawnTime: Date | null
+      updatedById: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["bossRotation"]>
+    composites: {}
+  }
+
+  type BossRotationGetPayload<S extends boolean | null | undefined | BossRotationDefaultArgs> = $Result.GetResult<Prisma.$BossRotationPayload, S>
+
+  type BossRotationCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<BossRotationFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: BossRotationCountAggregateInputType | true
+    }
+
+  export interface BossRotationDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['BossRotation'], meta: { name: 'BossRotation' } }
+    /**
+     * Find zero or one BossRotation that matches the filter.
+     * @param {BossRotationFindUniqueArgs} args - Arguments to find a BossRotation
+     * @example
+     * // Get one BossRotation
+     * const bossRotation = await prisma.bossRotation.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends BossRotationFindUniqueArgs>(args: SelectSubset<T, BossRotationFindUniqueArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one BossRotation that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {BossRotationFindUniqueOrThrowArgs} args - Arguments to find a BossRotation
+     * @example
+     * // Get one BossRotation
+     * const bossRotation = await prisma.bossRotation.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends BossRotationFindUniqueOrThrowArgs>(args: SelectSubset<T, BossRotationFindUniqueOrThrowArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first BossRotation that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BossRotationFindFirstArgs} args - Arguments to find a BossRotation
+     * @example
+     * // Get one BossRotation
+     * const bossRotation = await prisma.bossRotation.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends BossRotationFindFirstArgs>(args?: SelectSubset<T, BossRotationFindFirstArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first BossRotation that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BossRotationFindFirstOrThrowArgs} args - Arguments to find a BossRotation
+     * @example
+     * // Get one BossRotation
+     * const bossRotation = await prisma.bossRotation.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends BossRotationFindFirstOrThrowArgs>(args?: SelectSubset<T, BossRotationFindFirstOrThrowArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more BossRotations that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BossRotationFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all BossRotations
+     * const bossRotations = await prisma.bossRotation.findMany()
+     * 
+     * // Get first 10 BossRotations
+     * const bossRotations = await prisma.bossRotation.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const bossRotationWithIdOnly = await prisma.bossRotation.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends BossRotationFindManyArgs>(args?: SelectSubset<T, BossRotationFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a BossRotation.
+     * @param {BossRotationCreateArgs} args - Arguments to create a BossRotation.
+     * @example
+     * // Create one BossRotation
+     * const BossRotation = await prisma.bossRotation.create({
+     *   data: {
+     *     // ... data to create a BossRotation
+     *   }
+     * })
+     * 
+     */
+    create<T extends BossRotationCreateArgs>(args: SelectSubset<T, BossRotationCreateArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many BossRotations.
+     * @param {BossRotationCreateManyArgs} args - Arguments to create many BossRotations.
+     * @example
+     * // Create many BossRotations
+     * const bossRotation = await prisma.bossRotation.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends BossRotationCreateManyArgs>(args?: SelectSubset<T, BossRotationCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many BossRotations and returns the data saved in the database.
+     * @param {BossRotationCreateManyAndReturnArgs} args - Arguments to create many BossRotations.
+     * @example
+     * // Create many BossRotations
+     * const bossRotation = await prisma.bossRotation.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many BossRotations and only return the `id`
+     * const bossRotationWithIdOnly = await prisma.bossRotation.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends BossRotationCreateManyAndReturnArgs>(args?: SelectSubset<T, BossRotationCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a BossRotation.
+     * @param {BossRotationDeleteArgs} args - Arguments to delete one BossRotation.
+     * @example
+     * // Delete one BossRotation
+     * const BossRotation = await prisma.bossRotation.delete({
+     *   where: {
+     *     // ... filter to delete one BossRotation
+     *   }
+     * })
+     * 
+     */
+    delete<T extends BossRotationDeleteArgs>(args: SelectSubset<T, BossRotationDeleteArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one BossRotation.
+     * @param {BossRotationUpdateArgs} args - Arguments to update one BossRotation.
+     * @example
+     * // Update one BossRotation
+     * const bossRotation = await prisma.bossRotation.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends BossRotationUpdateArgs>(args: SelectSubset<T, BossRotationUpdateArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more BossRotations.
+     * @param {BossRotationDeleteManyArgs} args - Arguments to filter BossRotations to delete.
+     * @example
+     * // Delete a few BossRotations
+     * const { count } = await prisma.bossRotation.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends BossRotationDeleteManyArgs>(args?: SelectSubset<T, BossRotationDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more BossRotations.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BossRotationUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many BossRotations
+     * const bossRotation = await prisma.bossRotation.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends BossRotationUpdateManyArgs>(args: SelectSubset<T, BossRotationUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more BossRotations and returns the data updated in the database.
+     * @param {BossRotationUpdateManyAndReturnArgs} args - Arguments to update many BossRotations.
+     * @example
+     * // Update many BossRotations
+     * const bossRotation = await prisma.bossRotation.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more BossRotations and only return the `id`
+     * const bossRotationWithIdOnly = await prisma.bossRotation.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends BossRotationUpdateManyAndReturnArgs>(args: SelectSubset<T, BossRotationUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one BossRotation.
+     * @param {BossRotationUpsertArgs} args - Arguments to update or create a BossRotation.
+     * @example
+     * // Update or create a BossRotation
+     * const bossRotation = await prisma.bossRotation.upsert({
+     *   create: {
+     *     // ... data to create a BossRotation
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the BossRotation we want to update
+     *   }
+     * })
+     */
+    upsert<T extends BossRotationUpsertArgs>(args: SelectSubset<T, BossRotationUpsertArgs<ExtArgs>>): Prisma__BossRotationClient<$Result.GetResult<Prisma.$BossRotationPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of BossRotations.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BossRotationCountArgs} args - Arguments to filter BossRotations to count.
+     * @example
+     * // Count the number of BossRotations
+     * const count = await prisma.bossRotation.count({
+     *   where: {
+     *     // ... the filter for the BossRotations we want to count
+     *   }
+     * })
+    **/
+    count<T extends BossRotationCountArgs>(
+      args?: Subset<T, BossRotationCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], BossRotationCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a BossRotation.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BossRotationAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends BossRotationAggregateArgs>(args: Subset<T, BossRotationAggregateArgs>): Prisma.PrismaPromise<GetBossRotationAggregateType<T>>
+
+    /**
+     * Group by BossRotation.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BossRotationGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends BossRotationGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: BossRotationGroupByArgs['orderBy'] }
+        : { orderBy?: BossRotationGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, BossRotationGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetBossRotationGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the BossRotation model
+   */
+  readonly fields: BossRotationFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for BossRotation.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__BossRotationClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    updatedBy<T extends BossRotation$updatedByArgs<ExtArgs> = {}>(args?: Subset<T, BossRotation$updatedByArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the BossRotation model
+   */
+  interface BossRotationFieldRefs {
+    readonly id: FieldRef<"BossRotation", 'String'>
+    readonly bossName: FieldRef<"BossRotation", 'String'>
+    readonly queueGuildIds: FieldRef<"BossRotation", 'Json'>
+    readonly currentIndex: FieldRef<"BossRotation", 'Int'>
+    readonly nextSpawnTime: FieldRef<"BossRotation", 'DateTime'>
+    readonly updatedById: FieldRef<"BossRotation", 'String'>
+    readonly createdAt: FieldRef<"BossRotation", 'DateTime'>
+    readonly updatedAt: FieldRef<"BossRotation", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * BossRotation findUnique
+   */
+  export type BossRotationFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * Filter, which BossRotation to fetch.
+     */
+    where: BossRotationWhereUniqueInput
+  }
+
+  /**
+   * BossRotation findUniqueOrThrow
+   */
+  export type BossRotationFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * Filter, which BossRotation to fetch.
+     */
+    where: BossRotationWhereUniqueInput
+  }
+
+  /**
+   * BossRotation findFirst
+   */
+  export type BossRotationFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * Filter, which BossRotation to fetch.
+     */
+    where?: BossRotationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BossRotations to fetch.
+     */
+    orderBy?: BossRotationOrderByWithRelationInput | BossRotationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for BossRotations.
+     */
+    cursor?: BossRotationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BossRotations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BossRotations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of BossRotations.
+     */
+    distinct?: BossRotationScalarFieldEnum | BossRotationScalarFieldEnum[]
+  }
+
+  /**
+   * BossRotation findFirstOrThrow
+   */
+  export type BossRotationFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * Filter, which BossRotation to fetch.
+     */
+    where?: BossRotationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BossRotations to fetch.
+     */
+    orderBy?: BossRotationOrderByWithRelationInput | BossRotationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for BossRotations.
+     */
+    cursor?: BossRotationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BossRotations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BossRotations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of BossRotations.
+     */
+    distinct?: BossRotationScalarFieldEnum | BossRotationScalarFieldEnum[]
+  }
+
+  /**
+   * BossRotation findMany
+   */
+  export type BossRotationFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * Filter, which BossRotations to fetch.
+     */
+    where?: BossRotationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BossRotations to fetch.
+     */
+    orderBy?: BossRotationOrderByWithRelationInput | BossRotationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing BossRotations.
+     */
+    cursor?: BossRotationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BossRotations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BossRotations.
+     */
+    skip?: number
+    distinct?: BossRotationScalarFieldEnum | BossRotationScalarFieldEnum[]
+  }
+
+  /**
+   * BossRotation create
+   */
+  export type BossRotationCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * The data needed to create a BossRotation.
+     */
+    data: XOR<BossRotationCreateInput, BossRotationUncheckedCreateInput>
+  }
+
+  /**
+   * BossRotation createMany
+   */
+  export type BossRotationCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many BossRotations.
+     */
+    data: BossRotationCreateManyInput | BossRotationCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * BossRotation createManyAndReturn
+   */
+  export type BossRotationCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * The data used to create many BossRotations.
+     */
+    data: BossRotationCreateManyInput | BossRotationCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * BossRotation update
+   */
+  export type BossRotationUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * The data needed to update a BossRotation.
+     */
+    data: XOR<BossRotationUpdateInput, BossRotationUncheckedUpdateInput>
+    /**
+     * Choose, which BossRotation to update.
+     */
+    where: BossRotationWhereUniqueInput
+  }
+
+  /**
+   * BossRotation updateMany
+   */
+  export type BossRotationUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update BossRotations.
+     */
+    data: XOR<BossRotationUpdateManyMutationInput, BossRotationUncheckedUpdateManyInput>
+    /**
+     * Filter which BossRotations to update
+     */
+    where?: BossRotationWhereInput
+    /**
+     * Limit how many BossRotations to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * BossRotation updateManyAndReturn
+   */
+  export type BossRotationUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * The data used to update BossRotations.
+     */
+    data: XOR<BossRotationUpdateManyMutationInput, BossRotationUncheckedUpdateManyInput>
+    /**
+     * Filter which BossRotations to update
+     */
+    where?: BossRotationWhereInput
+    /**
+     * Limit how many BossRotations to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * BossRotation upsert
+   */
+  export type BossRotationUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * The filter to search for the BossRotation to update in case it exists.
+     */
+    where: BossRotationWhereUniqueInput
+    /**
+     * In case the BossRotation found by the `where` argument doesn't exist, create a new BossRotation with this data.
+     */
+    create: XOR<BossRotationCreateInput, BossRotationUncheckedCreateInput>
+    /**
+     * In case the BossRotation was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<BossRotationUpdateInput, BossRotationUncheckedUpdateInput>
+  }
+
+  /**
+   * BossRotation delete
+   */
+  export type BossRotationDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
+    /**
+     * Filter which BossRotation to delete.
+     */
+    where: BossRotationWhereUniqueInput
+  }
+
+  /**
+   * BossRotation deleteMany
+   */
+  export type BossRotationDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which BossRotations to delete
+     */
+    where?: BossRotationWhereInput
+    /**
+     * Limit how many BossRotations to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * BossRotation.updatedBy
+   */
+  export type BossRotation$updatedByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the User
+     */
+    select?: UserSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the User
+     */
+    omit?: UserOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: UserInclude<ExtArgs> | null
+    where?: UserWhereInput
+  }
+
+  /**
+   * BossRotation without action
+   */
+  export type BossRotationDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BossRotation
+     */
+    select?: BossRotationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BossRotation
+     */
+    omit?: BossRotationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: BossRotationInclude<ExtArgs> | null
   }
 
 
@@ -25782,6 +30830,50 @@ export namespace Prisma {
   export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
 
 
+  export const FactionAnnouncementScalarFieldEnum: {
+    id: 'id',
+    title: 'title',
+    body: 'body',
+    priority: 'priority',
+    status: 'status',
+    creatorId: 'creatorId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FactionAnnouncementScalarFieldEnum = (typeof FactionAnnouncementScalarFieldEnum)[keyof typeof FactionAnnouncementScalarFieldEnum]
+
+
+  export const FactionEventScalarFieldEnum: {
+    id: 'id',
+    title: 'title',
+    description: 'description',
+    startsAt: 'startsAt',
+    endsAt: 'endsAt',
+    location: 'location',
+    status: 'status',
+    creatorId: 'creatorId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FactionEventScalarFieldEnum = (typeof FactionEventScalarFieldEnum)[keyof typeof FactionEventScalarFieldEnum]
+
+
+  export const NotificationScalarFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    type: 'type',
+    title: 'title',
+    body: 'body',
+    metadata: 'metadata',
+    readAt: 'readAt',
+    createdAt: 'createdAt'
+  };
+
+  export type NotificationScalarFieldEnum = (typeof NotificationScalarFieldEnum)[keyof typeof NotificationScalarFieldEnum]
+
+
   export const GuildJoinRequestScalarFieldEnum: {
     id: 'id',
     guildId: 'guildId',
@@ -25832,6 +30924,7 @@ export namespace Prisma {
     spawnTime: 'spawnTime',
     location: 'location',
     guildTurn: 'guildTurn',
+    guildTurnGuildId: 'guildTurnGuildId',
     status: 'status',
     killedAt: 'killedAt',
     creatorId: 'creatorId',
@@ -25841,6 +30934,20 @@ export namespace Prisma {
   };
 
   export type BossScheduleScalarFieldEnum = (typeof BossScheduleScalarFieldEnum)[keyof typeof BossScheduleScalarFieldEnum]
+
+
+  export const BossRotationScalarFieldEnum: {
+    id: 'id',
+    bossName: 'bossName',
+    queueGuildIds: 'queueGuildIds',
+    currentIndex: 'currentIndex',
+    nextSpawnTime: 'nextSpawnTime',
+    updatedById: 'updatedById',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type BossRotationScalarFieldEnum = (typeof BossRotationScalarFieldEnum)[keyof typeof BossRotationScalarFieldEnum]
 
 
   export const BossScalarFieldEnum: {
@@ -26202,6 +31309,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenListRelationFilter
     guildJoinRequests?: GuildJoinRequestListRelationFilter
     attendanceRecords?: AttendanceRecordListRelationFilter
+    factionAnnouncements?: FactionAnnouncementListRelationFilter
+    factionEvents?: FactionEventListRelationFilter
+    notifications?: NotificationListRelationFilter
+    bossRotationsUpdated?: BossRotationListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -26225,6 +31336,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenOrderByRelationAggregateInput
     guildJoinRequests?: GuildJoinRequestOrderByRelationAggregateInput
     attendanceRecords?: AttendanceRecordOrderByRelationAggregateInput
+    factionAnnouncements?: FactionAnnouncementOrderByRelationAggregateInput
+    factionEvents?: FactionEventOrderByRelationAggregateInput
+    notifications?: NotificationOrderByRelationAggregateInput
+    bossRotationsUpdated?: BossRotationOrderByRelationAggregateInput
   }
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -26251,6 +31366,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenListRelationFilter
     guildJoinRequests?: GuildJoinRequestListRelationFilter
     attendanceRecords?: AttendanceRecordListRelationFilter
+    factionAnnouncements?: FactionAnnouncementListRelationFilter
+    factionEvents?: FactionEventListRelationFilter
+    notifications?: NotificationListRelationFilter
+    bossRotationsUpdated?: BossRotationListRelationFilter
   }, "id" | "email">
 
   export type UserOrderByWithAggregationInput = {
@@ -26507,6 +31626,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestListRelationFilter
     attendanceSessions?: AttendanceSessionListRelationFilter
     bossSchedules?: BossScheduleListRelationFilter
+    bossTurnSchedules?: BossScheduleListRelationFilter
     lootSales?: LootSaleListRelationFilter
     pointsSnapshots?: GuildPointsSnapshotListRelationFilter
     auctionItems?: AuctionItemListRelationFilter
@@ -26531,6 +31651,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestOrderByRelationAggregateInput
     attendanceSessions?: AttendanceSessionOrderByRelationAggregateInput
     bossSchedules?: BossScheduleOrderByRelationAggregateInput
+    bossTurnSchedules?: BossScheduleOrderByRelationAggregateInput
     lootSales?: LootSaleOrderByRelationAggregateInput
     pointsSnapshots?: GuildPointsSnapshotOrderByRelationAggregateInput
     auctionItems?: AuctionItemOrderByRelationAggregateInput
@@ -26558,6 +31679,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestListRelationFilter
     attendanceSessions?: AttendanceSessionListRelationFilter
     bossSchedules?: BossScheduleListRelationFilter
+    bossTurnSchedules?: BossScheduleListRelationFilter
     lootSales?: LootSaleListRelationFilter
     pointsSnapshots?: GuildPointsSnapshotListRelationFilter
     auctionItems?: AuctionItemListRelationFilter
@@ -27350,6 +32472,226 @@ export namespace Prisma {
     createdAt?: DateTimeWithAggregatesFilter<"AuditLog"> | Date | string
   }
 
+  export type FactionAnnouncementWhereInput = {
+    AND?: FactionAnnouncementWhereInput | FactionAnnouncementWhereInput[]
+    OR?: FactionAnnouncementWhereInput[]
+    NOT?: FactionAnnouncementWhereInput | FactionAnnouncementWhereInput[]
+    id?: StringFilter<"FactionAnnouncement"> | string
+    title?: StringFilter<"FactionAnnouncement"> | string
+    body?: StringFilter<"FactionAnnouncement"> | string
+    priority?: StringFilter<"FactionAnnouncement"> | string
+    status?: StringFilter<"FactionAnnouncement"> | string
+    creatorId?: StringFilter<"FactionAnnouncement"> | string
+    createdAt?: DateTimeFilter<"FactionAnnouncement"> | Date | string
+    updatedAt?: DateTimeFilter<"FactionAnnouncement"> | Date | string
+    creator?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }
+
+  export type FactionAnnouncementOrderByWithRelationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    priority?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    creator?: UserOrderByWithRelationInput
+  }
+
+  export type FactionAnnouncementWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FactionAnnouncementWhereInput | FactionAnnouncementWhereInput[]
+    OR?: FactionAnnouncementWhereInput[]
+    NOT?: FactionAnnouncementWhereInput | FactionAnnouncementWhereInput[]
+    title?: StringFilter<"FactionAnnouncement"> | string
+    body?: StringFilter<"FactionAnnouncement"> | string
+    priority?: StringFilter<"FactionAnnouncement"> | string
+    status?: StringFilter<"FactionAnnouncement"> | string
+    creatorId?: StringFilter<"FactionAnnouncement"> | string
+    createdAt?: DateTimeFilter<"FactionAnnouncement"> | Date | string
+    updatedAt?: DateTimeFilter<"FactionAnnouncement"> | Date | string
+    creator?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }, "id">
+
+  export type FactionAnnouncementOrderByWithAggregationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    priority?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FactionAnnouncementCountOrderByAggregateInput
+    _max?: FactionAnnouncementMaxOrderByAggregateInput
+    _min?: FactionAnnouncementMinOrderByAggregateInput
+  }
+
+  export type FactionAnnouncementScalarWhereWithAggregatesInput = {
+    AND?: FactionAnnouncementScalarWhereWithAggregatesInput | FactionAnnouncementScalarWhereWithAggregatesInput[]
+    OR?: FactionAnnouncementScalarWhereWithAggregatesInput[]
+    NOT?: FactionAnnouncementScalarWhereWithAggregatesInput | FactionAnnouncementScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FactionAnnouncement"> | string
+    title?: StringWithAggregatesFilter<"FactionAnnouncement"> | string
+    body?: StringWithAggregatesFilter<"FactionAnnouncement"> | string
+    priority?: StringWithAggregatesFilter<"FactionAnnouncement"> | string
+    status?: StringWithAggregatesFilter<"FactionAnnouncement"> | string
+    creatorId?: StringWithAggregatesFilter<"FactionAnnouncement"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"FactionAnnouncement"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FactionAnnouncement"> | Date | string
+  }
+
+  export type FactionEventWhereInput = {
+    AND?: FactionEventWhereInput | FactionEventWhereInput[]
+    OR?: FactionEventWhereInput[]
+    NOT?: FactionEventWhereInput | FactionEventWhereInput[]
+    id?: StringFilter<"FactionEvent"> | string
+    title?: StringFilter<"FactionEvent"> | string
+    description?: StringNullableFilter<"FactionEvent"> | string | null
+    startsAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    endsAt?: DateTimeNullableFilter<"FactionEvent"> | Date | string | null
+    location?: StringNullableFilter<"FactionEvent"> | string | null
+    status?: StringFilter<"FactionEvent"> | string
+    creatorId?: StringFilter<"FactionEvent"> | string
+    createdAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    updatedAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    creator?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }
+
+  export type FactionEventOrderByWithRelationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrderInput | SortOrder
+    location?: SortOrderInput | SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    creator?: UserOrderByWithRelationInput
+  }
+
+  export type FactionEventWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FactionEventWhereInput | FactionEventWhereInput[]
+    OR?: FactionEventWhereInput[]
+    NOT?: FactionEventWhereInput | FactionEventWhereInput[]
+    title?: StringFilter<"FactionEvent"> | string
+    description?: StringNullableFilter<"FactionEvent"> | string | null
+    startsAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    endsAt?: DateTimeNullableFilter<"FactionEvent"> | Date | string | null
+    location?: StringNullableFilter<"FactionEvent"> | string | null
+    status?: StringFilter<"FactionEvent"> | string
+    creatorId?: StringFilter<"FactionEvent"> | string
+    createdAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    updatedAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    creator?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }, "id">
+
+  export type FactionEventOrderByWithAggregationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrderInput | SortOrder
+    location?: SortOrderInput | SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FactionEventCountOrderByAggregateInput
+    _max?: FactionEventMaxOrderByAggregateInput
+    _min?: FactionEventMinOrderByAggregateInput
+  }
+
+  export type FactionEventScalarWhereWithAggregatesInput = {
+    AND?: FactionEventScalarWhereWithAggregatesInput | FactionEventScalarWhereWithAggregatesInput[]
+    OR?: FactionEventScalarWhereWithAggregatesInput[]
+    NOT?: FactionEventScalarWhereWithAggregatesInput | FactionEventScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FactionEvent"> | string
+    title?: StringWithAggregatesFilter<"FactionEvent"> | string
+    description?: StringNullableWithAggregatesFilter<"FactionEvent"> | string | null
+    startsAt?: DateTimeWithAggregatesFilter<"FactionEvent"> | Date | string
+    endsAt?: DateTimeNullableWithAggregatesFilter<"FactionEvent"> | Date | string | null
+    location?: StringNullableWithAggregatesFilter<"FactionEvent"> | string | null
+    status?: StringWithAggregatesFilter<"FactionEvent"> | string
+    creatorId?: StringWithAggregatesFilter<"FactionEvent"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"FactionEvent"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FactionEvent"> | Date | string
+  }
+
+  export type NotificationWhereInput = {
+    AND?: NotificationWhereInput | NotificationWhereInput[]
+    OR?: NotificationWhereInput[]
+    NOT?: NotificationWhereInput | NotificationWhereInput[]
+    id?: StringFilter<"Notification"> | string
+    userId?: StringFilter<"Notification"> | string
+    type?: StringFilter<"Notification"> | string
+    title?: StringFilter<"Notification"> | string
+    body?: StringFilter<"Notification"> | string
+    metadata?: JsonNullableFilter<"Notification">
+    readAt?: DateTimeNullableFilter<"Notification"> | Date | string | null
+    createdAt?: DateTimeFilter<"Notification"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }
+
+  export type NotificationOrderByWithRelationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    type?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    metadata?: SortOrderInput | SortOrder
+    readAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    user?: UserOrderByWithRelationInput
+  }
+
+  export type NotificationWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: NotificationWhereInput | NotificationWhereInput[]
+    OR?: NotificationWhereInput[]
+    NOT?: NotificationWhereInput | NotificationWhereInput[]
+    userId?: StringFilter<"Notification"> | string
+    type?: StringFilter<"Notification"> | string
+    title?: StringFilter<"Notification"> | string
+    body?: StringFilter<"Notification"> | string
+    metadata?: JsonNullableFilter<"Notification">
+    readAt?: DateTimeNullableFilter<"Notification"> | Date | string | null
+    createdAt?: DateTimeFilter<"Notification"> | Date | string
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+  }, "id">
+
+  export type NotificationOrderByWithAggregationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    type?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    metadata?: SortOrderInput | SortOrder
+    readAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: NotificationCountOrderByAggregateInput
+    _max?: NotificationMaxOrderByAggregateInput
+    _min?: NotificationMinOrderByAggregateInput
+  }
+
+  export type NotificationScalarWhereWithAggregatesInput = {
+    AND?: NotificationScalarWhereWithAggregatesInput | NotificationScalarWhereWithAggregatesInput[]
+    OR?: NotificationScalarWhereWithAggregatesInput[]
+    NOT?: NotificationScalarWhereWithAggregatesInput | NotificationScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"Notification"> | string
+    userId?: StringWithAggregatesFilter<"Notification"> | string
+    type?: StringWithAggregatesFilter<"Notification"> | string
+    title?: StringWithAggregatesFilter<"Notification"> | string
+    body?: StringWithAggregatesFilter<"Notification"> | string
+    metadata?: JsonNullableWithAggregatesFilter<"Notification">
+    readAt?: DateTimeNullableWithAggregatesFilter<"Notification"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"Notification"> | Date | string
+  }
+
   export type GuildJoinRequestWhereInput = {
     AND?: GuildJoinRequestWhereInput | GuildJoinRequestWhereInput[]
     OR?: GuildJoinRequestWhereInput[]
@@ -27587,6 +32929,7 @@ export namespace Prisma {
     spawnTime?: DateTimeFilter<"BossSchedule"> | Date | string
     location?: StringFilter<"BossSchedule"> | string
     guildTurn?: StringNullableFilter<"BossSchedule"> | string | null
+    guildTurnGuildId?: StringNullableFilter<"BossSchedule"> | string | null
     status?: EnumBossEventStatusFilter<"BossSchedule"> | $Enums.BossEventStatus
     killedAt?: DateTimeNullableFilter<"BossSchedule"> | Date | string | null
     creatorId?: StringFilter<"BossSchedule"> | string
@@ -27594,6 +32937,7 @@ export namespace Prisma {
     lootDrop?: StringNullableFilter<"BossSchedule"> | string | null
     screenshotUrl?: StringNullableFilter<"BossSchedule"> | string | null
     guild?: XOR<GuildNullableScalarRelationFilter, GuildWhereInput> | null
+    guildTurnGuild?: XOR<GuildNullableScalarRelationFilter, GuildWhereInput> | null
     attendanceSessions?: AttendanceSessionListRelationFilter
     lootSales?: LootSaleListRelationFilter
   }
@@ -27606,6 +32950,7 @@ export namespace Prisma {
     spawnTime?: SortOrder
     location?: SortOrder
     guildTurn?: SortOrderInput | SortOrder
+    guildTurnGuildId?: SortOrderInput | SortOrder
     status?: SortOrder
     killedAt?: SortOrderInput | SortOrder
     creatorId?: SortOrder
@@ -27613,6 +32958,7 @@ export namespace Prisma {
     lootDrop?: SortOrderInput | SortOrder
     screenshotUrl?: SortOrderInput | SortOrder
     guild?: GuildOrderByWithRelationInput
+    guildTurnGuild?: GuildOrderByWithRelationInput
     attendanceSessions?: AttendanceSessionOrderByRelationAggregateInput
     lootSales?: LootSaleOrderByRelationAggregateInput
   }
@@ -27628,6 +32974,7 @@ export namespace Prisma {
     spawnTime?: DateTimeFilter<"BossSchedule"> | Date | string
     location?: StringFilter<"BossSchedule"> | string
     guildTurn?: StringNullableFilter<"BossSchedule"> | string | null
+    guildTurnGuildId?: StringNullableFilter<"BossSchedule"> | string | null
     status?: EnumBossEventStatusFilter<"BossSchedule"> | $Enums.BossEventStatus
     killedAt?: DateTimeNullableFilter<"BossSchedule"> | Date | string | null
     creatorId?: StringFilter<"BossSchedule"> | string
@@ -27635,6 +32982,7 @@ export namespace Prisma {
     lootDrop?: StringNullableFilter<"BossSchedule"> | string | null
     screenshotUrl?: StringNullableFilter<"BossSchedule"> | string | null
     guild?: XOR<GuildNullableScalarRelationFilter, GuildWhereInput> | null
+    guildTurnGuild?: XOR<GuildNullableScalarRelationFilter, GuildWhereInput> | null
     attendanceSessions?: AttendanceSessionListRelationFilter
     lootSales?: LootSaleListRelationFilter
   }, "id">
@@ -27647,6 +32995,7 @@ export namespace Prisma {
     spawnTime?: SortOrder
     location?: SortOrder
     guildTurn?: SortOrderInput | SortOrder
+    guildTurnGuildId?: SortOrderInput | SortOrder
     status?: SortOrder
     killedAt?: SortOrderInput | SortOrder
     creatorId?: SortOrder
@@ -27669,12 +33018,85 @@ export namespace Prisma {
     spawnTime?: DateTimeWithAggregatesFilter<"BossSchedule"> | Date | string
     location?: StringWithAggregatesFilter<"BossSchedule"> | string
     guildTurn?: StringNullableWithAggregatesFilter<"BossSchedule"> | string | null
+    guildTurnGuildId?: StringNullableWithAggregatesFilter<"BossSchedule"> | string | null
     status?: EnumBossEventStatusWithAggregatesFilter<"BossSchedule"> | $Enums.BossEventStatus
     killedAt?: DateTimeNullableWithAggregatesFilter<"BossSchedule"> | Date | string | null
     creatorId?: StringWithAggregatesFilter<"BossSchedule"> | string
     createdAt?: DateTimeWithAggregatesFilter<"BossSchedule"> | Date | string
     lootDrop?: StringNullableWithAggregatesFilter<"BossSchedule"> | string | null
     screenshotUrl?: StringNullableWithAggregatesFilter<"BossSchedule"> | string | null
+  }
+
+  export type BossRotationWhereInput = {
+    AND?: BossRotationWhereInput | BossRotationWhereInput[]
+    OR?: BossRotationWhereInput[]
+    NOT?: BossRotationWhereInput | BossRotationWhereInput[]
+    id?: StringFilter<"BossRotation"> | string
+    bossName?: StringFilter<"BossRotation"> | string
+    queueGuildIds?: JsonFilter<"BossRotation">
+    currentIndex?: IntFilter<"BossRotation"> | number
+    nextSpawnTime?: DateTimeNullableFilter<"BossRotation"> | Date | string | null
+    updatedById?: StringNullableFilter<"BossRotation"> | string | null
+    createdAt?: DateTimeFilter<"BossRotation"> | Date | string
+    updatedAt?: DateTimeFilter<"BossRotation"> | Date | string
+    updatedBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+  }
+
+  export type BossRotationOrderByWithRelationInput = {
+    id?: SortOrder
+    bossName?: SortOrder
+    queueGuildIds?: SortOrder
+    currentIndex?: SortOrder
+    nextSpawnTime?: SortOrderInput | SortOrder
+    updatedById?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    updatedBy?: UserOrderByWithRelationInput
+  }
+
+  export type BossRotationWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    bossName?: string
+    AND?: BossRotationWhereInput | BossRotationWhereInput[]
+    OR?: BossRotationWhereInput[]
+    NOT?: BossRotationWhereInput | BossRotationWhereInput[]
+    queueGuildIds?: JsonFilter<"BossRotation">
+    currentIndex?: IntFilter<"BossRotation"> | number
+    nextSpawnTime?: DateTimeNullableFilter<"BossRotation"> | Date | string | null
+    updatedById?: StringNullableFilter<"BossRotation"> | string | null
+    createdAt?: DateTimeFilter<"BossRotation"> | Date | string
+    updatedAt?: DateTimeFilter<"BossRotation"> | Date | string
+    updatedBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+  }, "id" | "bossName">
+
+  export type BossRotationOrderByWithAggregationInput = {
+    id?: SortOrder
+    bossName?: SortOrder
+    queueGuildIds?: SortOrder
+    currentIndex?: SortOrder
+    nextSpawnTime?: SortOrderInput | SortOrder
+    updatedById?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: BossRotationCountOrderByAggregateInput
+    _avg?: BossRotationAvgOrderByAggregateInput
+    _max?: BossRotationMaxOrderByAggregateInput
+    _min?: BossRotationMinOrderByAggregateInput
+    _sum?: BossRotationSumOrderByAggregateInput
+  }
+
+  export type BossRotationScalarWhereWithAggregatesInput = {
+    AND?: BossRotationScalarWhereWithAggregatesInput | BossRotationScalarWhereWithAggregatesInput[]
+    OR?: BossRotationScalarWhereWithAggregatesInput[]
+    NOT?: BossRotationScalarWhereWithAggregatesInput | BossRotationScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"BossRotation"> | string
+    bossName?: StringWithAggregatesFilter<"BossRotation"> | string
+    queueGuildIds?: JsonWithAggregatesFilter<"BossRotation">
+    currentIndex?: IntWithAggregatesFilter<"BossRotation"> | number
+    nextSpawnTime?: DateTimeNullableWithAggregatesFilter<"BossRotation"> | Date | string | null
+    updatedById?: StringNullableWithAggregatesFilter<"BossRotation"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"BossRotation"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"BossRotation"> | Date | string
   }
 
   export type BossWhereInput = {
@@ -27872,6 +33294,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -27895,6 +33321,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUpdateInput = {
@@ -27918,6 +33348,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -27941,6 +33375,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -28213,6 +33651,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -28237,6 +33676,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -28261,6 +33701,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -28285,6 +33726,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -29162,6 +34604,248 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type FactionAnnouncementCreateInput = {
+    id?: string
+    title: string
+    body: string
+    priority?: string
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    creator: UserCreateNestedOneWithoutFactionAnnouncementsInput
+  }
+
+  export type FactionAnnouncementUncheckedCreateInput = {
+    id?: string
+    title: string
+    body: string
+    priority?: string
+    status?: string
+    creatorId: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionAnnouncementUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    creator?: UserUpdateOneRequiredWithoutFactionAnnouncementsNestedInput
+  }
+
+  export type FactionAnnouncementUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    creatorId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionAnnouncementCreateManyInput = {
+    id?: string
+    title: string
+    body: string
+    priority?: string
+    status?: string
+    creatorId: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionAnnouncementUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionAnnouncementUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    creatorId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionEventCreateInput = {
+    id?: string
+    title: string
+    description?: string | null
+    startsAt: Date | string
+    endsAt?: Date | string | null
+    location?: string | null
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    creator: UserCreateNestedOneWithoutFactionEventsInput
+  }
+
+  export type FactionEventUncheckedCreateInput = {
+    id?: string
+    title: string
+    description?: string | null
+    startsAt: Date | string
+    endsAt?: Date | string | null
+    location?: string | null
+    status?: string
+    creatorId: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionEventUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    creator?: UserUpdateOneRequiredWithoutFactionEventsNestedInput
+  }
+
+  export type FactionEventUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    creatorId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionEventCreateManyInput = {
+    id?: string
+    title: string
+    description?: string | null
+    startsAt: Date | string
+    endsAt?: Date | string | null
+    location?: string | null
+    status?: string
+    creatorId: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionEventUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionEventUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    creatorId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type NotificationCreateInput = {
+    id?: string
+    type: string
+    title: string
+    body: string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: Date | string | null
+    createdAt?: Date | string
+    user: UserCreateNestedOneWithoutNotificationsInput
+  }
+
+  export type NotificationUncheckedCreateInput = {
+    id?: string
+    userId: string
+    type: string
+    title: string
+    body: string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type NotificationUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutNotificationsNestedInput
+  }
+
+  export type NotificationUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type NotificationCreateManyInput = {
+    id?: string
+    userId: string
+    type: string
+    title: string
+    body: string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type NotificationUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type NotificationUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type GuildJoinRequestCreateInput = {
     id?: string
     ign: string
@@ -29405,6 +35089,7 @@ export namespace Prisma {
     lootDrop?: string | null
     screenshotUrl?: string | null
     guild?: GuildCreateNestedOneWithoutBossSchedulesInput
+    guildTurnGuild?: GuildCreateNestedOneWithoutBossTurnSchedulesInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutBossScheduleInput
     lootSales?: LootSaleCreateNestedManyWithoutBossScheduleInput
   }
@@ -29417,6 +35102,7 @@ export namespace Prisma {
     spawnTime: Date | string
     location: string
     guildTurn?: string | null
+    guildTurnGuildId?: string | null
     status?: $Enums.BossEventStatus
     killedAt?: Date | string | null
     creatorId: string
@@ -29441,6 +35127,7 @@ export namespace Prisma {
     lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
     screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
     guild?: GuildUpdateOneWithoutBossSchedulesNestedInput
+    guildTurnGuild?: GuildUpdateOneWithoutBossTurnSchedulesNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutBossScheduleNestedInput
     lootSales?: LootSaleUpdateManyWithoutBossScheduleNestedInput
   }
@@ -29453,6 +35140,7 @@ export namespace Prisma {
     spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
     location?: StringFieldUpdateOperationsInput | string
     guildTurn?: NullableStringFieldUpdateOperationsInput | string | null
+    guildTurnGuildId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBossEventStatusFieldUpdateOperationsInput | $Enums.BossEventStatus
     killedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     creatorId?: StringFieldUpdateOperationsInput | string
@@ -29471,6 +35159,7 @@ export namespace Prisma {
     spawnTime: Date | string
     location: string
     guildTurn?: string | null
+    guildTurnGuildId?: string | null
     status?: $Enums.BossEventStatus
     killedAt?: Date | string | null
     creatorId: string
@@ -29502,12 +35191,89 @@ export namespace Prisma {
     spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
     location?: StringFieldUpdateOperationsInput | string
     guildTurn?: NullableStringFieldUpdateOperationsInput | string | null
+    guildTurnGuildId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBossEventStatusFieldUpdateOperationsInput | $Enums.BossEventStatus
     killedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     creatorId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
     screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type BossRotationCreateInput = {
+    id?: string
+    bossName: string
+    queueGuildIds: JsonNullValueInput | InputJsonValue
+    currentIndex?: number
+    nextSpawnTime?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    updatedBy?: UserCreateNestedOneWithoutBossRotationsUpdatedInput
+  }
+
+  export type BossRotationUncheckedCreateInput = {
+    id?: string
+    bossName: string
+    queueGuildIds: JsonNullValueInput | InputJsonValue
+    currentIndex?: number
+    nextSpawnTime?: Date | string | null
+    updatedById?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type BossRotationUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    queueGuildIds?: JsonNullValueInput | InputJsonValue
+    currentIndex?: IntFieldUpdateOperationsInput | number
+    nextSpawnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedBy?: UserUpdateOneWithoutBossRotationsUpdatedNestedInput
+  }
+
+  export type BossRotationUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    queueGuildIds?: JsonNullValueInput | InputJsonValue
+    currentIndex?: IntFieldUpdateOperationsInput | number
+    nextSpawnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedById?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BossRotationCreateManyInput = {
+    id?: string
+    bossName: string
+    queueGuildIds: JsonNullValueInput | InputJsonValue
+    currentIndex?: number
+    nextSpawnTime?: Date | string | null
+    updatedById?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type BossRotationUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    queueGuildIds?: JsonNullValueInput | InputJsonValue
+    currentIndex?: IntFieldUpdateOperationsInput | number
+    nextSpawnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BossRotationUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    queueGuildIds?: JsonNullValueInput | InputJsonValue
+    currentIndex?: IntFieldUpdateOperationsInput | number
+    nextSpawnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedById?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type BossCreateInput = {
@@ -29809,6 +35575,30 @@ export namespace Prisma {
     none?: AttendanceRecordWhereInput
   }
 
+  export type FactionAnnouncementListRelationFilter = {
+    every?: FactionAnnouncementWhereInput
+    some?: FactionAnnouncementWhereInput
+    none?: FactionAnnouncementWhereInput
+  }
+
+  export type FactionEventListRelationFilter = {
+    every?: FactionEventWhereInput
+    some?: FactionEventWhereInput
+    none?: FactionEventWhereInput
+  }
+
+  export type NotificationListRelationFilter = {
+    every?: NotificationWhereInput
+    some?: NotificationWhereInput
+    none?: NotificationWhereInput
+  }
+
+  export type BossRotationListRelationFilter = {
+    every?: BossRotationWhereInput
+    some?: BossRotationWhereInput
+    none?: BossRotationWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -29843,6 +35633,22 @@ export namespace Prisma {
   }
 
   export type AttendanceRecordOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FactionAnnouncementOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FactionEventOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type NotificationOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type BossRotationOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -30926,6 +36732,109 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
+  export type FactionAnnouncementCountOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    priority?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FactionAnnouncementMaxOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    priority?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FactionAnnouncementMinOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    priority?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FactionEventCountOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    location?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FactionEventMaxOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    location?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FactionEventMinOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    location?: SortOrder
+    status?: SortOrder
+    creatorId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type NotificationCountOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    type?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    metadata?: SortOrder
+    readAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type NotificationMaxOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    type?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    readAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type NotificationMinOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    type?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    readAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
   export type EnumJoinRequestStatusFilter<$PrismaModel = never> = {
     equals?: $Enums.JoinRequestStatus | EnumJoinRequestStatusFieldRefInput<$PrismaModel>
     in?: $Enums.JoinRequestStatus[] | ListEnumJoinRequestStatusFieldRefInput<$PrismaModel>
@@ -31119,6 +37028,7 @@ export namespace Prisma {
     spawnTime?: SortOrder
     location?: SortOrder
     guildTurn?: SortOrder
+    guildTurnGuildId?: SortOrder
     status?: SortOrder
     killedAt?: SortOrder
     creatorId?: SortOrder
@@ -31135,6 +37045,7 @@ export namespace Prisma {
     spawnTime?: SortOrder
     location?: SortOrder
     guildTurn?: SortOrder
+    guildTurnGuildId?: SortOrder
     status?: SortOrder
     killedAt?: SortOrder
     creatorId?: SortOrder
@@ -31151,6 +37062,7 @@ export namespace Prisma {
     spawnTime?: SortOrder
     location?: SortOrder
     guildTurn?: SortOrder
+    guildTurnGuildId?: SortOrder
     status?: SortOrder
     killedAt?: SortOrder
     creatorId?: SortOrder
@@ -31167,6 +37079,50 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumBossEventStatusFilter<$PrismaModel>
     _max?: NestedEnumBossEventStatusFilter<$PrismaModel>
+  }
+
+  export type UserNullableScalarRelationFilter = {
+    is?: UserWhereInput | null
+    isNot?: UserWhereInput | null
+  }
+
+  export type BossRotationCountOrderByAggregateInput = {
+    id?: SortOrder
+    bossName?: SortOrder
+    queueGuildIds?: SortOrder
+    currentIndex?: SortOrder
+    nextSpawnTime?: SortOrder
+    updatedById?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type BossRotationAvgOrderByAggregateInput = {
+    currentIndex?: SortOrder
+  }
+
+  export type BossRotationMaxOrderByAggregateInput = {
+    id?: SortOrder
+    bossName?: SortOrder
+    currentIndex?: SortOrder
+    nextSpawnTime?: SortOrder
+    updatedById?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type BossRotationMinOrderByAggregateInput = {
+    id?: SortOrder
+    bossName?: SortOrder
+    currentIndex?: SortOrder
+    nextSpawnTime?: SortOrder
+    updatedById?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type BossRotationSumOrderByAggregateInput = {
+    currentIndex?: SortOrder
   }
 
   export type BossCountOrderByAggregateInput = {
@@ -31331,6 +37287,34 @@ export namespace Prisma {
     connect?: AttendanceRecordWhereUniqueInput | AttendanceRecordWhereUniqueInput[]
   }
 
+  export type FactionAnnouncementCreateNestedManyWithoutCreatorInput = {
+    create?: XOR<FactionAnnouncementCreateWithoutCreatorInput, FactionAnnouncementUncheckedCreateWithoutCreatorInput> | FactionAnnouncementCreateWithoutCreatorInput[] | FactionAnnouncementUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionAnnouncementCreateOrConnectWithoutCreatorInput | FactionAnnouncementCreateOrConnectWithoutCreatorInput[]
+    createMany?: FactionAnnouncementCreateManyCreatorInputEnvelope
+    connect?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+  }
+
+  export type FactionEventCreateNestedManyWithoutCreatorInput = {
+    create?: XOR<FactionEventCreateWithoutCreatorInput, FactionEventUncheckedCreateWithoutCreatorInput> | FactionEventCreateWithoutCreatorInput[] | FactionEventUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionEventCreateOrConnectWithoutCreatorInput | FactionEventCreateOrConnectWithoutCreatorInput[]
+    createMany?: FactionEventCreateManyCreatorInputEnvelope
+    connect?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+  }
+
+  export type NotificationCreateNestedManyWithoutUserInput = {
+    create?: XOR<NotificationCreateWithoutUserInput, NotificationUncheckedCreateWithoutUserInput> | NotificationCreateWithoutUserInput[] | NotificationUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: NotificationCreateOrConnectWithoutUserInput | NotificationCreateOrConnectWithoutUserInput[]
+    createMany?: NotificationCreateManyUserInputEnvelope
+    connect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+  }
+
+  export type BossRotationCreateNestedManyWithoutUpdatedByInput = {
+    create?: XOR<BossRotationCreateWithoutUpdatedByInput, BossRotationUncheckedCreateWithoutUpdatedByInput> | BossRotationCreateWithoutUpdatedByInput[] | BossRotationUncheckedCreateWithoutUpdatedByInput[]
+    connectOrCreate?: BossRotationCreateOrConnectWithoutUpdatedByInput | BossRotationCreateOrConnectWithoutUpdatedByInput[]
+    createMany?: BossRotationCreateManyUpdatedByInputEnvelope
+    connect?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+  }
+
   export type RefreshTokenUncheckedCreateNestedManyWithoutUserInput = {
     create?: XOR<RefreshTokenCreateWithoutUserInput, RefreshTokenUncheckedCreateWithoutUserInput> | RefreshTokenCreateWithoutUserInput[] | RefreshTokenUncheckedCreateWithoutUserInput[]
     connectOrCreate?: RefreshTokenCreateOrConnectWithoutUserInput | RefreshTokenCreateOrConnectWithoutUserInput[]
@@ -31385,6 +37369,34 @@ export namespace Prisma {
     connectOrCreate?: AttendanceRecordCreateOrConnectWithoutUserInput | AttendanceRecordCreateOrConnectWithoutUserInput[]
     createMany?: AttendanceRecordCreateManyUserInputEnvelope
     connect?: AttendanceRecordWhereUniqueInput | AttendanceRecordWhereUniqueInput[]
+  }
+
+  export type FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput = {
+    create?: XOR<FactionAnnouncementCreateWithoutCreatorInput, FactionAnnouncementUncheckedCreateWithoutCreatorInput> | FactionAnnouncementCreateWithoutCreatorInput[] | FactionAnnouncementUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionAnnouncementCreateOrConnectWithoutCreatorInput | FactionAnnouncementCreateOrConnectWithoutCreatorInput[]
+    createMany?: FactionAnnouncementCreateManyCreatorInputEnvelope
+    connect?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+  }
+
+  export type FactionEventUncheckedCreateNestedManyWithoutCreatorInput = {
+    create?: XOR<FactionEventCreateWithoutCreatorInput, FactionEventUncheckedCreateWithoutCreatorInput> | FactionEventCreateWithoutCreatorInput[] | FactionEventUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionEventCreateOrConnectWithoutCreatorInput | FactionEventCreateOrConnectWithoutCreatorInput[]
+    createMany?: FactionEventCreateManyCreatorInputEnvelope
+    connect?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+  }
+
+  export type NotificationUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<NotificationCreateWithoutUserInput, NotificationUncheckedCreateWithoutUserInput> | NotificationCreateWithoutUserInput[] | NotificationUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: NotificationCreateOrConnectWithoutUserInput | NotificationCreateOrConnectWithoutUserInput[]
+    createMany?: NotificationCreateManyUserInputEnvelope
+    connect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+  }
+
+  export type BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput = {
+    create?: XOR<BossRotationCreateWithoutUpdatedByInput, BossRotationUncheckedCreateWithoutUpdatedByInput> | BossRotationCreateWithoutUpdatedByInput[] | BossRotationUncheckedCreateWithoutUpdatedByInput[]
+    connectOrCreate?: BossRotationCreateOrConnectWithoutUpdatedByInput | BossRotationCreateOrConnectWithoutUpdatedByInput[]
+    createMany?: BossRotationCreateManyUpdatedByInputEnvelope
+    connect?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -31523,6 +37535,62 @@ export namespace Prisma {
     deleteMany?: AttendanceRecordScalarWhereInput | AttendanceRecordScalarWhereInput[]
   }
 
+  export type FactionAnnouncementUpdateManyWithoutCreatorNestedInput = {
+    create?: XOR<FactionAnnouncementCreateWithoutCreatorInput, FactionAnnouncementUncheckedCreateWithoutCreatorInput> | FactionAnnouncementCreateWithoutCreatorInput[] | FactionAnnouncementUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionAnnouncementCreateOrConnectWithoutCreatorInput | FactionAnnouncementCreateOrConnectWithoutCreatorInput[]
+    upsert?: FactionAnnouncementUpsertWithWhereUniqueWithoutCreatorInput | FactionAnnouncementUpsertWithWhereUniqueWithoutCreatorInput[]
+    createMany?: FactionAnnouncementCreateManyCreatorInputEnvelope
+    set?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    disconnect?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    delete?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    connect?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    update?: FactionAnnouncementUpdateWithWhereUniqueWithoutCreatorInput | FactionAnnouncementUpdateWithWhereUniqueWithoutCreatorInput[]
+    updateMany?: FactionAnnouncementUpdateManyWithWhereWithoutCreatorInput | FactionAnnouncementUpdateManyWithWhereWithoutCreatorInput[]
+    deleteMany?: FactionAnnouncementScalarWhereInput | FactionAnnouncementScalarWhereInput[]
+  }
+
+  export type FactionEventUpdateManyWithoutCreatorNestedInput = {
+    create?: XOR<FactionEventCreateWithoutCreatorInput, FactionEventUncheckedCreateWithoutCreatorInput> | FactionEventCreateWithoutCreatorInput[] | FactionEventUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionEventCreateOrConnectWithoutCreatorInput | FactionEventCreateOrConnectWithoutCreatorInput[]
+    upsert?: FactionEventUpsertWithWhereUniqueWithoutCreatorInput | FactionEventUpsertWithWhereUniqueWithoutCreatorInput[]
+    createMany?: FactionEventCreateManyCreatorInputEnvelope
+    set?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    disconnect?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    delete?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    connect?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    update?: FactionEventUpdateWithWhereUniqueWithoutCreatorInput | FactionEventUpdateWithWhereUniqueWithoutCreatorInput[]
+    updateMany?: FactionEventUpdateManyWithWhereWithoutCreatorInput | FactionEventUpdateManyWithWhereWithoutCreatorInput[]
+    deleteMany?: FactionEventScalarWhereInput | FactionEventScalarWhereInput[]
+  }
+
+  export type NotificationUpdateManyWithoutUserNestedInput = {
+    create?: XOR<NotificationCreateWithoutUserInput, NotificationUncheckedCreateWithoutUserInput> | NotificationCreateWithoutUserInput[] | NotificationUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: NotificationCreateOrConnectWithoutUserInput | NotificationCreateOrConnectWithoutUserInput[]
+    upsert?: NotificationUpsertWithWhereUniqueWithoutUserInput | NotificationUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: NotificationCreateManyUserInputEnvelope
+    set?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    disconnect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    delete?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    connect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    update?: NotificationUpdateWithWhereUniqueWithoutUserInput | NotificationUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: NotificationUpdateManyWithWhereWithoutUserInput | NotificationUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: NotificationScalarWhereInput | NotificationScalarWhereInput[]
+  }
+
+  export type BossRotationUpdateManyWithoutUpdatedByNestedInput = {
+    create?: XOR<BossRotationCreateWithoutUpdatedByInput, BossRotationUncheckedCreateWithoutUpdatedByInput> | BossRotationCreateWithoutUpdatedByInput[] | BossRotationUncheckedCreateWithoutUpdatedByInput[]
+    connectOrCreate?: BossRotationCreateOrConnectWithoutUpdatedByInput | BossRotationCreateOrConnectWithoutUpdatedByInput[]
+    upsert?: BossRotationUpsertWithWhereUniqueWithoutUpdatedByInput | BossRotationUpsertWithWhereUniqueWithoutUpdatedByInput[]
+    createMany?: BossRotationCreateManyUpdatedByInputEnvelope
+    set?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    disconnect?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    delete?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    connect?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    update?: BossRotationUpdateWithWhereUniqueWithoutUpdatedByInput | BossRotationUpdateWithWhereUniqueWithoutUpdatedByInput[]
+    updateMany?: BossRotationUpdateManyWithWhereWithoutUpdatedByInput | BossRotationUpdateManyWithWhereWithoutUpdatedByInput[]
+    deleteMany?: BossRotationScalarWhereInput | BossRotationScalarWhereInput[]
+  }
+
   export type RefreshTokenUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<RefreshTokenCreateWithoutUserInput, RefreshTokenUncheckedCreateWithoutUserInput> | RefreshTokenCreateWithoutUserInput[] | RefreshTokenUncheckedCreateWithoutUserInput[]
     connectOrCreate?: RefreshTokenCreateOrConnectWithoutUserInput | RefreshTokenCreateOrConnectWithoutUserInput[]
@@ -31635,6 +37703,62 @@ export namespace Prisma {
     deleteMany?: AttendanceRecordScalarWhereInput | AttendanceRecordScalarWhereInput[]
   }
 
+  export type FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput = {
+    create?: XOR<FactionAnnouncementCreateWithoutCreatorInput, FactionAnnouncementUncheckedCreateWithoutCreatorInput> | FactionAnnouncementCreateWithoutCreatorInput[] | FactionAnnouncementUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionAnnouncementCreateOrConnectWithoutCreatorInput | FactionAnnouncementCreateOrConnectWithoutCreatorInput[]
+    upsert?: FactionAnnouncementUpsertWithWhereUniqueWithoutCreatorInput | FactionAnnouncementUpsertWithWhereUniqueWithoutCreatorInput[]
+    createMany?: FactionAnnouncementCreateManyCreatorInputEnvelope
+    set?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    disconnect?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    delete?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    connect?: FactionAnnouncementWhereUniqueInput | FactionAnnouncementWhereUniqueInput[]
+    update?: FactionAnnouncementUpdateWithWhereUniqueWithoutCreatorInput | FactionAnnouncementUpdateWithWhereUniqueWithoutCreatorInput[]
+    updateMany?: FactionAnnouncementUpdateManyWithWhereWithoutCreatorInput | FactionAnnouncementUpdateManyWithWhereWithoutCreatorInput[]
+    deleteMany?: FactionAnnouncementScalarWhereInput | FactionAnnouncementScalarWhereInput[]
+  }
+
+  export type FactionEventUncheckedUpdateManyWithoutCreatorNestedInput = {
+    create?: XOR<FactionEventCreateWithoutCreatorInput, FactionEventUncheckedCreateWithoutCreatorInput> | FactionEventCreateWithoutCreatorInput[] | FactionEventUncheckedCreateWithoutCreatorInput[]
+    connectOrCreate?: FactionEventCreateOrConnectWithoutCreatorInput | FactionEventCreateOrConnectWithoutCreatorInput[]
+    upsert?: FactionEventUpsertWithWhereUniqueWithoutCreatorInput | FactionEventUpsertWithWhereUniqueWithoutCreatorInput[]
+    createMany?: FactionEventCreateManyCreatorInputEnvelope
+    set?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    disconnect?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    delete?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    connect?: FactionEventWhereUniqueInput | FactionEventWhereUniqueInput[]
+    update?: FactionEventUpdateWithWhereUniqueWithoutCreatorInput | FactionEventUpdateWithWhereUniqueWithoutCreatorInput[]
+    updateMany?: FactionEventUpdateManyWithWhereWithoutCreatorInput | FactionEventUpdateManyWithWhereWithoutCreatorInput[]
+    deleteMany?: FactionEventScalarWhereInput | FactionEventScalarWhereInput[]
+  }
+
+  export type NotificationUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<NotificationCreateWithoutUserInput, NotificationUncheckedCreateWithoutUserInput> | NotificationCreateWithoutUserInput[] | NotificationUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: NotificationCreateOrConnectWithoutUserInput | NotificationCreateOrConnectWithoutUserInput[]
+    upsert?: NotificationUpsertWithWhereUniqueWithoutUserInput | NotificationUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: NotificationCreateManyUserInputEnvelope
+    set?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    disconnect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    delete?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    connect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+    update?: NotificationUpdateWithWhereUniqueWithoutUserInput | NotificationUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: NotificationUpdateManyWithWhereWithoutUserInput | NotificationUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: NotificationScalarWhereInput | NotificationScalarWhereInput[]
+  }
+
+  export type BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput = {
+    create?: XOR<BossRotationCreateWithoutUpdatedByInput, BossRotationUncheckedCreateWithoutUpdatedByInput> | BossRotationCreateWithoutUpdatedByInput[] | BossRotationUncheckedCreateWithoutUpdatedByInput[]
+    connectOrCreate?: BossRotationCreateOrConnectWithoutUpdatedByInput | BossRotationCreateOrConnectWithoutUpdatedByInput[]
+    upsert?: BossRotationUpsertWithWhereUniqueWithoutUpdatedByInput | BossRotationUpsertWithWhereUniqueWithoutUpdatedByInput[]
+    createMany?: BossRotationCreateManyUpdatedByInputEnvelope
+    set?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    disconnect?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    delete?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    connect?: BossRotationWhereUniqueInput | BossRotationWhereUniqueInput[]
+    update?: BossRotationUpdateWithWhereUniqueWithoutUpdatedByInput | BossRotationUpdateWithWhereUniqueWithoutUpdatedByInput[]
+    updateMany?: BossRotationUpdateManyWithWhereWithoutUpdatedByInput | BossRotationUpdateManyWithWhereWithoutUpdatedByInput[]
+    deleteMany?: BossRotationScalarWhereInput | BossRotationScalarWhereInput[]
+  }
+
   export type UserCreateNestedOneWithoutRefreshTokensInput = {
     create?: XOR<UserCreateWithoutRefreshTokensInput, UserUncheckedCreateWithoutRefreshTokensInput>
     connectOrCreate?: UserCreateOrConnectWithoutRefreshTokensInput
@@ -31729,6 +37853,13 @@ export namespace Prisma {
     connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
   }
 
+  export type BossScheduleCreateNestedManyWithoutGuildTurnGuildInput = {
+    create?: XOR<BossScheduleCreateWithoutGuildTurnGuildInput, BossScheduleUncheckedCreateWithoutGuildTurnGuildInput> | BossScheduleCreateWithoutGuildTurnGuildInput[] | BossScheduleUncheckedCreateWithoutGuildTurnGuildInput[]
+    connectOrCreate?: BossScheduleCreateOrConnectWithoutGuildTurnGuildInput | BossScheduleCreateOrConnectWithoutGuildTurnGuildInput[]
+    createMany?: BossScheduleCreateManyGuildTurnGuildInputEnvelope
+    connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+  }
+
   export type LootSaleCreateNestedManyWithoutGuildInput = {
     create?: XOR<LootSaleCreateWithoutGuildInput, LootSaleUncheckedCreateWithoutGuildInput> | LootSaleCreateWithoutGuildInput[] | LootSaleUncheckedCreateWithoutGuildInput[]
     connectOrCreate?: LootSaleCreateOrConnectWithoutGuildInput | LootSaleCreateOrConnectWithoutGuildInput[]
@@ -31802,6 +37933,13 @@ export namespace Prisma {
     create?: XOR<BossScheduleCreateWithoutGuildInput, BossScheduleUncheckedCreateWithoutGuildInput> | BossScheduleCreateWithoutGuildInput[] | BossScheduleUncheckedCreateWithoutGuildInput[]
     connectOrCreate?: BossScheduleCreateOrConnectWithoutGuildInput | BossScheduleCreateOrConnectWithoutGuildInput[]
     createMany?: BossScheduleCreateManyGuildInputEnvelope
+    connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+  }
+
+  export type BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput = {
+    create?: XOR<BossScheduleCreateWithoutGuildTurnGuildInput, BossScheduleUncheckedCreateWithoutGuildTurnGuildInput> | BossScheduleCreateWithoutGuildTurnGuildInput[] | BossScheduleUncheckedCreateWithoutGuildTurnGuildInput[]
+    connectOrCreate?: BossScheduleCreateOrConnectWithoutGuildTurnGuildInput | BossScheduleCreateOrConnectWithoutGuildTurnGuildInput[]
+    createMany?: BossScheduleCreateManyGuildTurnGuildInputEnvelope
     connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
   }
 
@@ -31924,6 +38062,20 @@ export namespace Prisma {
     connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
     update?: BossScheduleUpdateWithWhereUniqueWithoutGuildInput | BossScheduleUpdateWithWhereUniqueWithoutGuildInput[]
     updateMany?: BossScheduleUpdateManyWithWhereWithoutGuildInput | BossScheduleUpdateManyWithWhereWithoutGuildInput[]
+    deleteMany?: BossScheduleScalarWhereInput | BossScheduleScalarWhereInput[]
+  }
+
+  export type BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput = {
+    create?: XOR<BossScheduleCreateWithoutGuildTurnGuildInput, BossScheduleUncheckedCreateWithoutGuildTurnGuildInput> | BossScheduleCreateWithoutGuildTurnGuildInput[] | BossScheduleUncheckedCreateWithoutGuildTurnGuildInput[]
+    connectOrCreate?: BossScheduleCreateOrConnectWithoutGuildTurnGuildInput | BossScheduleCreateOrConnectWithoutGuildTurnGuildInput[]
+    upsert?: BossScheduleUpsertWithWhereUniqueWithoutGuildTurnGuildInput | BossScheduleUpsertWithWhereUniqueWithoutGuildTurnGuildInput[]
+    createMany?: BossScheduleCreateManyGuildTurnGuildInputEnvelope
+    set?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    disconnect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    delete?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    update?: BossScheduleUpdateWithWhereUniqueWithoutGuildTurnGuildInput | BossScheduleUpdateWithWhereUniqueWithoutGuildTurnGuildInput[]
+    updateMany?: BossScheduleUpdateManyWithWhereWithoutGuildTurnGuildInput | BossScheduleUpdateManyWithWhereWithoutGuildTurnGuildInput[]
     deleteMany?: BossScheduleScalarWhereInput | BossScheduleScalarWhereInput[]
   }
 
@@ -32074,6 +38226,20 @@ export namespace Prisma {
     connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
     update?: BossScheduleUpdateWithWhereUniqueWithoutGuildInput | BossScheduleUpdateWithWhereUniqueWithoutGuildInput[]
     updateMany?: BossScheduleUpdateManyWithWhereWithoutGuildInput | BossScheduleUpdateManyWithWhereWithoutGuildInput[]
+    deleteMany?: BossScheduleScalarWhereInput | BossScheduleScalarWhereInput[]
+  }
+
+  export type BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput = {
+    create?: XOR<BossScheduleCreateWithoutGuildTurnGuildInput, BossScheduleUncheckedCreateWithoutGuildTurnGuildInput> | BossScheduleCreateWithoutGuildTurnGuildInput[] | BossScheduleUncheckedCreateWithoutGuildTurnGuildInput[]
+    connectOrCreate?: BossScheduleCreateOrConnectWithoutGuildTurnGuildInput | BossScheduleCreateOrConnectWithoutGuildTurnGuildInput[]
+    upsert?: BossScheduleUpsertWithWhereUniqueWithoutGuildTurnGuildInput | BossScheduleUpsertWithWhereUniqueWithoutGuildTurnGuildInput[]
+    createMany?: BossScheduleCreateManyGuildTurnGuildInputEnvelope
+    set?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    disconnect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    delete?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    connect?: BossScheduleWhereUniqueInput | BossScheduleWhereUniqueInput[]
+    update?: BossScheduleUpdateWithWhereUniqueWithoutGuildTurnGuildInput | BossScheduleUpdateWithWhereUniqueWithoutGuildTurnGuildInput[]
+    updateMany?: BossScheduleUpdateManyWithWhereWithoutGuildTurnGuildInput | BossScheduleUpdateManyWithWhereWithoutGuildTurnGuildInput[]
     deleteMany?: BossScheduleScalarWhereInput | BossScheduleScalarWhereInput[]
   }
 
@@ -32491,6 +38657,48 @@ export namespace Prisma {
     update?: XOR<XOR<GuildUpdateToOneWithWhereWithoutAuditLogsInput, GuildUpdateWithoutAuditLogsInput>, GuildUncheckedUpdateWithoutAuditLogsInput>
   }
 
+  export type UserCreateNestedOneWithoutFactionAnnouncementsInput = {
+    create?: XOR<UserCreateWithoutFactionAnnouncementsInput, UserUncheckedCreateWithoutFactionAnnouncementsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFactionAnnouncementsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type UserUpdateOneRequiredWithoutFactionAnnouncementsNestedInput = {
+    create?: XOR<UserCreateWithoutFactionAnnouncementsInput, UserUncheckedCreateWithoutFactionAnnouncementsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFactionAnnouncementsInput
+    upsert?: UserUpsertWithoutFactionAnnouncementsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutFactionAnnouncementsInput, UserUpdateWithoutFactionAnnouncementsInput>, UserUncheckedUpdateWithoutFactionAnnouncementsInput>
+  }
+
+  export type UserCreateNestedOneWithoutFactionEventsInput = {
+    create?: XOR<UserCreateWithoutFactionEventsInput, UserUncheckedCreateWithoutFactionEventsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFactionEventsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type UserUpdateOneRequiredWithoutFactionEventsNestedInput = {
+    create?: XOR<UserCreateWithoutFactionEventsInput, UserUncheckedCreateWithoutFactionEventsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutFactionEventsInput
+    upsert?: UserUpsertWithoutFactionEventsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutFactionEventsInput, UserUpdateWithoutFactionEventsInput>, UserUncheckedUpdateWithoutFactionEventsInput>
+  }
+
+  export type UserCreateNestedOneWithoutNotificationsInput = {
+    create?: XOR<UserCreateWithoutNotificationsInput, UserUncheckedCreateWithoutNotificationsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutNotificationsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type UserUpdateOneRequiredWithoutNotificationsNestedInput = {
+    create?: XOR<UserCreateWithoutNotificationsInput, UserUncheckedCreateWithoutNotificationsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutNotificationsInput
+    upsert?: UserUpsertWithoutNotificationsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutNotificationsInput, UserUpdateWithoutNotificationsInput>, UserUncheckedUpdateWithoutNotificationsInput>
+  }
+
   export type GuildCreateNestedOneWithoutJoinRequestsInput = {
     create?: XOR<GuildCreateWithoutJoinRequestsInput, GuildUncheckedCreateWithoutJoinRequestsInput>
     connectOrCreate?: GuildCreateOrConnectWithoutJoinRequestsInput
@@ -32637,6 +38845,12 @@ export namespace Prisma {
     connect?: GuildWhereUniqueInput
   }
 
+  export type GuildCreateNestedOneWithoutBossTurnSchedulesInput = {
+    create?: XOR<GuildCreateWithoutBossTurnSchedulesInput, GuildUncheckedCreateWithoutBossTurnSchedulesInput>
+    connectOrCreate?: GuildCreateOrConnectWithoutBossTurnSchedulesInput
+    connect?: GuildWhereUniqueInput
+  }
+
   export type AttendanceSessionCreateNestedManyWithoutBossScheduleInput = {
     create?: XOR<AttendanceSessionCreateWithoutBossScheduleInput, AttendanceSessionUncheckedCreateWithoutBossScheduleInput> | AttendanceSessionCreateWithoutBossScheduleInput[] | AttendanceSessionUncheckedCreateWithoutBossScheduleInput[]
     connectOrCreate?: AttendanceSessionCreateOrConnectWithoutBossScheduleInput | AttendanceSessionCreateOrConnectWithoutBossScheduleInput[]
@@ -32677,6 +38891,16 @@ export namespace Prisma {
     delete?: GuildWhereInput | boolean
     connect?: GuildWhereUniqueInput
     update?: XOR<XOR<GuildUpdateToOneWithWhereWithoutBossSchedulesInput, GuildUpdateWithoutBossSchedulesInput>, GuildUncheckedUpdateWithoutBossSchedulesInput>
+  }
+
+  export type GuildUpdateOneWithoutBossTurnSchedulesNestedInput = {
+    create?: XOR<GuildCreateWithoutBossTurnSchedulesInput, GuildUncheckedCreateWithoutBossTurnSchedulesInput>
+    connectOrCreate?: GuildCreateOrConnectWithoutBossTurnSchedulesInput
+    upsert?: GuildUpsertWithoutBossTurnSchedulesInput
+    disconnect?: GuildWhereInput | boolean
+    delete?: GuildWhereInput | boolean
+    connect?: GuildWhereUniqueInput
+    update?: XOR<XOR<GuildUpdateToOneWithWhereWithoutBossTurnSchedulesInput, GuildUpdateWithoutBossTurnSchedulesInput>, GuildUncheckedUpdateWithoutBossTurnSchedulesInput>
   }
 
   export type AttendanceSessionUpdateManyWithoutBossScheduleNestedInput = {
@@ -32733,6 +38957,22 @@ export namespace Prisma {
     update?: LootSaleUpdateWithWhereUniqueWithoutBossScheduleInput | LootSaleUpdateWithWhereUniqueWithoutBossScheduleInput[]
     updateMany?: LootSaleUpdateManyWithWhereWithoutBossScheduleInput | LootSaleUpdateManyWithWhereWithoutBossScheduleInput[]
     deleteMany?: LootSaleScalarWhereInput | LootSaleScalarWhereInput[]
+  }
+
+  export type UserCreateNestedOneWithoutBossRotationsUpdatedInput = {
+    create?: XOR<UserCreateWithoutBossRotationsUpdatedInput, UserUncheckedCreateWithoutBossRotationsUpdatedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutBossRotationsUpdatedInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type UserUpdateOneWithoutBossRotationsUpdatedNestedInput = {
+    create?: XOR<UserCreateWithoutBossRotationsUpdatedInput, UserUncheckedCreateWithoutBossRotationsUpdatedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutBossRotationsUpdatedInput
+    upsert?: UserUpsertWithoutBossRotationsUpdatedInput
+    disconnect?: UserWhereInput | boolean
+    delete?: UserWhereInput | boolean
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutBossRotationsUpdatedInput, UserUpdateWithoutBossRotationsUpdatedInput>, UserUncheckedUpdateWithoutBossRotationsUpdatedInput>
   }
 
   export type GuildCreateNestedOneWithoutLootSalesInput = {
@@ -33500,6 +39740,130 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type FactionAnnouncementCreateWithoutCreatorInput = {
+    id?: string
+    title: string
+    body: string
+    priority?: string
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionAnnouncementUncheckedCreateWithoutCreatorInput = {
+    id?: string
+    title: string
+    body: string
+    priority?: string
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionAnnouncementCreateOrConnectWithoutCreatorInput = {
+    where: FactionAnnouncementWhereUniqueInput
+    create: XOR<FactionAnnouncementCreateWithoutCreatorInput, FactionAnnouncementUncheckedCreateWithoutCreatorInput>
+  }
+
+  export type FactionAnnouncementCreateManyCreatorInputEnvelope = {
+    data: FactionAnnouncementCreateManyCreatorInput | FactionAnnouncementCreateManyCreatorInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type FactionEventCreateWithoutCreatorInput = {
+    id?: string
+    title: string
+    description?: string | null
+    startsAt: Date | string
+    endsAt?: Date | string | null
+    location?: string | null
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionEventUncheckedCreateWithoutCreatorInput = {
+    id?: string
+    title: string
+    description?: string | null
+    startsAt: Date | string
+    endsAt?: Date | string | null
+    location?: string | null
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionEventCreateOrConnectWithoutCreatorInput = {
+    where: FactionEventWhereUniqueInput
+    create: XOR<FactionEventCreateWithoutCreatorInput, FactionEventUncheckedCreateWithoutCreatorInput>
+  }
+
+  export type FactionEventCreateManyCreatorInputEnvelope = {
+    data: FactionEventCreateManyCreatorInput | FactionEventCreateManyCreatorInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type NotificationCreateWithoutUserInput = {
+    id?: string
+    type: string
+    title: string
+    body: string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type NotificationUncheckedCreateWithoutUserInput = {
+    id?: string
+    type: string
+    title: string
+    body: string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type NotificationCreateOrConnectWithoutUserInput = {
+    where: NotificationWhereUniqueInput
+    create: XOR<NotificationCreateWithoutUserInput, NotificationUncheckedCreateWithoutUserInput>
+  }
+
+  export type NotificationCreateManyUserInputEnvelope = {
+    data: NotificationCreateManyUserInput | NotificationCreateManyUserInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type BossRotationCreateWithoutUpdatedByInput = {
+    id?: string
+    bossName: string
+    queueGuildIds: JsonNullValueInput | InputJsonValue
+    currentIndex?: number
+    nextSpawnTime?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type BossRotationUncheckedCreateWithoutUpdatedByInput = {
+    id?: string
+    bossName: string
+    queueGuildIds: JsonNullValueInput | InputJsonValue
+    currentIndex?: number
+    nextSpawnTime?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type BossRotationCreateOrConnectWithoutUpdatedByInput = {
+    where: BossRotationWhereUniqueInput
+    create: XOR<BossRotationCreateWithoutUpdatedByInput, BossRotationUncheckedCreateWithoutUpdatedByInput>
+  }
+
+  export type BossRotationCreateManyUpdatedByInputEnvelope = {
+    data: BossRotationCreateManyUpdatedByInput | BossRotationCreateManyUpdatedByInput[]
+    skipDuplicates?: boolean
+  }
+
   export type RefreshTokenUpsertWithWhereUniqueWithoutUserInput = {
     where: RefreshTokenWhereUniqueInput
     update: XOR<RefreshTokenUpdateWithoutUserInput, RefreshTokenUncheckedUpdateWithoutUserInput>
@@ -33750,6 +40114,128 @@ export namespace Prisma {
     joinedAt?: DateTimeFilter<"AttendanceRecord"> | Date | string
   }
 
+  export type FactionAnnouncementUpsertWithWhereUniqueWithoutCreatorInput = {
+    where: FactionAnnouncementWhereUniqueInput
+    update: XOR<FactionAnnouncementUpdateWithoutCreatorInput, FactionAnnouncementUncheckedUpdateWithoutCreatorInput>
+    create: XOR<FactionAnnouncementCreateWithoutCreatorInput, FactionAnnouncementUncheckedCreateWithoutCreatorInput>
+  }
+
+  export type FactionAnnouncementUpdateWithWhereUniqueWithoutCreatorInput = {
+    where: FactionAnnouncementWhereUniqueInput
+    data: XOR<FactionAnnouncementUpdateWithoutCreatorInput, FactionAnnouncementUncheckedUpdateWithoutCreatorInput>
+  }
+
+  export type FactionAnnouncementUpdateManyWithWhereWithoutCreatorInput = {
+    where: FactionAnnouncementScalarWhereInput
+    data: XOR<FactionAnnouncementUpdateManyMutationInput, FactionAnnouncementUncheckedUpdateManyWithoutCreatorInput>
+  }
+
+  export type FactionAnnouncementScalarWhereInput = {
+    AND?: FactionAnnouncementScalarWhereInput | FactionAnnouncementScalarWhereInput[]
+    OR?: FactionAnnouncementScalarWhereInput[]
+    NOT?: FactionAnnouncementScalarWhereInput | FactionAnnouncementScalarWhereInput[]
+    id?: StringFilter<"FactionAnnouncement"> | string
+    title?: StringFilter<"FactionAnnouncement"> | string
+    body?: StringFilter<"FactionAnnouncement"> | string
+    priority?: StringFilter<"FactionAnnouncement"> | string
+    status?: StringFilter<"FactionAnnouncement"> | string
+    creatorId?: StringFilter<"FactionAnnouncement"> | string
+    createdAt?: DateTimeFilter<"FactionAnnouncement"> | Date | string
+    updatedAt?: DateTimeFilter<"FactionAnnouncement"> | Date | string
+  }
+
+  export type FactionEventUpsertWithWhereUniqueWithoutCreatorInput = {
+    where: FactionEventWhereUniqueInput
+    update: XOR<FactionEventUpdateWithoutCreatorInput, FactionEventUncheckedUpdateWithoutCreatorInput>
+    create: XOR<FactionEventCreateWithoutCreatorInput, FactionEventUncheckedCreateWithoutCreatorInput>
+  }
+
+  export type FactionEventUpdateWithWhereUniqueWithoutCreatorInput = {
+    where: FactionEventWhereUniqueInput
+    data: XOR<FactionEventUpdateWithoutCreatorInput, FactionEventUncheckedUpdateWithoutCreatorInput>
+  }
+
+  export type FactionEventUpdateManyWithWhereWithoutCreatorInput = {
+    where: FactionEventScalarWhereInput
+    data: XOR<FactionEventUpdateManyMutationInput, FactionEventUncheckedUpdateManyWithoutCreatorInput>
+  }
+
+  export type FactionEventScalarWhereInput = {
+    AND?: FactionEventScalarWhereInput | FactionEventScalarWhereInput[]
+    OR?: FactionEventScalarWhereInput[]
+    NOT?: FactionEventScalarWhereInput | FactionEventScalarWhereInput[]
+    id?: StringFilter<"FactionEvent"> | string
+    title?: StringFilter<"FactionEvent"> | string
+    description?: StringNullableFilter<"FactionEvent"> | string | null
+    startsAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    endsAt?: DateTimeNullableFilter<"FactionEvent"> | Date | string | null
+    location?: StringNullableFilter<"FactionEvent"> | string | null
+    status?: StringFilter<"FactionEvent"> | string
+    creatorId?: StringFilter<"FactionEvent"> | string
+    createdAt?: DateTimeFilter<"FactionEvent"> | Date | string
+    updatedAt?: DateTimeFilter<"FactionEvent"> | Date | string
+  }
+
+  export type NotificationUpsertWithWhereUniqueWithoutUserInput = {
+    where: NotificationWhereUniqueInput
+    update: XOR<NotificationUpdateWithoutUserInput, NotificationUncheckedUpdateWithoutUserInput>
+    create: XOR<NotificationCreateWithoutUserInput, NotificationUncheckedCreateWithoutUserInput>
+  }
+
+  export type NotificationUpdateWithWhereUniqueWithoutUserInput = {
+    where: NotificationWhereUniqueInput
+    data: XOR<NotificationUpdateWithoutUserInput, NotificationUncheckedUpdateWithoutUserInput>
+  }
+
+  export type NotificationUpdateManyWithWhereWithoutUserInput = {
+    where: NotificationScalarWhereInput
+    data: XOR<NotificationUpdateManyMutationInput, NotificationUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type NotificationScalarWhereInput = {
+    AND?: NotificationScalarWhereInput | NotificationScalarWhereInput[]
+    OR?: NotificationScalarWhereInput[]
+    NOT?: NotificationScalarWhereInput | NotificationScalarWhereInput[]
+    id?: StringFilter<"Notification"> | string
+    userId?: StringFilter<"Notification"> | string
+    type?: StringFilter<"Notification"> | string
+    title?: StringFilter<"Notification"> | string
+    body?: StringFilter<"Notification"> | string
+    metadata?: JsonNullableFilter<"Notification">
+    readAt?: DateTimeNullableFilter<"Notification"> | Date | string | null
+    createdAt?: DateTimeFilter<"Notification"> | Date | string
+  }
+
+  export type BossRotationUpsertWithWhereUniqueWithoutUpdatedByInput = {
+    where: BossRotationWhereUniqueInput
+    update: XOR<BossRotationUpdateWithoutUpdatedByInput, BossRotationUncheckedUpdateWithoutUpdatedByInput>
+    create: XOR<BossRotationCreateWithoutUpdatedByInput, BossRotationUncheckedCreateWithoutUpdatedByInput>
+  }
+
+  export type BossRotationUpdateWithWhereUniqueWithoutUpdatedByInput = {
+    where: BossRotationWhereUniqueInput
+    data: XOR<BossRotationUpdateWithoutUpdatedByInput, BossRotationUncheckedUpdateWithoutUpdatedByInput>
+  }
+
+  export type BossRotationUpdateManyWithWhereWithoutUpdatedByInput = {
+    where: BossRotationScalarWhereInput
+    data: XOR<BossRotationUpdateManyMutationInput, BossRotationUncheckedUpdateManyWithoutUpdatedByInput>
+  }
+
+  export type BossRotationScalarWhereInput = {
+    AND?: BossRotationScalarWhereInput | BossRotationScalarWhereInput[]
+    OR?: BossRotationScalarWhereInput[]
+    NOT?: BossRotationScalarWhereInput | BossRotationScalarWhereInput[]
+    id?: StringFilter<"BossRotation"> | string
+    bossName?: StringFilter<"BossRotation"> | string
+    queueGuildIds?: JsonFilter<"BossRotation">
+    currentIndex?: IntFilter<"BossRotation"> | number
+    nextSpawnTime?: DateTimeNullableFilter<"BossRotation"> | Date | string | null
+    updatedById?: StringNullableFilter<"BossRotation"> | string | null
+    createdAt?: DateTimeFilter<"BossRotation"> | Date | string
+    updatedAt?: DateTimeFilter<"BossRotation"> | Date | string
+  }
+
   export type UserCreateWithoutRefreshTokensInput = {
     id?: string
     email: string
@@ -33770,6 +40256,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutRefreshTokensInput = {
@@ -33792,6 +40282,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutRefreshTokensInput = {
@@ -33830,6 +40324,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutRefreshTokensInput = {
@@ -33852,6 +40350,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserCreateWithoutSessionsInput = {
@@ -33874,6 +40376,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutSessionsInput = {
@@ -33896,6 +40402,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutSessionsInput = {
@@ -33934,6 +40444,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutSessionsInput = {
@@ -33956,6 +40470,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserCreateWithoutPasswordResetTokensInput = {
@@ -33978,6 +40496,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryCreateNestedManyWithoutActorInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutPasswordResetTokensInput = {
@@ -34000,6 +40522,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUncheckedCreateNestedManyWithoutActorInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutPasswordResetTokensInput = {
@@ -34038,6 +40564,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUpdateManyWithoutActorNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutPasswordResetTokensInput = {
@@ -34060,6 +40590,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUncheckedUpdateManyWithoutActorNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type GuildSettingsCreateWithoutGuildInput = {
@@ -34304,6 +40838,7 @@ export namespace Prisma {
     createdAt?: Date | string
     lootDrop?: string | null
     screenshotUrl?: string | null
+    guildTurnGuild?: GuildCreateNestedOneWithoutBossTurnSchedulesInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutBossScheduleInput
     lootSales?: LootSaleCreateNestedManyWithoutBossScheduleInput
   }
@@ -34315,6 +40850,7 @@ export namespace Prisma {
     spawnTime: Date | string
     location: string
     guildTurn?: string | null
+    guildTurnGuildId?: string | null
     status?: $Enums.BossEventStatus
     killedAt?: Date | string | null
     creatorId: string
@@ -34332,6 +40868,52 @@ export namespace Prisma {
 
   export type BossScheduleCreateManyGuildInputEnvelope = {
     data: BossScheduleCreateManyGuildInput | BossScheduleCreateManyGuildInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type BossScheduleCreateWithoutGuildTurnGuildInput = {
+    id?: string
+    bossName: string
+    bossImageUrl?: string | null
+    spawnTime: Date | string
+    location: string
+    guildTurn?: string | null
+    status?: $Enums.BossEventStatus
+    killedAt?: Date | string | null
+    creatorId: string
+    createdAt?: Date | string
+    lootDrop?: string | null
+    screenshotUrl?: string | null
+    guild?: GuildCreateNestedOneWithoutBossSchedulesInput
+    attendanceSessions?: AttendanceSessionCreateNestedManyWithoutBossScheduleInput
+    lootSales?: LootSaleCreateNestedManyWithoutBossScheduleInput
+  }
+
+  export type BossScheduleUncheckedCreateWithoutGuildTurnGuildInput = {
+    id?: string
+    guildId?: string | null
+    bossName: string
+    bossImageUrl?: string | null
+    spawnTime: Date | string
+    location: string
+    guildTurn?: string | null
+    status?: $Enums.BossEventStatus
+    killedAt?: Date | string | null
+    creatorId: string
+    createdAt?: Date | string
+    lootDrop?: string | null
+    screenshotUrl?: string | null
+    attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutBossScheduleInput
+    lootSales?: LootSaleUncheckedCreateNestedManyWithoutBossScheduleInput
+  }
+
+  export type BossScheduleCreateOrConnectWithoutGuildTurnGuildInput = {
+    where: BossScheduleWhereUniqueInput
+    create: XOR<BossScheduleCreateWithoutGuildTurnGuildInput, BossScheduleUncheckedCreateWithoutGuildTurnGuildInput>
+  }
+
+  export type BossScheduleCreateManyGuildTurnGuildInputEnvelope = {
+    data: BossScheduleCreateManyGuildTurnGuildInput | BossScheduleCreateManyGuildTurnGuildInput[]
     skipDuplicates?: boolean
   }
 
@@ -34660,12 +41242,29 @@ export namespace Prisma {
     spawnTime?: DateTimeFilter<"BossSchedule"> | Date | string
     location?: StringFilter<"BossSchedule"> | string
     guildTurn?: StringNullableFilter<"BossSchedule"> | string | null
+    guildTurnGuildId?: StringNullableFilter<"BossSchedule"> | string | null
     status?: EnumBossEventStatusFilter<"BossSchedule"> | $Enums.BossEventStatus
     killedAt?: DateTimeNullableFilter<"BossSchedule"> | Date | string | null
     creatorId?: StringFilter<"BossSchedule"> | string
     createdAt?: DateTimeFilter<"BossSchedule"> | Date | string
     lootDrop?: StringNullableFilter<"BossSchedule"> | string | null
     screenshotUrl?: StringNullableFilter<"BossSchedule"> | string | null
+  }
+
+  export type BossScheduleUpsertWithWhereUniqueWithoutGuildTurnGuildInput = {
+    where: BossScheduleWhereUniqueInput
+    update: XOR<BossScheduleUpdateWithoutGuildTurnGuildInput, BossScheduleUncheckedUpdateWithoutGuildTurnGuildInput>
+    create: XOR<BossScheduleCreateWithoutGuildTurnGuildInput, BossScheduleUncheckedCreateWithoutGuildTurnGuildInput>
+  }
+
+  export type BossScheduleUpdateWithWhereUniqueWithoutGuildTurnGuildInput = {
+    where: BossScheduleWhereUniqueInput
+    data: XOR<BossScheduleUpdateWithoutGuildTurnGuildInput, BossScheduleUncheckedUpdateWithoutGuildTurnGuildInput>
+  }
+
+  export type BossScheduleUpdateManyWithWhereWithoutGuildTurnGuildInput = {
+    where: BossScheduleScalarWhereInput
+    data: XOR<BossScheduleUpdateManyMutationInput, BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildInput>
   }
 
   export type LootSaleUpsertWithWhereUniqueWithoutGuildInput = {
@@ -34823,6 +41422,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -34846,6 +41446,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -34885,6 +41486,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -34908,6 +41510,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -34934,6 +41537,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutGuildMembersInput = {
@@ -34956,6 +41563,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutGuildMembersInput = {
@@ -34980,6 +41591,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -35003,6 +41615,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -35117,6 +41730,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutGuildMembersInput = {
@@ -35139,6 +41756,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type GuildUpsertWithoutMembersInput = {
@@ -35169,6 +41790,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -35192,6 +41814,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -35259,6 +41882,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
@@ -35282,6 +41906,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
@@ -35321,6 +41946,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
@@ -35344,6 +41970,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
@@ -35367,6 +41994,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
@@ -35390,6 +42018,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
@@ -35453,6 +42082,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
@@ -35476,6 +42106,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
@@ -35683,6 +42314,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -35706,6 +42338,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -35786,6 +42419,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -35809,6 +42443,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -35878,6 +42513,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -35901,6 +42537,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -35932,6 +42569,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutLedgerEntriesAsActorInput = {
@@ -35954,6 +42595,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutLedgerEntriesAsActorInput = {
@@ -35989,6 +42634,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -36012,6 +42658,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -36049,6 +42696,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutLedgerEntriesAsActorInput = {
@@ -36071,6 +42722,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserCreateWithoutAuditLogsAsActorInput = {
@@ -36093,6 +42748,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutAuditLogsAsActorInput = {
@@ -36115,6 +42774,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutAuditLogsAsActorInput = {
@@ -36139,6 +42802,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -36162,6 +42826,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -36204,6 +42869,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutAuditLogsAsActorInput = {
@@ -36226,6 +42895,10 @@ export namespace Prisma {
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type GuildUpsertWithoutAuditLogsInput = {
@@ -36256,6 +42929,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -36279,10 +42953,371 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+  }
+
+  export type UserCreateWithoutFactionAnnouncementsInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenCreateNestedManyWithoutUserInput
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
+  }
+
+  export type UserUncheckedCreateWithoutFactionAnnouncementsInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenUncheckedCreateNestedManyWithoutUserInput
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberUncheckedCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogUncheckedCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
+  }
+
+  export type UserCreateOrConnectWithoutFactionAnnouncementsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutFactionAnnouncementsInput, UserUncheckedCreateWithoutFactionAnnouncementsInput>
+  }
+
+  export type UserUpsertWithoutFactionAnnouncementsInput = {
+    update: XOR<UserUpdateWithoutFactionAnnouncementsInput, UserUncheckedUpdateWithoutFactionAnnouncementsInput>
+    create: XOR<UserCreateWithoutFactionAnnouncementsInput, UserUncheckedCreateWithoutFactionAnnouncementsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutFactionAnnouncementsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutFactionAnnouncementsInput, UserUncheckedUpdateWithoutFactionAnnouncementsInput>
+  }
+
+  export type UserUpdateWithoutFactionAnnouncementsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUpdateManyWithoutUserNestedInput
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutFactionAnnouncementsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUncheckedUpdateManyWithoutUserNestedInput
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUncheckedUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUncheckedUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
+  }
+
+  export type UserCreateWithoutFactionEventsInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenCreateNestedManyWithoutUserInput
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
+  }
+
+  export type UserUncheckedCreateWithoutFactionEventsInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenUncheckedCreateNestedManyWithoutUserInput
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberUncheckedCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogUncheckedCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
+  }
+
+  export type UserCreateOrConnectWithoutFactionEventsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutFactionEventsInput, UserUncheckedCreateWithoutFactionEventsInput>
+  }
+
+  export type UserUpsertWithoutFactionEventsInput = {
+    update: XOR<UserUpdateWithoutFactionEventsInput, UserUncheckedUpdateWithoutFactionEventsInput>
+    create: XOR<UserCreateWithoutFactionEventsInput, UserUncheckedCreateWithoutFactionEventsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutFactionEventsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutFactionEventsInput, UserUncheckedUpdateWithoutFactionEventsInput>
+  }
+
+  export type UserUpdateWithoutFactionEventsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUpdateManyWithoutUserNestedInput
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutFactionEventsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUncheckedUpdateManyWithoutUserNestedInput
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUncheckedUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUncheckedUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
+  }
+
+  export type UserCreateWithoutNotificationsInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenCreateNestedManyWithoutUserInput
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
+  }
+
+  export type UserUncheckedCreateWithoutNotificationsInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenUncheckedCreateNestedManyWithoutUserInput
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberUncheckedCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogUncheckedCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
+  }
+
+  export type UserCreateOrConnectWithoutNotificationsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutNotificationsInput, UserUncheckedCreateWithoutNotificationsInput>
+  }
+
+  export type UserUpsertWithoutNotificationsInput = {
+    update: XOR<UserUpdateWithoutNotificationsInput, UserUncheckedUpdateWithoutNotificationsInput>
+    create: XOR<UserCreateWithoutNotificationsInput, UserUncheckedCreateWithoutNotificationsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutNotificationsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutNotificationsInput, UserUncheckedUpdateWithoutNotificationsInput>
+  }
+
+  export type UserUpdateWithoutNotificationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUpdateManyWithoutUserNestedInput
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutNotificationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUncheckedUpdateManyWithoutUserNestedInput
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUncheckedUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUncheckedUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type GuildCreateWithoutJoinRequestsInput = {
@@ -36302,6 +43337,7 @@ export namespace Prisma {
     auditLogs?: AuditLogCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -36325,6 +43361,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -36356,6 +43393,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryCreateNestedManyWithoutActorInput
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutGuildJoinRequestsInput = {
@@ -36378,6 +43419,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUncheckedCreateNestedManyWithoutActorInput
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutGuildJoinRequestsInput = {
@@ -36413,6 +43458,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -36436,6 +43482,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -36473,6 +43520,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUpdateManyWithoutActorNestedInput
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutGuildJoinRequestsInput = {
@@ -36495,6 +43546,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUncheckedUpdateManyWithoutActorNestedInput
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type GuildCreateWithoutAttendanceSessionsInput = {
@@ -36514,6 +43569,7 @@ export namespace Prisma {
     auditLogs?: AuditLogCreateNestedManyWithoutGuildInput
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -36537,6 +43593,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutGuildInput
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -36586,6 +43643,7 @@ export namespace Prisma {
     lootDrop?: string | null
     screenshotUrl?: string | null
     guild?: GuildCreateNestedOneWithoutBossSchedulesInput
+    guildTurnGuild?: GuildCreateNestedOneWithoutBossTurnSchedulesInput
     lootSales?: LootSaleCreateNestedManyWithoutBossScheduleInput
   }
 
@@ -36597,6 +43655,7 @@ export namespace Prisma {
     spawnTime: Date | string
     location: string
     guildTurn?: string | null
+    guildTurnGuildId?: string | null
     status?: $Enums.BossEventStatus
     killedAt?: Date | string | null
     creatorId: string
@@ -36639,6 +43698,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUpdateManyWithoutGuildNestedInput
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -36662,6 +43722,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUncheckedUpdateManyWithoutGuildNestedInput
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -36709,6 +43770,7 @@ export namespace Prisma {
     lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
     screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
     guild?: GuildUpdateOneWithoutBossSchedulesNestedInput
+    guildTurnGuild?: GuildUpdateOneWithoutBossTurnSchedulesNestedInput
     lootSales?: LootSaleUpdateManyWithoutBossScheduleNestedInput
   }
 
@@ -36720,6 +43782,7 @@ export namespace Prisma {
     spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
     location?: StringFieldUpdateOperationsInput | string
     guildTurn?: NullableStringFieldUpdateOperationsInput | string | null
+    guildTurnGuildId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBossEventStatusFieldUpdateOperationsInput | $Enums.BossEventStatus
     killedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     creatorId?: StringFieldUpdateOperationsInput | string
@@ -36778,6 +43841,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryCreateNestedManyWithoutActorInput
     passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserUncheckedCreateWithoutAttendanceRecordsInput = {
@@ -36800,6 +43867,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUncheckedCreateNestedManyWithoutActorInput
     passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
     guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    bossRotationsUpdated?: BossRotationUncheckedCreateNestedManyWithoutUpdatedByInput
   }
 
   export type UserCreateOrConnectWithoutAttendanceRecordsInput = {
@@ -36873,6 +43944,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUpdateManyWithoutActorNestedInput
     passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutAttendanceRecordsInput = {
@@ -36895,6 +43970,10 @@ export namespace Prisma {
     ledgerEntriesAsActor?: LedgerEntryUncheckedUpdateManyWithoutActorNestedInput
     passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
     guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    bossRotationsUpdated?: BossRotationUncheckedUpdateManyWithoutUpdatedByNestedInput
   }
 
   export type GuildCreateWithoutBossSchedulesInput = {
@@ -36914,6 +43993,7 @@ export namespace Prisma {
     auditLogs?: AuditLogCreateNestedManyWithoutGuildInput
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
@@ -36937,6 +44017,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutGuildInput
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
@@ -36946,6 +44027,59 @@ export namespace Prisma {
   export type GuildCreateOrConnectWithoutBossSchedulesInput = {
     where: GuildWhereUniqueInput
     create: XOR<GuildCreateWithoutBossSchedulesInput, GuildUncheckedCreateWithoutBossSchedulesInput>
+  }
+
+  export type GuildCreateWithoutBossTurnSchedulesInput = {
+    id?: string
+    name: string
+    slug: string
+    description?: string | null
+    avatarUrl?: string | null
+    bannerUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    inviteCode?: string | null
+    settings?: GuildSettingsCreateNestedOneWithoutGuildInput
+    members?: GuildMemberCreateNestedManyWithoutGuildInput
+    ledgerEntries?: LedgerEntryCreateNestedManyWithoutGuildInput
+    auditLogs?: AuditLogCreateNestedManyWithoutGuildInput
+    joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
+    attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
+    bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    lootSales?: LootSaleCreateNestedManyWithoutGuildInput
+    pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
+    auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
+    itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+  }
+
+  export type GuildUncheckedCreateWithoutBossTurnSchedulesInput = {
+    id?: string
+    name: string
+    slug: string
+    description?: string | null
+    avatarUrl?: string | null
+    bannerUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    inviteCode?: string | null
+    settings?: GuildSettingsUncheckedCreateNestedOneWithoutGuildInput
+    members?: GuildMemberUncheckedCreateNestedManyWithoutGuildInput
+    ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutGuildInput
+    auditLogs?: AuditLogUncheckedCreateNestedManyWithoutGuildInput
+    joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
+    attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
+    bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
+    pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
+    auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
+    itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+  }
+
+  export type GuildCreateOrConnectWithoutBossTurnSchedulesInput = {
+    where: GuildWhereUniqueInput
+    create: XOR<GuildCreateWithoutBossTurnSchedulesInput, GuildUncheckedCreateWithoutBossTurnSchedulesInput>
   }
 
   export type AttendanceSessionCreateWithoutBossScheduleInput = {
@@ -37050,6 +44184,7 @@ export namespace Prisma {
     auditLogs?: AuditLogUpdateManyWithoutGuildNestedInput
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
@@ -37073,6 +44208,66 @@ export namespace Prisma {
     auditLogs?: AuditLogUncheckedUpdateManyWithoutGuildNestedInput
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
+    lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
+    pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
+    auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
+    itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+  }
+
+  export type GuildUpsertWithoutBossTurnSchedulesInput = {
+    update: XOR<GuildUpdateWithoutBossTurnSchedulesInput, GuildUncheckedUpdateWithoutBossTurnSchedulesInput>
+    create: XOR<GuildCreateWithoutBossTurnSchedulesInput, GuildUncheckedCreateWithoutBossTurnSchedulesInput>
+    where?: GuildWhereInput
+  }
+
+  export type GuildUpdateToOneWithWhereWithoutBossTurnSchedulesInput = {
+    where?: GuildWhereInput
+    data: XOR<GuildUpdateWithoutBossTurnSchedulesInput, GuildUncheckedUpdateWithoutBossTurnSchedulesInput>
+  }
+
+  export type GuildUpdateWithoutBossTurnSchedulesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bannerUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    inviteCode?: NullableStringFieldUpdateOperationsInput | string | null
+    settings?: GuildSettingsUpdateOneWithoutGuildNestedInput
+    members?: GuildMemberUpdateManyWithoutGuildNestedInput
+    ledgerEntries?: LedgerEntryUpdateManyWithoutGuildNestedInput
+    auditLogs?: AuditLogUpdateManyWithoutGuildNestedInput
+    joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
+    attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
+    bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
+    pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
+    auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
+    itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+  }
+
+  export type GuildUncheckedUpdateWithoutBossTurnSchedulesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bannerUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    inviteCode?: NullableStringFieldUpdateOperationsInput | string | null
+    settings?: GuildSettingsUncheckedUpdateOneWithoutGuildNestedInput
+    members?: GuildMemberUncheckedUpdateManyWithoutGuildNestedInput
+    ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutGuildNestedInput
+    auditLogs?: AuditLogUncheckedUpdateManyWithoutGuildNestedInput
+    joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
+    attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
+    bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
@@ -37111,6 +44306,126 @@ export namespace Prisma {
     data: XOR<LootSaleUpdateManyMutationInput, LootSaleUncheckedUpdateManyWithoutBossScheduleInput>
   }
 
+  export type UserCreateWithoutBossRotationsUpdatedInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenCreateNestedManyWithoutUserInput
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+  }
+
+  export type UserUncheckedCreateWithoutBossRotationsUpdatedInput = {
+    id?: string
+    email: string
+    passwordHash: string
+    displayName: string
+    avatarUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    refreshTokens?: RefreshTokenUncheckedCreateNestedManyWithoutUserInput
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    guildMembers?: GuildMemberUncheckedCreateNestedManyWithoutUserInput
+    auditLogsAsActor?: AuditLogUncheckedCreateNestedManyWithoutActorInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedCreateNestedManyWithoutActorInput
+    passwordResetTokens?: PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+    guildJoinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutUserInput
+    attendanceRecords?: AttendanceRecordUncheckedCreateNestedManyWithoutUserInput
+    factionAnnouncements?: FactionAnnouncementUncheckedCreateNestedManyWithoutCreatorInput
+    factionEvents?: FactionEventUncheckedCreateNestedManyWithoutCreatorInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+  }
+
+  export type UserCreateOrConnectWithoutBossRotationsUpdatedInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutBossRotationsUpdatedInput, UserUncheckedCreateWithoutBossRotationsUpdatedInput>
+  }
+
+  export type UserUpsertWithoutBossRotationsUpdatedInput = {
+    update: XOR<UserUpdateWithoutBossRotationsUpdatedInput, UserUncheckedUpdateWithoutBossRotationsUpdatedInput>
+    create: XOR<UserCreateWithoutBossRotationsUpdatedInput, UserUncheckedCreateWithoutBossRotationsUpdatedInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutBossRotationsUpdatedInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutBossRotationsUpdatedInput, UserUncheckedUpdateWithoutBossRotationsUpdatedInput>
+  }
+
+  export type UserUpdateWithoutBossRotationsUpdatedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUpdateManyWithoutUserNestedInput
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutBossRotationsUpdatedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    displayName?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    refreshTokens?: RefreshTokenUncheckedUpdateManyWithoutUserNestedInput
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    guildMembers?: GuildMemberUncheckedUpdateManyWithoutUserNestedInput
+    auditLogsAsActor?: AuditLogUncheckedUpdateManyWithoutActorNestedInput
+    ledgerEntriesAsActor?: LedgerEntryUncheckedUpdateManyWithoutActorNestedInput
+    passwordResetTokens?: PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+    guildJoinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutUserNestedInput
+    attendanceRecords?: AttendanceRecordUncheckedUpdateManyWithoutUserNestedInput
+    factionAnnouncements?: FactionAnnouncementUncheckedUpdateManyWithoutCreatorNestedInput
+    factionEvents?: FactionEventUncheckedUpdateManyWithoutCreatorNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+  }
+
   export type GuildCreateWithoutLootSalesInput = {
     id?: string
     name: string
@@ -37129,6 +44444,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
@@ -37152,6 +44468,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
     attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
     bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
@@ -37176,6 +44493,7 @@ export namespace Prisma {
     lootDrop?: string | null
     screenshotUrl?: string | null
     guild?: GuildCreateNestedOneWithoutBossSchedulesInput
+    guildTurnGuild?: GuildCreateNestedOneWithoutBossTurnSchedulesInput
     attendanceSessions?: AttendanceSessionCreateNestedManyWithoutBossScheduleInput
   }
 
@@ -37187,6 +44505,7 @@ export namespace Prisma {
     spawnTime: Date | string
     location: string
     guildTurn?: string | null
+    guildTurnGuildId?: string | null
     status?: $Enums.BossEventStatus
     killedAt?: Date | string | null
     creatorId: string
@@ -37230,6 +44549,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
@@ -37253,6 +44573,7 @@ export namespace Prisma {
     joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
     attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
     bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
@@ -37283,6 +44604,7 @@ export namespace Prisma {
     lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
     screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
     guild?: GuildUpdateOneWithoutBossSchedulesNestedInput
+    guildTurnGuild?: GuildUpdateOneWithoutBossTurnSchedulesNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutBossScheduleNestedInput
   }
 
@@ -37294,6 +44616,7 @@ export namespace Prisma {
     spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
     location?: StringFieldUpdateOperationsInput | string
     guildTurn?: NullableStringFieldUpdateOperationsInput | string | null
+    guildTurnGuildId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBossEventStatusFieldUpdateOperationsInput | $Enums.BossEventStatus
     killedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     creatorId?: StringFieldUpdateOperationsInput | string
@@ -37391,6 +44714,48 @@ export namespace Prisma {
     sessionId: string
     status?: $Enums.AttendanceRecordStatus
     joinedAt?: Date | string
+  }
+
+  export type FactionAnnouncementCreateManyCreatorInput = {
+    id?: string
+    title: string
+    body: string
+    priority?: string
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FactionEventCreateManyCreatorInput = {
+    id?: string
+    title: string
+    description?: string | null
+    startsAt: Date | string
+    endsAt?: Date | string | null
+    location?: string | null
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type NotificationCreateManyUserInput = {
+    id?: string
+    type: string
+    title: string
+    body: string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: Date | string | null
+    createdAt?: Date | string
+  }
+
+  export type BossRotationCreateManyUpdatedByInput = {
+    id?: string
+    bossName: string
+    queueGuildIds: JsonNullValueInput | InputJsonValue
+    currentIndex?: number
+    nextSpawnTime?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type RefreshTokenUpdateWithoutUserInput = {
@@ -37667,6 +45032,132 @@ export namespace Prisma {
     joinedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type FactionAnnouncementUpdateWithoutCreatorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionAnnouncementUncheckedUpdateWithoutCreatorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionAnnouncementUncheckedUpdateManyWithoutCreatorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionEventUpdateWithoutCreatorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionEventUncheckedUpdateWithoutCreatorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FactionEventUncheckedUpdateManyWithoutCreatorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    location?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type NotificationUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type NotificationUncheckedUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type NotificationUncheckedUpdateManyWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BossRotationUpdateWithoutUpdatedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    queueGuildIds?: JsonNullValueInput | InputJsonValue
+    currentIndex?: IntFieldUpdateOperationsInput | number
+    nextSpawnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BossRotationUncheckedUpdateWithoutUpdatedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    queueGuildIds?: JsonNullValueInput | InputJsonValue
+    currentIndex?: IntFieldUpdateOperationsInput | number
+    nextSpawnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BossRotationUncheckedUpdateManyWithoutUpdatedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    queueGuildIds?: JsonNullValueInput | InputJsonValue
+    currentIndex?: IntFieldUpdateOperationsInput | number
+    nextSpawnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type GuildMemberCreateManyGuildInput = {
     id?: string
     userId: string
@@ -37736,6 +45227,23 @@ export namespace Prisma {
 
   export type BossScheduleCreateManyGuildInput = {
     id?: string
+    bossName: string
+    bossImageUrl?: string | null
+    spawnTime: Date | string
+    location: string
+    guildTurn?: string | null
+    guildTurnGuildId?: string | null
+    status?: $Enums.BossEventStatus
+    killedAt?: Date | string | null
+    creatorId: string
+    createdAt?: Date | string
+    lootDrop?: string | null
+    screenshotUrl?: string | null
+  }
+
+  export type BossScheduleCreateManyGuildTurnGuildInput = {
+    id?: string
+    guildId?: string | null
     bossName: string
     bossImageUrl?: string | null
     spawnTime: Date | string
@@ -38027,12 +45535,66 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
     screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    guildTurnGuild?: GuildUpdateOneWithoutBossTurnSchedulesNestedInput
     attendanceSessions?: AttendanceSessionUpdateManyWithoutBossScheduleNestedInput
     lootSales?: LootSaleUpdateManyWithoutBossScheduleNestedInput
   }
 
   export type BossScheduleUncheckedUpdateWithoutGuildInput = {
     id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    bossImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    location?: StringFieldUpdateOperationsInput | string
+    guildTurn?: NullableStringFieldUpdateOperationsInput | string | null
+    guildTurnGuildId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumBossEventStatusFieldUpdateOperationsInput | $Enums.BossEventStatus
+    killedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    creatorId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
+    screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutBossScheduleNestedInput
+    lootSales?: LootSaleUncheckedUpdateManyWithoutBossScheduleNestedInput
+  }
+
+  export type BossScheduleUncheckedUpdateManyWithoutGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    bossImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    location?: StringFieldUpdateOperationsInput | string
+    guildTurn?: NullableStringFieldUpdateOperationsInput | string | null
+    guildTurnGuildId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumBossEventStatusFieldUpdateOperationsInput | $Enums.BossEventStatus
+    killedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    creatorId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
+    screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type BossScheduleUpdateWithoutGuildTurnGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bossName?: StringFieldUpdateOperationsInput | string
+    bossImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    location?: StringFieldUpdateOperationsInput | string
+    guildTurn?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumBossEventStatusFieldUpdateOperationsInput | $Enums.BossEventStatus
+    killedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    creatorId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lootDrop?: NullableStringFieldUpdateOperationsInput | string | null
+    screenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    guild?: GuildUpdateOneWithoutBossSchedulesNestedInput
+    attendanceSessions?: AttendanceSessionUpdateManyWithoutBossScheduleNestedInput
+    lootSales?: LootSaleUpdateManyWithoutBossScheduleNestedInput
+  }
+
+  export type BossScheduleUncheckedUpdateWithoutGuildTurnGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: NullableStringFieldUpdateOperationsInput | string | null
     bossName?: StringFieldUpdateOperationsInput | string
     bossImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -38048,8 +45610,9 @@ export namespace Prisma {
     lootSales?: LootSaleUncheckedUpdateManyWithoutBossScheduleNestedInput
   }
 
-  export type BossScheduleUncheckedUpdateManyWithoutGuildInput = {
+  export type BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildInput = {
     id?: StringFieldUpdateOperationsInput | string
+    guildId?: NullableStringFieldUpdateOperationsInput | string | null
     bossName?: StringFieldUpdateOperationsInput | string
     bossImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     spawnTime?: DateTimeFieldUpdateOperationsInput | Date | string

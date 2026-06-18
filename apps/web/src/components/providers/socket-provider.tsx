@@ -84,6 +84,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     // 2. Subscribe to the specific guild channel if user has a guild
     const activeGuild = user.guilds?.[0];
     let guildChannel: any = null;
+    let userChannel: any = null;
 
     if (activeGuild) {
       const guildId = activeGuild.guildId;
@@ -106,10 +107,23 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         });
     }
 
+    userChannel = supabase.channel(`user-${user.id}`, {
+      config: { broadcast: { self: true } },
+    });
+
+    userChannel
+      .on("broadcast", { event: "*" }, ({ event, payload }: { event: string; payload: any }) => {
+        handleBroadcast(event, payload);
+      })
+      .subscribe((status: string) => {
+        console.log(`[Realtime Client]: User channel status: ${status}`);
+      });
+
     return () => {
       console.log("[Realtime Client]: Cleaning up Supabase subscriptions");
       if (globalChannel) supabase.removeChannel(globalChannel);
       if (guildChannel) supabase.removeChannel(guildChannel);
+      if (userChannel) supabase.removeChannel(userChannel);
     };
   }, [isAuthenticated, isSessionReady, user]);
 

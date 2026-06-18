@@ -15,7 +15,7 @@ export default function LeaderPanelPage() {
   const isLeader =
     activeGuild &&
     (activeGuild.role === "GUILD_LEADER" ||
-      activeGuild.role === "ALLIANCE_LEADER" ||
+      activeGuild.role === "FACTION_LEADER" ||
       activeGuild.role === "ADMIN");
 
   useEffect(() => {

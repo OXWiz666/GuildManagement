@@ -298,6 +298,41 @@ exports.Prisma.AuditLogScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.FactionAnnouncementScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  body: 'body',
+  priority: 'priority',
+  status: 'status',
+  creatorId: 'creatorId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FactionEventScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  description: 'description',
+  startsAt: 'startsAt',
+  endsAt: 'endsAt',
+  location: 'location',
+  status: 'status',
+  creatorId: 'creatorId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.NotificationScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  type: 'type',
+  title: 'title',
+  body: 'body',
+  metadata: 'metadata',
+  readAt: 'readAt',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.GuildJoinRequestScalarFieldEnum = {
   id: 'id',
   guildId: 'guildId',
@@ -339,12 +374,24 @@ exports.Prisma.BossScheduleScalarFieldEnum = {
   spawnTime: 'spawnTime',
   location: 'location',
   guildTurn: 'guildTurn',
+  guildTurnGuildId: 'guildTurnGuildId',
   status: 'status',
   killedAt: 'killedAt',
   creatorId: 'creatorId',
   createdAt: 'createdAt',
   lootDrop: 'lootDrop',
   screenshotUrl: 'screenshotUrl'
+};
+
+exports.Prisma.BossRotationScalarFieldEnum = {
+  id: 'id',
+  bossName: 'bossName',
+  queueGuildIds: 'queueGuildIds',
+  currentIndex: 'currentIndex',
+  nextSpawnTime: 'nextSpawnTime',
+  updatedById: 'updatedById',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.BossScalarFieldEnum = {
@@ -406,7 +453,7 @@ exports.Prisma.JsonNullValueFilter = {
 };
 exports.GuildRole = exports.$Enums.GuildRole = {
   ADMIN: 'ADMIN',
-  ALLIANCE_LEADER: 'ALLIANCE_LEADER',
+  FACTION_LEADER: 'FACTION_LEADER',
   GUILD_LEADER: 'GUILD_LEADER',
   OFFICER: 'OFFICER',
   CORE_MEMBER: 'CORE_MEMBER',
@@ -479,10 +526,14 @@ exports.Prisma.ModelName = {
   ItemRequest: 'ItemRequest',
   LedgerEntry: 'LedgerEntry',
   AuditLog: 'AuditLog',
+  FactionAnnouncement: 'FactionAnnouncement',
+  FactionEvent: 'FactionEvent',
+  Notification: 'Notification',
   GuildJoinRequest: 'GuildJoinRequest',
   AttendanceSession: 'AttendanceSession',
   AttendanceRecord: 'AttendanceRecord',
   BossSchedule: 'BossSchedule',
+  BossRotation: 'BossRotation',
   Boss: 'Boss',
   LootSale: 'LootSale'
 };

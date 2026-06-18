@@ -173,7 +173,7 @@ export class GuildService {
     // Determine rank name based on role
     const rankNameMap: Record<string, string> = {
       ADMIN: "Admin",
-      ALLIANCE_LEADER: "Alliance Leader",
+      FACTION_LEADER: "Faction Leader",
       GUILD_LEADER: "Guild Leader",
       OFFICER: "Officer",
       CORE_MEMBER: "Core",
@@ -189,8 +189,8 @@ export class GuildService {
 
     // Determine if promotion or demotion
     const isPromotion =
-      ["MEMBER", "ELITE_MEMBER", "CORE_MEMBER", "OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"].indexOf(newRole) >
-      ["MEMBER", "ELITE_MEMBER", "CORE_MEMBER", "OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"].indexOf(oldRole);
+      ["MEMBER", "ELITE_MEMBER", "CORE_MEMBER", "OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].indexOf(newRole) >
+      ["MEMBER", "ELITE_MEMBER", "CORE_MEMBER", "OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].indexOf(oldRole);
 
     await this.auditRepo.create({
       actorId,
@@ -262,7 +262,7 @@ export class GuildService {
       !actorMembership.isActive ||
       (actorMembership.role !== "GUILD_LEADER" &&
         actorMembership.role !== "OFFICER" &&
-        actorMembership.role !== "ALLIANCE_LEADER" &&
+        actorMembership.role !== "FACTION_LEADER" &&
         actorMembership.role !== "ADMIN")
     ) {
       throw new ForbiddenError("Only Guild Leaders and Officers can update settings");

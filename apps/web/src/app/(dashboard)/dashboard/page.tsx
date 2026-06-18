@@ -25,7 +25,7 @@ export default function DashboardPage() {
   switch (role) {
     case "ADMIN":
       return <AdminDashboard />;
-    case "ALLIANCE_LEADER":
+    case "FACTION_LEADER":
       return <FactionLeaderDashboard />;
     case "GUILD_LEADER":
       return <GuildLeaderDashboard />;

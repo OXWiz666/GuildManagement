@@ -51,6 +51,18 @@ const navGroups: NavGroup[] = [
           </svg>
         ),
       },
+      {
+        label: "Faction",
+        href: "/dashboard/faction",
+        icon: (
+          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z" />
+            <path d="M8 11h8" />
+            <path d="M10 8v7" />
+            <path d="M14 8v7" />
+          </svg>
+        ),
+      },
     ],
   },
   {
@@ -64,7 +76,7 @@ const navGroups: NavGroup[] = [
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l5.67-5.67" />
           </svg>
         ),
-        roles: ["ADMIN", "ALLIANCE_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER"],
+        roles: ["ADMIN", "FACTION_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"],
       },
       {
         label: "Boss Schedule",
@@ -113,7 +125,7 @@ const navGroups: NavGroup[] = [
             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
           </svg>
         ),
-        roles: ["ADMIN", "ALLIANCE_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER"],
+        roles: ["ADMIN", "FACTION_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER"],
       },
       {
         label: "Guild Market",
@@ -139,7 +151,7 @@ const navGroups: NavGroup[] = [
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           </svg>
         ),
-        roles: ["OFFICER", "GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"],
+        roles: ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"],
       },
       {
         label: "Leader Panel",
@@ -150,7 +162,7 @@ const navGroups: NavGroup[] = [
             <path d="M3 20h18" />
           </svg>
         ),
-        roles: ["GUILD_LEADER", "ALLIANCE_LEADER", "ADMIN"],
+        roles: ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"],
       },
     ],
   },
@@ -257,7 +269,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="mx-5 section-divider-gold" />
 
         {/* Grouped Navigation */}
-        <nav className="flex-1 px-4 py-4 space-y-5 overflow-hidden">
+        <nav className="flex-1 px-4 py-4 space-y-5 overflow-y-auto overflow-x-hidden">
           {navGroups.map((group) => {
             // Filter items based on roles and guild membership
             const filteredItems = group.items.filter((item) => {

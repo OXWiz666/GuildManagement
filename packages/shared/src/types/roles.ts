@@ -8,7 +8,7 @@ export const GUILD_ROLES = [
   "CORE_MEMBER",
   "OFFICER",
   "GUILD_LEADER",
-  "ALLIANCE_LEADER",
+  "FACTION_LEADER",
   "ADMIN",
 ] as const;
 
@@ -21,14 +21,14 @@ export const ROLE_DISPLAY_NAMES: Record<GuildRoleType, string> = {
   CORE_MEMBER: "Core Member",
   OFFICER: "Officer",
   GUILD_LEADER: "Guild Leader",
-  ALLIANCE_LEADER: "Alliance Leader",
+  FACTION_LEADER: "Faction Leader",
   ADMIN: "Admin",
 };
 
 // Role permissions description
 export const ROLE_PERMISSIONS: Record<GuildRoleType, string> = {
   ADMIN: "Full system control",
-  ALLIANCE_LEADER: "Manage alliance",
+  FACTION_LEADER: "Manage faction",
   GUILD_LEADER: "Manage guild",
   OFFICER: "Attendance, member management",
   CORE_MEMBER: "High-rank member",

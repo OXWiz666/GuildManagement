@@ -202,8 +202,8 @@ function LeaderToolsVisual() {
         </span>
       </div>
       <div className="flex items-center justify-between p-2 rounded bg-white/[0.01] border border-white/[0.03]">
-        <span className="text-white/70">Tax Collection Rate</span>
-        <span className="font-bold text-[#f5c542] font-mono">10%</span>
+        <span className="text-white/70">Activity Points Multiplier</span>
+        <span className="font-bold text-[#f5c542] font-mono text-[10px]">1.5</span>
       </div>
     </div>
   );
@@ -231,8 +231,19 @@ const FEATURES = [
     desc: "Track priority sequence values and cycle upcoming claims to ensure fair loot distribution.",
     visual: <BossRotationVisual />,
     icon: (
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 6H16" />
+      <svg
+        className="block h-5 w-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M7 7h5V2" />
+        <path d="M17 17h-5v5" />
+        <path d="M17.66 6.34A8 8 0 0 0 7 7" />
+        <path d="M6.34 17.66A8 8 0 0 0 17 17" />
       </svg>
     ),
   },
@@ -325,7 +336,7 @@ export default function Features() {
                 {/* Header info */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="h-9 w-9 rounded-lg border border-[#d4a853]/15 bg-white/[0.02] flex items-center justify-center text-[#f5c542] group-hover:bg-[#d4a853]/5 group-hover:border-[#d4a853]/40 transition-all duration-300">
+                    <div className="grid h-9 w-9 place-items-center rounded-lg border border-[#d4a853]/15 bg-white/[0.02] text-[#f5c542] group-hover:bg-[#d4a853]/5 group-hover:border-[#d4a853]/40 transition-all duration-300">
                       {feature.icon}
                     </div>
                     <span className="text-[9px] font-mono font-bold text-white/20">0{i + 1}</span>

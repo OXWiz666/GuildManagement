@@ -20,10 +20,10 @@ function useCountUp(target: number, enabled: boolean, duration = 1800) {
 }
 
 const STATS = [
-  { label: "Active guilds",        value: 500,   suffix: "+" },
-  { label: "Members managed",      value: 10000, suffix: "+" },
-  { label: "Transactions logged",  value: 50000, suffix: "+" },
-  { label: "Platform uptime",      value: 99.9,  suffix: "%", decimal: 1 },
+  { label: "Active guilds",        value: 20,   suffix: "+" },
+  { label: "Members managed",      value: 150, suffix: "+" },
+  { label: "Transactions logged",  value: 1000, suffix: "+" },
+  { label: "Platform uptime",      value: 100,  suffix: "%", decimal: 0 },
 ];
 
 function StatItem({

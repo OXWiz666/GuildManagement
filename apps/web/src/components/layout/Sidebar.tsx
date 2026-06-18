@@ -257,7 +257,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="mx-5 section-divider-gold" />
 
         {/* Grouped Navigation */}
-        <nav className="flex-1 px-4 py-4 overflow-y-auto space-y-5">
+        <nav className="flex-1 px-4 py-4 space-y-5 overflow-hidden">
           {navGroups.map((group) => {
             // Filter items based on roles and guild membership
             const filteredItems = group.items.filter((item) => {

@@ -38,6 +38,17 @@ const navItems = [
   },
 
   {
+    label: "Faction",
+    href: "/dashboard/faction",
+    requiresFactionLeader: true,
+    icon: (
+      <svg className="h-[20px] w-[20px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 7l3 4L12 3l4 8 3-4v12H5V7z" />
+        <line x1="5" y1="21" x2="19" y2="21" />
+      </svg>
+    ),
+  },
+  {
     label: "Boss Schedule",
     href: "/dashboard/boss-schedule",
     icon: (
@@ -178,6 +189,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             const hasNoGuild = user?.guilds && user.guilds.length === 0;
             if (hasNoGuild && item.href !== "/dashboard" && item.href !== "/dashboard/settings") {
               return null;
+            }
+            // Faction panel is restricted to faction (alliance) leaders.
+            const requiresFactionLeader =
+              "requiresFactionLeader" in item && item.requiresFactionLeader;
+            if (requiresFactionLeader) {
+              const activeRole = user?.guilds?.[0]?.role;
+              if (activeRole !== "ALLIANCE_LEADER" && activeRole !== "ADMIN") {
+                return null;
+              }
             }
             const isActive =
               item.href === "/dashboard"

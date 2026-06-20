@@ -1,325 +1,194 @@
 "use client";
 
-import { Children, useState, type ReactNode } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import {
-  factionApi,
-  type FactionAnnouncementData,
-  type FactionEventData,
-  type FactionMemberData,
-} from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
-import Button from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
-import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
-import { useQuery, queryClient } from "@/lib/query";
+import {
+  Reveal,
+  ModuleHeader,
+  ModuleTabs,
+  LiveDot,
+} from "@/components/dashboard/DashboardHelpers";
 
-type FactionTab = "ANNOUNCEMENTS" | "EVENTS" | "MEMBERS";
+import FindGuildTab from "./components/FindGuildTab";
+import MemberGuildsTab from "./components/MemberGuildsTab";
+import PendingInvitesTab from "./components/PendingInvitesTab";
+import InviteGuildModal from "./components/InviteGuildModal";
+import PermissionDenied from "./components/PermissionDenied";
+import {
+  type DirectoryGuild,
+  type FactionMemberGuild,
+  type PendingGuildInvite,
+  MY_FACTION,
+  getFactionMemberGuilds,
+  getPendingInvites,
+  sendGuildInvite,
+  cancelInvite,
+} from "./factionStubs";
+
+type TabValue = "guilds" | "find" | "pending";
+
+// Only Alliance Leaders (faction leaders) — and Admins — may manage a faction.
+const FACTION_LEADER_ROLES = ["ALLIANCE_LEADER", "ADMIN"];
 
 export default function FactionPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const activeGuild = user?.guilds?.[0];
-  const [activeTab, setActiveTab] = useState<FactionTab>("ANNOUNCEMENTS");
-  const [announcementForm, setAnnouncementForm] = useState({ title: "", body: "", priority: "NORMAL" });
-  const [eventForm, setEventForm] = useState({ title: "", description: "", startsAt: "", endsAt: "", location: "" });
-  const [isSaving, setIsSaving] = useState(false);
 
-  const canManage = activeGuild?.role === "FACTION_LEADER" || activeGuild?.role === "ADMIN";
+  const activeGuild = user?.guilds[0];
+  const isFactionLeader =
+    !!activeGuild && FACTION_LEADER_ROLES.includes(activeGuild.role);
 
-  const { data: announcementsRaw, isLoading: isLoadingAnnouncements } = useQuery<FactionAnnouncementData[]>(
-    "faction_announcements",
-    async () => {
-      const result = await factionApi.getAnnouncements();
-      return result.success && result.data?.announcements ? result.data.announcements : [];
-    },
-    { persist: true, staleTime: 30000 },
-  );
+  const [activeTab, setActiveTab] = useState<TabValue>("guilds");
 
-  const { data: eventsRaw, isLoading: isLoadingEvents } = useQuery<FactionEventData[]>(
-    "faction_events",
-    async () => {
-      const result = await factionApi.getEvents();
-      return result.success && result.data?.events ? result.data.events : [];
-    },
-    { persist: true, staleTime: 30000 },
-  );
+  const [memberGuilds, setMemberGuilds] = useState<FactionMemberGuild[]>([]);
+  const [isLoadingGuilds, setIsLoadingGuilds] = useState(true);
 
-  const { data: membersRaw, isLoading: isLoadingMembers } = useQuery<FactionMemberData[]>(
-    canManage ? "faction_members" : "faction_members_locked",
-    async () => {
-      if (!canManage) return [];
-      const result = await factionApi.getMembers();
-      return result.success && result.data?.members ? result.data.members : [];
-    },
-    { persist: true, staleTime: 30000 },
-  );
+  const [pendingInvites, setPendingInvites] = useState<PendingGuildInvite[]>([]);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(true);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
 
-  const announcements = announcementsRaw || [];
-  const events = eventsRaw || [];
-  const members = membersRaw || [];
+  const [inviteTarget, setInviteTarget] = useState<DirectoryGuild | null>(null);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
 
-  async function createAnnouncement() {
-    if (!announcementForm.title.trim() || !announcementForm.body.trim()) return;
-    setIsSaving(true);
+  const loadGuilds = useCallback(async () => {
+    setIsLoadingGuilds(true);
     try {
-      const result = await factionApi.createAnnouncement(announcementForm);
-      if (result.success) {
-        addToast("success", "Faction announcement posted");
-        setAnnouncementForm({ title: "", body: "", priority: "NORMAL" });
-        queryClient.invalidateQueries("faction_announcements");
-      } else {
-        addToast("error", result.error?.message || "Failed to post announcement");
-      }
+      setMemberGuilds(await getFactionMemberGuilds());
     } finally {
-      setIsSaving(false);
+      setIsLoadingGuilds(false);
     }
-  }
+  }, []);
 
-  async function createEvent() {
-    if (!eventForm.title.trim() || !eventForm.startsAt) return;
-    setIsSaving(true);
+  const loadInvites = useCallback(async () => {
+    setIsLoadingInvites(true);
     try {
-      const result = await factionApi.createEvent({
-        ...eventForm,
-        endsAt: eventForm.endsAt || null,
-      });
-      if (result.success) {
-        addToast("success", "Faction event created");
-        setEventForm({ title: "", description: "", startsAt: "", endsAt: "", location: "" });
-        queryClient.invalidateQueries("faction_events");
-      } else {
-        addToast("error", result.error?.message || "Failed to create event");
-      }
+      setPendingInvites(await getPendingInvites());
     } finally {
-      setIsSaving(false);
+      setIsLoadingInvites(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isFactionLeader) return;
+    loadGuilds();
+    loadInvites();
+  }, [isFactionLeader, loadGuilds, loadInvites]);
+
+  async function handleConfirmInvite() {
+    if (!inviteTarget) return;
+    setIsSendingInvite(true);
+    try {
+      const { invite } = await sendGuildInvite(inviteTarget);
+      setPendingInvites((prev) => [invite, ...prev]);
+      addToast("success", `Invitation sent to ${inviteTarget.name}`);
+      setInviteTarget(null);
+      setActiveTab("pending");
+    } catch {
+      addToast("error", "Failed to send invitation");
+    } finally {
+      setIsSendingInvite(false);
     }
   }
 
-  async function deleteAnnouncement(id: string) {
-    const result = await factionApi.deleteAnnouncement(id);
-    if (result.success) {
-      queryClient.invalidateQueries("faction_announcements");
-      addToast("success", "Announcement archived");
-    }
-  }
-
-  async function deleteEvent(id: string) {
-    const result = await factionApi.deleteEvent(id);
-    if (result.success) {
-      queryClient.invalidateQueries("faction_events");
-      addToast("success", "Event archived");
+  async function handleCancelInvite(invite: PendingGuildInvite) {
+    setCancelingId(invite.id);
+    try {
+      const result = await cancelInvite(invite.id);
+      if (result.success) {
+        setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
+        addToast("info", `Invitation to ${invite.guildName} canceled`);
+      }
+    } catch {
+      addToast("error", "Failed to cancel invitation");
+    } finally {
+      setCancelingId(null);
     }
   }
 
   if (!user || !activeGuild) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-white/40">No active guild selected</p>
+        <p className="text-white/40 text-[13px]">No active guild selected</p>
       </div>
     );
   }
 
-  const tabs: Array<{ id: FactionTab; label: string; count?: number }> = [
-    { id: "ANNOUNCEMENTS", label: "Announcements", count: announcements.length },
-    { id: "EVENTS", label: "Events", count: events.length },
-    { id: "MEMBERS", label: "Members", count: members.length },
+  // Permission-denied state (design brief requires it for leader-only screens).
+  if (!isFactionLeader) {
+    return (
+      <div className="relative max-w-7xl mx-auto w-full">
+        <DashboardDecor />
+        <div className="relative z-10">
+          <PermissionDenied currentRole={activeGuild.role} />
+        </div>
+      </div>
+    );
+  }
+
+  const tabs: Array<{ value: TabValue; label: string; count?: number }> = [
+    { value: "guilds", label: "Member guilds", count: memberGuilds.length },
+    { value: "find", label: "Find & invite" },
+    { value: "pending", label: "Pending invites", count: pendingInvites.length },
   ];
 
   return (
     <div className="relative max-w-7xl mx-auto w-full">
       <DashboardDecor />
+
       <div className="relative z-10 space-y-6 text-white/85">
         <ModuleHeader
-          eyebrow="Faction"
-          title="Faction Command"
-          description="Shared announcements, event planning, and cross-guild visibility."
+          eyebrow="Faction leader"
+          title="Faction"
+          description={
+            <span className="inline-flex items-center gap-1.5">
+              <LiveDot tone="amber" size={5} />
+              {MY_FACTION.name} · {MY_FACTION.memberGuildCount}/{MY_FACTION.capacity}{" "}
+              guilds
+            </span>
+          }
+          right={
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/[0.08] border border-amber-500/20 text-amber-300 text-[11px] font-medium uppercase tracking-[0.18em]">
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 7l3 4L12 3l4 8 3-4v12H5V7z" />
+              </svg>
+              Alliance leader
+            </span>
+          }
         />
 
-        <div className="inline-flex flex-wrap items-center glass-subtle border border-white/[0.06] rounded-xl p-1 gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer focus-ring ${
-                activeTab === tab.id
-                  ? "bg-amber-500/10 border border-amber-500/25 text-amber-400"
-                  : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
-              }`}
-            >
-              {tab.label}
-              {typeof tab.count === "number" && (
-                <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/45">
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        <Reveal delay={80}>
+          <ModuleTabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
+        </Reveal>
 
-        {activeTab === "ANNOUNCEMENTS" && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
-            <ContentList loading={isLoadingAnnouncements} empty="No announcements posted">
-              {announcements.map((item) => (
-                <PanelRow key={item.id} title={item.title} meta={`${item.priority} - ${new Date(item.createdAt).toLocaleDateString()}`}>
-                  <p className="text-sm text-white/55 leading-relaxed">{item.body}</p>
-                  {canManage && (
-                    <button onClick={() => deleteAnnouncement(item.id)} className="mt-3 text-[11px] text-red-300 hover:text-red-200 cursor-pointer">
-                      Archive
-                    </button>
-                  )}
-                </PanelRow>
-              ))}
-            </ContentList>
-            {canManage && (
-              <FormPanel title="New announcement">
-                <Field label="Title" value={announcementForm.title} onChange={(value) => setAnnouncementForm((prev) => ({ ...prev, title: value }))} />
-                <label className="block">
-                  <span className="block text-[10px] uppercase tracking-[0.16em] text-white/45 mb-2">Body</span>
-                  <textarea
-                    value={announcementForm.body}
-                    onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, body: event.target.value }))}
-                    rows={5}
-                    className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-amber-500/35 resize-none"
-                  />
-                </label>
-                <label className="block">
-                  <span className="block text-[10px] uppercase tracking-[0.16em] text-white/45 mb-2">Priority</span>
-                  <select
-                    value={announcementForm.priority}
-                    onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, priority: event.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-amber-500/35"
-                  >
-                    <option className="bg-[#101014]" value="NORMAL">Normal</option>
-                    <option className="bg-[#101014]" value="HIGH">High</option>
-                    <option className="bg-[#101014]" value="URGENT">Urgent</option>
-                  </select>
-                </label>
-                <Button variant="secondary" size="sm" onClick={createAnnouncement} isLoading={isSaving}>
-                  Post announcement
-                </Button>
-              </FormPanel>
-            )}
-          </div>
+        {activeTab === "guilds" && (
+          <MemberGuildsTab
+            guilds={memberGuilds}
+            isLoading={isLoadingGuilds}
+            onFindGuild={() => setActiveTab("find")}
+          />
         )}
 
-        {activeTab === "EVENTS" && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
-            <ContentList loading={isLoadingEvents} empty="No faction events scheduled">
-              {events.map((event) => (
-                <PanelRow key={event.id} title={event.title} meta={`${new Date(event.startsAt).toLocaleString()}${event.location ? ` - ${event.location}` : ""}`}>
-                  {event.description && <p className="text-sm text-white/55 leading-relaxed">{event.description}</p>}
-                  {canManage && (
-                    <button onClick={() => deleteEvent(event.id)} className="mt-3 text-[11px] text-red-300 hover:text-red-200 cursor-pointer">
-                      Archive
-                    </button>
-                  )}
-                </PanelRow>
-              ))}
-            </ContentList>
-            {canManage && (
-              <FormPanel title="New event">
-                <Field label="Title" value={eventForm.title} onChange={(value) => setEventForm((prev) => ({ ...prev, title: value }))} />
-                <Field label="Location" value={eventForm.location} onChange={(value) => setEventForm((prev) => ({ ...prev, location: value }))} />
-                <Field label="Starts at" type="datetime-local" value={eventForm.startsAt} onChange={(value) => setEventForm((prev) => ({ ...prev, startsAt: value }))} />
-                <Field label="Ends at" type="datetime-local" value={eventForm.endsAt} onChange={(value) => setEventForm((prev) => ({ ...prev, endsAt: value }))} />
-                <label className="block">
-                  <span className="block text-[10px] uppercase tracking-[0.16em] text-white/45 mb-2">Description</span>
-                  <textarea
-                    value={eventForm.description}
-                    onChange={(event) => setEventForm((prev) => ({ ...prev, description: event.target.value }))}
-                    rows={4}
-                    className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-amber-500/35 resize-none"
-                  />
-                </label>
-                <Button variant="secondary" size="sm" onClick={createEvent} isLoading={isSaving}>
-                  Create event
-                </Button>
-              </FormPanel>
-            )}
-          </div>
+        {activeTab === "find" && <FindGuildTab onInvite={setInviteTarget} />}
+
+        {activeTab === "pending" && (
+          <PendingInvitesTab
+            invites={pendingInvites}
+            isLoading={isLoadingInvites}
+            cancelingId={cancelingId}
+            onCancel={handleCancelInvite}
+            onFindGuild={() => setActiveTab("find")}
+          />
         )}
 
-        {activeTab === "MEMBERS" && (
-          !canManage ? (
-            <EmptyPanel title="Faction roster is restricted" body="Only Faction Leaders and Admins can view members across all guilds." />
-          ) : isLoadingMembers ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((item) => <Skeleton key={item} className="h-16 rounded-xl" />)}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {members.map((member) => (
-                <div key={member.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{member.ign || member.user.displayName}</p>
-                    <p className="text-[11px] text-white/40 truncate">{member.guild?.name || "Guild"} - {member.role.replaceAll("_", " ")}</p>
-                  </div>
-                  <p className="text-[11px] text-white/35 shrink-0">CP {member.cp || 0}</p>
-                </div>
-              ))}
-            </div>
-          )
-        )}
+        <InviteGuildModal
+          guild={inviteTarget}
+          isSending={isSendingInvite}
+          onClose={() => !isSendingInvite && setInviteTarget(null)}
+          onConfirm={handleConfirmInvite}
+        />
       </div>
-    </div>
-  );
-}
-
-function ContentList({ children, loading, empty }: { children: ReactNode; loading: boolean; empty: string }) {
-  if (loading) {
-    return (
-      <div className="space-y-2">
-        {[1, 2, 3].map((item) => <Skeleton key={item} className="h-28 rounded-xl" />)}
-      </div>
-    );
-  }
-  return <div className="space-y-2">{Children.count(children) > 0 ? children : <EmptyPanel title={empty} body="Faction leaders can add one from the panel." />}</div>;
-}
-
-function PanelRow({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
-  return (
-    <article className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
-          <p className="text-[11px] text-white/35 mt-1">{meta}</p>
-        </div>
-      </div>
-      {children}
-    </article>
-  );
-}
-
-function FormPanel({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <aside className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4 space-y-4">
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-      {children}
-    </aside>
-  );
-}
-
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return (
-    <label className="block">
-      <span className="block text-[10px] uppercase tracking-[0.16em] text-white/45 mb-2">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-amber-500/35"
-      />
-    </label>
-  );
-}
-
-function EmptyPanel({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8 text-center">
-      <h3 className="text-sm font-semibold text-white/80">{title}</h3>
-      <p className="text-xs text-white/45 mt-1">{body}</p>
     </div>
   );
 }

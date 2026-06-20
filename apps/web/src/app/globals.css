@@ -1,14 +1,13 @@
-/* ─── Google Font Import ─────────────────────── */
-@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Geist:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap");
-
+/* Fonts are self-hosted via next/font (see app/layout.tsx) — no remote @import,
+   so the dashboard theme never waits on a render-blocking external font request. */
 @import "tailwindcss";
 
 /* ─── Design Tokens (CSS Custom Properties) ──── */
 @theme {
-  --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-fantasy: "Cinzel", "Georgia", serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-fantasy: var(--font-cinzel), "Cinzel", "Georgia", serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* Primary palette — refined slate/ice (no neon) */
   --color-primary-50: oklch(0.97 0.005 240);

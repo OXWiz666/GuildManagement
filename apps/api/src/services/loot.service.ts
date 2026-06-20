@@ -10,6 +10,7 @@ interface CreateLootSaleInput {
   saleValue: bigint;
   currency: string;
   creatorId: string;
+  soldAt?: Date | null;
 }
 
 export async function createLootSale(input: CreateLootSaleInput) {
@@ -95,6 +96,8 @@ export async function createLootSale(input: CreateLootSaleInput) {
         distributionModel,
         currency: input.currency,
         creatorId: input.creatorId,
+        // Honor an officer-supplied activity date; otherwise default to now()
+        ...(input.soldAt ? { createdAt: input.soldAt } : {}),
       },
     });
 
@@ -216,12 +219,104 @@ export async function createLootSale(input: CreateLootSaleInput) {
   return lootSale;
 }
 
+interface CreateLootSaleBatchInput {
+  guildId: string;
+  bossScheduleId?: string | null;
+  category: string;
+  currency: string;
+  creatorId: string;
+  soldAt?: Date | null;
+  items: Array<{ itemName: string; saleValue: bigint }>;
+}
+
+/**
+ * Logs many loot items sold from a single activity. Each item is recorded as its
+ * own LootSale (so taxes/dividends are split per item), but they share the same
+ * activity (bossScheduleId), category, currency and sold date so the registry can
+ * group them into one activity row.
+ */
+export async function createLootSaleBatch(input: CreateLootSaleBatchInput) {
+  if (!input.items || input.items.length === 0) {
+    throw new BadRequestError("At least one loot item is required");
+  }
+
+  const created = [];
+  for (const item of input.items) {
+    const sale = await createLootSale({
+      guildId: input.guildId,
+      bossScheduleId: input.bossScheduleId ?? null,
+      itemName: item.itemName,
+      category: input.category,
+      saleValue: item.saleValue,
+      currency: input.currency,
+      creatorId: input.creatorId,
+      soldAt: input.soldAt ?? null,
+    });
+    created.push(sale);
+  }
+  return created;
+}
+
+/**
+ * Returns the CONFIRMED attendees (deduped, with in-game names) for a set of boss
+ * schedules, keyed by bossScheduleId. Used to display "who was present" on each
+ * activity in the registry and the logging modal preview.
+ */
+export async function getConfirmedAttendeesForSchedules(
+  guildId: string,
+  scheduleIds: string[],
+) {
+  const map = new Map<string, Array<{ userId: string; name: string }>>();
+  const ids = Array.from(new Set(scheduleIds.filter(Boolean)));
+  if (ids.length === 0) return map;
+
+  const records = await prisma.attendanceRecord.findMany({
+    where: {
+      status: "CONFIRMED",
+      session: { bossScheduleId: { in: ids } },
+    },
+    select: {
+      userId: true,
+      session: { select: { bossScheduleId: true } },
+      user: { select: { displayName: true } },
+    },
+  });
+
+  const userIds = Array.from(new Set(records.map((r) => r.userId)));
+  const members = await prisma.guildMember.findMany({
+    where: { guildId, userId: { in: userIds } },
+    select: { userId: true, ign: true },
+  });
+  const ignMap = new Map(members.map((m) => [m.userId, m.ign]));
+
+  for (const r of records) {
+    const sid = r.session.bossScheduleId;
+    if (!sid) continue;
+    const arr = map.get(sid) ?? [];
+    if (arr.some((a) => a.userId === r.userId)) continue; // dedupe across sessions
+    arr.push({ userId: r.userId, name: ignMap.get(r.userId) || r.user.displayName });
+    map.set(sid, arr);
+  }
+
+  return map;
+}
+
 export async function getLootSales(guildId: string) {
-  return prisma.lootSale.findMany({
+  const sales = await prisma.lootSale.findMany({
     where: { guildId },
     include: {
       bossSchedule: true,
     },
     orderBy: { createdAt: "desc" },
   });
+
+  const scheduleIds = sales
+    .map((s) => s.bossScheduleId)
+    .filter((id): id is string => Boolean(id));
+  const attendeeMap = await getConfirmedAttendeesForSchedules(guildId, scheduleIds);
+
+  return sales.map((s) => ({
+    ...s,
+    attendees: s.bossScheduleId ? attendeeMap.get(s.bossScheduleId) ?? [] : [],
+  }));
 }

@@ -2,6 +2,7 @@
 
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
 
 interface AccountingTabProps {
   accounting: any;
@@ -94,6 +95,7 @@ export default function AccountingTab({
               <thead>
                 <tr className="border-b border-white/[0.06] bg-white/[0.01] text-[10px] text-white/45 font-bold uppercase tracking-wider">
                   <th className="px-4 py-3">In-Game Name</th>
+                  <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Class</th>
                   <th className="px-4 py-3 text-center">Combat Power</th>
                   <th className="px-4 py-3 text-center">Guild Points</th>
@@ -111,6 +113,7 @@ export default function AccountingTab({
                 {filteredMembers.map((m: any) => (
                   <tr key={m.memberId} className="hover:bg-white/[0.01] transition-colors">
                     <td className="px-4 py-3 font-semibold text-white">{m.ign}</td>
+                    <td className="px-4 py-3"><Badge role={m.role} /></td>
                     <td className="px-4 py-3 text-zinc-400">{m.class}</td>
                     <td className="px-4 py-3 text-center font-mono font-bold text-cyan-400">{m.cp.toLocaleString()}</td>
                     <td className="px-4 py-3 text-center font-mono font-bold text-amber-400">{m.dkp}</td>

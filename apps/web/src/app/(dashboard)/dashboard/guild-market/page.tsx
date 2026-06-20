@@ -93,7 +93,7 @@ export default function GuildMarketPage() {
       const result = await dashboardApi.getLootSales(activeGuild.guildId);
       return result.success && result.data?.sales ? result.data.sales : [];
     },
-    { persist: true, staleTime: 30000 }
+    { persist: true, staleTime: 30000, enabled: !!activeGuild }
   );
   const sales = salesRaw || [];
 
@@ -108,7 +108,7 @@ export default function GuildMarketPage() {
       const result = await dashboardApi.getAccountingDashboard(activeGuild.guildId, ledgerPage, 15);
       return result.success && result.data ? result.data : null;
     },
-    { persist: true, staleTime: 15000 }
+    { persist: true, staleTime: 15000, enabled: !!activeGuild }
   );
 
   // 4. Boss Schedules Query (shares cache key!)
@@ -122,7 +122,7 @@ export default function GuildMarketPage() {
       const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
       return result.success && result.data?.schedules ? result.data.schedules : [];
     },
-    { persist: true, staleTime: 15000 }
+    { persist: true, staleTime: 15000, enabled: !!activeGuild }
   );
   const schedules = schedulesRaw || [];
 

@@ -66,7 +66,7 @@ export default function BaseGuildDashboard({
       const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
       return result.success && result.data?.schedules ? result.data.schedules : [];
     },
-    { persist: true, staleTime: 15000 }
+    { persist: true, staleTime: 15000, enabled: !!activeGuild }
   );
 
   const bossSchedules = (bossSchedulesRaw || [])
@@ -99,7 +99,7 @@ export default function BaseGuildDashboard({
       const result = await dashboardApi.getDashboardStats(activeGuild.guildId);
       return result.success && result.data ? result.data : null;
     },
-    { persist: true, staleTime: 30000 }
+    { persist: true, staleTime: 30000, enabled: !!activeGuild }
   );
 
   // Real-time Socket.IO listeners for instant dashboard invalidation

@@ -63,25 +63,25 @@ export async function register(
     userAgent,
   );
 
-  // Create session
-  await prisma.session.create({
-    data: {
-      userId: user.id,
-      deviceInfo: userAgent ?? null,
-      ipAddress: ipAddress ?? null,
-    },
-  });
-
-  // Audit log
-  await writeAuditLog({
-    actorId: user.id,
-    action: AUDIT_ACTIONS.USER_REGISTERED,
-    target: "User",
-    targetId: user.id,
-    detail: { email: user.email, displayName },
-    ipAddress,
-    userAgent,
-  });
+  // Create session and audit log in parallel (independent post-registration writes)
+  await Promise.all([
+    prisma.session.create({
+      data: {
+        userId: user.id,
+        deviceInfo: userAgent ?? null,
+        ipAddress: ipAddress ?? null,
+      },
+    }),
+    writeAuditLog({
+      actorId: user.id,
+      action: AUDIT_ACTIONS.USER_REGISTERED,
+      target: "User",
+      targetId: user.id,
+      detail: { email: user.email, displayName },
+      ipAddress,
+      userAgent,
+    }),
+  ]);
 
   return {
     user: toUserPublic(user),
@@ -121,24 +121,24 @@ export async function login(
     userAgent,
   );
 
-  // Create/update session
-  await prisma.session.create({
-    data: {
-      userId: user.id,
-      deviceInfo: userAgent ?? null,
-      ipAddress: ipAddress ?? null,
-    },
-  });
-
-  // Audit log
-  await writeAuditLog({
-    actorId: user.id,
-    action: AUDIT_ACTIONS.USER_LOGIN,
-    target: "User",
-    targetId: user.id,
-    ipAddress,
-    userAgent,
-  });
+  // Create session and audit log in parallel
+  await Promise.all([
+    prisma.session.create({
+      data: {
+        userId: user.id,
+        deviceInfo: userAgent ?? null,
+        ipAddress: ipAddress ?? null,
+      },
+    }),
+    writeAuditLog({
+      actorId: user.id,
+      action: AUDIT_ACTIONS.USER_LOGIN,
+      target: "User",
+      targetId: user.id,
+      ipAddress,
+      userAgent,
+    }),
+  ]);
 
   return {
     user: toUserPublic(user),
@@ -197,24 +197,24 @@ export async function supabaseSync(
     userAgent,
   );
 
-  // Create session
-  await prisma.session.create({
-    data: {
-      userId: user.id,
-      deviceInfo: userAgent ?? null,
-      ipAddress: ipAddress ?? null,
-    },
-  });
-
-  // Audit log login
-  await writeAuditLog({
-    actorId: user.id,
-    action: AUDIT_ACTIONS.USER_LOGIN,
-    target: "User",
-    targetId: user.id,
-    ipAddress,
-    userAgent,
-  });
+  // Create session and audit log in parallel
+  await Promise.all([
+    prisma.session.create({
+      data: {
+        userId: user.id,
+        deviceInfo: userAgent ?? null,
+        ipAddress: ipAddress ?? null,
+      },
+    }),
+    writeAuditLog({
+      actorId: user.id,
+      action: AUDIT_ACTIONS.USER_LOGIN,
+      target: "User",
+      targetId: user.id,
+      ipAddress,
+      userAgent,
+    }),
+  ]);
 
   return {
     user: toUserPublic(user),
@@ -373,24 +373,22 @@ export async function logoutAllDevices(
   ipAddress?: string,
   userAgent?: string,
 ): Promise<void> {
-  // Revoke ALL refresh tokens for this user
-  await prisma.refreshToken.updateMany({
-    where: { userId },
-    data: { isRevoked: true },
-  });
-
-  // Delete all sessions
-  await prisma.session.deleteMany({
-    where: { userId },
-  });
-
-  // Audit log
-  await writeAuditLog({
-    actorId: userId,
-    action: AUDIT_ACTIONS.USER_LOGOUT_ALL,
-    ipAddress,
-    userAgent,
-  });
+  // All three operations are independent — run in parallel
+  await Promise.all([
+    prisma.refreshToken.updateMany({
+      where: { userId },
+      data: { isRevoked: true },
+    }),
+    prisma.session.deleteMany({
+      where: { userId },
+    }),
+    writeAuditLog({
+      actorId: userId,
+      action: AUDIT_ACTIONS.USER_LOGOUT_ALL,
+      ipAddress,
+      userAgent,
+    }),
+  ]);
 }
 
 // ─── Password Recovery ──────────────────────────

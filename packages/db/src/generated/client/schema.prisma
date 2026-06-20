@@ -251,6 +251,7 @@ model AuctionItem {
 
   @@index([guildId, status])
   @@index([endsAt])
+  @@index([guildId, status, winnerId, endsAt])
   @@map("auction_items")
 }
 
@@ -309,6 +310,8 @@ model ItemRequest {
 
   @@index([guildId, status])
   @@index([memberId])
+  @@index([guildId, type, status, updatedAt])
+  @@index([guildId, memberId, type, status, updatedAt])
   @@map("item_requests")
 }
 
@@ -361,9 +364,11 @@ model LedgerEntry {
 
   @@index([accountType, accountId, currency])
   @@index([guildId])
+  @@index([guildId, createdAt])
   @@index([referenceType, referenceId])
   @@index([createdAt])
   @@index([guildId, accountType, entryType, currency])
+  @@index([guildId, accountType, currency, createdAt])
   @@index([guildId, accountId, accountType, referenceType])
   @@index([guildId, accountId, accountType, entryType, currency])
   @@map("ledger_entries")
@@ -410,6 +415,7 @@ model AuditLog {
   @@index([guildId])
   @@index([action])
   @@index([createdAt])
+  @@index([guildId, action, createdAt])
   @@map("audit_logs")
 }
 
@@ -521,6 +527,8 @@ model AttendanceSession {
   bossSchedule   BossSchedule?      @relation(fields: [bossScheduleId], references: [id], onDelete: SetNull)
 
   @@index([guildId])
+  @@index([guildId, createdAt])
+  @@index([guildId, expiresAt])
   @@index([bossScheduleId])
   @@map("attendance_sessions")
 }
@@ -566,6 +574,8 @@ model BossSchedule {
   @@index([spawnTime])
   @@index([status])
   @@index([guildId, status, killedAt])
+  @@index([bossName, status, spawnTime])
+  @@index([bossName, status, killedAt])
   @@map("boss_schedules")
 }
 

@@ -111,7 +111,7 @@ export default function BossSchedulePage() {
       const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
       return result.success && result.data?.schedules ? result.data.schedules : [];
     },
-    { persist: true, staleTime: 15000 }
+    { persist: true, staleTime: 15000, enabled: !!activeGuild }
   );
 
   const schedules = (schedulesRaw || []).filter((s) => {

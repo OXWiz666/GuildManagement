@@ -147,21 +147,22 @@ export async function placeBid(
 ) {
   if (bidAmount < 1) throw new BadRequestError("Bid amount must be at least 1 point");
 
-  // Get bidder's membership
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  // Get bidder's membership and auction details in parallel
+  const [member, auction] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: { userId_guildId: { userId: actorId, guildId } },
+    }),
+    prisma.auctionItem.findUnique({
+      where: { id: auctionId },
+      include: { bids: { orderBy: { bidAmount: "desc" }, take: 1 } },
+    }),
+  ]);
 
   if (!member || !member.isActive) {
     throw new ForbiddenError("You must be an active guild member to bid");
   }
 
-  // Get auction
   const now = new Date();
-  const auction = await prisma.auctionItem.findUnique({
-    where: { id: auctionId },
-    include: { bids: { orderBy: { bidAmount: "desc" }, take: 1 } },
-  });
 
   if (!auction || auction.guildId !== guildId) throw new NotFoundError("Auction not found");
   if (auction.status !== "ACTIVE") throw new BadRequestError("This auction is no longer active");
@@ -333,13 +334,8 @@ export async function awardBidPoints(
   userId: string,
   points: number,
 ) {
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId, guildId } },
-  });
-  if (!member || !member.isActive) return;
-
-  await prisma.guildMember.update({
-    where: { id: member.id },
+  await prisma.guildMember.updateMany({
+    where: { userId, guildId, isActive: true },
     data: { bidPoints: { increment: points } },
   });
 }

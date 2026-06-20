@@ -15,10 +15,7 @@ const DEFAULT_ITEM_LIMITS: Record<string, number> = {
 
 // ─── Helper: Get member's active item request count this cycle ───────────────
 
-async function getMemberActiveRequestCount(guildId: string, memberId: string) {
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
-  const resetCycle = settings?.pointsResetCycle || "MANUAL";
-
+async function getMemberActiveRequestCount(guildId: string, memberId: string, resetCycle: string = "MANUAL") {
   let sinceDate: Date | undefined;
   if (resetCycle === "WEEKLY") {
     sinceDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -49,9 +46,12 @@ export async function createItemRequest(
     note?: string;
   },
 ) {
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const [member, settings] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: { userId_guildId: { userId: actorId, guildId } },
+    }),
+    prisma.guildSettings.findUnique({ where: { guildId } }),
+  ]);
 
   if (!member || !member.isActive) {
     throw new ForbiddenError("You must be an active guild member to submit requests");
@@ -60,11 +60,14 @@ export async function createItemRequest(
   if (!payload.itemName?.trim()) throw new BadRequestError("Item name is required");
 
   // Enforce per-rank limits
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
   const limits = (settings?.itemRequestLimits as Record<string, number>) || {};
   const limit = limits[member.role] ?? DEFAULT_ITEM_LIMITS[member.role] ?? 5;
 
-  const activeCount = await getMemberActiveRequestCount(guildId, member.id);
+  const activeCount = await getMemberActiveRequestCount(
+    guildId,
+    member.id,
+    settings?.pointsResetCycle || "MANUAL",
+  );
   if (activeCount >= limit) {
     throw new BadRequestError(
       `You have reached your item request limit (${limit}) for this cycle. Current role: ${member.role}`
@@ -222,14 +225,19 @@ export async function getGuildRequests(
 // ─── Get My Requests (Member self-view) ───────────────────────────────────────
 
 export async function getMyRequests(guildId: string, actorId: string, page = 1, limit = 20) {
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const [member, settings] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: { userId_guildId: { userId: actorId, guildId } },
+    }),
+    prisma.guildSettings.findUnique({ where: { guildId } }),
+  ]);
 
   if (!member || !member.isActive) throw new ForbiddenError("Not a member of this guild");
 
+  const resetCycle = settings?.pointsResetCycle || "MANUAL";
   const skip = (page - 1) * limit;
-  const [requests, total] = await Promise.all([
+
+  const [requests, total, usedCount] = await Promise.all([
     prisma.itemRequest.findMany({
       where: { guildId, memberId: member.id },
       orderBy: { createdAt: "desc" },
@@ -237,13 +245,12 @@ export async function getMyRequests(guildId: string, actorId: string, page = 1, 
       take: limit,
     }),
     prisma.itemRequest.count({ where: { guildId, memberId: member.id } }),
+    getMemberActiveRequestCount(guildId, member.id, resetCycle),
   ]);
 
   // Also return remaining request quota
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
   const limits = (settings?.itemRequestLimits as Record<string, number>) || {};
   const itemLimit = limits[member.role] ?? DEFAULT_ITEM_LIMITS[member.role] ?? 5;
-  const usedCount = await getMemberActiveRequestCount(guildId, member.id);
 
   return {
     requests,

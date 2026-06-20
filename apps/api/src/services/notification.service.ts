@@ -49,22 +49,42 @@ export async function createNotification(payload: NotificationPayload) {
 }
 
 export async function createNotifications(payloads: NotificationPayload[]) {
-  const created = [];
-  for (const payload of payloads) {
-    created.push(await createNotification(payload));
+  if (payloads.length === 0) {
+    return [];
   }
+
+  const notifications = await prisma.notification.createManyAndReturn({
+    data: payloads.map((payload) => ({
+      userId: payload.userId,
+      type: payload.type,
+      title: payload.title,
+      body: payload.body,
+      metadata: (payload.metadata || undefined) as any,
+    })),
+  });
+
+  const created = notifications.map(serializeNotification);
+  await Promise.all(
+    created.map((notification) =>
+      broadcastToUser(notification.userId, "notification_created", notification),
+    ),
+  );
+
   return created;
 }
 
 export async function getNotifications(userId: string, limit = 20) {
-  const notifications = await prisma.notification.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: Math.min(Math.max(limit, 1), 50),
-  });
-  const unreadCount = await prisma.notification.count({
-    where: { userId, readAt: null },
-  });
+  const take = Math.min(Math.max(limit, 1), 50);
+  const [notifications, unreadCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take,
+    }),
+    prisma.notification.count({
+      where: { userId, readAt: null },
+    }),
+  ]);
   return {
     notifications: notifications.map(serializeNotification),
     unreadCount,

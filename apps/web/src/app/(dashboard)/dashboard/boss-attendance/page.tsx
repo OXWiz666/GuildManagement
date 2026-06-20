@@ -2,14 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useSocket } from "@/components/providers/socket-provider";
 import { dashboardApi, type BossScheduleData, type AttendanceSessionData, type AttendanceRecordData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
-import Card from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
-import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton";
+import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
+import { useQuery, queryClient } from "@/lib/query";
 import {
-  Reveal,
   ModuleHeader,
   Magnetic,
 } from "@/components/dashboard/DashboardHelpers";
@@ -20,6 +19,7 @@ import TimelineSpawns from "./components/TimelineSpawns";
 import VerificationQueue from "./components/VerificationQueue";
 import CheckInModal from "./components/CheckInModal";
 import CreateSessionModal from "./components/CreateSessionModal";
+import EditSessionModal from "./components/EditSessionModal";
 
 interface AttendanceStats {
   presenceRate: number;
@@ -37,10 +37,8 @@ interface AttendanceStats {
 export default function BossAttendancePage() {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { socket } = useSocket();
 
-  const [schedules, setSchedules] = useState<BossScheduleData[]>([]);
-  const [stats, setStats] = useState<AttendanceStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   // Weekly Planner Navigation State
@@ -59,10 +57,11 @@ export default function BossAttendancePage() {
   const [isGeneratingSession, setIsGeneratingSession] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
 
+  // Officer Session Editing State
+  const [showEditSessionModal, setShowEditSessionModal] = useState<AttendanceSessionData | null>(null);
+  const [isEditingSession, setIsEditingSession] = useState(false);
+
   // Officer Verification Queue State
-  const [selectedActiveSession, setSelectedActiveSession] = useState<AttendanceSessionData | null>(null);
-  const [pendingRecords, setPendingRecords] = useState<AttendanceRecordData[]>([]);
-  const [isLoadingPending, setIsLoadingPending] = useState(false);
   const [isVerifying, setIsVerifying] = useState<string | null>(null); // recordId of loading verification
   const [isVerifyingAll, setIsVerifyingAll] = useState(false);
 
@@ -76,70 +75,90 @@ export default function BossAttendancePage() {
     return () => clearInterval(timer);
   }, []);
 
-  const loadData = useCallback(async () => {
-    if (!activeGuild) return;
-    setIsLoading(true);
-    try {
-      // 1. Fetch boss schedules with associated attendance sessions
-      const schedulesResult = await dashboardApi.getBossSchedules(activeGuild.guildId);
-      if (schedulesResult.success && schedulesResult.data?.schedules) {
-        setSchedules(schedulesResult.data.schedules);
-      }
+  // ─── Persistent Queries ────────────────────────────────
 
-      // 2. Fetch member attendance stats
-      const statsResult = await dashboardApi.getAttendanceStats(activeGuild.guildId);
-      if (statsResult.success && statsResult.data) {
-        setStats(statsResult.data);
-      }
-    } catch {
-      addToast("error", "Failed to load attendance details");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeGuild, addToast]);
+  // 1. Boss Schedules Query (shares cache key!)
+  const {
+    data: schedulesRaw,
+    isLoading: isLoadingSchedules,
+  } = useQuery<BossScheduleData[]>(
+    activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty",
+    async () => {
+      if (!activeGuild) return [];
+      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
+      return result.success && result.data?.schedules ? result.data.schedules : [];
+    },
+    { persist: true, staleTime: 15000 }
+  );
+  const schedules = schedulesRaw || [];
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // 2. Attendance Stats Query
+  const {
+    data: stats,
+    isLoading: isLoadingStats,
+  } = useQuery<AttendanceStats | null>(
+    activeGuild ? `attendance_stats:${activeGuild.guildId}` : "attendance_stats_empty",
+    async () => {
+      if (!activeGuild) return null;
+      const result = await dashboardApi.getAttendanceStats(activeGuild.guildId);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 30000 }
+  );
 
-  // Load pending records for selected active session (Officer view)
-  const loadPendingRecords = useCallback(async () => {
-    if (!activeGuild || !isOfficer) return;
-    setIsLoadingPending(true);
-    try {
+  // 3. Officer Verification Queue Query
+  const {
+    data: pendingAttendanceRaw,
+    isLoading: isLoadingPending,
+    refetch: refetchPendingRecords,
+  } = useQuery<{ activeSession: AttendanceSessionData | null; pendingRecords: AttendanceRecordData[] } | null>(
+    activeGuild && isOfficer ? `pending_attendance:${activeGuild.guildId}` : "pending_attendance_empty",
+    async () => {
+      if (!activeGuild || !isOfficer) return null;
       const result = await dashboardApi.getPendingAttendance(activeGuild.guildId);
-      if (result.success && result.data) {
-        setSelectedActiveSession(result.data.activeSession);
-        setPendingRecords(result.data.pendingRecords);
-      }
-    } catch {
-      addToast("error", "Failed to refresh verification queue");
-    } finally {
-      setIsLoadingPending(false);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 15000 }
+  );
+
+  const selectedActiveSession = pendingAttendanceRaw?.activeSession || null;
+  const pendingRecords = pendingAttendanceRaw?.pendingRecords || [];
+
+  const isLoading = isLoadingSchedules || isLoadingStats;
+
+  // Helper to trigger refetch / invalidation for all active queues
+  const invalidateAll = () => {
+    if (!activeGuild) return;
+    queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+    queryClient.invalidateQueries(`attendance_stats:${activeGuild.guildId}`);
+    if (isOfficer) {
+      queryClient.invalidateQueries(`pending_attendance:${activeGuild.guildId}`);
     }
-  }, [activeGuild, isOfficer, addToast]);
-
-  useEffect(() => {
-    if (isOfficer && activeGuild) {
-      loadPendingRecords();
-    }
-  }, [isOfficer, activeGuild, loadPendingRecords]);
-
-  // Format real-time countdown
-  const getCountdownText = (spawnTimeStr: string) => {
-    const target = new Date(spawnTimeStr).getTime();
-    const diff = target - currentTime;
-    if (diff <= 0) return { expired: true, text: "LIVE NOW", danger: true };
-
-    const hrs = Math.floor(diff / (3600 * 1000));
-    const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
-    const secs = Math.floor((diff % (60 * 1000)) / 1000);
-
-    const text = `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-    const warning = diff <= 5 * 60 * 1000; // less than 5 mins
-
-    return { expired: false, text, warning };
   };
+
+  // Listen to Socket.IO real-time events for instant cache invalidation
+  useEffect(() => {
+    if (!socket || !activeGuild) return;
+
+    const handleAttendanceUpdate = () => {
+      console.log("[Attendance Socket]: Attendance updated. Invalidating caches...");
+      invalidateAll();
+    };
+
+    socket.on("attendance_session_created", handleAttendanceUpdate);
+    socket.on("attendance_session_updated", handleAttendanceUpdate);
+    socket.on("attendance_session_deleted", handleAttendanceUpdate);
+    socket.on("attendance_record_created", handleAttendanceUpdate);
+    socket.on("attendance_record_confirmed", handleAttendanceUpdate);
+
+    return () => {
+      socket.off("attendance_session_created", handleAttendanceUpdate);
+      socket.off("attendance_session_updated", handleAttendanceUpdate);
+      socket.off("attendance_session_deleted", handleAttendanceUpdate);
+      socket.off("attendance_record_created", handleAttendanceUpdate);
+      socket.off("attendance_record_confirmed", handleAttendanceUpdate);
+    };
+  }, [socket, activeGuild, isOfficer]);
 
   // Submit check-in code
   const handleSubmitCode = async (e: React.FormEvent) => {
@@ -156,8 +175,7 @@ export default function BossAttendancePage() {
         addToast("success", `Checked in. Awaiting verification.`);
         setShowCheckInModal(null);
         setAttendanceCode("");
-        await loadData();
-        if (isOfficer) await loadPendingRecords();
+        invalidateAll();
       }
     } catch (err: any) {
       addToast("error", err?.message || "Failed to submit attendance code");
@@ -183,14 +201,64 @@ export default function BossAttendancePage() {
       if (result.success && result.data?.session) {
         addToast("success", `Raid session started.`);
         setGeneratedCode(result.data.session.code);
-        await loadData();
-        await loadPendingRecords();
+        invalidateAll();
       }
     } catch (err: any) {
       addToast("error", err?.message || "Failed to create attendance session");
     } finally {
       setIsGeneratingSession(false);
     }
+  };
+
+  // Edit attendance session (Officer)
+  const handleEditSession = async (title: string, minutes: number, isActive: boolean) => {
+    if (!activeGuild || !showEditSessionModal) return;
+
+    setIsEditingSession(true);
+    try {
+      const expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+      const result = await dashboardApi.updateAttendanceSession(
+        activeGuild.guildId,
+        showEditSessionModal.id,
+        { title, expiresAt, isActive }
+      );
+
+      if (result.success) {
+        addToast("success", "Attendance session updated successfully!");
+        setShowEditSessionModal(null);
+        invalidateAll();
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to update attendance session");
+    } finally {
+      setIsEditingSession(false);
+    }
+  };
+
+  // Delete attendance session (Officer)
+  const handleDeleteSession = (sessionId: string) => {
+    if (!activeGuild) return;
+
+    addToast(
+      "warning",
+      "Are you sure you want to delete this attendance session? All pending check-in requests for this session will be removed.",
+      0, // stays until action or dismiss
+      {
+        label: "Delete",
+        variant: "danger",
+        onClick: async () => {
+          try {
+            const result = await dashboardApi.deleteAttendanceSession(activeGuild.guildId, sessionId);
+            if (result.success) {
+              addToast("success", "Attendance session deleted successfully!");
+              invalidateAll();
+            }
+          } catch (err: any) {
+            addToast("error", err?.message || "Failed to delete attendance session");
+          }
+        },
+      }
+    );
   };
 
   // Verify pending attendance record (Officer)
@@ -201,8 +269,7 @@ export default function BossAttendancePage() {
       const result = await dashboardApi.confirmAttendance(recordId, activeGuild.guildId);
       if (result.success) {
         addToast("success", `Verified member attendance.`);
-        await loadPendingRecords();
-        await loadData();
+        invalidateAll();
       }
     } catch (err: any) {
       addToast("error", err?.message || "Failed to verify presence");
@@ -226,8 +293,7 @@ export default function BossAttendancePage() {
         }
       }
       addToast("success", `Approved ${succeeded} check-ins.`);
-      await loadPendingRecords();
-      await loadData();
+      invalidateAll();
     } catch {
       addToast("error", "Error processing batch verification");
     } finally {
@@ -292,6 +358,21 @@ export default function BossAttendancePage() {
 
     return { status: "MISSED", label: "Missed", color: "text-rose-400 bg-rose-500/5 border-rose-500/10", dotColor: "bg-rose-500" };
   }, [user, currentTime]);
+
+  // Countdown formatter for active attendance session portals
+  const getCountdownText = useCallback((expiresAtStr: string) => {
+    const target = new Date(expiresAtStr).getTime();
+    const diff = target - currentTime;
+    if (diff <= 0) return { expired: true, text: "EXPIRED", warning: false };
+
+    const hrs = Math.floor(diff / (3600 * 1000));
+    const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
+    const secs = Math.floor((diff % (60 * 1000)) / 1000);
+    const text = `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    const warning = diff <= 5 * 60 * 1000;
+
+    return { expired: false, text, warning };
+  }, [currentTime]);
 
   // SMART DETECT ACTIVE ATTENDANCE SESSION FOR QUICK PORTAL
   const activeSessionEvent = useMemo(() => {
@@ -367,7 +448,7 @@ export default function BossAttendancePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      loadPendingRecords();
+                      refetchPendingRecords();
                       addToast("success", "Queue refreshed");
                     }}
                     className="px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-[11px] font-medium text-white/70 hover:text-white transition-all cursor-pointer"
@@ -379,7 +460,7 @@ export default function BossAttendancePage() {
               <Magnetic strength={4}>
                 <button
                   type="button"
-                  onClick={loadData}
+                  onClick={invalidateAll}
                   className="px-3 py-1.5 rounded-full bg-white text-black hover:bg-white/90 text-[11px] font-semibold transition-all cursor-pointer"
                 >
                   Refresh dashboard
@@ -461,7 +542,7 @@ export default function BossAttendancePage() {
               }`}>
                 {stats ? `${stats.presenceRate}%` : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">guild battles</span>
+              <span className="text-[10px] text-zinc-650">participated</span>
             </div>
           </div>
 
@@ -472,7 +553,7 @@ export default function BossAttendancePage() {
               <h3 className="text-2xl font-bold tracking-tight text-amber-400">
                 {stats ? stats.currentStreak : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">raids in a row</span>
+              <span className="text-[10px] text-zinc-650">Attendance in a row</span>
             </div>
           </div>
 
@@ -483,7 +564,7 @@ export default function BossAttendancePage() {
               <h3 className="text-2xl font-bold tracking-tight text-cyan-400">
                 {stats ? `${stats.totalPoints} ₱` : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">ledger share</span>
+              <span className="text-[10px] text-zinc-650">guild share</span>
             </div>
           </div>
 
@@ -494,7 +575,7 @@ export default function BossAttendancePage() {
               <h3 className="text-2xl font-bold tracking-tight text-emerald-400">
                 {stats ? `${stats.participationCount} / ${stats.participationCount + (stats.missedAlerts?.length || 0)}` : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">total events</span>
+              <span className="text-[10px] text-zinc-650">activities</span>
             </div>
           </div>
         </div>
@@ -569,6 +650,8 @@ export default function BossAttendancePage() {
             isVerifying={isVerifying}
             handleApproveAll={handleApproveAll}
             handleVerifyPresence={handleVerifyPresence}
+            onEditSession={(session) => setShowEditSessionModal(session)}
+            onDeleteSession={handleDeleteSession}
           />
         )}
 
@@ -595,6 +678,15 @@ export default function BossAttendancePage() {
           onClose={() => setShowCreateSessionModal(null)}
           setGeneratedCode={setGeneratedCode}
           addToast={addToast}
+        />
+
+        {/* Modal: Edit Raid Attendance */}
+        <EditSessionModal
+          showModal={!!showEditSessionModal}
+          onClose={() => setShowEditSessionModal(null)}
+          session={showEditSessionModal}
+          isSubmitting={isEditingSession}
+          handleEditSession={handleEditSession}
         />
       </div>
     </div>

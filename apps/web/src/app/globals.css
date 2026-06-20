@@ -1,12 +1,13 @@
 /* ─── Google Font Import ─────────────────────── */
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Geist:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap");
 
 @import "tailwindcss";
 
 /* ─── Design Tokens (CSS Custom Properties) ──── */
 @theme {
-  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-fantasy: "Cinzel", "Georgia", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* Primary palette — refined slate/ice (no neon) */
@@ -21,19 +22,19 @@
   --color-primary-800: oklch(0.32 0.030 232);
   --color-primary-900: oklch(0.22 0.022 232);
 
-  /* Accent — soft warm platinum (used sparingly) */
-  --color-accent-300: oklch(0.86 0.018 80);
-  --color-accent-400: oklch(0.78 0.024 78);
-  --color-accent-500: oklch(0.68 0.032 76);
-  --color-accent-600: oklch(0.56 0.028 74);
+  /* Accent — Forged Gold */
+  --color-accent-300: oklch(0.86 0.10 80);
+  --color-accent-400: oklch(0.80 0.12 78);
+  --color-accent-500: oklch(0.72 0.13 76);
+  --color-accent-600: oklch(0.60 0.10 74);
 
-  /* Surface colors — pure neutral greyscale */
-  --color-surface-50: oklch(0.10 0 0);
-  --color-surface-100: oklch(0.13 0 0);
-  --color-surface-200: oklch(0.16 0 0);
-  --color-surface-300: oklch(0.20 0 0);
-  --color-surface-400: oklch(0.26 0 0);
-  --color-surface-500: oklch(0.34 0 0);
+  /* Surface colors — obsidian */
+  --color-surface-50: oklch(0.09 0.005 280);
+  --color-surface-100: oklch(0.11 0.005 280);
+  --color-surface-200: oklch(0.14 0.005 280);
+  --color-surface-300: oklch(0.18 0.004 280);
+  --color-surface-400: oklch(0.24 0.004 280);
+  --color-surface-500: oklch(0.32 0.003 280);
 
   /* Status colors — muted */
   --color-success-500: oklch(0.70 0.13 162);
@@ -51,6 +52,23 @@
   --animate-shimmer: shimmer 2.2s infinite linear;
   --animate-aurora: aurora 22s ease-in-out infinite;
   --animate-drift-slow: drift-slow 28s linear infinite;
+  --animate-spin: spin 1s linear infinite;
+  --animate-spin-slow: spin-slow 12s linear infinite;
+  --animate-glow-pulse: glow-pulse 3s ease-in-out infinite;
+  --animate-forge-shimmer: forge-shimmer 4s linear infinite;
+}
+
+/* ─── Obsidian Guild Command — CSS Custom Properties ─── */
+:root {
+  --obsidian-deep: #08080c;
+  --obsidian-surface: #0d0d14;
+  --obsidian-elevated: #12121a;
+  --obsidian-border: rgba(255, 255, 255, 0.06);
+  --forge-gold: #d4a853;
+  --forge-gold-bright: #f5c542;
+  --forge-gold-dim: #a78332;
+  --forge-glow: rgba(212, 168, 83, 0.15);
+  --metal-border: rgba(212, 168, 83, 0.12);
 }
 
 /* ─── Keyframes ──────────────────────────────── */
@@ -117,9 +135,50 @@
   50%      { transform: translateY(8px); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px 2px rgba(212, 168, 83, 0.15); }
+  50%      { box-shadow: 0 0 16px 4px rgba(212, 168, 83, 0.30); }
+}
+
+@keyframes forge-shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(200%); }
+}
+
+@keyframes border-glow {
+  0%, 100% { border-color: rgba(212, 168, 83, 0.12); }
+  50%      { border-color: rgba(212, 168, 83, 0.28); }
+}
+
+@keyframes particle-float {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-140px) translateX(var(--drift-x, 15px)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.animate-particle {
+  animation: particle-float 10s ease-in-out infinite;
 }
 
 /* ─── Base Styles ────────────────────────────── */
@@ -131,14 +190,14 @@ html {
 }
 
 select option {
-  background-color: #0a0a0c;
+  background-color: var(--obsidian-deep);
   color: #ffffff;
 }
 
 body {
   font-family: var(--font-sans);
-  background: #08080a;
-  color: oklch(0.92 0.003 240);
+  background: var(--obsidian-deep);
+  color: oklch(0.90 0.003 240);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -146,33 +205,128 @@ body {
   letter-spacing: -0.011em;
 }
 
+/* ─── Fantasy Font Utility ───────────────────── */
+.font-fantasy {
+  font-family: var(--font-fantasy);
+}
+
 /* ─── Glassmorphism Utilities ────────────────── */
 .glass {
-  background: oklch(0.13 0 0 / 0.55);
+  background: oklch(0.12 0.005 280 / 0.55);
   backdrop-filter: blur(18px) saturate(1.1);
   -webkit-backdrop-filter: blur(18px) saturate(1.1);
   border: 1px solid oklch(1 0 0 / 0.06);
 }
 
 .glass-strong {
-  background: oklch(0.11 0 0 / 0.78);
+  background: oklch(0.10 0.005 280 / 0.78);
   backdrop-filter: blur(28px) saturate(1.2);
   -webkit-backdrop-filter: blur(28px) saturate(1.2);
   border: 1px solid oklch(1 0 0 / 0.08);
 }
 
 .glass-subtle {
-  background: oklch(0.13 0 0 / 0.28);
+  background: oklch(0.12 0.005 280 / 0.28);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid oklch(1 0 0 / 0.04);
 }
 
-/* ─── Card Surface ──────────────────────────── */
+/* ─── Obsidian Glass — dark fantasy variant ──── */
+.glass-obsidian {
+  background: linear-gradient(135deg, rgba(13,13,20,0.85), rgba(18,18,26,0.75));
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid rgba(212, 168, 83, 0.08);
+}
+
+.glass-obsidian:hover {
+  border-color: rgba(212, 168, 83, 0.15);
+}
+
+/* ─── Card Surfaces ─────────────────────────── */
 .card-surface {
-  background: oklch(0.13 0 0);
+  background: var(--obsidian-surface);
   border: 1px solid oklch(1 0 0 / 0.06);
   border-radius: 1rem;
+}
+
+/* Card Obsidian — premium dark fantasy card */
+.card-obsidian {
+  position: relative;
+  background: linear-gradient(180deg, var(--obsidian-elevated) 0%, var(--obsidian-surface) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.card-obsidian::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, rgba(212, 168, 83, 0.18), transparent 40%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ─── Gold Gradient Text ─────────────────────── */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #f5c542, #d4a853, #a78332);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gold-gradient-light {
+  background: linear-gradient(90deg, #fff, #f6e3a9, #d4a853);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Gold Glow ──────────────────────────────── */
+.glow-gold {
+  box-shadow: 0 0 12px 2px rgba(212, 168, 83, 0.20),
+              0 0 4px 1px rgba(212, 168, 83, 0.10);
+}
+
+.glow-gold-sm {
+  box-shadow: 0 0 8px 1px rgba(212, 168, 83, 0.15);
+}
+
+.glow-gold-active {
+  box-shadow: 0 0 16px 4px rgba(212, 168, 83, 0.25),
+              0 0 4px 1px rgba(212, 168, 83, 0.15);
+}
+
+/* ─── Metallic Border ────────────────────────── */
+.border-forge {
+  border: 1px solid var(--metal-border);
+}
+
+.border-forge-hover:hover {
+  border-color: rgba(212, 168, 83, 0.22);
+}
+
+/* ─── Section Dividers ───────────────────────── */
+.section-divider-gold {
+  position: relative;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.section-divider-gold::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 83, 0.25), transparent);
 }
 
 /* ─── Hairline Border (premium thin border) ──── */
@@ -186,7 +340,7 @@ body {
 
 /* ─── Focus Ring ─────────────────────────────── */
 .focus-ring:focus-visible {
-  outline: 2px solid oklch(0.78 0.024 78 / 0.5);
+  outline: 2px solid rgba(212, 168, 83, 0.50);
   outline-offset: 2px;
 }
 
@@ -198,14 +352,14 @@ body {
 
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.26 0 0);
+  background: oklch(0.22 0.005 280);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover { background: oklch(0.34 0 0); }
+::-webkit-scrollbar-thumb:hover { background: oklch(0.30 0.005 280); }
 
 /* ─── Text Selection ─────────────────────────── */
 ::selection {
-  background: oklch(0.78 0.024 78 / 0.25);
+  background: rgba(212, 168, 83, 0.25);
   color: white;
 }
 
@@ -213,19 +367,19 @@ body {
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
-  -webkit-text-fill-color: oklch(0.92 0.003 240);
-  -webkit-box-shadow: 0 0 0 30px oklch(0.13 0 0) inset;
+  -webkit-text-fill-color: oklch(0.90 0.003 240);
+  -webkit-box-shadow: 0 0 0 30px var(--obsidian-surface) inset;
   transition: background-color 5000s ease-in-out 0s;
 }
 
-/* ─── Background Aurora (used by SceneBackground) ──────── */
+/* ─── Background Aurora (Obsidian gold-tinted) ────── */
 .aurora-mesh {
   position: absolute;
   inset: -20%;
   background:
-    radial-gradient(ellipse 50% 40% at 20% 30%, oklch(0.62 0.035 234 / 0.20) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 35% at 80% 70%, oklch(0.56 0.028 74 / 0.13) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 50% 50%, oklch(0.34 0.02 230 / 0.10) 0%, transparent 65%);
+    radial-gradient(ellipse 50% 40% at 20% 30%, rgba(212, 168, 83, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 35% at 80% 70%, rgba(167, 131, 50, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 50% 50%, oklch(0.30 0.02 280 / 0.10) 0%, transparent 65%);
   filter: blur(48px);
   animation: aurora 22s ease-in-out infinite;
   will-change: transform;
@@ -235,8 +389,8 @@ input:-webkit-autofill:focus {
   position: absolute;
   inset: -10%;
   background:
-    radial-gradient(circle at 30% 20%, oklch(0.62 0.035 234 / 0.12) 0%, transparent 55%),
-    radial-gradient(circle at 70% 80%, oklch(0.56 0.028 74 / 0.08) 0%, transparent 55%);
+    radial-gradient(circle at 30% 20%, rgba(212, 168, 83, 0.07) 0%, transparent 55%),
+    radial-gradient(circle at 70% 80%, rgba(167, 131, 50, 0.05) 0%, transparent 55%);
   filter: blur(64px);
   animation: drift-slow 28s linear infinite;
 }
@@ -254,8 +408,8 @@ input:-webkit-autofill:focus {
 /* Hairline grid background */
 .bg-grid {
   background-image:
-    linear-gradient(oklch(1 0 0 / 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, oklch(1 0 0 / 0.022) 1px, transparent 1px);
+    linear-gradient(rgba(212, 168, 83, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 168, 83, 0.015) 1px, transparent 1px);
   background-size: 56px 56px;
 }
 
@@ -275,23 +429,25 @@ input:-webkit-autofill:focus {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.35), transparent);
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 83, 0.45), transparent);
   animation: shimmer 4s linear infinite;
 }
 
-/* Subtle button gradient — no glow */
+/* Subtle button gradient — gold accent */
 .btn-primary {
-  background: oklch(0.96 0.005 240);
-  color: oklch(0.10 0 0);
-  border: 1px solid oklch(1 0 0 / 0.12);
+  background: linear-gradient(135deg, var(--forge-gold), var(--forge-gold-bright));
+  color: var(--obsidian-deep);
+  border: 1px solid rgba(212, 168, 83, 0.30);
+  font-weight: 600;
 }
 .btn-primary:hover {
-  background: oklch(1 0 0);
+  background: linear-gradient(135deg, var(--forge-gold-bright), var(--forge-gold));
+  box-shadow: 0 0 16px 2px rgba(212, 168, 83, 0.25);
 }
 
 .btn-ghost {
   background: oklch(1 0 0 / 0.04);
-  color: oklch(0.92 0.003 240);
+  color: oklch(0.90 0.003 240);
   border: 1px solid oklch(1 0 0 / 0.08);
 }
 .btn-ghost:hover {
@@ -334,10 +490,29 @@ input:-webkit-autofill:focus {
 
 /* ─── Reduced Motion ──────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
+  *:not(.animate-spin):not([class*="spin"]):not([style*="spin"]):not([class*="premium-loader"]) {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  * {
     scroll-behavior: auto !important;
   }
+}
+
+/* ─── Premium Loader Classes ──────────────────── */
+.premium-loader-spin {
+  animation: spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+.premium-loader-spin-slow {
+  animation: spin-slow 8s linear infinite !important;
+}
+
+.premium-loader-spin-reverse {
+  animation: spin-slow 12s linear infinite reverse !important;
+}
+
+.premium-loader-pulse {
+  animation: pulse-soft 3s ease-in-out infinite !important;
 }

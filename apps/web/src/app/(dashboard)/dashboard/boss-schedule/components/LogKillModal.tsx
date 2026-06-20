@@ -53,7 +53,10 @@ export default function LogKillModal({
             <label className="block text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Death Time (Local HH:MM)</label>
             <div className="flex gap-2 items-center">
               <input
-                type="time"
+                type="text"
+                placeholder="HH:MM"
+                pattern="^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$"
+                title="Please enter time in HH:MM format (24-hour style, e.g. 14:30)"
                 value={killTimeInput}
                 onChange={(e) => setKillTimeInput(e.target.value)}
                 required

@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
+  const activeGuild = user?.guilds?.[0];
+
   // Profile states
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [email, setEmail] = useState(user?.email || "");
@@ -73,20 +75,42 @@ export default function SettingsPage() {
     }
   }, [user]);
 
-  async function handleRevokeSession(sessionId: string) {
-    const result = await authApi.revokeSession(sessionId);
-    if (result.success) {
-      addToast("success", "Session revoked");
-      loadSessions();
-    } else {
-      addToast("error", "Failed to revoke session");
-    }
+  function handleRevokeSession(sessionId: string) {
+    addToast(
+      "warning",
+      "Are you sure you want to revoke this active session?",
+      0, // stays until action or dismiss
+      {
+        label: "Revoke",
+        variant: "danger",
+        onClick: async () => {
+          const result = await authApi.revokeSession(sessionId);
+          if (result.success) {
+            addToast("success", "Session revoked");
+            loadSessions();
+          } else {
+            addToast("error", "Failed to revoke session");
+          }
+        },
+      }
+    );
   }
 
-  async function handleLogoutAll() {
-    await authApi.logoutAll();
-    addToast("info", "All sessions terminated");
-    window.location.href = "/login";
+  function handleLogoutAll() {
+    addToast(
+      "warning",
+      "Are you sure you want to sign out everywhere? This will terminate all active sessions on other devices.",
+      0, // stays until action or dismiss
+      {
+        label: "Sign Out All",
+        variant: "danger",
+        onClick: async () => {
+          await authApi.logoutAll();
+          addToast("info", "All sessions terminated");
+          window.location.href = "/login";
+        },
+      }
+    );
   }
 
   async function handleUpdateProfile(e: React.FormEvent) {
@@ -237,6 +261,8 @@ export default function SettingsPage() {
             handleLogoutAll={handleLogoutAll}
           />
         </Reveal>
+
+
 
         {/* Danger Zone */}
         <Reveal>

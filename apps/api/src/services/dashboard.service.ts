@@ -1,10 +1,12 @@
 import { prisma } from "@guild/db";
 import { AttendanceType, AttendanceRecordStatus, BossEventStatus } from "@guild/db";
+import { cache } from "../lib/cache";
 import { writeAuditLog } from "./audit.service";
 import { createLedgerEntry } from "./ledger.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import * as crypto from "crypto";
-import { getNextBossSpawnTime } from "@guild/shared";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime } from "@guild/shared";
+import { broadcastToUser } from "../lib/socket";
 
 // Anti-spam in-memory tracking: userId -> { attempts: number, blockedUntil: Date | null }
 interface SpamRecord {
@@ -12,6 +14,194 @@ interface SpamRecord {
   blockedUntil: Date | null;
 }
 const failedAttemptsMap = new Map<string, SpamRecord>();
+
+const ROTATION_MANAGER_ROLES = ["FACTION_LEADER", "GUILD_LEADER", "ADMIN"];
+const BOSS_KILL_AUDIT_ACTIONS = ["BOSS_ROTATION_KILLED", "BOSS_KILLED_LOGGED", "BOSS_KILL_RECORDED"];
+
+type PendingNotification = {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  metadata: Record<string, unknown>;
+};
+
+type BossRegistryItem = {
+  id: string;
+  name: string;
+  level: number;
+  type: string;
+  cooldownHours: number | null;
+  location: string;
+  fixedSpawns: unknown;
+};
+
+function canManageBossRotation(role: string) {
+  return ROTATION_MANAGER_ROLES.includes(role);
+}
+
+function normalizeQueue(rawQueue: unknown, activeGuildIds: string[]) {
+  const queue = Array.isArray(rawQueue)
+    ? rawQueue.filter((id): id is string => typeof id === "string")
+    : [];
+  const activeSet = new Set(activeGuildIds);
+  const normalized = queue.filter((id) => activeSet.has(id));
+  for (const guildId of activeGuildIds) {
+    if (!normalized.includes(guildId)) {
+      normalized.push(guildId);
+    }
+  }
+  return normalized;
+}
+
+async function requireActiveGuildMember(actorId: string, guildId: string) {
+  const membership = await prisma.guildMember.findUnique({
+    where: { userId_guildId: { userId: actorId, guildId } },
+  });
+
+  if (!membership || !membership.isActive) {
+    throw new ForbiddenError("You must be an active member of this guild");
+  }
+
+  return membership;
+}
+
+async function requireBossRotationManager(actorId: string, guildId: string) {
+  const membership = await requireActiveGuildMember(actorId, guildId);
+  if (!canManageBossRotation(membership.role)) {
+    throw new ForbiddenError("Only Faction Leaders, Guild Leaders, and Admins can manage boss rotations");
+  }
+  return membership;
+}
+
+async function getActiveFactionGuilds() {
+  return prisma.guild.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, slug: true, avatarUrl: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+function serializeBossScheduleForApi(schedule: any) {
+  return {
+    id: schedule.id,
+    guildId: schedule.guildId,
+    bossName: schedule.bossName,
+    bossImageUrl: schedule.bossImageUrl,
+    spawnTime: schedule.spawnTime.toISOString(),
+    location: schedule.location,
+    guildTurn: schedule.guildTurn,
+    guildTurnGuildId: schedule.guildTurnGuildId,
+    guildTurnGuildName: schedule.guildTurnGuild?.name || null,
+    status: schedule.status,
+    killedAt: schedule.killedAt ? schedule.killedAt.toISOString() : null,
+    creatorId: schedule.creatorId,
+    createdAt: schedule.createdAt.toISOString(),
+    lootDrop: schedule.lootDrop,
+    screenshotUrl: schedule.screenshotUrl,
+  };
+}
+
+function parseBossHistoryMonth(month?: string) {
+  const now = new Date();
+  const match = month?.match(/^(\d{4})-(\d{2})$/);
+  const year = match ? Number(match[1]) : now.getUTCFullYear();
+  const monthIndex = match ? Number(match[2]) - 1 : now.getUTCMonth();
+
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    throw new BadRequestError("Month must use YYYY-MM format");
+  }
+
+  const start = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, monthIndex + 1, 1, 0, 0, 0, 0));
+  const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  return { key, start, end };
+}
+
+function getDetailString(detail: Record<string, unknown> | null, key: string) {
+  const value = detail?.[key];
+  return typeof value === "string" ? value : null;
+}
+
+function predefinedBossToRegistryItem(boss: (typeof PREDEFINED_BOSSES)[number]): BossRegistryItem {
+  return {
+    id: `predefined:${boss.name}`,
+    name: boss.name,
+    level: boss.level,
+    type: boss.type,
+    cooldownHours: boss.cooldownHours || null,
+    location: boss.location,
+    fixedSpawns: boss.fixedSpawns || null,
+  };
+}
+
+async function getBossRegistryForRotation() {
+  try {
+    const dbBosses = await prisma.boss.findMany({
+      orderBy: [{ type: "asc" }, { level: "desc" }, { name: "asc" }],
+    });
+    const bossMap = new Map<string, BossRegistryItem>(
+      dbBosses.map((boss) => [boss.name.toLowerCase(), boss]),
+    );
+
+    for (const boss of PREDEFINED_BOSSES) {
+      if (!bossMap.has(boss.name.toLowerCase())) {
+        bossMap.set(boss.name.toLowerCase(), predefinedBossToRegistryItem(boss));
+      }
+    }
+
+    return Array.from(bossMap.values()).sort((a, b) => {
+      const typeCompare = a.type.localeCompare(b.type);
+      if (typeCompare !== 0) return typeCompare;
+      if (b.level !== a.level) return b.level - a.level;
+      return a.name.localeCompare(b.name);
+    });
+  } catch {
+    return PREDEFINED_BOSSES
+      .map(predefinedBossToRegistryItem)
+      .sort((a, b) => {
+        const typeCompare = a.type.localeCompare(b.type);
+        if (typeCompare !== 0) return typeCompare;
+        if (b.level !== a.level) return b.level - a.level;
+        return a.name.localeCompare(b.name);
+      });
+  }
+}
+
+async function ensureBossRegistrySeeded() {
+  const existingBosses = await prisma.boss.findMany({
+    select: { name: true },
+  });
+  const existingNames = new Set(existingBosses.map((boss) => boss.name.toLowerCase()));
+  const missingBosses = PREDEFINED_BOSSES.filter((boss) => !existingNames.has(boss.name.toLowerCase()));
+
+  if (missingBosses.length === 0) {
+    return;
+  }
+
+  await prisma.$transaction(
+    missingBosses.map((boss) =>
+      prisma.boss.upsert({
+        where: { name: boss.name },
+        update: {
+          level: boss.level,
+          type: boss.type,
+          cooldownHours: boss.cooldownHours || null,
+          location: boss.location,
+          fixedSpawns: boss.fixedSpawns || undefined,
+        },
+        create: {
+          name: boss.name,
+          level: boss.level,
+          type: boss.type,
+          cooldownHours: boss.cooldownHours || null,
+          location: boss.location,
+          fixedSpawns: boss.fixedSpawns || undefined,
+        },
+      }),
+    ),
+  );
+}
 
 
 // ─── Attendance Systems ─────────────────────────
@@ -180,28 +370,30 @@ export async function submitAttendanceCode(userId: string, code: string) {
     success: true,
     sessionTitle: session.title,
     guildName: session.guild.name,
+    guildId: session.guildId,
     record,
   };
 }
 
 export async function getGuildPendingAttendance(guildId: string, actorId: string) {
-  const actorMembership = await prisma.guildMember.findUnique({
-    where: {
-      userId_guildId: {
-        userId: actorId,
-        guildId,
+  // Parallelize actor verification and active session query
+  const [actorMembership, activeSession] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: {
+        userId_guildId: {
+          userId: actorId,
+          guildId,
+        },
       },
-    },
-  });
+    }),
+    prisma.attendanceSession.findFirst({
+      where: { guildId, isActive: true },
+    }),
+  ]);
 
   if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER")) {
     throw new ForbiddenError("Only Guild Leaders and Officers can view pending attendance");
   }
-
-  // Get active session for this guild
-  const activeSession = await prisma.attendanceSession.findFirst({
-    where: { guildId, isActive: true },
-  });
 
   if (!activeSession) {
     return { activeSession: null, pendingRecords: [] };
@@ -322,7 +514,7 @@ export async function confirmAttendanceRecord(
 
 // ─── Boss schedules & Calendar systems ───────────
 
-export async function getBossSchedules(guildId: string) {
+export async function getBossSchedules(guildId: string, requestingUserId?: string) {
   // Retrieve combining both guild-specific events AND unified faction-wide events (guildId: null)
   const schedules = await prisma.bossSchedule.findMany({
     where: {
@@ -332,14 +524,29 @@ export async function getBossSchedules(guildId: string) {
       ],
     },
     include: {
+      guildTurnGuild: {
+        select: { id: true, name: true, slug: true, avatarUrl: true },
+      },
       attendanceSessions: {
         include: {
-          records: true
-        }
-      }
+          records: requestingUserId
+            ? {
+                where: { userId: requestingUserId },
+              }
+            : true,
+        },
+      },
     },
     orderBy: { spawnTime: "asc" },
   });
+
+  // Fetch users for creator details
+  const creatorIds = Array.from(new Set(schedules.map((s) => s.creatorId)));
+  const users = await prisma.user.findMany({
+    where: { id: { in: creatorIds } },
+    select: { id: true, displayName: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u.displayName]));
 
   return schedules.map((s) => ({
     id: s.id,
@@ -349,9 +556,12 @@ export async function getBossSchedules(guildId: string) {
     spawnTime: s.spawnTime.toISOString(),
     location: s.location,
     guildTurn: s.guildTurn,
+    guildTurnGuildId: s.guildTurnGuildId,
+    guildTurnGuildName: s.guildTurnGuild?.name || null,
     status: s.status,
     killedAt: s.killedAt ? s.killedAt.toISOString() : null,
     creatorId: s.creatorId,
+    creatorName: userMap.get(s.creatorId) || "System / Officer",
     createdAt: s.createdAt.toISOString(),
     attendanceSessions: s.attendanceSessions.map(session => ({
       id: session.id,
@@ -370,6 +580,593 @@ export async function getBossSchedules(guildId: string) {
   }));
 }
 
+export async function getBossRotation(guildId: string, actorId: string) {
+  const [membership, guilds, bosses] = await Promise.all([
+    requireActiveGuildMember(actorId, guildId),
+    getActiveFactionGuilds(),
+    getBossRegistryForRotation(),
+  ]);
+  const canManage = canManageBossRotation(membership.role);
+
+  const activeGuildIds = guilds.map((g) => g.id);
+  const guildMap = new Map(guilds.map((g) => [g.id, g]));
+
+  // Bulk-fetch all rotation, active schedule, and killed schedule data in 3 parallel queries
+  // instead of 3 sequential queries per boss (N+1 elimination)
+  const bossNames = bosses.map((b) => b.name);
+  const [allRotations, allActiveSchedules, allKilledSchedules] = await Promise.all([
+    prisma.bossRotation.findMany({
+      where: { bossName: { in: bossNames } },
+    }),
+    prisma.bossSchedule.findMany({
+      where: {
+        bossName: { in: bossNames },
+        status: { not: BossEventStatus.KILLED },
+      },
+      include: { guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
+      orderBy: { spawnTime: "asc" },
+    }),
+    prisma.bossSchedule.findMany({
+      where: {
+        bossName: { in: bossNames },
+        status: BossEventStatus.KILLED,
+      },
+      include: { guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
+      orderBy: { killedAt: "desc" },
+    }),
+  ]);
+
+  const rotationMap = new Map(allRotations.map((r) => [r.bossName, r]));
+  // For active schedules, take the first (earliest spawn) per boss
+  const activeScheduleMap = new Map<string, typeof allActiveSchedules[number]>();
+  for (const s of allActiveSchedules) {
+    if (!activeScheduleMap.has(s.bossName)) {
+      activeScheduleMap.set(s.bossName, s);
+    }
+  }
+  // For killed schedules, take the first (latest killed) per boss
+  const killedScheduleMap = new Map<string, typeof allKilledSchedules[number]>();
+  for (const s of allKilledSchedules) {
+    if (!killedScheduleMap.has(s.bossName)) {
+      killedScheduleMap.set(s.bossName, s);
+    }
+  }
+
+  const rotations = [];
+  for (const boss of bosses) {
+    const existing = rotationMap.get(boss.name) || null;
+    const queueGuildIds = normalizeQueue(existing?.queueGuildIds, activeGuildIds);
+    const currentIndex = queueGuildIds.length
+      ? Math.min(existing?.currentIndex || 0, queueGuildIds.length - 1)
+      : 0;
+
+    const activeSchedule = activeScheduleMap.get(boss.name) || null;
+    const latestKilled = killedScheduleMap.get(boss.name) || null;
+
+    const currentGuildId = queueGuildIds[currentIndex] || null;
+    const nextGuildId = queueGuildIds.length
+      ? queueGuildIds[(currentIndex + 1) % queueGuildIds.length] || currentGuildId
+      : null;
+    const currentGuild = currentGuildId ? guildMap.get(currentGuildId) || null : null;
+    const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
+    const spawnTime = boss.type === "FIXED_SCHEDULE"
+      ? (activeSchedule?.spawnTime || existing?.nextSpawnTime || getNextBossSpawnTime(boss.name, new Date()))
+      : (activeSchedule?.spawnTime ||
+         existing?.nextSpawnTime ||
+         (latestKilled?.killedAt ? getNextBossSpawnTime(boss.name, latestKilled.killedAt) : new Date()));
+
+    rotations.push({
+      id: existing?.id || `predefined:${boss.name}`,
+      bossName: boss.name,
+      bossImageUrl: getBossImageUrl(boss.name),
+      level: boss.level,
+      type: boss.type,
+      cooldownHours: boss.cooldownHours,
+      location: boss.location,
+      currentIndex,
+      queue: queueGuildIds.map((id) => guildMap.get(id)).filter(Boolean),
+      currentGuild,
+      nextGuild,
+      spawnTime: spawnTime.toISOString(),
+      status: activeSchedule
+        ? activeSchedule.status
+        : latestKilled
+          ? BossEventStatus.KILLED
+          : BossEventStatus.UPCOMING,
+      activeSchedule: activeSchedule ? serializeBossScheduleForApi(activeSchedule) : null,
+      latestKilled: latestKilled ? serializeBossScheduleForApi(latestKilled) : null,
+    });
+  }
+
+  return {
+    serverTime: new Date().toISOString(),
+    canManage,
+    viewerRole: membership.role,
+    guilds,
+    rotations,
+  };
+}
+
+export async function updateBossRotationQueue(
+  guildId: string,
+  bossName: string,
+  queueGuildIds: string[],
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossRotationManager(actorId, guildId);
+  const guilds = await getActiveFactionGuilds();
+  const normalizedQueue = normalizeQueue(queueGuildIds, guilds.map((g) => g.id));
+
+  if (normalizedQueue.length === 0) {
+    throw new BadRequestError("Rotation queue needs at least one active guild");
+  }
+
+  const rotation = await prisma.bossRotation.upsert({
+    where: { bossName },
+    create: {
+      bossName,
+      queueGuildIds: normalizedQueue,
+      currentIndex: 0,
+      updatedById: actorId,
+    },
+    update: {
+      queueGuildIds: normalizedQueue,
+      currentIndex: 0,
+      updatedById: actorId,
+    },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_ROTATION_QUEUE_UPDATED",
+    target: "BossRotation",
+    targetId: rotation.id,
+    detail: { bossName, queueGuildIds: normalizedQueue },
+    ipAddress,
+    userAgent,
+  });
+
+  return getBossRotation(guildId, actorId);
+}
+
+export async function markBossRotationKilled(
+  guildId: string,
+  scheduleId: string,
+  killedAt: string,
+  takenGuildId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossRotationManager(actorId, guildId);
+  const killedDate = new Date(killedAt);
+  if (Number.isNaN(killedDate.getTime())) {
+    throw new BadRequestError("Killed timestamp is invalid");
+  }
+
+  const [schedule, guilds] = await Promise.all([
+    prisma.bossSchedule.findUnique({
+      where: { id: scheduleId },
+    }),
+    prisma.guild.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, slug: true, avatarUrl: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
+  if (!schedule) {
+    throw new NotFoundError("Boss schedule not found");
+  }
+  if (schedule.status === BossEventStatus.KILLED) {
+    throw new BadRequestError("This boss kill has already been logged");
+  }
+
+  const activeGuildIds = guilds.map((g) => g.id);
+  const guildMap = new Map(guilds.map((g) => [g.id, g]));
+  const takenGuild = guildMap.get(takenGuildId);
+
+  if (!takenGuild) {
+    throw new BadRequestError("Selected taking guild is not active");
+  }
+
+  const existingRotation = await prisma.bossRotation.findUnique({
+    where: { bossName: schedule.bossName },
+  });
+  const queueGuildIds = normalizeQueue(existingRotation?.queueGuildIds, activeGuildIds);
+  const takenIndex = queueGuildIds.indexOf(takenGuildId);
+  const nextIndex = queueGuildIds.length ? ((takenIndex >= 0 ? takenIndex : 0) + 1) % queueGuildIds.length : 0;
+  const nextGuildId = queueGuildIds[nextIndex] || null;
+  const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
+  const nextSpawnTime = getNextBossSpawnTime(schedule.bossName, killedDate);
+
+  const updatedEvent = await prisma.bossSchedule.update({
+    where: { id: scheduleId },
+    data: {
+      status: BossEventStatus.KILLED,
+      killedAt: killedDate,
+      guildTurn: takenGuild.name,
+      guildTurnGuildId: takenGuild.id,
+    },
+  });
+
+  const rotation = await prisma.bossRotation.upsert({
+    where: { bossName: schedule.bossName },
+    create: {
+      bossName: schedule.bossName,
+      queueGuildIds,
+      currentIndex: nextIndex,
+      nextSpawnTime,
+      updatedById: actorId,
+    },
+    update: {
+      queueGuildIds,
+      currentIndex: nextIndex,
+      nextSpawnTime,
+      updatedById: actorId,
+    },
+  });
+
+  const [leaders, auditLog] = await Promise.all([
+    nextGuildId
+      ? prisma.guildMember.findMany({
+          where: {
+            guildId: nextGuildId,
+            isActive: true,
+            role: { in: ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"] },
+          },
+          select: { userId: true },
+        })
+      : Promise.resolve([]),
+    prisma.auditLog.create({
+      data: {
+        actorId,
+        guildId,
+        action: "BOSS_ROTATION_KILLED",
+        target: "BossRotation",
+        targetId: rotation.id,
+        detail: {
+          bossName: schedule.bossName,
+          killedAt: killedDate.toISOString(),
+          takenGuildId: takenGuild.id,
+          takenGuildName: takenGuild.name,
+          nextSpawnTime: nextSpawnTime.toISOString(),
+          nextGuildId,
+          nextGuildName: nextGuild?.name || null,
+          nextScheduleId: null,
+        },
+        ipAddress,
+        userAgent,
+      },
+    }),
+  ]);
+
+  const notifications: PendingNotification[] = [];
+  if (nextGuildId) {
+    for (const leader of leaders) {
+      notifications.push({
+        userId: leader.userId,
+        type: "BOSS_ROTATION_NOW",
+        title: "It is your Rotation Now",
+        body: `${nextGuild?.name || "Your guild"} is now assigned to ${schedule.bossName}.`,
+        metadata: {
+          bossName: schedule.bossName,
+          takenGuildId: takenGuild.id,
+          takenGuildName: takenGuild.name,
+          guildId: nextGuildId,
+          scheduleId: null,
+          spawnTime: nextSpawnTime.toISOString(),
+        },
+      });
+    }
+  }
+
+  if (notifications.length > 0) {
+    await Promise.all(
+      notifications.map(async (payload) => {
+        try {
+          const notification = await prisma.notification.create({
+            data: {
+              userId: payload.userId,
+              type: payload.type,
+              title: payload.title,
+              body: payload.body,
+              metadata: payload.metadata as any,
+            },
+          });
+
+          void broadcastToUser(notification.userId, "notification_created", {
+            id: notification.id,
+            userId: notification.userId,
+            type: notification.type,
+            title: notification.title,
+            body: notification.body,
+            metadata: notification.metadata,
+            readAt: null,
+            createdAt: notification.createdAt.toISOString(),
+          });
+        } catch (error) {
+          console.error("[Boss Rotation]: Failed to create notification after rotation update", error);
+        }
+      })
+    );
+  }
+
+  return {
+    schedule: serializeBossScheduleForApi(updatedEvent),
+    nextSchedule: null,
+    rotationId: rotation.id,
+  };
+}
+
+export async function markBossRotationKilledByName(
+  guildId: string,
+  bossName: string,
+  killedAt: string,
+  takenGuildId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossRotationManager(actorId, guildId);
+  const killedDate = new Date(killedAt);
+  if (Number.isNaN(killedDate.getTime())) {
+    throw new BadRequestError("Killed timestamp is invalid");
+  }
+
+  // Load registry, active schedule, guilds, and existing rotation in parallel
+  const [bosses, activeSchedule, guilds, existingRotation] = await Promise.all([
+    getBossRegistryForRotation(),
+    prisma.bossSchedule.findFirst({
+      where: {
+        bossName: bossName.trim(),
+        status: { not: BossEventStatus.KILLED },
+      },
+      orderBy: { spawnTime: "asc" },
+    }),
+    prisma.guild.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, slug: true, avatarUrl: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.bossRotation.findUnique({
+      where: { bossName: bossName.trim() },
+    }),
+  ]);
+
+  const registryBoss = bosses.find((boss) => boss.name.toLowerCase() === bossName.trim().toLowerCase());
+  if (!registryBoss) {
+    throw new BadRequestError("Boss is not available in the boss registry");
+  }
+
+  if (activeSchedule) {
+    return markBossRotationKilled(
+      guildId,
+      activeSchedule.id,
+      killedAt,
+      takenGuildId,
+      actorId,
+      ipAddress,
+      userAgent,
+    );
+  }
+
+  const activeGuildIds = guilds.map((g) => g.id);
+  const guildMap = new Map(guilds.map((g) => [g.id, g]));
+  const takenGuild = guildMap.get(takenGuildId);
+
+  if (!takenGuild) {
+    throw new BadRequestError("Selected taking guild is not active");
+  }
+
+  const queueGuildIds = normalizeQueue(existingRotation?.queueGuildIds, activeGuildIds);
+  const takenIndex = queueGuildIds.indexOf(takenGuildId);
+  const nextIndex = queueGuildIds.length ? ((takenIndex >= 0 ? takenIndex : 0) + 1) % queueGuildIds.length : 0;
+  const nextGuildId = queueGuildIds[nextIndex] || null;
+  const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
+  const nextSpawnTime = getNextBossSpawnTime(registryBoss.name, killedDate);
+
+  const rotation = await prisma.bossRotation.upsert({
+    where: { bossName: registryBoss.name },
+    create: {
+      bossName: registryBoss.name,
+      queueGuildIds,
+      currentIndex: nextIndex,
+      nextSpawnTime,
+      updatedById: actorId,
+    },
+    update: {
+      queueGuildIds,
+      currentIndex: nextIndex,
+      nextSpawnTime,
+      updatedById: actorId,
+    },
+  });
+
+  const [leaders, auditLog] = await Promise.all([
+    nextGuildId
+      ? prisma.guildMember.findMany({
+          where: {
+            guildId: nextGuildId,
+            isActive: true,
+            role: { in: ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"] },
+          },
+          select: { userId: true },
+        })
+      : Promise.resolve([]),
+    prisma.auditLog.create({
+      data: {
+        actorId,
+        guildId,
+        action: "BOSS_ROTATION_KILLED",
+        target: "BossRotation",
+        targetId: rotation.id,
+        detail: {
+          bossName: registryBoss.name,
+          killedAt: killedDate.toISOString(),
+          takenGuildId: takenGuild.id,
+          takenGuildName: takenGuild.name,
+          nextSpawnTime: nextSpawnTime.toISOString(),
+          nextGuildId,
+          nextGuildName: nextGuild?.name || null,
+          nextScheduleId: null,
+        },
+        ipAddress,
+        userAgent,
+      },
+    }),
+  ]);
+
+  const notifications: PendingNotification[] = [];
+  if (nextGuildId) {
+    for (const leader of leaders) {
+      notifications.push({
+        userId: leader.userId,
+        type: "BOSS_ROTATION_NOW",
+        title: "It is your Rotation Now",
+        body: `${nextGuild?.name || "Your guild"} is now assigned to ${registryBoss.name}.`,
+        metadata: {
+          bossName: registryBoss.name,
+          takenGuildId: takenGuild.id,
+          takenGuildName: takenGuild.name,
+          guildId: nextGuildId,
+          scheduleId: null,
+          spawnTime: nextSpawnTime.toISOString(),
+        },
+      });
+    }
+  }
+
+  if (notifications.length > 0) {
+    await Promise.all(
+      notifications.map(async (payload) => {
+        try {
+          const notification = await prisma.notification.create({
+            data: {
+              userId: payload.userId,
+              type: payload.type,
+              title: payload.title,
+              body: payload.body,
+              metadata: payload.metadata as any,
+            },
+          });
+
+          void broadcastToUser(notification.userId, "notification_created", {
+            id: notification.id,
+            userId: notification.userId,
+            type: notification.type,
+            title: notification.title,
+            body: notification.body,
+            metadata: notification.metadata,
+            readAt: null,
+            createdAt: notification.createdAt.toISOString(),
+          });
+        } catch (error) {
+          console.error("[Boss Rotation]: Failed to create notification after rotation update", error);
+        }
+      })
+    );
+  }
+
+  return {
+    schedule: null,
+    nextSchedule: null,
+    rotationId: rotation.id,
+  };
+}
+
+export async function getBossKilledHistory(guildId: string, actorId: string, month?: string) {
+  await requireActiveGuildMember(actorId, guildId);
+  const { key, start, end } = parseBossHistoryMonth(month);
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      guildId,
+      action: { in: BOSS_KILL_AUDIT_ACTIONS },
+    },
+    include: {
+      actor: {
+        select: {
+          id: true,
+          displayName: true,
+          avatarUrl: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 1000,
+  });
+
+  const days = new Map<string, {
+    date: string;
+    total: number;
+    kills: Array<{
+      id: string;
+      action: string;
+      bossName: string;
+      bossImageUrl: string;
+      killedAt: string;
+      recordedAt: string;
+      recordedBy: {
+        id: string;
+        displayName: string;
+        avatarUrl: string | null;
+      };
+      nextGuildName: string | null;
+      nextSpawnTime: string | null;
+    }>;
+  }>();
+
+  for (const log of logs) {
+    const detail = log.detail && typeof log.detail === "object" && !Array.isArray(log.detail)
+      ? log.detail as Record<string, unknown>
+      : null;
+    const killedAtValue = getDetailString(detail, "killedAt") || log.createdAt.toISOString();
+    const killedDate = new Date(killedAtValue);
+
+    if (Number.isNaN(killedDate.getTime()) || killedDate < start || killedDate >= end) {
+      continue;
+    }
+
+    const dayKey = killedDate.toISOString().slice(0, 10);
+    const existingDay = days.get(dayKey) || { date: dayKey, total: 0, kills: [] };
+    const bossName = getDetailString(detail, "bossName") || log.target || "World Boss";
+    existingDay.total += 1;
+    existingDay.kills.push({
+      id: log.id,
+      action: log.action,
+      bossName,
+      bossImageUrl: getBossImageUrl(bossName),
+      killedAt: killedDate.toISOString(),
+      recordedAt: log.createdAt.toISOString(),
+      recordedBy: {
+        id: log.actor.id,
+        displayName: log.actor.displayName,
+        avatarUrl: log.actor.avatarUrl,
+      },
+      nextGuildName: getDetailString(detail, "nextGuildName") || getDetailString(detail, "nextGuildTurn"),
+      nextSpawnTime: getDetailString(detail, "nextSpawnTime"),
+    });
+    days.set(dayKey, existingDay);
+  }
+
+  const groupedDays = Array.from(days.values())
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((day) => ({
+      ...day,
+      kills: day.kills.sort((a, b) => new Date(b.killedAt).getTime() - new Date(a.killedAt).getTime()),
+    }));
+
+  return {
+    month: key,
+    total: groupedDays.reduce((sum, day) => sum + day.total, 0),
+    days: groupedDays,
+  };
+}
+
 export async function createBossSchedule(
   guildId: string | null,
   payload: {
@@ -378,6 +1175,7 @@ export async function createBossSchedule(
     spawnTime: string;
     location: string;
     guildTurn?: string;
+    guildTurnGuildId?: string | null;
   },
   actorId: string,
   ipAddress?: string,
@@ -412,6 +1210,7 @@ export async function createBossSchedule(
       spawnTime: new Date(payload.spawnTime),
       location: payload.location,
       guildTurn: payload.guildTurn || null,
+      guildTurnGuildId: payload.guildTurnGuildId || null,
       status: BossEventStatus.UPCOMING,
       creatorId: actorId,
     },
@@ -482,22 +1281,10 @@ export async function logBossKill(
     },
   });
 
-  // Automatically calculate next spawn and schedule it in the calendar
+  // Automatically calculate next spawn for audit logging (scheduling is done manually)
   const killDate = new Date(killedAt);
   const nextSpawnTime = getNextBossSpawnTime(schedule.bossName, killDate);
-
-  await prisma.bossSchedule.create({
-    data: {
-      guildId: schedule.guildId, // Maintains the same guild or faction unified scope
-      bossName: schedule.bossName,
-      bossImageUrl: schedule.bossImageUrl,
-      location: schedule.location,
-      guildTurn: schedule.guildTurn,
-      status: BossEventStatus.UPCOMING,
-      spawnTime: nextSpawnTime,
-      creatorId: actorId,
-    },
-  });
+  const nextSchedule: any = null;
 
   await writeAuditLog({
     actorId,
@@ -509,6 +1296,7 @@ export async function logBossKill(
       bossName: schedule.bossName, 
       killedAt, 
       nextSpawnTime: nextSpawnTime.toISOString(),
+      nextGuildTurn: nextSchedule ? nextSchedule.guildTurn : undefined,
       lootDrop,
       screenshotUrl
     },
@@ -516,10 +1304,242 @@ export async function logBossKill(
     userAgent,
   });
 
+  return { updatedEvent, nextSchedule };
+}
+
+export async function updateBossSchedule(
+  guildId: string,
+  scheduleId: string,
+  payload: {
+    bossName?: string;
+    bossImageUrl?: string;
+    spawnTime?: string;
+    location?: string;
+    guildTurn?: string;
+    guildTurnGuildId?: string | null;
+    isFaction?: boolean;
+  },
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  // Validate actor is Guild Leader or Officer
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "FACTION_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can edit schedules");
+  }
+
+  const schedule = await prisma.bossSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw new NotFoundError("Boss schedule not found");
+  }
+
+  // Faction (null) events or guild-specific events can be edited
+  if (schedule.guildId && schedule.guildId !== guildId) {
+    throw new ForbiddenError("You cannot edit another guild's schedule");
+  }
+
+  // Faction Leader check for guildTurn
+  const isFactionLeader = actorMembership.role === "FACTION_LEADER" || actorMembership.role === "ADMIN";
+  let resolvedGuildTurn = payload.guildTurn;
+  if (!isFactionLeader) {
+    // If not faction leader, do not allow changing or adding guild turn
+    resolvedGuildTurn = schedule.guildTurn || undefined;
+  }
+
+  const updatedEvent = await prisma.bossSchedule.update({
+    where: { id: scheduleId },
+    data: {
+      bossName: payload.bossName,
+      bossImageUrl: payload.bossImageUrl,
+      spawnTime: payload.spawnTime ? new Date(payload.spawnTime) : undefined,
+      location: payload.location,
+      guildTurn: isFactionLeader ? payload.guildTurn : resolvedGuildTurn,
+      guildTurnGuildId: isFactionLeader ? payload.guildTurnGuildId : undefined,
+      guildId: payload.isFaction ? null : (payload.isFaction === false ? guildId : undefined),
+    },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_EVENT_UPDATED",
+    target: "BossSchedule",
+    targetId: scheduleId,
+    detail: { ...payload },
+    ipAddress,
+    userAgent,
+  });
+
   return updatedEvent;
 }
 
+export async function deleteBossSchedule(
+  guildId: string,
+  scheduleId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  // Validate actor is Guild Leader or Officer
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "FACTION_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can delete schedules");
+  }
+
+  const schedule = await prisma.bossSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw new NotFoundError("Boss schedule not found");
+  }
+
+  if (schedule.guildId && schedule.guildId !== guildId) {
+    throw new ForbiddenError("You cannot delete another guild's schedule");
+  }
+
+  await prisma.bossSchedule.delete({
+    where: { id: scheduleId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_EVENT_DELETED",
+    target: "BossSchedule",
+    targetId: scheduleId,
+    detail: { bossName: schedule.bossName },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true };
+}
+
+export async function updateAttendanceSession(
+  guildId: string,
+  sessionId: string,
+  payload: {
+    title?: string;
+    expiresAt?: string;
+    isActive?: boolean;
+  },
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "FACTION_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can edit attendance sessions");
+  }
+
+  const session = await prisma.attendanceSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!session || session.guildId !== guildId) {
+    throw new NotFoundError("Attendance session not found");
+  }
+
+  const updatedSession = await prisma.attendanceSession.update({
+    where: { id: sessionId },
+    data: {
+      title: payload.title,
+      expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : undefined,
+      isActive: payload.isActive,
+    },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "ATTENDANCE_SESSION_UPDATED",
+    target: "AttendanceSession",
+    targetId: sessionId,
+    detail: { ...payload },
+    ipAddress,
+    userAgent,
+  });
+
+  return updatedSession;
+}
+
+export async function deleteAttendanceSession(
+  guildId: string,
+  sessionId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "FACTION_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can delete attendance sessions");
+  }
+
+  const session = await prisma.attendanceSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!session || session.guildId !== guildId) {
+    throw new NotFoundError("Attendance session not found");
+  }
+
+  await prisma.attendanceSession.delete({
+    where: { id: sessionId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "ATTENDANCE_SESSION_DELETED",
+    target: "AttendanceSession",
+    targetId: sessionId,
+    detail: { title: session.title },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true };
+}
+
 export async function getBosses() {
+  await ensureBossRegistrySeeded();
   return prisma.boss.findMany({
     orderBy: { level: "asc" },
   });
@@ -591,16 +1611,46 @@ export async function getMemberAttendanceStats(guildId: string, userId: string) 
     expiresAt: s.expiresAt.toISOString()
   }));
 
+  const history = sessions.map(session => {
+    const record = session.records[0];
+    let status: "CONFIRMED" | "PENDING" | "MISSED" | "UNCHECKED" = "UNCHECKED";
+    
+    if (record) {
+      if (record.status === AttendanceRecordStatus.CONFIRMED) {
+        status = "CONFIRMED";
+      } else {
+        status = "PENDING";
+      }
+    } else {
+      const isExpired = new Date(session.expiresAt).getTime() < Date.now();
+      if (isExpired) {
+        status = "MISSED";
+      } else {
+        status = "UNCHECKED";
+      }
+    }
+    
+    return {
+      sessionId: session.id,
+      title: session.title,
+      type: session.type,
+      createdAt: session.createdAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      status,
+      joinedAt: record ? record.joinedAt.toISOString() : null,
+    };
+  });
+
   return {
     presenceRate,
     currentStreak,
     participationCount,
     totalPoints,
-    missedAlerts
+    missedAlerts,
+    history
   };
 }
 
-<<<<<<< HEAD
 export async function getDashboardSummary(guildId: string, userId: string) {
   // Verify membership
   const membership = await prisma.guildMember.findUnique({
@@ -624,136 +1674,188 @@ export async function getDashboardSummary(guildId: string, userId: string) {
   const currencySymbol = settings?.currencySymbol || "₱";
   const currencyCode = settings?.currencyCode || "PHP";
 
-  // 2. Fetch Balance and Balance change this week (last 7 days)
-  const ledgerEntries = await prisma.ledgerEntry.groupBy({
-    by: ["entryType"],
-    where: {
-      accountType: "MEMBER",
-      accountId: userId,
-      currency: currencyCode,
-      guildId,
-    },
-    _sum: { amount: true },
-  });
+  // 2. Fetch or compute guild-wide stats (cached globally for the guild for 30s)
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
+  const guildCacheKey = `stats:guild:${guildId}`;
+  let guildStats = await cache.get<{
+    totalMembers: number;
+    onlineMembersCount: number;
+    bossKillsToday: number;
+    totalBossKills: number;
+    guildAudit: any[];
+    claims: any[];
+  }>(guildCacheKey);
+
+  if (!guildStats) {
+    const [
+      activeMembers,
+      bossKillsToday,
+      totalBossKills,
+      guildAudit,
+      claims,
+    ] = await Promise.all([
+      // Fetch active members to count total and online members
+      prisma.guildMember.findMany({
+        where: { guildId, isActive: true },
+        select: {
+          userId: true,
+          user: {
+            select: {
+              sessions: {
+                where: {
+                  lastActive: { gte: fifteenMinutesAgo },
+                },
+                take: 1,
+                select: {
+                  id: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      // Boss Kills Today count
+      prisma.bossSchedule.count({
+        where: {
+          OR: [
+            { guildId },
+            { guildId: null },
+          ],
+          status: BossEventStatus.KILLED,
+          killedAt: { gte: startOfToday },
+        },
+      }),
+      // Total Boss Kills count
+      prisma.bossSchedule.count({
+        where: {
+          OR: [
+            { guildId },
+            { guildId: null },
+          ],
+          status: BossEventStatus.KILLED,
+        },
+      }),
+      // Guild Audit timeline
+      prisma.auditLog.findMany({
+        where: { guildId },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      // Claims ratio by guild turn
+      prisma.bossSchedule.groupBy({
+        by: ["guildTurn"],
+        where: {
+          status: BossEventStatus.KILLED,
+          guildTurn: { not: null },
+        },
+        _count: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const totalMembers = activeMembers.length;
+    const onlineMembersCount = activeMembers.filter((m) => m.user.sessions.length > 0).length;
+
+    guildStats = {
+      totalMembers,
+      onlineMembersCount,
+      bossKillsToday,
+      totalBossKills,
+      guildAudit,
+      claims,
+    };
+
+    await cache.set(guildCacheKey, guildStats, 30); // Cache guild-wide stats for 30 seconds
+  }
+
+  // 3. Fetch user-specific metrics in parallel
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgoTime = new Date();
+  sevenDaysAgoTime.setDate(sevenDaysAgoTime.getDate() - 6);
+  sevenDaysAgoTime.setHours(0, 0, 0, 0);
+
+  // We query all CREDIT entries since 7 days ago to calculate weekly counts and chart details in JS
+  const [
+    ledgerAggregates,
+    weeklyCredits,
+    memberLedger,
+  ] = await Promise.all([
+    // Combine overall balances (CREDIT and DEBIT) and total points (ATTENDANCE)
+    prisma.ledgerEntry.groupBy({
+      by: ["entryType", "referenceType"],
+      where: {
+        accountType: "MEMBER",
+        accountId: userId,
+        currency: currencyCode,
+        guildId,
+      },
+      _sum: { amount: true },
+    }),
+    // Fetch user credits since 7 days ago (superset of both weekly balance credit and chart credit history)
+    prisma.ledgerEntry.findMany({
+      where: {
+        guildId,
+        accountId: userId,
+        accountType: "MEMBER",
+        entryType: "CREDIT",
+        createdAt: { gte: sevenDaysAgo },
+      },
+      select: {
+        amount: true,
+        referenceType: true,
+        createdAt: true,
+      },
+    }),
+    // User ledger timeline
+    prisma.ledgerEntry.findMany({
+      where: {
+        guildId,
+        accountId: userId,
+        accountType: "MEMBER",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+  ]);
+
+  // Compute balance (credits - debits) and total points in Javascript
   let credits = 0n;
   let debits = 0n;
-  for (const row of ledgerEntries) {
+  for (const row of ledgerAggregates) {
     if (row.entryType === "CREDIT") {
-      credits = row._sum.amount ?? 0n;
+      credits += row._sum.amount ?? 0n;
     } else {
-      debits = row._sum.amount ?? 0n;
+      debits += row._sum.amount ?? 0n;
     }
   }
   const balanceCents = credits - debits;
   const balanceValue = `${currencySymbol} ${(Number(balanceCents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const weeklyCreditSum = await prisma.ledgerEntry.aggregate({
-    where: {
-      accountType: "MEMBER",
-      accountId: userId,
-      currency: currencyCode,
-      guildId,
-      entryType: "CREDIT",
-      createdAt: { gte: sevenDaysAgo },
-    },
-    _sum: { amount: true },
-  });
-  const weeklyCredit = Number(weeklyCreditSum._sum.amount || 0n) / 100;
-  const balanceSub = `+${currencySymbol}${weeklyCredit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this week`;
-
-  // 3. Guild Points
-  const pointsSum = await prisma.ledgerEntry.aggregate({
-    where: {
-      guildId,
-      accountId: userId,
-      accountType: "MEMBER",
-      referenceType: "ATTENDANCE",
-    },
-    _sum: { amount: true },
-  });
-  const totalPoints = Number(pointsSum._sum.amount || 0n);
+  // Compute total attendance points
+  const totalPoints = ledgerAggregates
+    .filter((row) => row.referenceType === "ATTENDANCE")
+    .reduce((sum, row) => sum + Number(row._sum.amount ?? 0n), 0);
   const guildPointsValue = totalPoints.toLocaleString();
 
-  const weeklyPointsSum = await prisma.ledgerEntry.aggregate({
-    where: {
-      guildId,
-      accountId: userId,
-      accountType: "MEMBER",
-      referenceType: "ATTENDANCE",
-      createdAt: { gte: sevenDaysAgo },
-    },
-    _sum: { amount: true },
-  });
-  const weeklyPoints = Number(weeklyPointsSum._sum.amount || 0n);
+  // Compute weekly stats from weeklyCredits in JS
+  const weeklyCredit = weeklyCredits.reduce((sum, entry) => sum + Number(entry.amount), 0) / 100;
+  const balanceSub = `+${currencySymbol}${weeklyCredit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this week`;
+
+  const weeklyPoints = weeklyCredits
+    .filter((entry) => entry.referenceType === "ATTENDANCE")
+    .reduce((sum, entry) => sum + Number(entry.amount), 0);
   const guildPointsSub = `+${weeklyPoints.toLocaleString()} this week`;
 
-  // 4. Members
-  const totalMembers = await prisma.guildMember.count({
-    where: { guildId, isActive: true },
-  });
+  const membersValue = guildStats.totalMembers.toString();
+  const membersSub = `${guildStats.onlineMembersCount} online`;
 
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-  const onlineMembersCount = await prisma.guildMember.count({
-    where: {
-      guildId,
-      isActive: true,
-      user: {
-        sessions: {
-          some: {
-            lastActive: { gte: fifteenMinutesAgo },
-          },
-        },
-      },
-    },
-  });
-  const membersValue = totalMembers.toString();
-  const membersSub = `${onlineMembersCount} online`;
-
-  // 5. Boss Today
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-
-  const bossKillsToday = await prisma.bossSchedule.count({
-    where: {
-      OR: [
-        { guildId },
-        { guildId: null },
-      ],
-      status: BossEventStatus.KILLED,
-      killedAt: { gte: startOfToday },
-    },
-  });
-
-  const totalBossKills = await prisma.bossSchedule.count({
-    where: {
-      OR: [
-        { guildId },
-        { guildId: null },
-      ],
-      status: BossEventStatus.KILLED,
-    },
-  });
-  const bossTodayValue = bossKillsToday.toString();
-  const bossTodaySub = `${totalBossKills} this season`;
-
-  // 6. Recent Activity Timeline
-  const memberLedger = await prisma.ledgerEntry.findMany({
-    where: {
-      guildId,
-      accountId: userId,
-      accountType: "MEMBER",
-    },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
-
-  const guildAudit = await prisma.auditLog.findMany({
-    where: { guildId },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  const bossTodayValue = guildStats.bossKillsToday.toString();
+  const bossTodaySub = `${guildStats.totalBossKills} this season`;
 
   const activities: Array<{
     type: "CREDIT" | "DEBIT" | "POINTS" | "INFO" | "CONFIG";
@@ -789,7 +1891,7 @@ export async function getDashboardSummary(guildId: string, userId: string) {
     }
   }
 
-  for (const log of guildAudit) {
+  for (const log of guildStats.guildAudit) {
     if (log.action === "MEMBER_ADDED" || log.action === "GUILD_JOIN_REQUEST_ACCEPTED") {
       const addedMemberName = (log.detail as any)?.displayName || "New member";
       activities.push({
@@ -852,6 +1954,50 @@ export async function getDashboardSummary(guildId: string, userId: string) {
     });
   }
 
+  // 7. Performance history (Ledger credit accumulations over the last 7 calendar days)
+  const performanceHistory: Array<{ dayName: string; amount: number }> = [];
+  const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const dailyAmounts: { [key: string]: number } = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toDateString();
+    dailyAmounts[dateStr] = 0;
+  }
+
+  // Filter weeklyCredits for creditsHistory (createdAt >= sevenDaysAgoTime)
+  const creditsHistory = weeklyCredits.filter((entry) => entry.createdAt >= sevenDaysAgoTime);
+
+  for (const entry of creditsHistory) {
+    const dateStr = entry.createdAt.toDateString();
+    if (dailyAmounts[dateStr] !== undefined) {
+      dailyAmounts[dateStr] += Number(entry.amount) / 100;
+    }
+  }
+
+  const generatedPerformanceHistory = Object.keys(dailyAmounts).map((dateStr) => {
+    const d = new Date(dateStr);
+    return {
+      dayName: daysOfWeek[d.getDay()],
+      amount: dailyAmounts[dateStr],
+    };
+  });
+
+  // 8. Faction claim ratios (Group boss schedules by guild turn)
+  const totalClaimsCount = guildStats.claims.reduce((acc, c) => acc + c._count.id, 0);
+  const factionClaims = guildStats.claims
+    .map((c) => {
+      const claimsCount = c._count.id;
+      const percentage = totalClaimsCount > 0 ? Math.round((claimsCount / totalClaimsCount) * 100) : 0;
+      return {
+        guildName: c.guildTurn || "Unknown",
+        claimsCount,
+        percentage,
+      };
+    })
+    .sort((a, b) => b.claimsCount - a.claimsCount);
+
   return {
     balance: {
       raw: Number(balanceCents) / 100,
@@ -865,21 +2011,322 @@ export async function getDashboardSummary(guildId: string, userId: string) {
       sub: guildPointsSub,
     },
     members: {
-      raw: totalMembers,
+      raw: guildStats.totalMembers,
       value: membersValue,
       sub: membersSub,
-      online: onlineMembersCount,
+      online: guildStats.onlineMembersCount,
     },
     bossToday: {
-      raw: bossKillsToday,
+      raw: guildStats.bossKillsToday,
       value: bossTodayValue,
       sub: bossTodaySub,
-      total: totalBossKills,
+      total: guildStats.totalBossKills,
     },
     recentActivity: formattedActivities,
+    performanceHistory: generatedPerformanceHistory,
+    factionClaims: factionClaims,
   };
 }
 
+export async function getAccountingDashboard(guildId: string, actorId: string, page: number = 1, limit: number = 25) {
+  // Validate actor is Guild Leader, Officer, or Faction Leader
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
 
-=======
->>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288
+  if (!actorMembership || !actorMembership.isActive) {
+    throw new ForbiddenError("You must be an active member of this guild to view accounting");
+  }
+
+  const settings = await prisma.guildSettings.findUnique({
+    where: { guildId },
+  });
+
+  const currencySymbol = settings?.currencySymbol || "₱";
+  const currencyCode = settings?.currencyCode || "PHP";
+  const secondarySymbol = settings?.secondaryCurrencySymbol || "💎";
+  const secondaryCode = settings?.secondaryCurrencyCode || "DIAMOND";
+
+  // 1. Fetch treasury balances
+  // A. Guild Treasury Balance
+  const fundCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "CREDIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const fundDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "DEBIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const fundBalanceCents = (fundCreditsSum._sum.amount || 0n) - (fundDebitsSum._sum.amount || 0n);
+
+  // B. Guild Tax Balance
+  const taxCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "CREDIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const taxDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "DEBIT", currency: currencyCode },
+    _sum: { amount: true },
+  });
+  const taxBalanceCents = (taxCreditsSum._sum.amount || 0n) - (taxDebitsSum._sum.amount || 0n);
+
+  // C. Total Expenses
+  const expensesSum = await prisma.ledgerEntry.aggregate({
+    where: {
+      guildId,
+      entryType: "DEBIT",
+      currency: currencyCode,
+      accountType: { in: ["GUILD_FUND", "TAX"] },
+    },
+    _sum: { amount: true },
+  });
+  const totalExpensesCents = expensesSum._sum.amount || 0n;
+
+  // Secondary Currency Treasury
+  const secFundCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "CREDIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secFundDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "GUILD_FUND", entryType: "DEBIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secFundBalanceCents = (secFundCreditsSum._sum.amount || 0n) - (secFundDebitsSum._sum.amount || 0n);
+
+  const secTaxCreditsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "CREDIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secTaxDebitsSum = await prisma.ledgerEntry.aggregate({
+    where: { guildId, accountType: "TAX", entryType: "DEBIT", currency: secondaryCode },
+    _sum: { amount: true },
+  });
+  const secTaxBalanceCents = (secTaxCreditsSum._sum.amount || 0n) - (secTaxDebitsSum._sum.amount || 0n);
+
+  const secExpensesSum = await prisma.ledgerEntry.aggregate({
+    where: {
+      guildId,
+      entryType: "DEBIT",
+      currency: secondaryCode,
+      accountType: { in: ["GUILD_FUND", "TAX"] },
+    },
+    _sum: { amount: true },
+  });
+  const secExpensesCents = secExpensesSum._sum.amount || 0n;
+
+  // 2. Member Balance Board - OPTIMIZED O(1) BATCH QUERIES
+  const members = await prisma.guildMember.findMany({
+    where: { guildId, isActive: true },
+    include: {
+      user: {
+        select: {
+          id: true,
+          displayName: true,
+          email: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  });
+
+  // A. Fetch DKP points for all guild members in a single query
+  const dkpAggregates = await prisma.ledgerEntry.groupBy({
+    by: ["accountId"],
+    where: {
+      guildId,
+      accountType: "MEMBER",
+      referenceType: "ATTENDANCE",
+    },
+    _sum: { amount: true },
+  });
+
+  const memberDkpMap: Record<string, number> = {};
+  for (const row of dkpAggregates) {
+    memberDkpMap[row.accountId] = Number(row._sum.amount || 0n);
+  }
+
+  // B. Fetch credits and debits for ALL members and ALL currencies in a single query
+  const balanceAggregates = await prisma.ledgerEntry.groupBy({
+    by: ["accountId", "entryType", "currency"],
+    where: {
+      guildId,
+      accountType: "MEMBER",
+    },
+    _sum: { amount: true },
+  });
+
+  // memberBalancesMap[userId][currencyCode][entryType] = amount
+  const memberBalancesMap: Record<string, Record<string, { CREDIT: bigint; DEBIT: bigint }>> = {};
+
+  for (const row of balanceAggregates) {
+    const userId = row.accountId;
+    const currency = row.currency;
+    const entryType = row.entryType as "CREDIT" | "DEBIT";
+    const amount = row._sum.amount || 0n;
+
+    if (!memberBalancesMap[userId]) {
+      memberBalancesMap[userId] = {};
+    }
+    if (!memberBalancesMap[userId][currency]) {
+      memberBalancesMap[userId][currency] = { CREDIT: 0n, DEBIT: 0n };
+    }
+    memberBalancesMap[userId][currency][entryType] = amount;
+  }
+
+  const memberBalances = members.map((m) => {
+    const userId = m.userId;
+    const dkp = memberDkpMap[userId] || 0;
+
+    // Primary Currency Balance
+    const prim = memberBalancesMap[userId]?.[currencyCode] || { CREDIT: 0n, DEBIT: 0n };
+    const balance = Number(prim.CREDIT - prim.DEBIT) / 100;
+    const totalEarned = Number(prim.CREDIT) / 100;
+
+    // Secondary Currency Balance
+    const sec = memberBalancesMap[userId]?.[secondaryCode] || { CREDIT: 0n, DEBIT: 0n };
+    const secBalance = Number(sec.CREDIT - sec.DEBIT) / 100;
+    const secTotalEarned = Number(sec.CREDIT) / 100;
+
+    return {
+      memberId: m.id,
+      userId: m.userId,
+      ign: m.ign || m.user.displayName,
+      role: m.role,
+      rankName: m.rankName,
+      cp: m.cp || 0,
+      class: m.class || "Unknown",
+      dkp,
+      balance,
+      totalEarned,
+      secBalance,
+      secTotalEarned,
+      user: m.user,
+    };
+  });
+
+  // 3. Paginated Transaction Ledger history
+  const totalTransactions = await prisma.ledgerEntry.count({
+    where: { guildId },
+  });
+
+  const skip = (page - 1) * limit;
+  const take = limit;
+
+  const ledgerHistory = await prisma.ledgerEntry.findMany({
+    where: { guildId },
+    orderBy: { createdAt: "desc" },
+    skip,
+    take,
+  });
+
+  const formattedHistory = ledgerHistory.map((item) => ({
+    id: item.id,
+    accountType: item.accountType,
+    accountId: item.accountId,
+    currency: item.currency,
+    amount: Number(item.amount) / 100,
+    entryType: item.entryType,
+    referenceType: item.referenceType,
+    referenceId: item.referenceId,
+    description: item.description,
+    createdAt: item.createdAt.toISOString(),
+  }));
+
+  return {
+    treasury: {
+      primary: {
+        currencyCode,
+        currencySymbol,
+        fundBalance: Number(fundBalanceCents) / 100,
+        taxBalance: Number(taxBalanceCents) / 100,
+        totalExpenses: Number(totalExpensesCents) / 100,
+      },
+      secondary: {
+        currencyCode: secondaryCode,
+        currencySymbol: secondarySymbol,
+        fundBalance: Number(secFundBalanceCents) / 100,
+        taxBalance: Number(secTaxBalanceCents) / 100,
+        totalExpenses: Number(secExpensesCents) / 100,
+      },
+    },
+    memberBalances,
+    transactions: formattedHistory,
+    pagination: {
+      page,
+      limit,
+      total: totalTransactions,
+      totalPages: Math.ceil(totalTransactions / limit),
+    },
+  };
+}
+
+export async function createTreasuryAdjustment(
+  guildId: string,
+  payload: {
+    accountId: string; // userId or guildId
+    accountType: "MEMBER" | "GUILD_FUND" | "TAX";
+    entryType: "CREDIT" | "DEBIT";
+    amount: number; // in floating decimal standard format (e.g. 150.50)
+    currency: string;
+    description: string;
+  },
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  // Validate actor is Guild Leader, Officer, or Faction Leader
+  const actorMembership = await prisma.guildMember.findUnique({
+    where: {
+      userId_guildId: {
+        userId: actorId,
+        guildId,
+      },
+    },
+  });
+
+  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER" && actorMembership.role !== "FACTION_LEADER" && actorMembership.role !== "ADMIN")) {
+    throw new ForbiddenError("Only Guild Leaders and Officers can make treasury adjustments");
+  }
+
+  const centsAmount = BigInt(Math.round(payload.amount * 100));
+  const idKey = `ADJ-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
+
+  const entry = await createLedgerEntry({
+    guildId,
+    accountType: payload.accountType,
+    accountId: payload.accountId,
+    currency: payload.currency,
+    amount: centsAmount,
+    entryType: payload.entryType,
+    referenceType: "MANUAL_ADJUSTMENT",
+    referenceId: idKey,
+    idempotencyKey: idKey,
+    actorId,
+    description: payload.description,
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "TREASURY_ADJUSTMENT",
+    target: "LedgerEntry",
+    targetId: entry.id,
+    detail: {
+      accountId: payload.accountId,
+      accountType: payload.accountType,
+      entryType: payload.entryType,
+      amount: payload.amount.toString(),
+      currency: payload.currency,
+      description: payload.description,
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  return entry;
+}

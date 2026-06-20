@@ -14,6 +14,8 @@ import healthRoutes from "./routes/health.routes";
 import authRoutes from "./routes/auth.routes";
 import guildRoutes from "./routes/guild.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import factionRoutes from "./routes/faction.routes";
+import notificationRoutes from "./routes/notification.routes";
 
 const app: express.Express = express();
 
@@ -39,21 +41,35 @@ app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/guilds", guildRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/faction", factionRoutes);
+app.use("/api/notifications", notificationRoutes);
+
+app.use("/api", (_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: "NOT_FOUND",
+      message: "API route not found",
+    },
+  });
+});
 
 // ─── Error Handler (must be last) ───────────────
 app.use(errorHandler);
 
 // ─── Start Server ───────────────────────────────
-app.listen(env.PORT, () => {
-  console.log(`
-  Guild Management API
-  ────────────────────────
-  Status:  Running
-  Port:    ${env.PORT}
-  Env:     ${env.NODE_ENV}
-  CORS:    ${env.CORS_ORIGIN}
-  ────────────────────────
-  `);
-});
+if (env.NODE_ENV !== "test") {
+  app.listen(env.PORT, () => {
+    console.log(`
+    Guild Management API (Serverless Ready)
+    ────────────────────────
+    Status:  Running
+    Port:    ${env.PORT}
+    Env:     ${env.NODE_ENV}
+    CORS:    ${env.CORS_ORIGIN}
+    ────────────────────────
+    `);
+  });
+}
 
 export default app;

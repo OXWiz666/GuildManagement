@@ -1,19 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Reveal, SectionLabel } from "./LandingHelpers";
+import { Reveal, SectionLabel, Scroll3D } from "./LandingHelpers";
 
 const PRICING_PLANS = [
   {
-    name: "Recruit",
+    name: "Starter",
     price: "₱0",
     period: "forever",
     desc: "For new factions beginning their journey.",
     features: [
-      "1 active guild",
-      "Up to 20 members",
-      "Basic activity points",
-      "7-day audit history",
+      "1 active guild workspace",
+      "Up to 25 member roster",
+      "Basic raid attendance logs",
+      "Guild Points (GP) rankings",
+      "7-day ledger audit history",
       "Standard Discord support",
     ],
     cta: "Start for free",
@@ -21,36 +22,36 @@ const PRICING_PLANS = [
     popular: false,
   },
   {
-    name: "Officer",
+    name: "Guild Pro",
     price: "₱499",
     period: "per month",
-    desc: "For active guilds with regular raids and DKP management.",
+    desc: "For active guilds with regular raids, timers, and GP payouts.",
     features: [
-      "3 active guilds",
-      "Unlimited members",
-      "Advanced DKP & ledger",
-      "Infinite audit history",
-      "Custom payout rules",
-      "GCash integrations",
-      "Priority Discord support",
+      "3 active guild workspaces",
+      "Unlimited members roster",
+      "Live boss spawn timers",
+      "Boss rotation priority queue",
+      "Interactive DKP bidding auctions",
+      "GCash automated payout splits",
+      "Priority Discord channel support",
     ],
-    cta: "Get Officer",
+    cta: "Get Guild Pro",
     href: "/register",
     popular: true,
   },
   {
-    name: "Guild Master",
+    name: "Alliance",
     price: "₱1,499",
     period: "per month",
-    desc: "For multi-guild organizations and alliances.",
+    desc: "For massive multi-guild coalitions and gaming alliances.",
     features: [
-      "Unlimited guilds",
-      "Multi-tenant organization",
-      "Custom branding & domain",
-      "Developer API & webhooks",
-      "Automated audits",
-      "Dedicated account officer",
-      "24/7 VIP support",
+      "Unlimited guild workspaces",
+      "Multi-guild coalitions & alliances",
+      "Custom domain & guild branding",
+      "Tamper-proof on-chain audit logs",
+      "Developer APIs & webhook sync",
+      "Dedicated guild manager account",
+      "24/7 VIP priority support",
     ],
     cta: "Establish alliance",
     href: "/register",
@@ -60,98 +61,104 @@ const PRICING_PLANS = [
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="pt-12 pb-32 relative overflow-hidden">
+    <section id="pricing" className="pt-12 pb-32 relative overflow-hidden bg-[#050608]">
+      <div className="absolute inset-0 bg-grid opacity-10 bg-grid-fade pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-r from-[#d4a853]/5 to-[#f5c542]/5 blur-[120px] pointer-events-none" />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <Reveal className="text-center mb-20">
-          <SectionLabel>Pricing</SectionLabel>
-          <h2 className="mt-6 text-4xl sm:text-5xl lg:text-[56px] leading-[1.05] font-semibold text-white tracking-[-0.022em]">
-            Simple, fair pricing.
-            <span className="block text-white/40">Built for any size.</span>
+          <SectionLabel>Citadel Pricing</SectionLabel>
+          <h2 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-semibold text-white tracking-[-0.02em] font-fantasy">
+            Simple, transparent tribute
+            <span className="block text-gold-gradient mt-2">Built for any size division.</span>
           </h2>
-          <p className="mt-6 text-base text-white/50 max-w-xl mx-auto">
-            Choose your tier. Upgrade or cancel anytime. No surprises.
+          <p className="mt-4 text-sm text-[#8B8F98] max-w-xl mx-auto leading-relaxed">
+            Choose your operations tier. Formulate your team, claim boss loops, coordinate GCash dividends, and track GP. Upgrade or cancel anytime.
           </p>
         </Reveal>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-5xl mx-auto">
           {PRICING_PLANS.map((plan, i) => (
             <Reveal key={plan.name} delay={i * 100} className="h-full">
-              <div
-                className={`relative rounded-2xl p-8 h-full flex flex-col transition-all duration-300 ${
-                  plan.popular
-                    ? "border border-white/[0.18] bg-white/[0.03]"
-                    : "border border-white/[0.06] bg-white/[0.015] hover:border-white/[0.12] hover:bg-white/[0.025]"
-                }`}
-              >
-                {/* Popular ribbon */}
-                {plan.popular && (
-                  <div className="absolute -top-px left-1/2 -translate-x-1/2 px-3 py-1 rounded-b-md bg-white text-black text-[10px] font-semibold uppercase tracking-[0.18em]">
-                    Recommended
-                  </div>
-                )}
-
-                {/* Header */}
-                <div className="mb-6">
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-white/40 font-mono mb-2">
-                    Tier {i + 1}
-                  </div>
-                  <h3 className="text-2xl font-semibold text-white tracking-tight mb-2">
-                    {plan.name}
-                  </h3>
-                  <p className="text-sm text-white/50 leading-relaxed min-h-[48px]">
-                    {plan.desc}
-                  </p>
-                </div>
-
-                {/* Price */}
-                <div className="flex items-baseline gap-2 mb-8 pb-8 border-b border-white/[0.06]">
-                  <span className="text-5xl font-semibold text-white tracking-[-0.025em]">
-                    {plan.price}
-                  </span>
-                  <span className="text-sm text-white/40">/ {plan.period}</span>
-                </div>
-
-                {/* Features */}
-                <ul className="space-y-3.5 mb-10 flex-1">
-                  {plan.features.map((feat) => (
-                    <li key={feat} className="flex items-start gap-3 text-sm text-white/75">
-                      <svg
-                        className="h-4 w-4 shrink-0 mt-0.5 text-white/50"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <span>{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* CTA */}
-                <Link
-                  href={plan.href}
-                  className={`block w-full py-3 px-6 rounded-xl text-center font-medium text-sm transition-all duration-200 ${
+              <Scroll3D rotateX={4} rotateY={plan.popular ? 2 : 0} scaleFrom={0.96} liftFrom={25} className="h-full">
+                <div
+                  className={`relative rounded-2xl p-8 h-full flex flex-col transition-all duration-300 card-obsidian border border-white/[0.05] ${
                     plan.popular
-                      ? "bg-white text-black hover:bg-white/90"
-                      : "border border-white/[0.10] text-white hover:bg-white/[0.05] hover:border-white/20"
+                      ? "border-[#d4a853]/45 glow-gold bg-[#0d0d14]/85 scale-[1.02] z-10 shadow-[0_20px_50px_rgba(212,168,83,0.1)]"
+                      : "bg-[#0b0b10]/80 hover:border-white/[0.12] hover:bg-white/[0.02]"
                   }`}
                 >
-                  {plan.cta}
-                </Link>
-              </div>
+                  {/* Popular ribbon */}
+                  {plan.popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-[#d4a853] to-[#f5c542] text-black text-[9px] font-extrabold uppercase tracking-[0.2em] shadow-[0_0_12px_rgba(212,168,83,0.4)]">
+                      RECOMMENDED
+                    </div>
+                  )}
+
+                  {/* Header */}
+                  <div className="mb-6">
+                    <div className="text-[9px] uppercase tracking-[0.22em] text-[#d4a853] font-mono mb-2">
+                      Tier {i + 1}
+                    </div>
+                    <h3 className="text-2xl font-bold text-white font-fantasy tracking-wider mb-2">
+                      {plan.name}
+                    </h3>
+                    <p className="text-xs text-[#8B8F98] leading-relaxed min-h-[48px]">
+                      {plan.desc}
+                    </p>
+                  </div>
+
+                  {/* Price */}
+                  <div className="flex items-baseline gap-2 mb-8 pb-8 border-b border-white/[0.06]">
+                    <span className="text-5xl font-extrabold text-white tracking-wide font-fantasy text-gold-gradient">
+                      {plan.price}
+                    </span>
+                    <span className="text-xs text-white/40 font-mono">/ {plan.period}</span>
+                  </div>
+
+                  {/* Features */}
+                  <ul className="space-y-4 mb-10 flex-1">
+                    {plan.features.map((feat) => (
+                      <li key={feat} className="flex items-start gap-3 text-xs text-white/85">
+                        <svg
+                          className="h-4 w-4 shrink-0 mt-0.5 text-[#f5c542]"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        <span>{feat}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* CTA */}
+                  <Link
+                    href={plan.href}
+                    className={`block w-full py-3 px-6 rounded-xl text-center font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                      plan.popular
+                        ? "btn-primary shadow-[0_0_16px_rgba(212,168,83,0.25)]"
+                        : "border border-white/[0.08] text-white hover:bg-white/[0.05] hover:border-white/20"
+                    }`}
+                  >
+                    {plan.cta}
+                  </Link>
+                </div>
+              </Scroll3D>
             </Reveal>
           ))}
         </div>
 
         {/* Footnote */}
-        <Reveal delay={400} className="mt-12 text-center">
-          <p className="text-xs text-white/35">
-            All plans include encrypted storage, daily backups, and SOC 2-ready infrastructure.
+        <Reveal delay={400} className="mt-16 text-center">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-[#8B8F98]/40 font-mono">
+            🛡️ ALL PLAN PRIVILEGES SECURED VIA RSA-4096 SHA256 ENCRYPTION · SOC-2 COMPLIANT LEDGERS
           </p>
         </Reveal>
       </div>
     </section>
   );
 }
+

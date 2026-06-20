@@ -1,60 +1,44 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Reveal, SectionLabel, useReveal } from "./LandingHelpers";
+import { Reveal, SectionLabel } from "./LandingHelpers";
 
 // ═══════════════════════════════════════════════════════════
-// SCENE COMPONENTS — animated mockups inside the video frame
+// HIGH-FIDELITY SCENES INSIDE VIDEO MOCKUP
 // ═══════════════════════════════════════════════════════════
 
+// Scene 1: Guild Creation
 function OnboardScene({ active }: { active: boolean }) {
   return (
-    <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0d] via-[#0c0c10] to-[#0e0e14] flex items-center justify-center px-8 py-10">
-      {/* Decor grid */}
-      <div className="absolute inset-0 opacity-30 bg-grid" />
+    <div className="absolute inset-0 bg-[#0B0D10] flex flex-col justify-center px-8 py-6 select-none overflow-hidden">
+      <div className="absolute inset-0 opacity-20 bg-grid" />
       <div className="absolute inset-0" style={{
-        background: "radial-gradient(ellipse 70% 50% at 50% 60%, oklch(0.62 0.035 234 / 0.18), transparent 70%)",
+        background: "radial-gradient(ellipse at 50% 50%, rgba(245,158,11,0.06) 0%, transparent 75%)",
       }} />
 
-      <div className="relative w-full max-w-xs">
-        <div className="text-[9px] text-white/45 uppercase tracking-[0.22em] mb-3 font-medium">
-          Create your guild
-        </div>
-        <div className="space-y-2">
+      <div className="relative space-y-3 max-w-xs mx-auto">
+        <span className="text-[8px] font-bold text-[#f5c542] uppercase tracking-[0.2em] block">STEP 01: GUILD CONFIGURATION</span>
+        <h4 className="text-sm font-bold text-white tracking-wide">Set Up Guild</h4>
+        
+        <div className="space-y-2.5">
           {[
-            { label: "Guild name", value: "Iron Wolves" },
-            { label: "Faction",    value: "Order" },
-            { label: "Region",     value: "PH-East" },
+            { label: "Guild Title", val: "Kurakortz" },
+            { label: "Raid Region", val: "PH-East (Asia)" },
           ].map((f, i) => (
             <div
               key={f.label}
-              className="rounded-md border border-white/[0.08] bg-white/[0.025] p-2.5"
-              style={
-                active
-                  ? {
-                      animation: `slide-up 0.6s cubic-bezier(0.16,1,0.3,1) ${
-                        0.3 + i * 0.35
-                      }s both`,
-                    }
-                  : undefined
-              }
+              className="rounded-lg border border-white/[0.05] bg-black/40 p-2.5"
+              style={active ? { animation: `slide-up 0.5s cubic-bezier(0.16,1,0.3,1) ${0.3 + i * 0.3}s both` } : { opacity: 0 }}
             >
-              <div className="text-[7px] text-white/40 uppercase tracking-widest mb-1">
-                {f.label}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-1.5 rounded bg-white/65" style={{ width: `${50 + i * 18}%` }} />
-                {active && i === 2 && (
-                  <span className="inline-block h-3 w-px bg-white/80 animate-pulse" />
-                )}
-              </div>
+              <div className="text-[7.5px] uppercase tracking-wider text-white/35 font-mono">{f.label}</div>
+              <span className="text-xs font-bold text-white/80 block mt-0.5">{f.val}</span>
             </div>
           ))}
           <div
-            className="mt-3 h-7 rounded-md bg-white text-black text-[10px] font-semibold flex items-center justify-center"
-            style={active ? { animation: "scale-in 0.5s cubic-bezier(0.16,1,0.3,1) 1.6s both" } : undefined}
+            className="h-8 rounded-lg bg-gradient-to-r from-[#d4a853] to-[#f5c542] text-black text-[10.5px] font-bold flex items-center justify-center shadow-[0_0_12px_rgba(212,168,83,0.2)] hover:opacity-90"
+            style={active ? { animation: "scale-in 0.4s cubic-bezier(0.16,1,0.3,1) 1s both" } : { opacity: 0 }}
           >
-            Create guild →
+            Create Guild Workspace →
           </div>
         </div>
       </div>
@@ -62,129 +46,114 @@ function OnboardScene({ active }: { active: boolean }) {
   );
 }
 
-function RaidScene({ active }: { active: boolean }) {
+// Scene 2: Member Invites
+function InviteScene({ active }: { active: boolean }) {
+  const invites = [
+    { name: "Dragz", role: "Leader", status: "Joined" },
+    { name: "Wiz", role: "Officer", status: "Joined" },
+    { name: "Mavis08", role: "Officer", status: "Pending" },
+  ];
   return (
-    <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0d] via-[#0c0c10] to-[#0e0e14] flex items-center justify-center px-6 py-6">
-      <div className="absolute inset-0 opacity-30 bg-grid" />
+    <div className="absolute inset-0 bg-[#0B0D10] flex flex-col justify-center px-8 py-6 select-none overflow-hidden">
+      <div className="absolute inset-0 opacity-20 bg-grid" />
       <div className="absolute inset-0" style={{
-        background: "radial-gradient(ellipse 70% 50% at 50% 40%, oklch(0.62 0.18 22 / 0.10), transparent 70%)",
+        background: "radial-gradient(circle 250px at 50% 50%, rgba(16,217,154,0.04) 0%, transparent 100%)",
       }} />
 
-      <div className="relative w-full max-w-sm space-y-2.5">
-        <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.22em]">
-          <span className="text-white/45 font-medium">Auction · Serus Greatsword</span>
-          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-200">
-            <span className="h-1 w-1 rounded-full bg-red-400 animate-ping" />
-            LIVE
-          </span>
-        </div>
+      <div className="relative space-y-3 max-w-xs mx-auto w-full">
+        <span className="text-[8px] font-bold text-[#10D99A] uppercase tracking-[0.2em] block">STEP 02: GUILD MEMBER </span>
+        <h4 className="text-sm font-bold text-white tracking-wide">Invite Online Members</h4>
 
-        {[
-          { name: "Dragz",   bid: 450,   lead: true,  delay: 0.4 },
-          { name: "Mavis08", bid: 425,   lead: false, delay: 0.8 },
-          { name: "Hou13",   bid: 400,   lead: false, delay: 1.2 },
-        ].map((b, i) => (
-          <div
-            key={b.name}
-            className={`flex items-center justify-between px-3 py-2 rounded-md border text-xs ${
-              b.lead
-                ? "bg-white/[0.06] border-white/15"
-                : "bg-white/[0.02] border-white/[0.04]"
-            }`}
-            style={
-              active
-                ? { animation: `slide-up 0.55s cubic-bezier(0.16,1,0.3,1) ${b.delay}s both` }
-                : undefined
-            }
-          >
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-5 rounded-full bg-gradient-to-br from-white/30 to-white/10 flex items-center justify-center text-[9px] font-semibold text-white/80">
-                {b.name[0]}
-              </div>
-              <span className="text-white/85 font-medium">{b.name}</span>
-              {b.lead && (
-                <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 uppercase tracking-wider">
-                  Lead
-                </span>
-              )}
-            </div>
-            <span className="text-white font-semibold tabular-nums font-mono">{b.bid} DKP</span>
-          </div>
-        ))}
-
-        {/* Timer bar */}
-        <div className="pt-2">
-          <div className="flex items-center justify-between text-[9px] mb-1.5 text-white/40 font-mono uppercase tracking-widest">
-            <span>Bid window</span>
-            <span className="text-white/70 tabular-nums">00:12s</span>
-          </div>
-          <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+        <div className="space-y-2">
+          {invites.map((inv, i) => (
             <div
-              className="h-full"
-              style={{
-                width: active ? "20%" : "100%",
-                background: "linear-gradient(90deg, oklch(0.62 0.18 22 / 0.8), oklch(0.78 0.18 22))",
-                transition: "width 6s linear",
-              }}
-            />
-          </div>
+              key={inv.name}
+              className="flex items-center justify-between p-2 rounded-lg border border-white/[0.04] bg-black/40 text-xs"
+              style={active ? { animation: `slide-up 0.5s cubic-bezier(0.16,1,0.3,1) ${0.2 + i * 0.25}s both` } : { opacity: 0 }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="h-5 w-5 rounded-full bg-white/[0.03] border border-white/10 flex items-center justify-center text-[10px] text-white font-bold">{inv.name[0]}</span>
+                <span className="font-semibold text-white/80">{inv.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] text-white/40 uppercase font-mono">{inv.role}</span>
+                <span className={`text-[9px] font-bold ${inv.status === "Joined" ? "text-emerald-400" : "text-[#f5c542] animate-pulse"}`}>
+                  {inv.status}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-function AuditScene({ active }: { active: boolean }) {
+// Scene 3: Operations Tracking
+function OperationsScene({ active }: { active: boolean }) {
   return (
-    <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0d] via-[#0c0c10] to-[#0e0e14] flex items-center justify-center px-6 py-6">
-      <div className="absolute inset-0 opacity-30 bg-grid" />
+    <div className="absolute inset-0 bg-[#0B0D10] flex flex-col justify-center px-8 py-6 select-none overflow-hidden">
+      <div className="absolute inset-0 opacity-20 bg-grid" />
       <div className="absolute inset-0" style={{
-        background: "radial-gradient(ellipse 70% 50% at 50% 50%, oklch(0.70 0.13 162 / 0.10), transparent 70%)",
+        background: "radial-gradient(ellipse at 50% 50%, rgba(212,168,83,0.05) 0%, transparent 75%)",
       }} />
 
-      <div className="relative w-full max-w-sm">
-        <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.22em] mb-2.5">
-          <span className="text-white/45 font-medium">Ledger · 30d</span>
-          <span className="text-emerald-300/80">Hash-verified</span>
-        </div>
+      <div className="relative space-y-3 max-w-xs mx-auto w-full">
+        <span className="text-[8px] font-bold text-[#f5c542] uppercase tracking-[0.2em] block">STEP 03: LIVE OPERATIONS</span>
+        <h4 className="text-sm font-bold text-white tracking-wide">Command Live Raids</h4>
 
-        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto] px-3 py-1.5 text-[8px] font-medium text-white/35 uppercase tracking-widest border-b border-white/[0.05]">
-            <span>Description</span>
-            <span className="text-right pr-3">Amount</span>
-            <span className="text-right">Date</span>
-          </div>
+        <div className="space-y-2">
           {[
-            { label: "Field Boss · Titore",   amount: "+100 DKP", date: "now",  color: "text-emerald-300", delay: 0.2 },
-            { label: "Bid won · Serus Greatsword",  amount: "-450 DKP", date: "1m",   color: "text-red-300",     delay: 0.5 },
-            { label: "Weekly attendance",     amount: "+50 DKP",  date: "3m",   color: "text-emerald-300", delay: 0.8 },
-            { label: "Field Boss · Catena",   amount: "+100 DKP", date: "5m",   color: "text-emerald-300", delay: 1.1 },
-            { label: "Guild bid fee (10%)",   amount: "-45 DKP",  date: "8m",   color: "text-amber-300",   delay: 1.4 },
-          ].map((row, i) => (
+            { label: "Catena Spawning Cooldown", val: "02m 14s", active: true },
+            { label: "Active Guild Loot Auction", val: "Serus Sword (350 GP)", active: false },
+          ].map((item, i) => (
             <div
               key={i}
-              className={`grid grid-cols-[1fr_auto_auto] items-center px-3 py-1.5 text-[10px] gap-3 ${
-                i > 0 ? "border-t border-white/[0.03]" : ""
-              }`}
-              style={
-                active
-                  ? { animation: `slide-up 0.5s cubic-bezier(0.16,1,0.3,1) ${row.delay}s both` }
-                  : undefined
-              }
+              className={`p-2.5 rounded-lg border ${item.active ? "border-[#d4a853]/25 bg-[#d4a853]/5 text-[#f5c542]" : "border-white/[0.04] bg-black/40 text-white/60"}`}
+              style={active ? { animation: `slide-up 0.5s cubic-bezier(0.16,1,0.3,1) ${0.3 + i * 0.3}s both` } : { opacity: 0 }}
             >
-              <span className="text-white/70 truncate">{row.label}</span>
-              <span className={`font-mono tabular-nums font-medium ${row.color}`}>{row.amount}</span>
-              <span className="text-white/35 tabular-nums font-mono">{row.date}</span>
+              <div className="text-[7.5px] uppercase tracking-wider text-white/35 font-mono">{item.label}</div>
+              <span className="text-[11px] font-bold block mt-0.5">{item.val}</span>
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* Hash badge */}
-        <div className="mt-2 flex items-center gap-1.5 text-[9px] font-mono text-white/35">
-          <svg className="h-2.5 w-2.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          <span>0x8f3a · immutable</span>
+// Scene 4: Coordination Splits
+function CoordinationScene({ active }: { active: boolean }) {
+  return (
+    <div className="absolute inset-0 bg-[#0B0D10] flex flex-col justify-center px-8 py-6 select-none overflow-hidden">
+      <div className="absolute inset-0 opacity-20 bg-grid" />
+      <div className="absolute inset-0" style={{
+        background: "radial-gradient(circle 250px at 50% 50%, rgba(16,217,154,0.05) 0%, transparent 100%)",
+      }} />
+
+      <div className="relative space-y-3 max-w-xs mx-auto w-full">
+        <span className="text-[8px] font-bold text-[#10D99A] uppercase tracking-[0.2em] block">STEP 04: TREASURY PAYOUTS</span>
+        <h4 className="text-sm font-bold text-white tracking-wide">GCash Splits Distributed</h4>
+
+        <div className="space-y-2.5">
+          <div
+            className="rounded-lg border border-[#10D99A]/20 bg-[#10D99A]/5 p-3 flex items-center justify-between"
+            style={active ? { animation: "scale-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.3s both" } : { opacity: 0 }}
+          >
+            <div>
+              <span className="text-[8px] text-[#10D99A] font-bold uppercase tracking-wider block">GCash Split Status</span>
+              <span className="text-xs font-bold text-white mt-0.5 block">₱ 1,080.00 Dividends</span>
+            </div>
+            <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">SUCCESS ✓</span>
+          </div>
+
+          <div
+            className="p-2 rounded bg-black/40 border border-white/[0.04] text-[9.5px] font-mono flex items-center justify-between text-white/40"
+            style={active ? { animation: "fade-in 0.6s ease 0.8s both" } : { opacity: 0 }}
+          >
+            <span>Txn verification: 0x8f3a...</span>
+            <span className="text-emerald-400">Verifiable</span>
+          </div>
         </div>
       </div>
     </div>
@@ -192,36 +161,31 @@ function AuditScene({ active }: { active: boolean }) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// VIDEO PREVIEW — player UI with progress, controls, scene
+// VIDEO PREVIEW WRAPPER
 // ═══════════════════════════════════════════════════════════
 
-function VideoPreview({
-  title,
-  duration,
-  scene,
-  active,
-}: {
+interface VideoPreviewProps {
   title: string;
-  duration: string; // mm:ss
-  scene: "onboard" | "raid" | "audit";
+  duration: string;
+  scene: "onboard" | "invite" | "operations" | "coordination";
   active: boolean;
-}) {
-  const { ref, visible } = useReveal(0.15);
+}
+
+function VideoPreview({ title, duration, scene, active }: VideoPreviewProps) {
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [hovering, setHovering] = useState(false);
 
-  // Convert duration "1:42" → seconds
   const [mStr = "0", sStr = "0"] = duration.split(":");
   const totalSecs = parseInt(mStr, 10) * 60 + parseInt(sStr, 10);
 
   useEffect(() => {
-    if (!playing || !visible || !active) return;
+    if (!playing || !active) return;
     const id = setInterval(() => {
-      setProgress((p) => (p >= 100 ? 0 : p + 0.35));
-    }, 80);
+      setProgress((p) => (p >= 100 ? 0 : p + 0.5));
+    }, 90);
     return () => clearInterval(id);
-  }, [playing, visible, active]);
+  }, [playing, active]);
 
   const currentSecs = Math.floor((progress / 100) * totalSecs);
   const fmt = (sec: number) =>
@@ -229,81 +193,58 @@ function VideoPreview({
 
   return (
     <div
-      ref={ref}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      className="group relative rounded-xl overflow-hidden border border-white/[0.10] bg-black aspect-video shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] cursor-pointer"
+      className="group relative rounded-2xl overflow-hidden border border-white/[0.08] bg-black aspect-video shadow-[0_20px_50px_rgba(0,0,0,0.85)] cursor-pointer"
     >
-      {/* Scene mockup */}
+      {/* Scene Content */}
       <div className="absolute inset-0">
         {scene === "onboard" && <OnboardScene active={active && playing} />}
-        {scene === "raid"    && <RaidScene    active={active && playing} />}
-        {scene === "audit"   && <AuditScene   active={active && playing} />}
+        {scene === "invite" && <InviteScene active={active && playing} />}
+        {scene === "operations" && <OperationsScene active={active && playing} />}
+        {scene === "coordination" && <CoordinationScene active={active && playing} />}
       </div>
 
-      {/* Subtle scanline overlay for "video" feel */}
+      {/* Video Overlay Top Bar */}
       <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none opacity-[0.06] mix-blend-overlay"
+        className="absolute top-0 inset-x-0 p-3 flex items-center justify-between transition-opacity duration-300 z-10"
         style={{
-          backgroundImage:
-            "repeating-linear-gradient(180deg, transparent 0, transparent 2px, oklch(1 0 0) 2px, oklch(1 0 0) 3px)",
-        }}
-      />
-
-      {/* Top bar */}
-      <div
-        className="absolute top-0 inset-x-0 p-3 flex items-center justify-between transition-opacity duration-300"
-        style={{
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)",
+          background: "linear-gradient(to bottom, rgba(0,0,0,0.65), transparent)",
           opacity: hovering ? 1 : 0.85,
         }}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-red-500/30 backdrop-blur text-[9px] font-semibold text-red-100 uppercase tracking-[0.15em]">
-            <span className="h-1 w-1 rounded-full bg-red-400 animate-pulse" />
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/30 text-[8px] font-extrabold text-red-100 uppercase tracking-widest">
+            <span className="h-1 w-1 rounded-full bg-red-500 animate-ping" />
             REC
           </span>
-          <span className="text-[11px] text-white/90 font-medium truncate">{title}</span>
+          <span className="text-[10px] text-white/80 font-bold tracking-wide truncate max-w-[150px]">{title}</span>
         </div>
-        <span className="text-[9px] text-white/55 font-mono uppercase tracking-widest shrink-0">
-          1080p · HD
-        </span>
+        <span className="text-[8px] text-white/40 font-mono tracking-widest">1080p HD</span>
       </div>
 
-      {/* Center play overlay */}
+      {/* Center Play Button Toggle */}
       <button
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setPlaying((p) => !p);
-        }}
-        className="absolute inset-0 flex items-center justify-center"
+        onClick={() => setPlaying(!playing)}
+        className="absolute inset-0 flex items-center justify-center z-10"
         aria-label={playing ? "Pause" : "Play"}
       >
         <div
-          className="relative transition-all duration-500"
+          className="relative transition-all duration-300"
           style={{
             opacity: playing ? (hovering ? 1 : 0) : 1,
-            transform: `scale(${playing && !hovering ? 0.8 : 1})`,
+            transform: `scale(${playing && !hovering ? 0.9 : 1})`,
           }}
         >
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: "radial-gradient(circle, oklch(1 0 0 / 0.25), transparent 70%)",
-              filter: "blur(16px)",
-              transform: "scale(1.4)",
-            }}
-          />
-          <div className="relative h-14 w-14 rounded-full bg-white/95 text-black flex items-center justify-center shadow-2xl backdrop-blur transition-transform duration-200 group-hover:scale-110">
+          <div className="relative h-12 w-12 rounded-full bg-white text-black flex items-center justify-center shadow-2xl transition-transform duration-200 hover:scale-105">
             {playing ? (
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="5" width="4" height="14" rx="1" />
                 <rect x="14" y="5" width="4" height="14" rx="1" />
               </svg>
             ) : (
-              <svg className="h-5 w-5 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="h-4.5 w-4.5 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
             )}
@@ -311,67 +252,20 @@ function VideoPreview({
         </div>
       </button>
 
-      {/* Bottom controls */}
+      {/* Video Timeline Scrubber */}
       <div
-        className="absolute bottom-0 inset-x-0 p-3 transition-opacity duration-300"
+        className="absolute bottom-0 inset-x-0 p-3 transition-opacity duration-300 z-10"
         style={{
-          background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)",
+          background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)",
           opacity: hovering || !playing ? 1 : 0.7,
         }}
       >
-        {/* Progress bar */}
-        <div className="relative h-1 bg-white/15 rounded-full overflow-hidden mb-2 group/bar">
-          <div
-            className="absolute inset-y-0 left-0 bg-white rounded-full"
-            style={{ width: `${progress}%`, transition: "width 80ms linear" }}
-          />
-          {/* Buffered (lighter) */}
-          <div
-            className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
-            style={{ width: `${Math.min(progress + 18, 100)}%` }}
-          />
-          {/* Real fill */}
-          <div
-            className="absolute inset-y-0 left-0 bg-white rounded-full"
-            style={{ width: `${progress}%`, transition: "width 80ms linear" }}
-          />
-          {/* Scrubber dot */}
-          <div
-            className="absolute h-2.5 w-2.5 rounded-full bg-white shadow-lg top-1/2 transition-opacity"
-            style={{
-              left: `${progress}%`,
-              transform: "translate(-50%, -50%)",
-              opacity: hovering ? 1 : 0,
-            }}
-          />
+        <div className="relative h-1 bg-white/10 rounded-full overflow-hidden mb-2">
+          <div className="absolute inset-y-0 left-0 bg-[#f5c542] rounded-full" style={{ width: `${progress}%` }} />
         </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] text-white/85 font-mono tabular-nums">
-              {fmt(currentSecs)}
-              <span className="text-white/40"> / {duration}</span>
-            </span>
-            {/* Volume */}
-            <button className="text-white/60 hover:text-white transition-colors" aria-label="Volume">
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="text-white/60 hover:text-white transition-colors" aria-label="Settings">
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
-              </svg>
-            </button>
-            <button className="text-white/60 hover:text-white transition-colors" aria-label="Fullscreen">
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 8V3h5M21 8V3h-5M3 16v5h5M21 16v5h-5" />
-              </svg>
-            </button>
-          </div>
+        <div className="flex items-center justify-between text-[9px] font-mono text-white/60">
+          <span>{fmt(currentSecs)} <span className="text-white/30">/ {duration}</span></span>
+          <span className="tracking-widest">VOL 100%</span>
         </div>
       </div>
     </div>
@@ -379,39 +273,46 @@ function VideoPreview({
 }
 
 // ═══════════════════════════════════════════════════════════
-// HOW IT WORKS
+// MAIN HOW IT WORKS SCROLL MECHANICS
 // ═══════════════════════════════════════════════════════════
 
 const STEPS = [
   {
     step: "01",
     title: "Create your guild",
-    desc: "Sign up, create your guild, invite members with a share link. Roles auto-apply.",
-    detail:
-      "Onboarding takes under five minutes. Your guild is provisioned instantly with isolated data, a dedicated audit ledger, and role templates ready to customize.",
-    videoTitle: "Onboarding tour",
+    desc: "Set up your guild workspace, roles, and member structure in minutes.",
+    detail: "Choose your game template or customize your guild faction from scratch. Configure roster tiers and assign base roles that match your raid guidelines.",
+    videoTitle: "Create Workspace Portal",
     videoDuration: "1:42",
     scene: "onboard" as const,
   },
   {
     step: "02",
-    title: "Run your raids",
-    desc: "Log attendance, track boss kills, run smart GP bidding with custom rules.",
-    detail:
-      "Discord integration imports raid signups automatically. Bid windows close on schedule. Every winning bid is logged with a verifiable timestamp.",
-    videoTitle: "Raid night flow",
-    videoDuration: "2:15",
-    scene: "raid" as const,
+    title: "Invite your members",
+    desc: "Bring in leaders, officers, and members with role-based access.",
+    detail: "Share secure invitation URLs that automatically map to preconfigured roles. Sync membership listings to sync ranks and synchronize active rosters.",
+    videoTitle: "Secure Invite Dashboard",
+    videoDuration: "2:05",
+    scene: "invite" as const,
   },
   {
     step: "03",
-    title: "Audit everything",
-    desc: "Every action permanently logged. View the complete treasury history at any time.",
-    detail:
-      "The ledger is append-only and tamper-proof. Generate exports for officers, prove fair distribution, and trace every point earned or spent.",
-    videoTitle: "Audit Guild's Treasury",
-    videoDuration: "1:08",
-    scene: "audit" as const,
+    title: "Manage operations",
+    desc: "Track boss schedules, attendance, guild points, treasury, and activities from one dashboard.",
+    visual: <OperationsScene active={true} />,
+    detail: "Maintain live countdown spawns for major field bosses, automate check-ins, record raid attendance using random codes, and log auction bids.",
+    videoTitle: "Operations Controls Overview",
+    videoDuration: "2:45",
+    scene: "operations" as const,
+  },
+  {
+    step: "04",
+    title: "Stay coordinated",
+    desc: "Keep everyone aligned with clear status tracking, alerts, and live updates.",
+    detail: "Automate treasury payouts and GCash splits. Review tamper-proof ledger audit histories signed on-chain to verify complete transparency.",
+    videoTitle: "Payouts & Coordination Audit",
+    videoDuration: "1:22",
+    scene: "coordination" as const,
   },
 ];
 
@@ -441,121 +342,122 @@ export default function HowItWorks() {
     <section
       id="how-it-works"
       ref={sectionRef}
-      className="relative"
+      className="relative bg-[#050608]"
       style={{ minHeight: `${STEPS.length * 60 + 10}vh` }}
     >
       <div className="sticky top-0 min-h-screen flex items-center">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-20">
+          
+          {/* Section Header */}
           <Reveal className="text-center mb-14">
-            <SectionLabel>How it works</SectionLabel>
-            <h2 className="mt-6 text-4xl sm:text-5xl font-semibold text-white tracking-[-0.022em]">
-              Three steps to control.
+            <SectionLabel>Process Flow</SectionLabel>
+            <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-[-0.022em] font-fantasy">
+              How it works
             </h2>
-            <p className="mt-4 text-sm text-white/45 max-w-md mx-auto">
-              Watch the short tutorials as you scroll through each step.
+            <p className="mt-3 text-sm text-[#8B8F98] max-w-md mx-auto leading-relaxed">
+              Command your guild operations with ease. Scroll through each step to see the flow in action.
             </p>
           </Reveal>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.3fr] gap-10 lg:gap-16 items-start">
-            {/* Left: Step list */}
-            <div className="space-y-1">
-              {STEPS.map((s, i) => (
-                <button
-                  key={s.step}
-                  onClick={() => {
-                    const section = sectionRef.current;
-                    if (!section) return;
-                    const target = section.offsetTop + (section.offsetHeight / STEPS.length) * i;
-                    window.scrollTo({ top: target, behavior: "smooth" });
-                  }}
-                  className={`w-full text-left flex items-start gap-5 p-5 rounded-xl border transition-all duration-500 cursor-pointer ${
-                    active === i
-                      ? "border-white/[0.12] bg-white/[0.03]"
-                      : "border-transparent hover:border-white/[0.05]"
-                  }`}
-                >
-                  <div className="flex-shrink-0 mt-0.5">
-                    <div
-                      className={`text-[10px] font-mono uppercase tracking-[0.2em] transition-colors ${
-                        active === i ? "text-white" : "text-white/30"
-                      }`}
-                    >
+          {/* Interactive Scroll grid split */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-10 lg:gap-14 items-center">
+            
+            {/* Left: Button steps list */}
+            <div className="space-y-2">
+              {STEPS.map((s, i) => {
+                const isSelected = active === i;
+                return (
+                  <button
+                    key={s.step}
+                    onClick={() => {
+                      const section = sectionRef.current;
+                      if (!section) return;
+                      const target = section.offsetTop + (section.offsetHeight / STEPS.length) * i;
+                      window.scrollTo({ top: target, behavior: "smooth" });
+                    }}
+                    className={`w-full text-left flex items-start gap-4 p-5 rounded-xl border transition-all duration-300 cursor-pointer ${
+                      isSelected
+                        ? "border-[#d4a853]/25 bg-[#d4a853]/5"
+                        : "border-transparent hover:border-white/[0.04] hover:bg-white/[0.01]"
+                    }`}
+                  >
+                    <span className={`text-[10px] font-mono font-bold tracking-[0.2em] mt-0.5 ${
+                      isSelected ? "text-[#f5c542]" : "text-white/20"
+                    }`}>
                       {s.step}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`text-base font-bold uppercase tracking-wide mb-1 transition-colors ${
+                        isSelected ? "text-white" : "text-white/40"
+                      }`}>
+                        {s.title}
+                      </h3>
+                      <p className={`text-xs leading-relaxed transition-colors ${
+                        isSelected ? "text-white/70" : "text-white/25"
+                      }`}>
+                        {s.desc}
+                      </p>
                     </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3
-                      className={`text-xl font-semibold tracking-tight mb-1.5 transition-colors ${
-                        active === i ? "text-white" : "text-white/45"
-                      }`}
-                    >
-                      {s.title}
-                    </h3>
-                    <p
-                      className={`text-sm leading-relaxed transition-colors ${
-                        active === i ? "text-white/65" : "text-white/30"
-                      }`}
-                    >
-                      {s.desc}
-                    </p>
-                  </div>
-                  <div className="w-1 h-12 rounded-full bg-white/[0.04] overflow-hidden flex-shrink-0">
-                    <div
-                      className="w-full bg-white/80 transition-all duration-500"
-                      style={{
-                        height: active === i ? "100%" : active > i ? "100%" : "0%",
-                      }}
-                    />
-                  </div>
-                </button>
-              ))}
+                    
+                    {/* Progress Indicator line */}
+                    <div className="w-1 h-10 rounded-full bg-white/[0.04] overflow-hidden shrink-0 self-center">
+                      <div
+                        className="w-full bg-[#f5c542] transition-all duration-300"
+                        style={{
+                          height: isSelected ? "100%" : active > i ? "100%" : "0%",
+                        }}
+                      />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Right: Video tutorial + detail */}
-            <div className="relative min-h-[480px]">
-              {STEPS.map((s, i) => (
-                <div
-                  key={s.step}
-                  className="absolute inset-0 transition-all duration-700 ease-out"
-                  style={{
-                    opacity: active === i ? 1 : 0,
-                    transform: active === i ? "translateY(0)" : "translateY(20px)",
-                    pointerEvents: active === i ? "auto" : "none",
-                  }}
-                >
-                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 lg:p-6 h-full backdrop-blur space-y-4">
-                    {/* Video player */}
-                    <VideoPreview
-                      title={`${s.step} · ${s.videoTitle}`}
-                      duration={s.videoDuration}
-                      scene={s.scene}
-                      active={active === i}
-                    />
+            {/* Right: Mock scenes view */}
+            <div className="relative min-h-[420px] lg:min-h-[460px]">
+              {STEPS.map((s, i) => {
+                const isSelected = active === i;
+                return (
+                  <div
+                    key={s.step}
+                    className="absolute inset-0 transition-all duration-500 ease-out"
+                    style={{
+                      opacity: isSelected ? 1 : 0,
+                      transform: isSelected ? "translateY(0)" : "translateY(15px)",
+                      pointerEvents: isSelected ? "auto" : "none",
+                    }}
+                  >
+                    <div className="rounded-2xl border border-white/[0.08] bg-[#0b0d10]/50 p-5 lg:p-6 h-full backdrop-blur-md space-y-4 shadow-[0_25px_60px_rgba(0,0,0,0.95)] relative overflow-hidden card-obsidian">
+                      {/* Video shell layout */}
+                      <VideoPreview
+                        title={`${s.step} · ${s.videoTitle}`}
+                        duration={s.videoDuration}
+                        scene={s.scene}
+                        active={isSelected}
+                      />
 
-                    {/* Detail */}
-                    <div className="space-y-3 px-1 pt-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-lg font-semibold text-white tracking-tight">
-                          {s.title}
-                        </h4>
-                        <span className="text-[10px] text-white/40 uppercase tracking-[0.18em] font-mono">
-                          Step {i + 1} / {STEPS.length}
-                        </span>
-                      </div>
-                      <p className="text-sm text-white/55 leading-relaxed">{s.detail}</p>
-
-                      <div className="hr-shine my-3" />
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs text-white/45">
+                      {/* Description Details */}
+                      <div className="space-y-2 pt-2 px-1">
+                        <div className="flex items-center justify-between border-b border-white/[0.04] pb-2">
+                          <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                            {s.title}
+                          </h4>
+                          <span className="text-[9px] font-mono text-white/35">
+                            STEP {i + 1} OF {STEPS.length}
+                          </span>
                         </div>
+                        <p className="text-xs text-[#8B8F98] leading-relaxed">
+                          {s.detail}
+                        </p>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+
           </div>
+
         </div>
       </div>
     </section>

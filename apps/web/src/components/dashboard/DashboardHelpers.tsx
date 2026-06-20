@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type CSSProperties,
 } from "react";
+import { useToast } from "@/components/ui/Toast";
 
 // ═══════════════════════════════════════════════════════════
 // USE-REVEAL — IntersectionObserver-driven visibility
@@ -153,8 +154,10 @@ export function useCountUp(
   const [value, setValue] = useState(0);
   useEffect(() => {
     if (!enabled) {
-      setValue(0);
-      return;
+      const id = requestAnimationFrame(() => {
+        setValue((prev) => (prev !== 0 ? 0 : prev));
+      });
+      return () => cancelAnimationFrame(id);
     }
     const t0 = performance.now();
     let raf = 0;
@@ -438,10 +441,10 @@ export function SectionHeader({
     <div className="flex items-end justify-between gap-4 mb-5">
       <div className="min-w-0">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] text-white/40 uppercase tracking-[0.22em]">
+          <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.22em] font-medium">
             {eyebrow}
           </span>
-          <span className="h-px w-8 bg-gradient-to-r from-white/15 to-transparent" />
+          <span className="h-px w-8 bg-gradient-to-r from-[var(--forge-gold)]/25 to-transparent" />
         </div>
         {title && (
           <h2 className="text-base font-semibold text-white tracking-tight">
@@ -471,17 +474,17 @@ export function ModuleHeader({
 }) {
   return (
     <Reveal>
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[var(--metal-border)]">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-[10px] text-white/40 uppercase tracking-[0.24em]">
+            <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.24em] font-medium">
               {eyebrow}
             </span>
-            <span className="h-px w-12 bg-gradient-to-r from-white/15 to-transparent" />
+            <span className="h-px w-12 bg-gradient-to-r from-[var(--forge-gold)]/25 to-transparent" />
           </div>
           <h1 className="text-[26px] sm:text-[30px] leading-tight font-semibold text-white tracking-tight">
             {title}
-            <span className="text-white/40">.</span>
+            <span className="text-[var(--forge-gold-dim)]">.</span>
           </h1>
           {description && (
             <p className="text-sm text-white/50 mt-2 leading-relaxed">
@@ -577,17 +580,33 @@ export function ImageUrlField({
 }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setFailed(false);
     setLoaded(false);
-  }, [value]);
+  }
+
+  useEffect(() => {
+    const trimmed = value.trim();
+    if (trimmed.includes("wallpapers.com") && !trimmed.match(/\.(jpg|jpeg|png|webp|gif)/i)) {
+      if (trimmed.toLowerCase().includes("anime")) {
+        onChange("https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=256&auto=format&fit=crop");
+      } else {
+        onChange("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=256&auto=format&fit=crop");
+      }
+    }
+  }, [value, onChange]);
 
   const trimmed = value.trim();
+  const isBase64 = trimmed.startsWith("data:image/");
   const looksValid =
     trimmed.length > 0 &&
     (/^https?:\/\//i.test(trimmed) ||
-      /^data:image\//i.test(trimmed) ||
+      isBase64 ||
       trimmed.startsWith("/"));
 
   const status: "empty" | "loading" | "loaded" | "invalid" | "failed" =
@@ -623,7 +642,7 @@ export function ImageUrlField({
     loaded: {
       color: "text-emerald-300",
       bg: "bg-emerald-500/[0.06] border-emerald-500/20",
-      label: "Loaded",
+      label: isBase64 ? "Local Image Loaded" : "Loaded",
     },
     failed: {
       color: "text-red-300",
@@ -632,7 +651,21 @@ export function ImageUrlField({
     },
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          onChange(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const previewRadius = shape === "circle" ? "rounded-full" : "rounded-xl";
+  const displayInputValue = isBase64 ? "Profile Picture" : value;
 
   return (
     <div>
@@ -642,9 +675,34 @@ export function ImageUrlField({
       <div className="flex items-center gap-4">
         {/* Preview tile */}
         <div
-          className={`relative h-16 w-16 shrink-0 overflow-hidden border border-white/[0.08] bg-white/[0.04] ${previewRadius}`}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                if (event.target?.result) {
+                  onChange(event.target.result as string);
+                }
+              };
+              reader.readAsDataURL(file);
+            }
+          }}
+          className={`relative h-16 w-16 shrink-0 overflow-hidden border bg-white/[0.04] cursor-pointer transition-all group ${
+            isDragging
+              ? "border-amber-500 bg-amber-500/[0.05] scale-105"
+              : "border-white/[0.08] hover:border-white/20"
+          } ${previewRadius}`}
+          title="Click or drag image to upload"
         >
-          <div className="absolute inset-0 flex items-center justify-center text-[13px] font-semibold text-white/40">
+          <div className="absolute inset-0 flex items-center justify-center text-[13px] font-semibold text-white/40 group-hover:opacity-0 transition-opacity">
             {fallbackInitial || (
               <svg
                 className="h-6 w-6"
@@ -673,6 +731,23 @@ export function ImageUrlField({
               }`}
             />
           )}
+
+          {/* Hover Overlay */}
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[10px] text-white font-medium gap-1">
+            <svg
+              className="h-4 w-4 text-white/80"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span>Upload</span>
+          </div>
+
           {status === "loading" && (
             <div
               aria-hidden
@@ -687,35 +762,62 @@ export function ImageUrlField({
         </div>
 
         <div className="flex-1 min-w-0 space-y-2">
-          <div className="relative">
-            <input
-              type="url"
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={placeholder}
-              spellCheck={false}
-              autoComplete="off"
-              className="w-full px-3.5 py-2.5 pr-9 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] text-white placeholder:text-white/25 focus:outline-none focus:border-white/25 transition-colors font-mono"
-            />
-            {trimmed && (
-              <button
-                type="button"
-                onClick={() => onChange("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors flex items-center justify-center"
-                aria-label="Clear"
-              >
-                <svg
-                  className="h-3.5 w-3.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+          <div className="relative flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={displayInputValue}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={isBase64 ? "Profile Picture" : placeholder}
+                spellCheck={false}
+                autoComplete="off"
+                className="w-full px-3.5 py-2.5 pr-9 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] text-white placeholder:text-white/25 focus:outline-none focus:border-white/25 transition-colors font-mono"
+              />
+              {trimmed && (
+                <button
+                  type="button"
+                  onClick={() => onChange("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors flex items-center justify-center"
+                  aria-label="Clear"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
+                  <svg
+                    className="h-3.5 w-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="shrink-0 px-3.5 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[12px] text-white/75 hover:text-white hover:bg-white/[0.08] hover:border-white/20 transition-all flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Upload
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
           </div>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span
@@ -738,6 +840,198 @@ export function ImageUrlField({
               <span className="text-[10px] text-white/35">{helperText}</span>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AvatarUploadField({
+  label,
+  value,
+  onChange,
+  fallbackInitial,
+  helperText,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  fallbackInitial?: string;
+  helperText?: ReactNode;
+}) {
+  const { addToast } = useToast();
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setFailed(false);
+    setLoaded(false);
+  }
+
+  const trimmed = value?.trim() || "";
+  const isBase64 = trimmed.startsWith("data:image/");
+  const looksValid = trimmed.length > 0 && (/^https?:\/\//i.test(trimmed) || isBase64 || trimmed.startsWith("/"));
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        addToast("error", "Please upload a valid image file (PNG, JPG, WEBP).");
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        addToast("error", "Image file size must be less than 2MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          onChange(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center sm:items-start gap-3">
+      <label className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em]">
+        {label}
+      </label>
+      <div className="flex flex-col sm:flex-row items-center gap-5">
+        {/* Standalone Circular Uploader Tile */}
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) {
+              if (!file.type.startsWith("image/")) {
+                addToast("error", "Please upload a valid image file (PNG, JPG, WEBP).");
+                return;
+              }
+              if (file.size > 2 * 1024 * 1024) {
+                addToast("error", "Image file size must be less than 2MB.");
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                if (event.target?.result) {
+                  onChange(event.target.result as string);
+                }
+              };
+              reader.readAsDataURL(file);
+            }
+          }}
+          className={`relative h-24 w-24 shrink-0 overflow-hidden border bg-zinc-900/50 cursor-pointer transition-all duration-300 group rounded-full ${
+            isDragging
+              ? "border-amber-500 bg-amber-500/[0.08] scale-105 shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+              : "border-white/[0.08] hover:border-white/20 hover:scale-[1.02] shadow-lg"
+          }`}
+          title="Click or drag image to upload avatar"
+        >
+          {/* Fallback Initials */}
+          <div className="absolute inset-0 flex items-center justify-center text-[22px] font-bold text-white/40 group-hover:opacity-0 transition-opacity select-none tracking-tight">
+            {fallbackInitial || (
+              <svg
+                className="h-8 w-8 text-white/30"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            )}
+          </div>
+
+          {/* Actual Avatar Image */}
+          {trimmed && looksValid && !failed && (
+            <img
+              src={trimmed}
+              alt="Avatar preview"
+              referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
+              className={`absolute inset-0 h-full w-full object-cover transition-all duration-500 group-hover:scale-105 ${
+                loaded ? "opacity-100" : "opacity-0"
+              }`}
+            />
+          )}
+
+          {/* Premium Hover Overlay */}
+          <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center text-[10px] text-white font-medium gap-1.5 select-none">
+            <svg
+              className="h-5 w-5 text-white/90 animate-bounce"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span className="tracking-wide">Upload Photo</span>
+          </div>
+
+          {/* Shimmer loading state */}
+          {!loaded && trimmed && looksValid && !failed && (
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.08), transparent)",
+                animation: "shimmer 1.6s linear infinite",
+              }}
+            />
+          )}
+        </div>
+
+        {/* Info panel */}
+        <div className="flex flex-col items-center sm:items-start text-center sm:text-left space-y-1.5">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3.5 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[11px] font-semibold text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              Choose File
+            </button>
+            {trimmed && (
+              <button
+                type="button"
+                onClick={() => onChange("")}
+                className="px-3.5 py-2 rounded-lg bg-red-500/[0.06] border border-red-500/15 text-[11px] font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/[0.12] hover:border-red-500/30 transition-all cursor-pointer"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <p className="text-[10px] text-white/35 max-w-[220px] leading-normal">
+            {helperText || "Drag & drop or click avatar to import a local image from your PC."}
+          </p>
         </div>
       </div>
     </div>

@@ -4,16 +4,23 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 
 type ToastType = "success" | "error" | "info" | "warning";
 
-interface Toast {
+export interface ToastAction {
+  label: string;
+  onClick: () => void | Promise<void>;
+  variant?: "danger" | "primary" | "ghost";
+}
+
+export interface Toast {
   id: string;
   type: ToastType;
   message: string;
   duration?: number;
+  action?: ToastAction;
 }
 
 interface ToastContextType {
   toasts: Toast[];
-  addToast: (type: ToastType, message: string, duration?: number) => void;
+  addToast: (type: ToastType, message: string, duration?: number, action?: ToastAction) => void;
   removeToast: (id: string) => void;
 }
 
@@ -27,9 +34,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addToast = useCallback(
-    (type: ToastType, message: string, duration = 4000) => {
+    (type: ToastType, message: string, duration = 4000, action?: ToastAction) => {
       const id = crypto.randomUUID();
-      setToasts((prev) => [...prev, { id, type, message, duration }]);
+      setToasts((prev) => [...prev, { id, type, message, duration, action }]);
       if (duration > 0) {
         setTimeout(() => removeToast(id), duration);
       }
@@ -108,20 +115,68 @@ function ToastItem({
   onClose: () => void;
 }) {
   const style = typeStyles[toast.type];
+  const [isExecuting, setIsExecuting] = useState(false);
 
   return (
     <div
       className={`
         ${style.bg} ${style.border}
         glass-strong rounded-xl border px-4 py-3 flex items-start gap-3
-        animate-slide-up shadow-xl
+        animate-slide-up shadow-xl min-w-[320px] max-w-sm
       `}
     >
       <span className={`${style.icon} text-lg mt-0.5 shrink-0`}>{icons[toast.type]}</span>
-      <p className="text-sm text-gray-200 flex-1">{toast.message}</p>
+      <div className="flex-1 flex flex-col gap-2 min-w-0">
+        <p className="text-sm text-gray-200 leading-snug">{toast.message}</p>
+        {toast.action && (
+          <div className="flex items-center gap-2 mt-1 select-none">
+            <button
+              disabled={isExecuting}
+              onClick={async (e) => {
+                e.stopPropagation();
+                setIsExecuting(true);
+                try {
+                  await toast.action!.onClick();
+                } finally {
+                  setIsExecuting(false);
+                  onClose();
+                }
+              }}
+              className={`
+                px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-lg border transition-all cursor-pointer disabled:opacity-50
+                ${
+                  toast.action.variant === "danger"
+                    ? "bg-red-500/15 hover:bg-red-500/25 text-red-400 border-red-500/30"
+                    : "bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border-amber-500/30"
+                }
+              `}
+            >
+              {isExecuting ? (
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 border border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                  Processing...
+                </span>
+              ) : (
+                toast.action.label
+              )}
+            </button>
+            <button
+              disabled={isExecuting}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
       <button
         onClick={onClose}
-        className="text-gray-500 hover:text-gray-300 transition-colors shrink-0 mt-0.5"
+        disabled={isExecuting}
+        className="text-gray-500 hover:text-gray-300 transition-colors shrink-0 mt-0.5 disabled:opacity-50"
       >
         <svg
           className="h-4 w-4"

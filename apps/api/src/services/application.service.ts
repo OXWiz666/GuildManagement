@@ -75,29 +75,29 @@ export async function createJoinRequest(
   // Validate invite code
   const guild = await verifyInviteCode(inviteCode);
 
-  // Check if user is already a member of the guild
-  const existingMembership = await prisma.guildMember.findUnique({
-    where: {
-      userId_guildId: {
-        userId,
-        guildId: guild.id,
+  // Check membership and existing request in parallel
+  const [existingMembership, existingRequest] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: {
+        userId_guildId: {
+          userId,
+          guildId: guild.id,
+        },
       },
-    },
-  });
+    }),
+    prisma.guildJoinRequest.findUnique({
+      where: {
+        userId_guildId: {
+          userId,
+          guildId: guild.id,
+        },
+      },
+    }),
+  ]);
 
   if (existingMembership && existingMembership.isActive) {
     throw new BadRequestError("You are already a member of this guild");
   }
-
-  // Check if user already has a pending request for THIS guild
-  const existingRequest = await prisma.guildJoinRequest.findUnique({
-    where: {
-      userId_guildId: {
-        userId,
-        guildId: guild.id,
-      },
-    },
-  });
 
   if (existingRequest && existingRequest.status === JoinRequestStatus.PENDING) {
     throw new BadRequestError("You already have a pending application for this guild");
@@ -194,7 +194,7 @@ export async function cancelJoinRequest(userId: string, requestId: string) {
     where: { id: requestId },
   });
 
-  return { success: true };
+  return { success: true, guildId: request.guildId };
 }
 
 // ─── Get Guild Applications ──────────────────────
@@ -244,22 +244,24 @@ export async function generateGuildInviteCode(
   ipAddress?: string,
   userAgent?: string,
 ) {
-  const membership = await prisma.guildMember.findUnique({
-    where: {
-      userId_guildId: {
-        userId: actorId,
-        guildId,
+  // Fetch membership and guild in parallel
+  const [membership, guild] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: {
+        userId_guildId: {
+          userId: actorId,
+          guildId,
+        },
       },
-    },
-  });
+    }),
+    prisma.guild.findUnique({
+      where: { id: guildId },
+    }),
+  ]);
 
   if (!membership || !membership.isActive || membership.role !== GuildRole.GUILD_LEADER) {
     throw new ForbiddenError("Only the Guild Leader can generate invite codes");
   }
-
-  const guild = await prisma.guild.findUnique({
-    where: { id: guildId },
-  });
 
   if (!guild) {
     throw new NotFoundError("Guild not found");
@@ -302,31 +304,32 @@ export async function handleApplicationAction(
   ipAddress?: string,
   userAgent?: string,
 ) {
-  // Validate actor is Guild Leader in the guild
-  const actorMembership = await prisma.guildMember.findUnique({
-    where: {
-      userId_guildId: {
-        userId: actorId,
-        guildId,
+  // Validate actor and fetch request in parallel
+  const [actorMembership, request] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: {
+        userId_guildId: {
+          userId: actorId,
+          guildId,
+        },
       },
-    },
-  });
+    }),
+    prisma.guildJoinRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        user: {
+          select: { displayName: true },
+        },
+        guild: {
+          select: { name: true },
+        },
+      },
+    }),
+  ]);
 
   if (!actorMembership || !actorMembership.isActive || actorMembership.role !== GuildRole.GUILD_LEADER) {
     throw new ForbiddenError("Only the Guild Leader can accept or decline applications");
   }
-
-  const request = await prisma.guildJoinRequest.findUnique({
-    where: { id: requestId },
-    include: {
-      user: {
-        select: { displayName: true },
-      },
-      guild: {
-        select: { name: true },
-      },
-    },
-  });
 
   if (!request || request.guildId !== guildId) {
     throw new NotFoundError("Application request not found");

@@ -11,6 +11,8 @@ export interface VerificationQueueProps {
   isVerifying: string | null;
   handleApproveAll: () => void;
   handleVerifyPresence: (recordId: string) => void;
+  onEditSession: (session: AttendanceSessionData) => void;
+  onDeleteSession: (sessionId: string) => void;
 }
 
 export default function VerificationQueue({
@@ -21,6 +23,8 @@ export default function VerificationQueue({
   isVerifying,
   handleApproveAll,
   handleVerifyPresence,
+  onEditSession,
+  onDeleteSession,
 }: VerificationQueueProps) {
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.01] p-5">
@@ -29,10 +33,28 @@ export default function VerificationQueue({
           <h3 className="text-xs font-bold text-white uppercase tracking-wider">
             Verification Queue
           </h3>
-          <p className="text-xs text-white/40 mt-0.5">
-            {selectedActiveSession 
-              ? `Active: "${selectedActiveSession.title}" (Code: ${selectedActiveSession.code})`
-              : "No check-in portal active"}
+          <p className="text-xs text-white/40 mt-1.5 flex flex-wrap items-center gap-2">
+            {selectedActiveSession ? (
+              <>
+                <span className="font-medium text-white/70">Active: "{selectedActiveSession.title}" (Code: <strong className="text-white font-mono">{selectedActiveSession.code}</strong>)</span>
+                <button
+                  type="button"
+                  onClick={() => onEditSession(selectedActiveSession)}
+                  className="text-violet-400 hover:text-violet-300 transition-colors font-bold text-[10px] bg-violet-500/5 hover:bg-violet-500/10 px-1.5 py-0.5 rounded cursor-pointer"
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteSession(selectedActiveSession.id)}
+                  className="text-rose-400 hover:text-rose-300 transition-colors font-bold text-[10px] bg-rose-500/5 hover:bg-rose-500/10 px-1.5 py-0.5 rounded cursor-pointer"
+                >
+                  🗑️ Delete
+                </button>
+              </>
+            ) : (
+              "No check-in portal active"
+            )}
           </p>
         </div>
         {pendingRecords.length > 0 && (

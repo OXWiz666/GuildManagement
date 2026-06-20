@@ -16,12 +16,8 @@ export const passwordSchema = z
   .max(128, "Password too long")
   .regex(/[a-z]/, "Password must contain a lowercase letter")
   .regex(/[A-Z]/, "Password must contain an uppercase letter")
-<<<<<<< HEAD
   .regex(/[0-9]/, "Password must contain a number")
   .regex(/[^a-zA-Z0-9]/, "Password must contain a special character (e.g., !, @, #, $, etc.)");
-=======
-  .regex(/[0-9]/, "Password must contain a number");
->>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288
 
 export const displayNameSchema = z
   .string()
@@ -75,9 +71,21 @@ export const changePasswordSchema = z
     path: ["confirmPassword"],
   });
 
+export const updateUserSchema = z.object({
+  displayName: displayNameSchema.optional(),
+  email: emailSchema.optional(),
+  avatarUrl: z.string().nullable().optional(),
+  password: passwordSchema.optional(),
+  ign: z.string().nullable().optional(),
+  cp: z.number().int().nonnegative().nullable().optional(),
+  class: z.string().nullable().optional(),
+  weapon: z.string().nullable().optional(),
+});
+
 // Infer types from schemas
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;

@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { dashboardApi, type BossScheduleData, type BossData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
-import Card from "@/components/ui/Card";
+import { useSocket } from "@/components/providers/socket-provider";
 import Button from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
+import { useQuery, queryClient } from "@/lib/query";
 import {
-  Reveal,
   ModuleHeader,
   Magnetic,
+
 } from "@/components/dashboard/DashboardHelpers";
 
 // Imports from co-located components
@@ -21,14 +21,35 @@ import ActiveSpawnsQueue from "./components/ActiveSpawnsQueue";
 import KilledBossHistory from "./components/KilledBossHistory";
 import AddScheduleModal from "./components/AddScheduleModal";
 import LogKillModal from "./components/LogKillModal";
+import BossRespawnList from "./components/BossRespawnList";
+
+// Guild badges and colors configuration
+const GUILD_CONFIG: Record<string, { color: string; border: string; bg: string; text: string }> = {
+  SAUSAGE: {
+    color: "#f59e0b",
+    border: "border-amber-500/20",
+    bg: "bg-amber-500/[0.08]",
+    text: "text-amber-400"
+  },
+  VALHALLA: {
+    color: "#10b981",
+    border: "border-emerald-500/20",
+    bg: "bg-emerald-500/[0.08]",
+    text: "text-emerald-400"
+  },
+  BZDK: {
+    color: "#3b82f6",
+    border: "border-blue-500/20",
+    bg: "bg-blue-500/[0.08]",
+    text: "text-blue-400"
+  }
+};
 
 export default function BossSchedulePage() {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { socket } = useSocket();
 
-  const [schedules, setSchedules] = useState<BossScheduleData[]>([]);
-  const [bosses, setBosses] = useState<BossData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   // Weekly Planner Navigation State
@@ -37,15 +58,8 @@ export default function BossSchedulePage() {
 
   // Add Event Form State
   const [showAddModal, setShowAddModal] = useState(false);
-  const [bossName, setBossName] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [bossImageUrl, setBossImageUrl] = useState("");
   const [spawnDate, setSpawnDate] = useState("");
   const [spawnTime, setSpawnTime] = useState("");
-  const [location, setLocation] = useState("");
-  const [guildTurn, setGuildTurn] = useState("");
-  const [isFactionWide, setIsFactionWide] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Log Kill Form State
@@ -58,7 +72,11 @@ export default function BossSchedulePage() {
 
   const activeGuild = user?.guilds?.[0];
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
-  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader;
+  const isFactionLeader = activeGuild?.role === "FACTION_LEADER" || activeGuild?.role === "ADMIN";
+  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader || isFactionLeader;
+
+  // State for editing single event
+  const [editingEvent, setEditingEvent] = useState<BossScheduleData | null>(null);
 
   // Sync clocks every second
   useEffect(() => {
@@ -66,115 +84,157 @@ export default function BossSchedulePage() {
     return () => clearInterval(timer);
   }, []);
 
-  const loadSchedules = useCallback(async () => {
-    if (!activeGuild) return;
-    setIsLoading(true);
-    try {
-      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
-      if (result.success && result.data?.schedules) {
-        setSchedules(result.data.schedules);
-      }
-    } catch {
-      addToast("error", "Failed to load boss schedules");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeGuild, addToast]);
+  // ─── Persistent Queries ────────────────────────────────
 
-  const loadBosses = useCallback(async () => {
-    try {
+  // 1. Boss Registry Query
+  const {
+    data: bossRegistryRaw,
+    isLoading: isLoadingRegistry,
+  } = useQuery<BossData[]>(
+    "boss_registry",
+    async () => {
       const result = await dashboardApi.getBosses();
-      if (result.success && result.data?.bosses) {
-        setBosses(result.data.bosses);
-      }
-    } catch {
-      addToast("error", "Failed to load boss registry");
-    }
-  }, [addToast]);
+      return result.success && result.data?.bosses ? result.data.bosses : [];
+    },
+    { persist: true, staleTime: 300000 }
+  );
+  const bosses = bossRegistryRaw || [];
 
+  // 2. Boss Schedules Query (shares cache key with main dashboard page!)
+  const {
+    data: schedulesRaw,
+    isLoading: isLoadingSchedules,
+  } = useQuery<BossScheduleData[]>(
+    activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty",
+    async () => {
+      if (!activeGuild) return [];
+      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
+      return result.success && result.data?.schedules ? result.data.schedules : [];
+    },
+    { persist: true, staleTime: 15000, enabled: !!activeGuild }
+  );
+
+  const schedules = (schedulesRaw || []).filter((s) => {
+    if (!activeGuild) return false;
+    if (s.guildId && s.guildId !== activeGuild.guildId) return false;
+    if (s.guildTurn && s.guildTurn.toUpperCase() !== activeGuild.guildName.toUpperCase()) return false;
+    return true;
+  });
+
+  const isLoading = isLoadingRegistry || isLoadingSchedules;
+
+  // Listen to Socket.IO real-time events for instant cache invalidation
   useEffect(() => {
-    loadSchedules();
-    loadBosses();
-  }, [loadSchedules, loadBosses]);
+    if (!socket || !activeGuild) return;
 
-  // Auto-resolve spawn time for fixed schedule bosses
-  useEffect(() => {
-    if (!bossName || !spawnDate) return;
-    const selectedBoss = bosses.find((b) => b.name.toLowerCase() === bossName.toLowerCase());
-    if (selectedBoss && selectedBoss.type === "FIXED_SCHEDULE" && selectedBoss.fixedSpawns) {
-      const dateParts = spawnDate.split("-");
-      if (dateParts.length === 3) {
-        const year = parseInt(dateParts[0], 10);
-        const month = parseInt(dateParts[1], 10) - 1;
-        const day = parseInt(dateParts[2], 10);
-        const targetDate = new Date(year, month, day);
-        const dayOfWeek = targetDate.getDay();
+    const handleRealTimeRefresh = () => {
+      console.log("[Socket Real-time]: Invalidating schedules...");
+      queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+    };
 
-        let spawnsArray: Array<{ day: number; hour: number; minute: number }> = [];
-        try {
-          if (typeof selectedBoss.fixedSpawns === "string") {
-            spawnsArray = JSON.parse(selectedBoss.fixedSpawns);
-          } else if (Array.isArray(selectedBoss.fixedSpawns)) {
-            spawnsArray = selectedBoss.fixedSpawns;
-          }
-        } catch (e) {
-          spawnsArray = [];
-        }
+    socket.on("boss_rotation_updated", handleRealTimeRefresh);
+    socket.on("boss_schedule_deleted", handleRealTimeRefresh);
 
-        const match = spawnsArray.find((s) => s.day === dayOfWeek);
-        if (match) {
-          const hh = String(match.hour).padStart(2, "0");
-          const mm = String(match.minute).padStart(2, "0");
-          setSpawnTime(`${hh}:${mm}`);
-        } else if (spawnsArray.length > 0) {
-          const first = spawnsArray[0];
-          const hh = String(first.hour).padStart(2, "0");
-          const mm = String(first.minute).padStart(2, "0");
-          setSpawnTime(`${hh}:${mm}`);
-        }
-      }
-    }
-  }, [bossName, spawnDate, bosses]);
+    return () => {
+      socket.off("boss_rotation_updated", handleRealTimeRefresh);
+      socket.off("boss_schedule_deleted", handleRealTimeRefresh);
+    };
+  }, [socket, activeGuild]);
 
-  // Submit new boss schedule
-  async function handleAddSchedule(e: React.FormEvent) {
-    e.preventDefault();
-    if (!activeGuild || !bossName.trim() || !spawnDate || !spawnTime || !location.trim()) {
-      addToast("error", "Please fill in all event details");
-      return;
-    }
-
+  // Submit new boss schedule batch
+  async function handleAddScheduleBatch(
+    spawnDate: string,
+    isFactionWide: boolean,
+    items: Array<{
+      bossName: string;
+      bossImageUrl?: string;
+      spawnTime: string;
+      location: string;
+      guildTurn?: string;
+    }>
+  ) {
+    if (!activeGuild || items.length === 0) return;
     setIsSubmitting(true);
     try {
-      const fullSpawnTime = new Date(`${spawnDate}T${spawnTime}:00`);
-      const result = await dashboardApi.addBossSchedule(activeGuild.guildId, {
-        bossName: bossName.trim(),
-        bossImageUrl: bossImageUrl.trim() || undefined,
-        spawnTime: fullSpawnTime.toISOString(),
-        location: location.trim(),
-        guildTurn: guildTurn.trim() || undefined,
-        isFaction: isFactionWide,
-      });
-
-      if (result.success) {
-        addToast("success", `Scheduled ${bossName} spawn successfully!`);
-        setShowAddModal(false);
-        // Reset form
-        setBossName("");
-        setSearchQuery("");
-        setBossImageUrl("");
-        setSpawnDate("");
-        setSpawnTime("");
-        setLocation("");
-        setGuildTurn("");
-        setIsFactionWide(false);
-        await loadSchedules();
+      let succeeded = 0;
+      for (const item of items) {
+        const result = await dashboardApi.addBossSchedule(activeGuild.guildId, {
+          bossName: item.bossName,
+          bossImageUrl: item.bossImageUrl,
+          spawnTime: item.spawnTime,
+          location: item.location,
+          guildTurn: item.guildTurn,
+          isFaction: isFactionWide,
+        });
+        if (result.success && result.data?.schedule) {
+          succeeded++;
+        }
       }
+
+      addToast("success", `Successfully scheduled ${succeeded} boss spawn(s)!`);
+      setShowAddModal(false);
+      queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to add boss schedule");
+      addToast("error", err?.message || "Failed to add boss schedule batch");
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  // Edit boss schedule handler
+  async function handleEditSchedule(
+    scheduleId: string,
+    payload: {
+      bossName?: string;
+      bossImageUrl?: string;
+      spawnTime?: string;
+      location?: string;
+      guildTurn?: string;
+      isFaction?: boolean;
+    }
+  ) {
+    if (!activeGuild) return;
+    setIsSubmitting(true);
+    try {
+      const result = await dashboardApi.updateBossSchedule(activeGuild.guildId, scheduleId, payload);
+      if (result.success && result.data?.schedule) {
+        addToast("success", "Boss schedule updated successfully!");
+        setShowAddModal(false);
+        setEditingEvent(null);
+        queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to update boss schedule");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // Delete boss schedule handler
+  function handleDeleteSchedule(scheduleId: string) {
+    const targetSchedule = schedules.find((s) => s.id === scheduleId);
+    if (!targetSchedule || !activeGuild) return;
+
+    addToast(
+      "warning",
+      `Are you sure you want to delete the scheduled fight for ${targetSchedule.bossName}? This will also remove any associated DKP check-in data.`,
+      0, // stays until action or dismiss
+      {
+        label: "Delete",
+        variant: "danger",
+        onClick: async () => {
+          try {
+            const result = await dashboardApi.deleteBossSchedule(activeGuild.guildId, scheduleId);
+            if (result.success) {
+              addToast("success", `Schedule for ${targetSchedule.bossName} has been deleted.`);
+              queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+            }
+          } catch (err: any) {
+            addToast("error", err?.message || `Failed to delete schedule for ${targetSchedule.bossName}`);
+          }
+        },
+      }
+    );
   }
 
   // Submit boss death log
@@ -192,8 +252,8 @@ export default function BossSchedulePage() {
         lootDrop.trim() && lootDrop.trim() !== "None" ? lootDrop.trim() : undefined,
         screenshotUrl.trim() || undefined
       );
-      if (result.success) {
-        let successMsg = `Boss kill logged for ${showKillModal.bossName}! Next spawn auto-scheduled.`;
+      if (result.success && result.data) {
+        let successMsg = `Boss kill logged for ${showKillModal.bossName}! Expected respawn timer updated.`;
         if (broadcastDiscord) {
           successMsg += " Discord webhook notification broadcasted! 📡";
         }
@@ -202,7 +262,7 @@ export default function BossSchedulePage() {
         setKillTimeInput("");
         setLootDrop("");
         setScreenshotUrl("");
-        await loadSchedules();
+        queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
       }
     } catch (err: any) {
       addToast("error", err?.message || "Failed to log boss kill");
@@ -215,23 +275,28 @@ export default function BossSchedulePage() {
   function getCountdownText(spawnTimeStr: string) {
     const target = new Date(spawnTimeStr).getTime();
     const diff = target - currentTime;
-    if (diff <= 0) return { expired: true, text: "SPAWNED", danger: true };
+    if (diff <= 0) return { expired: true, text: "LIVE", danger: true, warning: false };
 
     const hrs = Math.floor(diff / (3600 * 1000));
     const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
     const secs = Math.floor((diff % (60 * 1000)) / 1000);
 
-    const text = `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-    const warning = diff <= 5 * 60 * 1000; // less than 5 mins
+    const hrsStr = hrs > 0 ? `${hrs}h ` : "";
+    const minsStr = `${String(mins).padStart(2, "0")}m `;
+    const secsStr = `${String(secs).padStart(2, "0")}s`;
 
-    return { expired: false, text, warning };
+    return {
+      expired: false,
+      text: `${hrsStr}${minsStr}${secsStr}`,
+      warning: diff <= 60 * 60 * 1000 // less than 1 hour remains
+    };
   }
 
   // Calendar math calculations for Weekly View
   const getDaysOfWeek = (date: Date) => {
     const start = new Date(date);
-    const day = start.getDay(); // 0 is Sunday
-    start.setDate(start.getDate() - day); // Move to Sunday
+    const day = start.getDay();
+    start.setDate(start.getDate() - day);
     start.setHours(0, 0, 0, 0);
 
     const days = [];
@@ -244,26 +309,6 @@ export default function BossSchedulePage() {
   };
 
   const daysOfWeek = getDaysOfWeek(anchorDate);
-
-  const getFixedSpawnDaysText = (selectedBossName: string) => {
-    const selectedBoss = bosses.find((b) => b.name.toLowerCase() === selectedBossName.toLowerCase());
-    if (selectedBoss && selectedBoss.type === "FIXED_SCHEDULE" && selectedBoss.fixedSpawns) {
-      let spawnsArray: Array<{ day: number; hour: number; minute: number }> = [];
-      try {
-        if (typeof selectedBoss.fixedSpawns === "string") {
-          spawnsArray = JSON.parse(selectedBoss.fixedSpawns);
-        } else if (Array.isArray(selectedBoss.fixedSpawns)) {
-          spawnsArray = selectedBoss.fixedSpawns;
-        }
-      } catch (e) {
-        spawnsArray = [];
-      }
-      
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      return spawnsArray.map(s => `${dayNames[s.day]} at ${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")}`).join(", ");
-    }
-    return "";
-  };
 
   if (!user || !activeGuild) {
     return (
@@ -287,7 +332,7 @@ export default function BossSchedulePage() {
       .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
   };
 
-  // Events filtered by currently highlighted day column for the timeline panel on the right
+  // Events filtered by currently highlighted day column
   const dayEvents = selectedDate
     ? schedules
         .filter((s) => {
@@ -311,44 +356,7 @@ export default function BossSchedulePage() {
     .filter((s) => s.status !== "KILLED")
     .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
 
-  if (isLoading && schedules.length === 0) {
-    return (
-      <div className="space-y-6 max-w-full xl:max-w-[1600px] mx-auto px-2 md:px-4 lg:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-64 animate-pulse" />
-            <Skeleton className="h-4 w-96 animate-pulse" />
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-8 w-24 rounded-lg animate-pulse" />
-          </div>
-        </div>
-        <div className="h-[520px] rounded-2xl bg-[#111116]/40 border border-white/[0.04] backdrop-blur-md relative overflow-hidden animate-pulse shadow-[0_0_15px_rgba(139,92,246,0.03)] flex flex-col justify-between p-6">
-          <div className="flex items-center justify-between mb-6">
-            <Skeleton className="h-6 w-48" />
-            <div className="flex gap-2">
-              <Skeleton className="h-8 w-20 rounded-lg" />
-              <Skeleton className="h-8 w-16 rounded-lg" />
-              <Skeleton className="h-8 w-20 rounded-lg" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 flex-1">
-            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <div key={i} className="rounded-xl border border-white/[0.05] p-4 flex flex-col justify-between min-h-[380px] bg-white/[0.01]">
-                <div className="border-b border-white/[0.05] pb-2 mb-3 space-y-2">
-                  <Skeleton className="h-3 w-12" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
-                <div className="flex-1 flex flex-col justify-center items-center">
-                  <div className="h-10 w-10 rounded-full bg-white/[0.02] border border-dashed border-white/10" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="relative max-w-full xl:max-w-[1600px] mx-auto w-full px-2 md:px-4 lg:px-6">
@@ -392,7 +400,7 @@ export default function BossSchedulePage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={loadSchedules}
+                onClick={() => queryClient.invalidateQueries(`boss_schedules:${activeGuild?.guildId}`)}
                 isLoading={isLoading}
               >
                 Refresh
@@ -401,74 +409,99 @@ export default function BossSchedulePage() {
           }
         />
 
-        {/* Interactive Weekly Planner Calendar */}
-        <WeeklyCalendar
-          anchorDate={anchorDate}
-          setAnchorDate={setAnchorDate}
-          selectedDate={selectedDate}
-          setSelectedDate={setSelectedDate}
-          daysOfWeek={daysOfWeek}
-          getEventsForDay={getEventsForDay}
-          getCountdownText={getCountdownText}
-          isOfficer={isOfficer}
-          isLoading={isLoading}
-          setShowAddModal={setShowAddModal}
-          setSpawnDate={setSpawnDate}
-          setSpawnTime={setSpawnTime}
-          setShowKillModal={setShowKillModal}
-          setKillTimeInput={setKillTimeInput}
-        />
 
-        {/* 3-Column Split Details Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-up">
-          {/* Day Highlight Timeline Panel */}
-          <DaySpawnsTimeline
+
+        {/* Global Status Legend Panel */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/[0.06] pt-5 text-white/50 text-xs select-none">
+          <div className="flex flex-wrap items-center gap-5">
+            <span className="font-semibold text-white/40 uppercase tracking-wider">Status:</span>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
+              <span>Spawned</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
+              <span>Upcoming Spawn</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
+              <span>Killed</span>
+            </div>
+          </div>
+          <div className="text-[10px] text-zinc-500 italic">
+            Times and schedules are synchronized with global server time.
+          </div>
+        </div>
+
+        {/* Interactive Weekly Planner Calendar */}
+        <div className="border-t border-white/[0.05] pt-6 space-y-4">
+  
+          <WeeklyCalendar
+            anchorDate={anchorDate}
+            setAnchorDate={setAnchorDate}
             selectedDate={selectedDate}
-            dayEvents={dayEvents}
+            setSelectedDate={setSelectedDate}
+            daysOfWeek={daysOfWeek}
+            getEventsForDay={getEventsForDay}
             getCountdownText={getCountdownText}
             isOfficer={isOfficer}
+            isLoading={isLoading}
+            setShowAddModal={setShowAddModal}
+            setSpawnDate={setSpawnDate}
+            setSpawnTime={setSpawnTime}
             setShowKillModal={setShowKillModal}
             setKillTimeInput={setKillTimeInput}
+            onDeleteSchedule={handleDeleteSchedule}
           />
 
-          {/* Upcoming Active Spawns Countdown Tracker Panel */}
-          <ActiveSpawnsQueue
-            upcomingSpawns={upcomingSpawns}
-            getCountdownText={getCountdownText}
-          />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-up pt-4">
+            <DaySpawnsTimeline
+              selectedDate={selectedDate}
+              dayEvents={dayEvents}
+              getCountdownText={getCountdownText}
+              isOfficer={isOfficer}
+              setShowKillModal={setShowKillModal}
+              setKillTimeInput={setKillTimeInput}
+              onEditSchedule={(item) => {
+                setEditingEvent(item);
+                setShowAddModal(true);
+              }}
+              onDeleteSchedule={handleDeleteSchedule}
+            />
 
-          {/* Killed History Logs panel */}
-          <KilledBossHistory
+            <ActiveSpawnsQueue
+              upcomingSpawns={upcomingSpawns}
+              getCountdownText={getCountdownText}
+            />
+
+            <KilledBossHistory
+              killedHistory={killedHistory}
+            />
+          </div>
+
+          <BossRespawnList
             killedHistory={killedHistory}
+            bosses={bosses}
           />
         </div>
 
-        {/* Modal: Schedule Boss Spawn */}
+        {/* Modal: Schedule / Edit Boss Spawn */}
         <AddScheduleModal
           showAddModal={showAddModal}
-          setShowAddModal={setShowAddModal}
-          bossName={bossName}
-          setBossName={setBossName}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          showSuggestions={showSuggestions}
-          setShowSuggestions={setShowSuggestions}
-          bossImageUrl={bossImageUrl}
-          setBossImageUrl={setBossImageUrl}
+          setShowAddModal={(val) => {
+            setShowAddModal(val);
+            if (!val) setEditingEvent(null);
+          }}
+          bosses={bosses}
+          isFactionLeader={isFactionLeader}
+          isSubmitting={isSubmitting}
           spawnDate={spawnDate}
           setSpawnDate={setSpawnDate}
           spawnTime={spawnTime}
           setSpawnTime={setSpawnTime}
-          location={location}
-          setLocation={setLocation}
-          guildTurn={guildTurn}
-          setGuildTurn={setGuildTurn}
-          isFactionWide={isFactionWide}
-          setIsFactionWide={setIsFactionWide}
-          isSubmitting={isSubmitting}
-          handleAddSchedule={handleAddSchedule}
-          bosses={bosses}
-          getFixedSpawnDaysText={getFixedSpawnDaysText}
+          handleAddScheduleBatch={handleAddScheduleBatch}
+          editingEvent={editingEvent}
+          handleEditSchedule={handleEditSchedule}
         />
 
         {/* Modal: Log Boss Death */}

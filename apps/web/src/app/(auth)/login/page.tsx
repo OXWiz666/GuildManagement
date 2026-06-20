@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { AuthStagger, MagneticPress } from "@/components/auth/AuthAnim";
+import { createClient } from "@/utils/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,6 +18,23 @@ export default function LoginPage() {
   const { login } = useAuth();
   const { addToast } = useToast();
   const router = useRouter();
+
+  const handleDiscordLogin = async () => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "discord",
+        options: {
+          redirectTo: window.location.origin + "/auth/callback",
+        },
+      });
+      if (error) {
+        setError(error.message);
+      }
+    } catch {
+      setError("Failed to initiate Discord login");
+    }
+  };
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -44,16 +62,16 @@ export default function LoginPage() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-[10px] text-white/40 uppercase tracking-[0.24em]">
-              Sign in
+            <span className="text-[10px] text-[#F5B841] font-bold uppercase tracking-[0.24em]">
+              Welcome back
             </span>
-            <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
+            <span className="h-px flex-1 bg-gradient-to-r from-[#F5B841]/25 to-transparent" />
           </div>
-          <h1 className="text-[28px] leading-tight font-semibold text-white tracking-tight">
-            Welcome back
-            <span className="text-white/40">.</span>
+          <h1 className="text-[28px] leading-tight font-extrabold text-white tracking-tight">
+            Sign in to ForgeKeep
+            <span className="text-[#F5B841]">.</span>
           </h1>
-          <p className="text-sm text-white/50 mt-2 leading-relaxed">
+          <p className="text-sm text-[#8B8F98] mt-2 leading-relaxed">
             Continue managing your guild operations.
           </p>
         </div>
@@ -61,19 +79,26 @@ export default function LoginPage() {
         {/* Error */}
         <div className={error ? "block mb-5" : "hidden"}>
           {error && (
-            <div className="px-4 py-3 rounded-lg bg-red-500/[0.08] border border-red-500/20 text-xs text-red-300 flex items-start gap-2.5 animate-slide-down">
+            <div className="px-4 py-3 rounded-xl bg-[#3A1A1E]/80 border border-[#D94A4A]/40 text-xs text-red-200 flex items-start gap-2.5 animate-slide-down">
               <svg
-                className="h-3.5 w-3.5 text-red-400 flex-shrink-0 mt-px"
+                className="h-4 w-4 text-[#D94A4A] flex-shrink-0 mt-0.5"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
               >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
-              <span className="leading-relaxed">{error}</span>
+              <div className="flex flex-col gap-0.5">
+                <span className="font-semibold text-red-100">
+                  {error.toLowerCase().includes("credential") || error.toLowerCase().includes("password") || error.toLowerCase().includes("email")
+                    ? "Authentication Error"
+                    : "An unexpected error occurred"}
+                </span>
+                <span className="text-red-300/80 leading-relaxed">{error}</span>
+              </div>
             </div>
           )}
         </div>
@@ -87,6 +112,7 @@ export default function LoginPage() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              variant="auth"
               required
               autoComplete="email"
               icon={
@@ -111,6 +137,7 @@ export default function LoginPage() {
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              variant="auth"
               required
               autoComplete="current-password"
               icon={
@@ -129,11 +156,11 @@ export default function LoginPage() {
             <div className="flex items-center justify-end mt-2">
               <Link
                 href="/forgot-password"
-                className="group text-xs text-white/50 hover:text-white transition-colors inline-flex items-center gap-1"
+                className="group text-xs text-[#8B8F98] hover:text-[#F5B841] transition-colors inline-flex items-center gap-1 font-medium"
               >
                 Forgot password?
                 <svg
-                  className="h-3 w-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300"
+                  className="h-3 w-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 text-[#F5B841]"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -145,18 +172,30 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <MagneticPress strength={5} className="block mt-3">
+          <MagneticPress strength={5} className="block mt-4">
             <Button
               type="submit"
               fullWidth
               isLoading={isLoading}
               size="lg"
+              variant="auth"
               className="group"
             >
-              <span className="inline-flex items-center gap-2">
-                Sign in
+              <span className="inline-flex items-center justify-center w-full">
+                {/* Shield icon */}
                 <svg
-                  className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5"
+                  className="h-4 w-4 mr-2 text-[#F5B841]/90 transition-transform duration-300 group-hover:scale-110"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Login Now!
+                {/* Right arrow icon */}
+                <svg
+                  className="h-3.5 w-3.5 ml-2 text-white/80 transition-transform duration-300 group-hover:translate-x-1"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -171,78 +210,56 @@ export default function LoginPage() {
 
         {/* Divider */}
         <div className="my-7 flex items-center gap-4">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.08] to-white/[0.06]" />
-          <span className="text-[10px] text-white/30 uppercase tracking-[0.22em]">
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.04] to-white/[0.02]" />
+          <span className="text-[10px] text-[#8B8F98] uppercase tracking-[0.22em] font-bold">
             or
           </span>
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/[0.08] to-white/[0.06]" />
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/[0.04] to-white/[0.02]" />
         </div>
 
         {/* SSO buttons */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="w-full">
           <MagneticPress strength={4}>
             <button
               type="button"
-              className="group relative w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-white/[0.08] hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/70 hover:text-white transition-all duration-300 overflow-hidden"
+              onClick={handleDiscordLogin}
+              className="group relative w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#1E232B] hover:border-[#F5B841]/30 bg-[#11141A] hover:bg-[#0B0D10] text-xs font-semibold text-[#8B8F98] hover:text-[#F4F4F5] transition-all duration-300 overflow-hidden cursor-pointer"
             >
               <span
                 aria-hidden
                 className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"
                 style={{
                   background:
-                    "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.06), transparent)",
+                    "linear-gradient(90deg, transparent, rgba(245, 184, 65, 0.04), transparent)",
                 }}
               />
               <svg
-                className="h-4 w-4 relative"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M21.35 11.1H12v3.83h5.59c-.59 2.84-3.04 4.46-5.59 4.46-3.36 0-6.07-2.72-6.07-6.08 0-3.36 2.71-6.08 6.07-6.08 1.5 0 2.86.55 3.92 1.45l2.86-2.86C16.99 4.13 14.66 3 12 3 7.03 3 3 7.03 3 12s4.03 9 9 9c5.2 0 8.71-3.7 8.71-8.91 0-.4-.05-.74-.13-1.09z" />
-              </svg>
-              <span className="relative">Google</span>
-            </button>
-          </MagneticPress>
-          <MagneticPress strength={4}>
-            <button
-              type="button"
-              className="group relative w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-white/[0.08] hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/70 hover:text-white transition-all duration-300 overflow-hidden"
-            >
-              <span
-                aria-hidden
-                className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"
-                style={{
-                  background:
-                    "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.06), transparent)",
-                }}
-              />
-              <svg
-                className="h-4 w-4 relative"
+                className="h-4 w-4 relative text-[#8B8F98] group-hover:text-[#F5B841] transition-colors"
                 viewBox="0 0 24 24"
                 fill="currentColor"
               >
                 <path d="M20.317 4.37a19.79 19.79 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z" />
               </svg>
-              <span className="relative">Discord</span>
+              <span className="relative">Continue with Discord</span>
             </button>
           </MagneticPress>
         </div>
 
         {/* Footer link */}
         <div className="mt-8 text-center">
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-[#8B8F98]">
             Don&apos;t have an account?{" "}
             <Link
               href="/register"
-              className="group text-white hover:text-white/80 font-medium transition-colors inline-flex items-center gap-1"
+              className="group text-white hover:text-[#F5B841] font-semibold transition-colors inline-flex items-center gap-1"
             >
               Create one
               <svg
-                className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-0.5"
+                className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-0.5 text-[#F5B841]"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2"
+                strokeWidth="2.5"
               >
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>

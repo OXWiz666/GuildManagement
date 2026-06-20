@@ -12,17 +12,18 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRY: z.string().default("7d"),
   BCRYPT_ROUNDS: z.coerce.number().min(10).max(15).default(12),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  REDIS_URL: z.string().optional(),
+  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
+  SUPABASE_KEY: z.string().min(1, "SUPABASE_KEY is required"),
 });
 
 function validateEnv() {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-<<<<<<< HEAD
+
     console.error("Invalid environment variables:");
-=======
-    console.error("❌ Invalid environment variables:");
->>>>>>> 4ca53ae77e7e08144101dc0e85266ff4e8db7288
+
     console.error(result.error.format());
     process.exit(1);
   }

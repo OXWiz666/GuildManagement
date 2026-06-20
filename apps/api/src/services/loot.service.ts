@@ -1,0 +1,227 @@
+import { prisma, Prisma } from "@guild/db";
+import { writeAuditLog } from "./audit.service";
+import { NotFoundError, BadRequestError } from "../utils/errors";
+
+interface CreateLootSaleInput {
+  guildId: string;
+  bossScheduleId?: string | null;
+  itemName: string;
+  category: string;
+  saleValue: bigint;
+  currency: string;
+  creatorId: string;
+}
+
+export async function createLootSale(input: CreateLootSaleInput) {
+  let attendees: Array<{ userId: string }> = [];
+
+  // Run settings and attendee lookups in parallel when bossScheduleId is provided
+  const [settings, attendeeResult] = await Promise.all([
+    prisma.guildSettings.findUnique({
+      where: { guildId: input.guildId },
+    }),
+    input.bossScheduleId
+      ? (async () => {
+          const [schedule, records] = await Promise.all([
+            prisma.bossSchedule.findUnique({
+              where: { id: input.bossScheduleId! },
+              select: { id: true },
+            }),
+            prisma.attendanceRecord.findMany({
+              where: {
+                status: "CONFIRMED",
+                session: { bossScheduleId: input.bossScheduleId! },
+              },
+              select: { userId: true },
+            }),
+          ]);
+
+          if (!schedule) {
+            throw new NotFoundError("Boss schedule not found");
+          }
+
+          const result = Array.from(new Set(records.map((record) => record.userId))).map((userId) => ({ userId }));
+
+          if (result.length === 0) {
+            throw new BadRequestError(
+              `No checked-in members found for this boss schedule's attendance session. Cannot distribute loot.`,
+            );
+          }
+
+          return result;
+        })()
+      : Promise.resolve([]),
+  ]);
+
+  attendees = attendeeResult;
+
+  const taxRatePercent = settings?.taxRatePercent ?? 10;
+  const distributionModel = settings?.activeShareModel ?? "EQUAL";
+  const taxAmount = (input.saleValue * BigInt(taxRatePercent)) / 100n;
+  const netProfit = input.saleValue - taxAmount;
+
+  const memberPoints: Record<string, number> = {};
+  let totalPoints = 0;
+  if (netProfit > 0n && attendees.length > 0 && distributionModel === "PRO_RATA") {
+    const dkpRows = await prisma.ledgerEntry.groupBy({
+      by: ["accountId"],
+      where: {
+        guildId: input.guildId,
+        accountId: { in: attendees.map((member) => member.userId) },
+        accountType: "MEMBER",
+        referenceType: "ATTENDANCE",
+      },
+      _sum: { amount: true },
+    });
+
+    for (const row of dkpRows) {
+      const points = Number(row._sum.amount || 0n);
+      memberPoints[row.accountId] = points;
+      totalPoints += points;
+    }
+  }
+
+  const lootSale = await prisma.$transaction(async (tx) => {
+    const createdSale = await tx.lootSale.create({
+      data: {
+        guildId: input.guildId,
+        bossScheduleId: input.bossScheduleId || null,
+        itemName: input.itemName,
+        category: input.category,
+        saleValue: input.saleValue,
+        taxRatePercent,
+        taxAmount,
+        netProfit,
+        distributionModel,
+        currency: input.currency,
+        creatorId: input.creatorId,
+      },
+    });
+
+    const ledgerEntries: Prisma.LedgerEntryCreateManyInput[] = [];
+
+    if (taxAmount > 0n) {
+      ledgerEntries.push({
+        guildId: input.guildId,
+        accountType: "TAX",
+        accountId: input.guildId,
+        currency: input.currency,
+        amount: taxAmount,
+        entryType: "CREDIT",
+        referenceType: "BOSS_LOOT_TAX",
+        referenceId: createdSale.id,
+        idempotencyKey: `TAX-LOOT-${createdSale.id}`,
+        actorId: input.creatorId,
+        description: `Guild tax accumulated from sale of ${input.itemName} (${taxRatePercent}%)`,
+      });
+    }
+
+    if (netProfit > 0n) {
+      if (attendees.length > 0) {
+        if (distributionModel === "PRO_RATA" && totalPoints > 0) {
+          let distributed = 0n;
+          for (let i = 0; i < attendees.length; i++) {
+            const member = attendees[i];
+            if (!member) continue;
+            const points = memberPoints[member.userId] ?? 0;
+            const share = (netProfit * BigInt(points)) / BigInt(totalPoints);
+            distributed += share;
+            const finalShare = i === attendees.length - 1 ? share + (netProfit - distributed) : share;
+
+            ledgerEntries.push({
+              guildId: input.guildId,
+              accountType: "MEMBER",
+              accountId: member.userId,
+              currency: input.currency,
+              amount: finalShare,
+              entryType: "CREDIT",
+              referenceType: "BOSS_LOOT_SHARE",
+              referenceId: createdSale.id,
+              idempotencyKey: `SHARE-LOOT-${createdSale.id}-${member.userId}`,
+              actorId: input.creatorId,
+              description: `Pro-rata DKP share payout from ${input.itemName} (${points}/${totalPoints} DKP)`,
+            });
+          }
+        } else {
+          const share = netProfit / BigInt(attendees.length);
+          const remainder = netProfit % BigInt(attendees.length);
+          const description = distributionModel === "PRO_RATA"
+            ? `Loot share payout from ${input.itemName} (Pro-rata DKP fallback equal)`
+            : `Equal loot share payout from ${input.itemName}`;
+
+          for (let i = 0; i < attendees.length; i++) {
+            const member = attendees[i];
+            if (!member) continue;
+            const finalShare = i === 0 ? share + remainder : share;
+
+            ledgerEntries.push({
+              guildId: input.guildId,
+              accountType: "MEMBER",
+              accountId: member.userId,
+              currency: input.currency,
+              amount: finalShare,
+              entryType: "CREDIT",
+              referenceType: "BOSS_LOOT_SHARE",
+              referenceId: createdSale.id,
+              idempotencyKey: `SHARE-LOOT-${createdSale.id}-${member.userId}`,
+              actorId: input.creatorId,
+              description,
+            });
+          }
+        }
+      } else {
+        ledgerEntries.push({
+          guildId: input.guildId,
+          accountType: "GUILD_FUND",
+          accountId: input.guildId,
+          currency: input.currency,
+          amount: netProfit,
+          entryType: "CREDIT",
+          referenceType: "BOSS_LOOT_GUILD_FUND",
+          referenceId: createdSale.id,
+          idempotencyKey: `FUND-LOOT-${createdSale.id}`,
+          actorId: input.creatorId,
+          description: `General sale proceeds for ${input.itemName} credited to treasury`,
+        });
+      }
+    }
+
+    if (ledgerEntries.length > 0) {
+      await tx.ledgerEntry.createMany({
+        data: ledgerEntries,
+        skipDuplicates: true,
+      });
+    }
+
+    return createdSale;
+  });
+
+  await writeAuditLog({
+    actorId: input.creatorId,
+    guildId: input.guildId,
+    action: "LOOT_ITEM_SOLD",
+    target: "LootSale",
+    targetId: lootSale.id,
+    detail: {
+      itemName: input.itemName,
+      category: input.category,
+      saleValue: input.saleValue.toString(),
+      taxAmount: taxAmount.toString(),
+      netProfit: netProfit.toString(),
+      bossScheduleId: input.bossScheduleId,
+      distributionModel,
+    },
+  });
+
+  return lootSale;
+}
+
+export async function getLootSales(guildId: string) {
+  return prisma.lootSale.findMany({
+    where: { guildId },
+    include: {
+      bossSchedule: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}

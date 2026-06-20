@@ -1,6 +1,7 @@
 import type { ApiResponse } from "@guild/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const JSON_CONTENT_TYPE = "application/json";
 
 // In-memory access token storage (never localStorage for security)
 let accessToken: string | null = null;
@@ -18,6 +19,39 @@ interface FetchOptions extends Omit<RequestInit, "body"> {
   skipAuth?: boolean;
 }
 
+function hasJsonBody(response: Response): boolean {
+  return response.headers.get("content-type")?.includes(JSON_CONTENT_TYPE) ?? false;
+}
+
+function createFallbackResponse<T>(response: Response, message: string): ApiResponse<T> {
+  return {
+    success: false,
+    error: {
+      code: response.ok ? "INVALID_RESPONSE" : `HTTP_${response.status}`,
+      message,
+    },
+  };
+}
+
+async function parseApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  if (response.status === 204) {
+    return { success: response.ok } as ApiResponse<T>;
+  }
+
+  if (!hasJsonBody(response)) {
+    return createFallbackResponse(
+      response,
+      response.ok ? "The server returned an empty response." : response.statusText || "Request failed.",
+    );
+  }
+
+  try {
+    return (await response.json()) as ApiResponse<T>;
+  } catch {
+    return createFallbackResponse(response, "The server returned malformed JSON.");
+  }
+}
+
 /**
  * API client with automatic token refresh on 401.
  * Access token is stored in memory, refresh token in httpOnly cookie.
@@ -29,9 +63,13 @@ async function apiFetch<T = unknown>(
   const { body, skipAuth, ...fetchOptions } = options;
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    Accept: JSON_CONTENT_TYPE,
     ...(fetchOptions.headers as Record<string, string>),
   };
+
+  if (body !== undefined) {
+    headers["Content-Type"] = JSON_CONTENT_TYPE;
+  }
 
   if (!skipAuth && accessToken) {
     headers["Authorization"] = `Bearer ${accessToken}`;
@@ -42,26 +80,25 @@ async function apiFetch<T = unknown>(
   let response = await fetch(url, {
     ...fetchOptions,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: "include", // Include cookies for refresh token
   });
 
   // If 401, try refreshing the token once
-  if (response.status === 401 && !skipAuth && accessToken) {
+  if (response.status === 401 && !skipAuth) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       headers["Authorization"] = `Bearer ${accessToken}`;
       response = await fetch(url, {
         ...fetchOptions,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
         credentials: "include",
       });
     }
   }
 
-  const data = (await response.json()) as ApiResponse<T>;
-  return data;
+  return parseApiResponse<T>(response);
 }
 
 /**
@@ -242,6 +279,19 @@ export const authApi = {
     );
   },
 
+  async supabaseSync(token: string) {
+    const result = await api.post<{
+      user: { id: string; email: string; displayName: string; avatarUrl: string | null; createdAt: string };
+      accessToken: string;
+    }>("/auth/supabase-sync", { token }, { skipAuth: true });
+
+    if (result.success && result.data?.accessToken) {
+      setAccessToken(result.data.accessToken);
+    }
+
+    return result;
+  },
+
   async refreshToken() {
     const success = await refreshAccessToken();
     return success;
@@ -353,6 +403,27 @@ export const guildApi = {
       `/guilds/${guildId}/invite-code`,
     );
   },
+
+  async getSettings(guildId: string) {
+    return api.get<any>(`/guilds/${guildId}/settings`);
+  },
+
+  async updateSettings(guildId: string, payload: any) {
+    return api.patch<any>(`/guilds/${guildId}/settings`, payload);
+  },
+
+  async getAuditLogs(guildId: string, filter?: string, page = 1, limit = 30, memberId?: string) {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (filter) params.set("filter", filter);
+    if (memberId) params.set("memberId", memberId);
+    return api.get<{
+      logs: AuditLogEntry[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/guilds/${guildId}/audit-logs?${params.toString()}`);
+  },
 };
 
 // ─── Dashboard-specific API calls (Attendance & Boss Timers) ────
@@ -402,13 +473,88 @@ export interface BossScheduleData {
   spawnTime: string;
   location: string;
   guildTurn: string | null;
+  guildTurnGuildId?: string | null;
+  guildTurnGuildName?: string | null;
   status: "UPCOMING" | "SPAWNED" | "KILLED";
   killedAt: string | null;
   creatorId: string;
+  creatorName?: string;
   createdAt: string;
   attendanceSessions?: AttendanceSessionData[];
   lootDrop?: string | null;
   screenshotUrl?: string | null;
+}
+
+export interface FactionGuildData {
+  id: string;
+  name: string;
+  slug: string;
+  avatarUrl: string | null;
+}
+
+export interface BossRotationItem {
+  id: string;
+  bossName: string;
+  bossImageUrl: string | null;
+  level: number;
+  type: "LONG_CYCLE" | "FIXED_SCHEDULE" | string;
+  cooldownHours: number | null;
+  location: string;
+  currentIndex: number;
+  queue: FactionGuildData[];
+  currentGuild: FactionGuildData | null;
+  nextGuild: FactionGuildData | null;
+  spawnTime: string;
+  status: "UPCOMING" | "SPAWNED" | "KILLED";
+  activeSchedule: BossScheduleData | null;
+  latestKilled: BossScheduleData | null;
+}
+
+export interface BossRotationResponse {
+  serverTime: string;
+  canManage: boolean;
+  viewerRole: string;
+  guilds: FactionGuildData[];
+  rotations: BossRotationItem[];
+}
+
+export interface BossKilledHistoryEntry {
+  id: string;
+  action: string;
+  bossName: string;
+  bossImageUrl: string;
+  killedAt: string;
+  recordedAt: string;
+  recordedBy: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  nextGuildName: string | null;
+  nextSpawnTime: string | null;
+}
+
+export interface BossKilledHistoryDay {
+  date: string;
+  total: number;
+  kills: BossKilledHistoryEntry[];
+}
+
+export interface BossKilledHistoryResponse {
+  month: string;
+  total: number;
+  days: BossKilledHistoryDay[];
+}
+
+export interface NotificationData {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  metadata: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
 }
 
 export const dashboardApi = {
@@ -457,12 +603,65 @@ export const dashboardApi = {
         createdAt: string;
         expiresAt: string;
       }>;
+      history: Array<{
+        sessionId: string;
+        title: string;
+        type: "GUILD" | "FACTION";
+        createdAt: string;
+        expiresAt: string;
+        status: "CONFIRMED" | "PENDING" | "MISSED" | "UNCHECKED";
+        joinedAt: string | null;
+      }>;
     }>(`/dashboard/attendance/stats/${guildId}`);
   },
 
   async getBossSchedules(guildId: string) {
     return api.get<{ schedules: BossScheduleData[] }>(
       `/dashboard/boss-schedule/${guildId}`,
+    );
+  },
+
+  async getBossRotation(guildId: string) {
+    return api.get<BossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}`,
+    );
+  },
+
+  async getBossKilledHistory(guildId: string, month?: string) {
+    const params = month ? `?${new URLSearchParams({ month }).toString()}` : "";
+    return api.get<BossKilledHistoryResponse>(
+      `/dashboard/boss-rotation/${guildId}/killed-history${params}`,
+    );
+  },
+
+  async updateBossRotationQueue(guildId: string, bossName: string, queueGuildIds: string[]) {
+    return api.post<BossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}/${encodeURIComponent(bossName)}/queue`,
+      { queueGuildIds },
+    );
+  },
+
+  async markBossRotationKilled(guildId: string, scheduleId: string, killedAt: string, takenGuildId: string, signal?: AbortSignal) {
+    return api.post<{
+      schedule: BossScheduleData | null;
+      nextSchedule: BossScheduleData | null;
+      rotationId: string;
+    }>(
+      `/dashboard/boss-rotation/${guildId}/${scheduleId}/killed`,
+      { killedAt, takenGuildId },
+      signal ? { signal } : undefined,
+    );
+  },
+
+  async markBossRotationKilledByName(guildId: string, bossName: string, killedAt: string, takenGuildId: string, signal?: AbortSignal) {
+    return api.post<{
+      schedule: BossScheduleData | null;
+      nextSchedule: BossScheduleData | null;
+      rotationId: string;
+    }>(
+      `/dashboard/boss-rotation/${guildId}/boss/${encodeURIComponent(bossName)}/killed`,
+      { killedAt, takenGuildId },
+      signal ? { signal } : undefined,
     );
   },
 
@@ -480,6 +679,7 @@ export const dashboardApi = {
       spawnTime: string;
       location: string;
       guildTurn?: string;
+      guildTurnGuildId?: string | null;
       isFaction?: boolean;
     },
   ) {
@@ -499,6 +699,52 @@ export const dashboardApi = {
     return api.patch<{ schedule: BossScheduleData }>(
       `/dashboard/boss-schedule/${guildId}/kill/${scheduleId}`,
       { killedAt, lootDrop, screenshotUrl },
+    );
+  },
+
+  async updateBossSchedule(
+    guildId: string,
+    scheduleId: string,
+    payload: {
+      bossName?: string;
+      bossImageUrl?: string;
+      spawnTime?: string;
+      location?: string;
+      guildTurn?: string;
+      guildTurnGuildId?: string | null;
+      isFaction?: boolean;
+    },
+  ) {
+    return api.patch<{ schedule: BossScheduleData }>(
+      `/dashboard/boss-schedule/${guildId}/${scheduleId}`,
+      payload,
+    );
+  },
+
+  async deleteBossSchedule(guildId: string, scheduleId: string) {
+    return api.delete<{ success: boolean }>(
+      `/dashboard/boss-schedule/${guildId}/${scheduleId}`,
+    );
+  },
+
+  async updateAttendanceSession(
+    guildId: string,
+    sessionId: string,
+    payload: {
+      title?: string;
+      expiresAt?: string;
+      isActive?: boolean;
+    },
+  ) {
+    return api.patch<{ session: AttendanceSessionData }>(
+      `/dashboard/attendance/session/${guildId}/${sessionId}`,
+      payload,
+    );
+  },
+
+  async deleteAttendanceSession(guildId: string, sessionId: string) {
+    return api.delete<{ success: boolean }>(
+      `/dashboard/attendance/session/${guildId}/${sessionId}`,
     );
   },
 
@@ -533,7 +779,153 @@ export const dashboardApi = {
         detail: string;
         time: string;
       }>;
+      performanceHistory: Array<{
+        dayName: string;
+        amount: number;
+      }>;
+      factionClaims: Array<{
+        guildName: string;
+        claimsCount: number;
+        percentage: number;
+      }>;
     }>(`/dashboard/stats/${guildId}`);
+  },
+
+  async addLootSale(
+    guildId: string,
+    payload: {
+      itemName: string;
+      category: string;
+      bossScheduleId?: string | null;
+      saleValue: number;
+      currency: string;
+    },
+  ) {
+    return api.post<any>(`/dashboard/loot-sale/${guildId}`, payload);
+  },
+
+  async getLootSales(guildId: string) {
+    return api.get<any>(`/dashboard/loot-sale/${guildId}`);
+  },
+
+  async getAccountingDashboard(guildId: string, page = 1, limit = 25) {
+    return api.get<any>(`/dashboard/accounting/${guildId}?page=${page}&limit=${limit}`);
+  },
+
+  async addTreasuryAdjustment(
+    guildId: string,
+    payload: {
+      accountId: string;
+      accountType: "MEMBER" | "GUILD_FUND" | "TAX";
+      entryType: "CREDIT" | "DEBIT";
+      amount: number;
+      currency: string;
+      description: string;
+    },
+  ) {
+    return api.post<any>(`/dashboard/accounting/adjustment/${guildId}`, payload);
   },
 };
 
+export const notificationApi = {
+  async getNotifications(limit = 20) {
+    return api.get<{ notifications: NotificationData[]; unreadCount: number }>(
+      `/notifications?limit=${limit}`,
+    );
+  },
+
+  async markRead(notificationId: string) {
+    return api.patch<{ notification: NotificationData }>(
+      `/notifications/${notificationId}/read`,
+    );
+  },
+
+  async markAllRead() {
+    return api.patch<{ success: boolean }>(`/notifications/read-all`);
+  },
+};
+
+export interface FactionAnnouncementData {
+  id: string;
+  title: string;
+  body: string;
+  priority: string;
+  status: string;
+  creatorId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FactionEventData {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  location: string | null;
+  status: string;
+  creatorId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FactionMemberData = GuildMemberData & {
+  guild?: {
+    id: string;
+    name: string;
+    slug: string;
+    avatarUrl: string | null;
+  };
+};
+
+export const factionApi = {
+  async getMembers() {
+    return api.get<{ members: FactionMemberData[] }>(`/faction/members`);
+  },
+
+  async getAnnouncements() {
+    return api.get<{ announcements: FactionAnnouncementData[] }>(`/faction/announcements`);
+  },
+
+  async createAnnouncement(payload: { title: string; body: string; priority?: string; status?: string }) {
+    return api.post<{ announcement: FactionAnnouncementData }>(`/faction/announcements`, payload);
+  },
+
+  async updateAnnouncement(id: string, payload: Partial<{ title: string; body: string; priority: string; status: string }>) {
+    return api.patch<{ announcement: FactionAnnouncementData }>(`/faction/announcements/${id}`, payload);
+  },
+
+  async deleteAnnouncement(id: string) {
+    return api.delete<{ success: boolean }>(`/faction/announcements/${id}`);
+  },
+
+  async getEvents() {
+    return api.get<{ events: FactionEventData[] }>(`/faction/events`);
+  },
+
+  async createEvent(payload: { title: string; description?: string; startsAt: string; endsAt?: string | null; location?: string; status?: string }) {
+    return api.post<{ event: FactionEventData }>(`/faction/events`, payload);
+  },
+
+  async updateEvent(id: string, payload: Partial<{ title: string; description: string; startsAt: string; endsAt: string | null; location: string; status: string }>) {
+    return api.patch<{ event: FactionEventData }>(`/faction/events/${id}`, payload);
+  },
+
+  async deleteEvent(id: string) {
+    return api.delete<{ success: boolean }>(`/faction/events/${id}`);
+  },
+};
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  target: string | null;
+  targetId: string | null;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+  actor: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}

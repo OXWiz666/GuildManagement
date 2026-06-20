@@ -37,6 +37,7 @@ export {
   forgotPasswordSchema,
   resetPasswordSchema,
   changePasswordSchema,
+  updateUserSchema,
 } from "./validators/auth";
 export type {
   LoginInput,
@@ -44,6 +45,7 @@ export type {
   ForgotPasswordInput,
   ResetPasswordInput,
   ChangePasswordInput,
+  UpdateUserInput,
 } from "./validators/auth";
 
 // Constants
@@ -57,5 +59,5 @@ export {
 export type { AuditAction, ApiResponse } from "./constants";
 
 // Bosses
-export { PREDEFINED_BOSSES, getNextBossSpawnTime } from "./types/bosses";
+export { PREDEFINED_BOSSES, getNextBossSpawnTime, getBossImageUrl } from "./types/bosses";
 export type { PredefinedBoss } from "./types/bosses";

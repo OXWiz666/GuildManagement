@@ -5,10 +5,12 @@ import {
   registerSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  updateUserSchema,
 } from "@guild/shared";
 import { requireAuth } from "../middleware/auth";
 import { authLimiter } from "../middleware/rateLimiter";
 import * as authService from "../services/auth.service";
+import { env } from "../config/env";
 import type { ApiResponse } from "@guild/shared";
 
 const router: Router = Router();
@@ -93,6 +95,88 @@ router.post(
   },
 );
 
+// ─── POST /supabase-sync ────────────────────────
+router.post(
+  "/supabase-sync",
+  authLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { token } = req.body as { token?: unknown };
+      if (!token || typeof token !== "string") {
+        res.status(400).json({
+          success: false,
+          error: { code: "BAD_REQUEST", message: "Token is required" },
+        } satisfies ApiResponse);
+        return;
+      }
+
+      // Verify token with Supabase API
+      const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: env.SUPABASE_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        res.status(401).json({
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "Invalid Supabase token" },
+        } satisfies ApiResponse);
+        return;
+      }
+
+      const supabaseUser = (await response.json()) as {
+        id: string;
+        email: string;
+        user_metadata?: {
+          display_name?: string;
+          full_name?: string;
+        };
+      };
+
+      if (!supabaseUser.id || !supabaseUser.email) {
+        res.status(400).json({
+          success: false,
+          error: { code: "BAD_REQUEST", message: "Invalid user data from Supabase" },
+        } satisfies ApiResponse);
+        return;
+      }
+
+      const email = supabaseUser.email;
+      const id = supabaseUser.id;
+      const displayName =
+        supabaseUser.user_metadata?.display_name ||
+        supabaseUser.user_metadata?.full_name ||
+        email.split("@")[0];
+
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const result = await authService.supabaseSync(
+        { id: id as string, email: email as string, displayName: displayName as string },
+        ipAddress,
+        userAgent,
+      );
+
+      // Set refresh token as httpOnly cookie
+      setRefreshCookie(res, result.tokens.refreshToken);
+
+      const responseBody: ApiResponse = {
+        success: true,
+        data: {
+          user: result.user,
+          accessToken: result.tokens.accessToken,
+        },
+      };
+
+      res.json(responseBody);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+
 // ─── POST /refresh ──────────────────────────────
 router.post(
   "/refresh",
@@ -157,7 +241,7 @@ router.post(
       res.clearCookie("refreshToken", {
         httpOnly: true,
         secure: process.env['NODE_ENV'] === "production",
-        sameSite: "lax",
+        sameSite: process.env['NODE_ENV'] === "production" ? "strict" : "lax",
         path: "/",
       });
 
@@ -186,7 +270,7 @@ router.post(
       res.clearCookie("refreshToken", {
         httpOnly: true,
         secure: process.env['NODE_ENV'] === "production",
-        sameSite: "lax",
+        sameSite: process.env['NODE_ENV'] === "production" ? "strict" : "lax",
         path: "/",
       });
 
@@ -278,9 +362,10 @@ router.put(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const data = updateUserSchema.parse(req.body);
       const user = await authService.updateUserProfile(
         req.user!.userId,
-        req.body
+        data
       );
 
       const response: ApiResponse = {
@@ -344,7 +429,7 @@ function setRefreshCookie(res: Response, token: string): void {
   res.cookie("refreshToken", token, {
     httpOnly: true,
     secure: process.env['NODE_ENV'] === "production",
-    sameSite: "lax",
+    sameSite: process.env['NODE_ENV'] === "production" ? "strict" : "lax",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });

@@ -120,7 +120,7 @@ export default function AuthCard({
     >
       <div
         ref={cardRef}
-        className={`relative glass-strong rounded-2xl p-8 md:p-10 border border-white/[0.08] shadow-[0_40px_90px_-25px_rgba(0,0,0,0.75)] ${className}`}
+        className={`relative bg-[#0B0D10]/85 backdrop-blur-2xl rounded-2xl p-8 md:p-10 border border-[#1E232B] shadow-[0_40px_90px_-25px_rgba(0,0,0,0.85)] ${className}`}
         style={{ transformStyle: "preserve-3d", willChange: "transform" }}
       >
         {/* Animated top edge gradient */}
@@ -128,7 +128,7 @@ export default function AuthCard({
           className="absolute inset-x-8 top-0 h-px overflow-hidden"
           style={{
             background:
-              "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.32), transparent)",
+              "linear-gradient(90deg, transparent, rgba(245, 184, 65, 0.35), transparent)",
           }}
         />
         {/* Mouse-follow shine */}
@@ -140,7 +140,7 @@ export default function AuthCard({
         {/* Corner accent — animated */}
         <span
           aria-hidden
-          className="absolute top-3 right-3 h-1.5 w-1.5 rounded-full bg-emerald-400/70 shadow-[0_0_10px_2px_rgba(52,211,153,0.5)]"
+          className="absolute top-4 right-4 h-1.5 w-1.5 rounded-full bg-[#10D99A] shadow-[0_0_10px_2px_rgba(16,217,154,0.6)]"
           style={{ animation: "pulse-soft 3s ease-in-out infinite" }}
         />
         {children}

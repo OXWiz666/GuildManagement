@@ -19,6 +19,7 @@ export interface WeeklyCalendarProps {
   setSpawnTime: (val: string) => void;
   setShowKillModal: (val: BossScheduleData | null) => void;
   setKillTimeInput: (val: string) => void;
+  onDeleteSchedule?: (scheduleId: string) => void;
 }
 
 export default function WeeklyCalendar({
@@ -36,6 +37,7 @@ export default function WeeklyCalendar({
   setSpawnTime,
   setShowKillModal,
   setKillTimeInput,
+  onDeleteSchedule,
 }: WeeklyCalendarProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [focusedDay, setFocusedDay] = useState<Date | null>(null);
@@ -249,7 +251,7 @@ export default function WeeklyCalendar({
                             </div>
 
                             {/* Direct Kill Log button on Calendar Cell */}
-                            {isOfficer && !isKilled && (tick.expired || tick.warning || isSpawned) && (
+                            {isOfficer && !isKilled && (tick.expired || isSpawned) && (
                               <div className="mt-1">
                                 <Button
                                   variant="danger"
@@ -422,7 +424,7 @@ export default function WeeklyCalendar({
                             </div>
 
                             {/* Log Kill button inside Detailed Row */}
-                            {isOfficer && !isKilled && (tick.expired || tick.warning || isSpawned) && (
+                            {isOfficer && !isKilled && (tick.expired || isSpawned) && (
                               <div className="pt-1.5 border-t border-white/[0.04]">
                                 <Button
                                   variant="danger"
@@ -538,8 +540,8 @@ export default function WeeklyCalendar({
                         )}
                       </div>
 
-                      <div className="shrink-0">
-                        {isOfficer && !isKilled && (tick.expired || tick.warning || isSpawned) && (
+                      <div className="shrink-0 flex items-center gap-2">
+                        {isOfficer && !isKilled && (tick.expired || isSpawned) && (
                           <Button
                             variant="danger"
                             size="xs"
@@ -551,6 +553,18 @@ export default function WeeklyCalendar({
                           >
                             Log Kill
                           </Button>
+                        )}
+                        {isOfficer && onDeleteSchedule && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFocusedDay(null);
+                              onDeleteSchedule(item.id);
+                            }}
+                            className="px-2 py-1 rounded bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/20 text-[10px] font-bold text-rose-400 transition-all cursor-pointer"
+                          >
+                            🗑️ Delete
+                          </button>
                         )}
                       </div>
                     </div>

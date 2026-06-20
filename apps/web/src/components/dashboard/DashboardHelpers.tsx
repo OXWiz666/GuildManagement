@@ -21,6 +21,12 @@ export function useReveal(threshold = 0.1, once = true) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Fallback: if IntersectionObserver is unavailable (SSR/old browsers),
+    // reveal immediately so content is never left stuck at opacity: 0.
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {

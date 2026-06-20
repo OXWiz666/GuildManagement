@@ -249,6 +249,7 @@ export class GuildService {
       currencySymbol?: string;
       secondaryCurrencyCode?: string | null;
       secondaryCurrencySymbol?: string | null;
+      pointsResetCycle?: string;
     },
     actorId: string,
     ipAddress?: string,
@@ -278,6 +279,7 @@ export class GuildService {
       currencySymbol: payload.currencySymbol,
       secondaryCurrencyCode: payload.secondaryCurrencyCode,
       secondaryCurrencySymbol: payload.secondaryCurrencySymbol,
+      pointsResetCycle: payload.pointsResetCycle,
     });
 
     await this.auditRepo.create({

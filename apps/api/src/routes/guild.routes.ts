@@ -406,6 +406,7 @@ router.patch(
         currencySymbol?: string;
         secondaryCurrencyCode?: string | null;
         secondaryCurrencySymbol?: string | null;
+        pointsResetCycle?: string;
       };
 
       const { ipAddress, userAgent } = getClientInfo(req);
@@ -417,7 +418,12 @@ router.patch(
         ipAddress,
         userAgent,
       );
-      await cache.delete(`guild-settings:${guildId}`);
+      await Promise.all([
+        cache.delete(`guild-settings:${guildId}`),
+        // Guild Points reset window affects accounting/ranking points
+        cache.invalidatePattern(`accounting:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+      ]);
 
       const response: ApiResponse = {
         success: true,

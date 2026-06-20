@@ -2028,6 +2028,31 @@ export async function getDashboardSummary(guildId: string, userId: string) {
   };
 }
 
+/**
+ * Resolves the "Guild Points reset" window into a cutoff date. Guild Points
+ * (attendance ledger points) are only counted from this cutoff forward, which
+ * gives a rolling weekly / monthly reset WITHOUT deleting any ledger history —
+ * members' money balances and dividends are untouched.
+ *
+ * - WEEKLY  → counts from the start of the current week (Monday 00:00)
+ * - MONTHLY → counts from the first day of the current month
+ * - MANUAL / unset → no cutoff (lifetime points)
+ */
+export function getGuildPointsCutoff(pointsResetCycle?: string | null): Date | null {
+  const now = new Date();
+  if (pointsResetCycle === "WEEKLY") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const daysSinceMonday = (start.getDay() + 6) % 7; // Sun=0 → 6, Mon=1 → 0
+    start.setDate(start.getDate() - daysSinceMonday);
+    return start;
+  }
+  if (pointsResetCycle === "MONTHLY") {
+    return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  }
+  return null;
+}
+
 export async function getAccountingDashboard(guildId: string, actorId: string, page: number = 1, limit: number = 25) {
   // Validate actor is Guild Leader, Officer, or Faction Leader
   const actorMembership = await prisma.guildMember.findUnique({
@@ -2134,13 +2159,16 @@ export async function getAccountingDashboard(guildId: string, actorId: string, p
     },
   });
 
-  // A. Fetch DKP points for all guild members in a single query
+  // A. Fetch DKP points for all guild members in a single query.
+  // Apply the Guild Points reset window so points roll over weekly / monthly.
+  const pointsCutoff = getGuildPointsCutoff(settings?.pointsResetCycle);
   const dkpAggregates = await prisma.ledgerEntry.groupBy({
     by: ["accountId"],
     where: {
       guildId,
       accountType: "MEMBER",
       referenceType: "ATTENDANCE",
+      ...(pointsCutoff ? { createdAt: { gte: pointsCutoff } } : {}),
     },
     _sum: { amount: true },
   });

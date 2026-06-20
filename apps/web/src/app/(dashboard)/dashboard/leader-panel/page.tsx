@@ -42,7 +42,7 @@ export default function LeaderPanelPage() {
         <ModuleHeader
           eyebrow="Management"
           title="Leader Panel"
-          description="Guild points configurations, preferred economies, tax overrides, and active DKP leaderboard lists."
+          description="Guild points configurations, preferred economies, tax overrides, and rank share multipliers."
         />
 
         <LeaderPanelContent guildId={activeGuild.guildId} />

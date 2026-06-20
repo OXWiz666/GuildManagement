@@ -14,8 +14,9 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
+import AddGuildTab from "./components/AddGuildTab";
 
-type FactionTab = "ANNOUNCEMENTS" | "EVENTS" | "MEMBERS";
+type FactionTab = "ANNOUNCEMENTS" | "EVENTS" | "MEMBERS" | "ADD_GUILD";
 
 export default function FactionPage() {
   const { user } = useAuth();
@@ -125,6 +126,7 @@ export default function FactionPage() {
     { id: "ANNOUNCEMENTS", label: "Announcements", count: announcements.length },
     { id: "EVENTS", label: "Events", count: events.length },
     { id: "MEMBERS", label: "Members", count: members.length },
+    ...(canManage ? [{ id: "ADD_GUILD" as FactionTab, label: "Add Guild" }] : []),
   ];
 
   return (
@@ -260,6 +262,14 @@ export default function FactionPage() {
                 </div>
               ))}
             </div>
+          )
+        )}
+
+        {activeTab === "ADD_GUILD" && (
+          canManage ? (
+            <AddGuildTab />
+          ) : (
+            <EmptyPanel title="Inviting guilds is restricted" body="Only Faction Leaders and Admins can invite guilds into the faction." />
           )
         )}
       </div>

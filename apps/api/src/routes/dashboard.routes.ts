@@ -959,6 +959,114 @@ router.post(
   },
 );
 
+// Record a batch of loot items sold from a single activity (many loots → 1 activity)
+router.post(
+  "/loot-sale/:guildId/batch",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const { category, bossScheduleId, currency, soldDate, items } = req.body as {
+        category: string;
+        bossScheduleId?: string | null;
+        currency: string;
+        soldDate?: string;
+        items: Array<{ itemName: string; saleValue: number }>;
+      };
+
+      if (!category || !currency || !Array.isArray(items) || items.length === 0) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Missing category, currency, or loot items",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const normalizedItems = items.map((item) => ({
+        itemName: (item.itemName || "").trim(),
+        saleValue: Number(item.saleValue),
+      }));
+
+      const invalid = normalizedItems.some(
+        (item) => !item.itemName || isNaN(item.saleValue) || item.saleValue <= 0,
+      );
+      if (invalid) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Each loot item needs a name and a positive sale value",
+          },
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const sales = await lootService.createLootSaleBatch({
+        guildId,
+        bossScheduleId: bossScheduleId || null,
+        category,
+        currency,
+        creatorId: req.user!.userId,
+        soldAt: soldDate ? new Date(soldDate) : null,
+        items: normalizedItems.map((item) => ({
+          itemName: item.itemName,
+          saleValue: BigInt(Math.round(item.saleValue * 100)),
+        })),
+      });
+
+      // Invalidate caches concurrently
+      await Promise.all([
+        cache.invalidatePattern(`accounting:${guildId}:*`),
+        cache.invalidatePattern(`stats:${guildId}:*`),
+        cache.invalidatePattern(`loot:${guildId}:*`),
+      ]);
+
+      // A single event is enough — clients refetch the full registry on it
+      broadcastToGuild(guildId, "loot_sale_recorded", {
+        batch: true,
+        count: sales.length,
+        bossScheduleId: bossScheduleId || null,
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        data: { count: sales.length },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Get CONFIRMED attendees (with in-game names) for a boss activity
+router.get(
+  "/loot-sale/:guildId/attendees/:bossScheduleId",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const bossScheduleId = req.params["bossScheduleId"] as string;
+
+      const map = await lootService.getConfirmedAttendeesForSchedules(guildId, [bossScheduleId]);
+      const attendees = map.get(bossScheduleId) ?? [];
+
+      const response: ApiResponse = {
+        success: true,
+        data: { attendees },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 // Get sold items list
 router.get(
   "/loot-sale/:guildId",

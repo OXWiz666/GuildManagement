@@ -26,6 +26,33 @@ router.get("/members", requireAuth, async (req: Request, res: Response, next: Ne
   }
 });
 
+router.get("/guilds/search", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const query = typeof req.query["q"] === "string" ? req.query["q"] : "";
+    const guilds = await factionService.searchGuilds(req.user!.userId, query);
+    const response: ApiResponse = { success: true, data: { guilds } };
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/guilds/invite", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ipAddress, userAgent } = getClientInfo(req);
+    const result = await factionService.inviteGuild(
+      req.user!.userId,
+      req.body?.guildId,
+      ipAddress,
+      userAgent,
+    );
+    const response: ApiResponse = { success: true, data: result };
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/announcements", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const announcements = await factionService.listAnnouncements(req.user!.userId);

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import SettingsCard from "./SettingsCard";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { guildApi, dashboardApi } from "@/lib/api";
+import { guildApi } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { Magnetic } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
@@ -71,26 +71,6 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
     }
   }, [guildSettings]);
 
-  // 2. Rankings Query
-  const {
-    data: accounting,
-    isLoading: isLoadingRanking,
-  } = useQuery<any | null>(
-    `accounting_dashboard:${guildId}:1`,
-    async () => {
-      const result = await dashboardApi.getAccountingDashboard(guildId, 1, 15);
-      return result.success && result.data ? result.data : null;
-    },
-    { persist: true, staleTime: 15000 }
-  );
-
-  const rankingData = React.useMemo(() => {
-    if (accounting?.memberBalances) {
-      return [...accounting.memberBalances].sort((a, b) => b.dkp - a.dkp);
-    }
-    return [];
-  }, [accounting]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -117,7 +97,6 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
       if (result.success) {
         addToast("success", "Guild configurations updated successfully!");
         queryClient.invalidateQueries(`guild_settings:${guildId}`);
-        queryClient.invalidateQueries(`accounting_dashboard:${guildId}:1`);
       } else {
         addToast("error", result.error?.message || "Failed to save guild configurations");
       }
@@ -147,7 +126,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
           {/* Economy settings */}
           <div>
             <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-4 border-b border-white/[0.04] pb-1.5">
-              💰 Guild Economy & Tax
+              Guild Economy & Tax
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Input
@@ -225,7 +204,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
           {/* Rank Multipliers */}
           <div>
             <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-4 border-b border-white/[0.04] pb-1.5">
-              👑 Rank share multipliers
+              Rank share multipliers
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <Input
@@ -274,61 +253,6 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
             </Magnetic>
           </div>
         </form>
-      </SettingsCard>
-
-      {/* DKP Leaderboard */}
-      <SettingsCard
-        eyebrow="Rankings"
-        title="Guild points leaderboard"
-        description="Dynamic leaderboard tracking present check-in logs and accumulated DKP points, serving as the basis for bidding splits."
-      >
-        {isLoadingRanking ? (
-          <div className="py-8 text-center text-xs text-white/35 italic animate-pulse">
-            Loading rankings board...
-          </div>
-        ) : rankingData.length === 0 ? (
-          <div className="py-8 text-center text-xs text-white/35 italic">
-            No member rankings found. Members earn points by checking in at attendance portals.
-          </div>
-        ) : (
-          <div className="overflow-hidden border border-white/[0.05] rounded-2xl bg-white/[0.01]">
-            <table className="w-full border-collapse text-left text-[12px]">
-              <thead>
-                <tr className="border-b border-white/[0.06] bg-white/[0.02] text-[10px] text-white/40 font-bold uppercase tracking-wider">
-                  <th className="px-4 py-3 text-center w-12">Rank</th>
-                  <th className="px-4 py-3">In-Game Name</th>
-                  <th className="px-4 py-3">Class</th>
-                  <th className="px-4 py-3 text-center">Combat Power</th>
-                  <th className="px-4 py-3 text-right">DKP Points</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {rankingData.map((row, index) => (
-                  <tr
-                    key={row.memberId}
-                    className="hover:bg-white/[0.015] transition-colors"
-                  >
-                    <td className="px-4 py-3 text-center font-bold font-mono">
-                      {index + 1 === 1 ? "🥇" : index + 1 === 2 ? "🥈" : index + 1 === 3 ? "🥉" : `${index + 1}`}
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-white">
-                      {row.ign}
-                    </td>
-                    <td className="px-4 py-3 text-white/60">
-                      {row.class}
-                    </td>
-                    <td className="px-4 py-3 text-center font-mono text-cyan-400">
-                      {row.cp.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold font-mono text-emerald-400">
-                      {row.dkp}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </SettingsCard>
     </div>
   );

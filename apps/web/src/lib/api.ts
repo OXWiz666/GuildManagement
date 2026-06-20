@@ -804,6 +804,25 @@ export const dashboardApi = {
     return api.post<any>(`/dashboard/loot-sale/${guildId}`, payload);
   },
 
+  async addLootSaleBatch(
+    guildId: string,
+    payload: {
+      category: string;
+      bossScheduleId?: string | null;
+      currency: string;
+      soldDate?: string;
+      items: Array<{ itemName: string; saleValue: number }>;
+    },
+  ) {
+    return api.post<{ count: number }>(`/dashboard/loot-sale/${guildId}/batch`, payload);
+  },
+
+  async getBossAttendees(guildId: string, bossScheduleId: string) {
+    return api.get<{ attendees: Array<{ userId: string; name: string }> }>(
+      `/dashboard/loot-sale/${guildId}/attendees/${bossScheduleId}`,
+    );
+  },
+
   async getLootSales(guildId: string) {
     return api.get<any>(`/dashboard/loot-sale/${guildId}`);
   },
@@ -878,9 +897,37 @@ export type FactionMemberData = GuildMemberData & {
   };
 };
 
+export interface FactionGuildSearchResult {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  avatarUrl: string | null;
+  memberCount: number;
+  leaderName: string | null;
+  isOwnGuild: boolean;
+}
+
+export interface FactionGuildInviteResult {
+  success: boolean;
+  guildId: string;
+  guildName: string;
+  notifiedLeaders: number;
+}
+
 export const factionApi = {
   async getMembers() {
     return api.get<{ members: FactionMemberData[] }>(`/faction/members`);
+  },
+
+  async searchGuilds(query: string) {
+    return api.get<{ guilds: FactionGuildSearchResult[] }>(
+      `/faction/guilds/search?q=${encodeURIComponent(query)}`,
+    );
+  },
+
+  async inviteGuild(guildId: string) {
+    return api.post<FactionGuildInviteResult>(`/faction/guilds/invite`, { guildId });
   },
 
   async getAnnouncements() {

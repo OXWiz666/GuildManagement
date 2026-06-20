@@ -1,6 +1,7 @@
 import { prisma } from "@guild/db";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
 import { writeAuditLog } from "./audit.service";
+import { createNotifications } from "./notification.service";
 
 function isFactionManagerRole(role: string) {
   return role === "FACTION_LEADER" || role === "ADMIN";
@@ -20,11 +21,16 @@ async function requireFactionMember(userId: string) {
   return memberships;
 }
 
-async function requireFactionManager(userId: string) {
+async function requireFactionManagerMemberships(userId: string) {
   const memberships = await requireFactionMember(userId);
   if (!memberships.some((m) => isFactionManagerRole(m.role))) {
     throw new ForbiddenError("Only Faction Leaders and Admins can manage faction features");
   }
+  return memberships;
+}
+
+async function requireFactionManager(userId: string) {
+  const memberships = await requireFactionManagerMemberships(userId);
   return memberships[0]!;
 }
 
@@ -93,6 +99,170 @@ export async function getFactionMembers(actorId: string) {
     guild: m.guild,
     user: m.user,
   }));
+}
+
+// ═══════════════════════════════════════════════════
+// FACTION GUILD INVITES
+// Faction Leaders can find guilds and invite them to the faction.
+// Migration-free: invites are delivered as notifications to the
+// target guild's leadership and recorded in the audit log.
+// ═══════════════════════════════════════════════════
+
+const INVITE_COOLDOWN_MS = 24 * 60 * 60 * 1000; // one invite per guild per day
+const GUILD_LEADERSHIP_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"] as const;
+
+export async function searchGuilds(actorId: string, query: string) {
+  const memberships = await requireFactionManagerMemberships(actorId);
+  const ownGuildIds = new Set(memberships.map((m) => m.guildId));
+
+  const term = (query || "").trim();
+  if (term.length < 2) {
+    throw new BadRequestError("Search query must be at least 2 characters");
+  }
+
+  const guilds = await prisma.guild.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { name: { contains: term, mode: "insensitive" } },
+        { slug: { contains: term, mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      description: true,
+      avatarUrl: true,
+    },
+    orderBy: { name: "asc" },
+    take: 20,
+  });
+
+  if (guilds.length === 0) return [];
+
+  const guildIds = guilds.map((g) => g.id);
+
+  // Active member counts per guild
+  const counts = await prisma.guildMember.groupBy({
+    by: ["guildId"],
+    where: { guildId: { in: guildIds }, isActive: true },
+    _count: { _all: true },
+  });
+  const countMap = new Map(counts.map((c) => [c.guildId, c._count._all]));
+
+  // Resolve a representative leader name per guild
+  const leaders = await prisma.guildMember.findMany({
+    where: {
+      guildId: { in: guildIds },
+      isActive: true,
+      role: { in: ["GUILD_LEADER", "FACTION_LEADER"] },
+    },
+    select: { guildId: true, user: { select: { displayName: true } } },
+    orderBy: { role: "asc" },
+  });
+  const leaderMap = new Map<string, string>();
+  for (const l of leaders) {
+    if (!leaderMap.has(l.guildId)) leaderMap.set(l.guildId, l.user.displayName);
+  }
+
+  return guilds.map((g) => ({
+    id: g.id,
+    name: g.name,
+    slug: g.slug,
+    description: g.description,
+    avatarUrl: g.avatarUrl,
+    memberCount: countMap.get(g.id) ?? 0,
+    leaderName: leaderMap.get(g.id) ?? null,
+    isOwnGuild: ownGuildIds.has(g.id),
+  }));
+}
+
+export async function inviteGuild(
+  actorId: string,
+  guildId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const memberships = await requireFactionManagerMemberships(actorId);
+  const ownGuildIds = new Set(memberships.map((m) => m.guildId));
+
+  if (!guildId?.trim()) {
+    throw new BadRequestError("A target guild is required");
+  }
+
+  const guild = await prisma.guild.findUnique({
+    where: { id: guildId },
+    select: { id: true, name: true, isActive: true },
+  });
+  if (!guild || !guild.isActive) {
+    throw new NotFoundError("Guild not found or inactive");
+  }
+
+  if (ownGuildIds.has(guild.id)) {
+    throw new BadRequestError("You cannot invite a guild you already belong to");
+  }
+
+  // Prevent duplicate invitations within the cooldown window
+  const since = new Date(Date.now() - INVITE_COOLDOWN_MS);
+  const recentInvite = await prisma.auditLog.findFirst({
+    where: {
+      action: "FACTION_GUILD_INVITED",
+      target: "Guild",
+      targetId: guild.id,
+      createdAt: { gte: since },
+    },
+  });
+  if (recentInvite) {
+    throw new BadRequestError("This guild was already invited within the last 24 hours");
+  }
+
+  const leaders = await prisma.guildMember.findMany({
+    where: {
+      guildId: guild.id,
+      isActive: true,
+      role: { in: [...GUILD_LEADERSHIP_ROLES] },
+    },
+    select: { userId: true },
+  });
+
+  const actor = await prisma.user.findUnique({
+    where: { id: actorId },
+    select: { displayName: true },
+  });
+  const actorName = actor?.displayName || "A Faction Leader";
+
+  // Notify the target guild's leadership (deduped by userId)
+  const uniqueLeaderIds = [...new Set(leaders.map((l) => l.userId))];
+  if (uniqueLeaderIds.length > 0) {
+    await createNotifications(
+      uniqueLeaderIds.map((userId) => ({
+        userId,
+        type: "FACTION_GUILD_INVITE",
+        title: "Faction invitation",
+        body: `${actorName} invited ${guild.name} to join the faction.`,
+        metadata: { guildId: guild.id, guildName: guild.name, invitedBy: actorId },
+      })),
+    );
+  }
+
+  await writeAuditLog({
+    actorId,
+    guildId: memberships[0]!.guildId,
+    action: "FACTION_GUILD_INVITED",
+    target: "Guild",
+    targetId: guild.id,
+    detail: { guildName: guild.name, notifiedLeaders: uniqueLeaderIds.length },
+    ipAddress,
+    userAgent,
+  });
+
+  return {
+    success: true,
+    guildId: guild.id,
+    guildName: guild.name,
+    notifiedLeaders: uniqueLeaderIds.length,
+  };
 }
 
 export async function listAnnouncements(actorId: string) {

@@ -9,6 +9,11 @@ import { GUILD_ROLES, type GuildRoleType } from "@guild/shared";
 import { prisma } from "@guild/db";
 import { broadcastToGuild } from "../lib/socket";
 import { auditLogLimiter } from "../middleware/rateLimiter";
+import { cache } from "../lib/cache";
+import {
+  getCurrencyDistributionAuditLogs,
+  getItemDistributionAuditLogs,
+} from "../services/audit-log.service";
 
 const router: Router = Router();
 
@@ -21,6 +26,16 @@ function getClientInfo(req: Request) {
       req.socket.remoteAddress,
     userAgent: req.headers["user-agent"],
   };
+}
+
+function clampPagination(pageParam: unknown, limitParam: unknown, defaultLimit = 30) {
+  const parsedPage = typeof pageParam === "string" ? parseInt(pageParam, 10) : NaN;
+  const parsedLimit = typeof limitParam === "string" ? parseInt(limitParam, 10) : NaN;
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, 100)
+    : defaultLimit;
+  return { page, limit, skip: (page - 1) * limit };
 }
 
 // ─── GET /:guildId/members ──────────────────────
@@ -348,7 +363,19 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
+      const cacheKey = `guild-settings:${guildId}`;
+      const cached = await cache.get<any>(cacheKey);
+      if (cached) {
+        const response: ApiResponse = {
+          success: true,
+          data: cached,
+        };
+        res.json(response);
+        return;
+      }
+
       const settings = await guildService.getGuildSettings(guildId);
+      await cache.set(cacheKey, settings, 300);
 
       const response: ApiResponse = {
         success: true,
@@ -390,6 +417,7 @@ router.patch(
         ipAddress,
         userAgent,
       );
+      await cache.delete(`guild-settings:${guildId}`);
 
       const response: ApiResponse = {
         success: true,
@@ -413,9 +441,41 @@ router.get(
     try {
       const guildId = req.params['guildId'] as string;
       const filter = req.query['filter'] as string | undefined; // e.g., "boss", "items", "member-items", "currency"
-      const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
-      const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 30;
-      const skip = (page - 1) * limit;
+      const { page, limit, skip } = clampPagination(req.query['page'], req.query['limit']);
+
+      if (filter === "items") {
+        const data = await getItemDistributionAuditLogs(guildId, page, limit);
+        const response: ApiResponse = { success: true, data };
+        res.json(response);
+        return;
+      }
+
+      if (filter === "member-items") {
+        const memberId = req.query['memberId'] as string | undefined;
+        if (!memberId) {
+          const response: ApiResponse = {
+            success: false,
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "memberId query parameter is required for member-items filter",
+            }
+          };
+          res.status(400).json(response);
+          return;
+        }
+
+        const data = await getItemDistributionAuditLogs(guildId, page, limit, memberId);
+        const response: ApiResponse = { success: true, data };
+        res.json(response);
+        return;
+      }
+
+      if (filter === "currency") {
+        const data = await getCurrencyDistributionAuditLogs(guildId, page, limit);
+        const response: ApiResponse = { success: true, data };
+        res.json(response);
+        return;
+      }
 
       // ──────────────────────────────────────────
       // BRANCH 1: ITEMS DISTRIBUTED (filter === "items")

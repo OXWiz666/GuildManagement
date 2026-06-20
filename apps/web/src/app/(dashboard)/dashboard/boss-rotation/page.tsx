@@ -92,7 +92,7 @@ export default function BossRotationPage() {
         ? result.data
         : { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", guilds: [], rotations: [] };
     },
-    { persist: true, staleTime: 10000 },
+    { persist: true, staleTime: 10000, enabled: !!activeGuild },
   );
 
   const { data: schedulesRaw } = useQuery<BossScheduleData[]>(
@@ -102,7 +102,7 @@ export default function BossRotationPage() {
       const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
       return result.success && result.data?.schedules ? result.data.schedules : [];
     },
-    { persist: true, staleTime: 15000 },
+    { persist: true, staleTime: 15000, enabled: !!activeGuild },
   );
 
   const {
@@ -118,7 +118,7 @@ export default function BossRotationPage() {
         ? result.data
         : { logs: [], total: 0, page: activityPage, limit: 10, totalPages: 1 };
     },
-    { persist: true, staleTime: 30000 },
+    { persist: true, staleTime: 30000, enabled: !!activeGuild },
   );
 
   const {
@@ -132,7 +132,7 @@ export default function BossRotationPage() {
       const result = await dashboardApi.getBossKilledHistory(activeGuild.guildId, historyMonth || undefined);
       return result.success && result.data ? result.data : { month: historyMonth, total: 0, days: [] };
     },
-    { persist: true, staleTime: 30000 },
+    { persist: true, staleTime: 30000, enabled: !!activeGuild },
   );
 
   useEffect(() => {

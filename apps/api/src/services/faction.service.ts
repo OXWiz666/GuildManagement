@@ -9,7 +9,6 @@ function isFactionManagerRole(role: string) {
 async function getActiveMemberships(userId: string) {
   return prisma.guildMember.findMany({
     where: { userId, isActive: true },
-    include: { guild: true },
   });
 }
 

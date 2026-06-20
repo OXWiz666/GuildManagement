@@ -1,5 +1,4 @@
-import { prisma, type LootSale } from "@guild/db";
-import { createLedgerEntry } from "./ledger.service";
+import { prisma, Prisma } from "@guild/db";
 import { writeAuditLog } from "./audit.service";
 import { NotFoundError, BadRequestError } from "../utils/errors";
 
@@ -8,131 +7,154 @@ interface CreateLootSaleInput {
   bossScheduleId?: string | null;
   itemName: string;
   category: string;
-  saleValue: bigint; // in integer cents
+  saleValue: bigint;
   currency: string;
   creatorId: string;
 }
 
 export async function createLootSale(input: CreateLootSaleInput) {
-  // 1. Fetch guild settings to find default tax and active model
-  const settings = await prisma.guildSettings.findUnique({
-    where: { guildId: input.guildId },
-  });
+  let attendees: Array<{ userId: string }> = [];
+
+  // Run settings and attendee lookups in parallel when bossScheduleId is provided
+  const [settings, attendeeResult] = await Promise.all([
+    prisma.guildSettings.findUnique({
+      where: { guildId: input.guildId },
+    }),
+    input.bossScheduleId
+      ? (async () => {
+          const [schedule, records] = await Promise.all([
+            prisma.bossSchedule.findUnique({
+              where: { id: input.bossScheduleId! },
+              select: { id: true },
+            }),
+            prisma.attendanceRecord.findMany({
+              where: {
+                status: "CONFIRMED",
+                session: { bossScheduleId: input.bossScheduleId! },
+              },
+              select: { userId: true },
+            }),
+          ]);
+
+          if (!schedule) {
+            throw new NotFoundError("Boss schedule not found");
+          }
+
+          const result = Array.from(new Set(records.map((record) => record.userId))).map((userId) => ({ userId }));
+
+          if (result.length === 0) {
+            throw new BadRequestError(
+              `No checked-in members found for this boss schedule's attendance session. Cannot distribute loot.`,
+            );
+          }
+
+          return result;
+        })()
+      : Promise.resolve([]),
+  ]);
+
+  attendees = attendeeResult;
 
   const taxRatePercent = settings?.taxRatePercent ?? 10;
   const distributionModel = settings?.activeShareModel ?? "EQUAL";
-
-  // 2. Compute tax amount and net profit
   const taxAmount = (input.saleValue * BigInt(taxRatePercent)) / 100n;
   const netProfit = input.saleValue - taxAmount;
 
-  let attendees: Array<{ userId: string }> = [];
-
-  // 3. Retrieve attendees if bossScheduleId is provided
-  if (input.bossScheduleId) {
-    const schedule = await prisma.bossSchedule.findUnique({
-      where: { id: input.bossScheduleId },
+  const memberPoints: Record<string, number> = {};
+  let totalPoints = 0;
+  if (netProfit > 0n && attendees.length > 0 && distributionModel === "PRO_RATA") {
+    const dkpRows = await prisma.ledgerEntry.groupBy({
+      by: ["accountId"],
+      where: {
+        guildId: input.guildId,
+        accountId: { in: attendees.map((member) => member.userId) },
+        accountType: "MEMBER",
+        referenceType: "ATTENDANCE",
+      },
+      _sum: { amount: true },
     });
 
-    if (!schedule) {
-      throw new NotFoundError("Boss schedule not found");
+    for (const row of dkpRows) {
+      const points = Number(row._sum.amount || 0n);
+      memberPoints[row.accountId] = points;
+      totalPoints += points;
     }
+  }
 
-    // Gather all confirmed records across any attendance session associated with this boss schedule
-    const sessions = await prisma.attendanceSession.findMany({
-      where: { bossScheduleId: input.bossScheduleId },
-      include: {
-        records: {
-          where: { status: "CONFIRMED" },
-        },
+  const lootSale = await prisma.$transaction(async (tx) => {
+    const createdSale = await tx.lootSale.create({
+      data: {
+        guildId: input.guildId,
+        bossScheduleId: input.bossScheduleId || null,
+        itemName: input.itemName,
+        category: input.category,
+        saleValue: input.saleValue,
+        taxRatePercent,
+        taxAmount,
+        netProfit,
+        distributionModel,
+        currency: input.currency,
+        creatorId: input.creatorId,
       },
     });
 
-    const attendeeSet = new Set<string>();
-    for (const session of sessions) {
-      for (const record of session.records) {
-        attendeeSet.add(record.userId);
-      }
+    const ledgerEntries: Prisma.LedgerEntryCreateManyInput[] = [];
+
+    if (taxAmount > 0n) {
+      ledgerEntries.push({
+        guildId: input.guildId,
+        accountType: "TAX",
+        accountId: input.guildId,
+        currency: input.currency,
+        amount: taxAmount,
+        entryType: "CREDIT",
+        referenceType: "BOSS_LOOT_TAX",
+        referenceId: createdSale.id,
+        idempotencyKey: `TAX-LOOT-${createdSale.id}`,
+        actorId: input.creatorId,
+        description: `Guild tax accumulated from sale of ${input.itemName} (${taxRatePercent}%)`,
+      });
     }
 
-    attendees = Array.from(attendeeSet).map((userId) => ({ userId }));
+    if (netProfit > 0n) {
+      if (attendees.length > 0) {
+        if (distributionModel === "PRO_RATA" && totalPoints > 0) {
+          let distributed = 0n;
+          for (let i = 0; i < attendees.length; i++) {
+            const member = attendees[i];
+            if (!member) continue;
+            const points = memberPoints[member.userId] ?? 0;
+            const share = (netProfit * BigInt(points)) / BigInt(totalPoints);
+            distributed += share;
+            const finalShare = i === attendees.length - 1 ? share + (netProfit - distributed) : share;
 
-    if (attendees.length === 0) {
-      throw new BadRequestError(
-        `No checked-in members found for this boss schedule's attendance session. Cannot distribute loot.`
-      );
-    }
-  }
-
-  // 4. Create the LootSale entry in DB
-  const lootSale = await prisma.lootSale.create({
-    data: {
-      guildId: input.guildId,
-      bossScheduleId: input.bossScheduleId || null,
-      itemName: input.itemName,
-      category: input.category,
-      saleValue: input.saleValue,
-      taxRatePercent,
-      taxAmount,
-      netProfit,
-      distributionModel,
-      currency: input.currency,
-      creatorId: input.creatorId,
-    },
-  });
-
-  // 5. Ledger entry distributions
-  // A. Credit Tax account
-  if (taxAmount > 0n) {
-    await createLedgerEntry({
-      guildId: input.guildId,
-      accountType: "TAX",
-      accountId: input.guildId,
-      currency: input.currency,
-      amount: taxAmount,
-      entryType: "CREDIT",
-      referenceType: "BOSS_LOOT_TAX",
-      referenceId: lootSale.id,
-      idempotencyKey: `TAX-LOOT-${lootSale.id}`,
-      actorId: input.creatorId,
-      description: `Guild tax accumulated from sale of ${input.itemName} (${taxRatePercent}%)`,
-    });
-  }
-
-  // B. Distribute Net Profit
-  if (netProfit > 0n) {
-    if (attendees.length > 0) {
-      if (distributionModel === "PRO_RATA") {
-        // Fetch all attendees' total attendance points (DKP) to calculate ratio
-        const memberPoints: Record<string, number> = {};
-        let totalPoints = 0;
-
-        for (const member of attendees) {
-          const ledgerSum = await prisma.ledgerEntry.aggregate({
-            where: {
+            ledgerEntries.push({
               guildId: input.guildId,
-              accountId: member.userId,
               accountType: "MEMBER",
-              referenceType: "ATTENDANCE",
-            },
-            _sum: { amount: true },
-          });
-          const points = Number(ledgerSum._sum.amount || 0n);
-          memberPoints[member.userId] = points;
-          totalPoints += points;
-        }
-
-        if (totalPoints === 0) {
-          // Fallback to EQUAL if nobody has points
+              accountId: member.userId,
+              currency: input.currency,
+              amount: finalShare,
+              entryType: "CREDIT",
+              referenceType: "BOSS_LOOT_SHARE",
+              referenceId: createdSale.id,
+              idempotencyKey: `SHARE-LOOT-${createdSale.id}-${member.userId}`,
+              actorId: input.creatorId,
+              description: `Pro-rata DKP share payout from ${input.itemName} (${points}/${totalPoints} DKP)`,
+            });
+          }
+        } else {
           const share = netProfit / BigInt(attendees.length);
           const remainder = netProfit % BigInt(attendees.length);
+          const description = distributionModel === "PRO_RATA"
+            ? `Loot share payout from ${input.itemName} (Pro-rata DKP fallback equal)`
+            : `Equal loot share payout from ${input.itemName}`;
 
           for (let i = 0; i < attendees.length; i++) {
             const member = attendees[i];
             if (!member) continue;
             const finalShare = i === 0 ? share + remainder : share;
 
-            await createLedgerEntry({
+            ledgerEntries.push({
               guildId: input.guildId,
               accountType: "MEMBER",
               accountId: member.userId,
@@ -140,85 +162,40 @@ export async function createLootSale(input: CreateLootSaleInput) {
               amount: finalShare,
               entryType: "CREDIT",
               referenceType: "BOSS_LOOT_SHARE",
-              referenceId: lootSale.id,
-              idempotencyKey: `SHARE-LOOT-${lootSale.id}-${member.userId}`,
+              referenceId: createdSale.id,
+              idempotencyKey: `SHARE-LOOT-${createdSale.id}-${member.userId}`,
               actorId: input.creatorId,
-              description: `Loot share payout from ${input.itemName} (Pro-rata DKP fallback equal)`,
-            });
-          }
-        } else {
-          // Distribute proportionally
-          let distributed = 0n;
-          for (let i = 0; i < attendees.length; i++) {
-            const member = attendees[i];
-            if (!member) continue;
-            const points = memberPoints[member.userId] ?? 0;
-            // Proportional share calculation
-            const share = (netProfit * BigInt(points)) / BigInt(totalPoints);
-            distributed += share;
-
-            // Give remainder to the last attendee
-            const finalShare = i === attendees.length - 1 ? share + (netProfit - distributed) : share;
-
-            await createLedgerEntry({
-              guildId: input.guildId,
-              accountType: "MEMBER",
-              accountId: member.userId,
-              currency: input.currency,
-              amount: finalShare,
-              entryType: "CREDIT",
-              referenceType: "BOSS_LOOT_SHARE",
-              referenceId: lootSale.id,
-              idempotencyKey: `SHARE-LOOT-${lootSale.id}-${member.userId}`,
-              actorId: input.creatorId,
-              description: `Pro-rata DKP share payout from ${input.itemName} (${points}/${totalPoints} DKP)`,
+              description,
             });
           }
         }
       } else {
-        // Default: EQUAL split
-        const share = netProfit / BigInt(attendees.length);
-        const remainder = netProfit % BigInt(attendees.length);
-
-        for (let i = 0; i < attendees.length; i++) {
-          const member = attendees[i];
-          if (!member) continue;
-          const finalShare = i === 0 ? share + remainder : share;
-
-          await createLedgerEntry({
-            guildId: input.guildId,
-            accountType: "MEMBER",
-            accountId: member.userId,
-            currency: input.currency,
-            amount: finalShare,
-            entryType: "CREDIT",
-            referenceType: "BOSS_LOOT_SHARE",
-            referenceId: lootSale.id,
-            idempotencyKey: `SHARE-LOOT-${lootSale.id}-${member.userId}`,
-            actorId: input.creatorId,
-            description: `Equal loot share payout from ${input.itemName}`,
-          });
-        }
+        ledgerEntries.push({
+          guildId: input.guildId,
+          accountType: "GUILD_FUND",
+          accountId: input.guildId,
+          currency: input.currency,
+          amount: netProfit,
+          entryType: "CREDIT",
+          referenceType: "BOSS_LOOT_GUILD_FUND",
+          referenceId: createdSale.id,
+          idempotencyKey: `FUND-LOOT-${createdSale.id}`,
+          actorId: input.creatorId,
+          description: `General sale proceeds for ${input.itemName} credited to treasury`,
+        });
       }
-    } else {
-      // General sale — goes entirely to the Guild Fund
-      await createLedgerEntry({
-        guildId: input.guildId,
-        accountType: "GUILD_FUND",
-        accountId: input.guildId,
-        currency: input.currency,
-        amount: netProfit,
-        entryType: "CREDIT",
-        referenceType: "BOSS_LOOT_GUILD_FUND",
-        referenceId: lootSale.id,
-        idempotencyKey: `FUND-LOOT-${lootSale.id}`,
-        actorId: input.creatorId,
-        description: `General sale proceeds for ${input.itemName} credited to treasury`,
+    }
+
+    if (ledgerEntries.length > 0) {
+      await tx.ledgerEntry.createMany({
+        data: ledgerEntries,
+        skipDuplicates: true,
       });
     }
-  }
 
-  // 6. Write Audit Log
+    return createdSale;
+  });
+
   await writeAuditLog({
     actorId: input.creatorId,
     guildId: input.guildId,

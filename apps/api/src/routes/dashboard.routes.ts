@@ -23,6 +23,10 @@ function getClientInfo(req: Request) {
   };
 }
 
+function invalidateBossScheduleCache(guildId: string | null | undefined) {
+  return cache.invalidatePattern(guildId ? `boss-schedule:${guildId}:*` : `boss-schedule:*`);
+}
+
 // ─── Attendance Endpoints ───────────────────────
 
 // Start a check-in session. Requires auth. (Validates GL/Officer inside service)
@@ -565,7 +569,7 @@ router.post(
 
       // Invalidate schedule and dashboard stats in-memory caches
       await Promise.all([
-        cache.invalidatePattern(`boss-schedule:*`),
+        invalidateBossScheduleCache(targetGuildId),
         cache.invalidatePattern(`stats:${targetGuildId || guildId}:*`),
       ]);
 
@@ -631,7 +635,7 @@ router.patch(
 
       // Invalidate schedule and stats in-memory caches
       await Promise.all([
-        cache.invalidatePattern(`boss-schedule:*`),
+        invalidateBossScheduleCache(updatedEvent.guildId || guildId),
         cache.invalidatePattern(`stats:${guildId}:*`),
       ]);
 
@@ -730,7 +734,7 @@ router.patch(
 
       // Invalidate schedule and stats in-memory caches
       await Promise.all([
-        cache.invalidatePattern(`boss-schedule:*`),
+        invalidateBossScheduleCache(schedule.guildId || guildId),
         cache.invalidatePattern(`stats:${guildId}:*`),
       ]);
 
@@ -776,7 +780,7 @@ router.delete(
 
       // Invalidate schedule and stats in-memory caches
       await Promise.all([
-        cache.invalidatePattern(`boss-schedule:*`),
+        invalidateBossScheduleCache(guildId),
         cache.invalidatePattern(`stats:${guildId}:*`),
       ]);
 

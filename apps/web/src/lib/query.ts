@@ -16,6 +16,7 @@ export interface QueryResult<T> {
 export interface QueryOptions {
   staleTime?: number;
   persist?: boolean;
+  enabled?: boolean;
 }
 
 export function useQuery<T>(
@@ -25,6 +26,7 @@ export function useQuery<T>(
 ): QueryResult<T> {
   const staleTime = options.staleTime ?? 15000; // default 15s stale window
   const persist = options.persist ?? false;
+  const enabled = options.enabled ?? true;
   const cacheKey = key;
   const lsKey = `query_cache:${key}`;
 
@@ -61,7 +63,7 @@ export function useQuery<T>(
   }, [cacheKey, staleTime, persist, lsKey]);
 
   const [data, setData] = useState<T | null>(getCached());
-  const [isLoading, setIsLoading] = useState(!getCached());
+  const [isLoading, setIsLoading] = useState(enabled && !getCached());
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<any>(null);
 
@@ -71,12 +73,18 @@ export function useQuery<T>(
     prevKeyRef.current = key;
     const freshCached = getCached();
     setData(freshCached);
-    setIsLoading(!freshCached);
+    setIsLoading(enabled && !freshCached);
     setError(null);
   }
 
   const fetchData = useCallback(async (force = false) => {
     const cached = globalQueryCache.get(cacheKey);
+    if (!enabled) {
+      setIsLoading(false);
+      setIsFetching(false);
+      return;
+    }
+
     if (!force && cached && Date.now() - cached.timestamp < staleTime) {
       setData(cached.data);
       setIsLoading(false);
@@ -138,9 +146,15 @@ export function useQuery<T>(
       setIsLoading(false);
       setIsFetching(false);
     }
-  }, [cacheKey, staleTime, persist, lsKey]);
+  }, [cacheKey, staleTime, persist, lsKey, enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      setIsFetching(false);
+      return;
+    }
+
     fetchData();
 
     // Listen for query key invalidations
@@ -161,14 +175,18 @@ export function useQuery<T>(
         }
       }
     };
-  }, [cacheKey, fetchData]);
+  }, [cacheKey, fetchData, enabled]);
+
+  const refetch = useCallback(() => {
+    return fetchData(true);
+  }, [fetchData]);
 
   return {
     data,
     isLoading,
     isFetching,
     error,
-    refetch: () => fetchData(true)
+    refetch
   };
 }
 
@@ -194,18 +212,23 @@ export const queryClient = {
     // Invalidate localStorage persistent caches by setting timestamp to 0
     if (typeof window !== "undefined") {
       try {
+        const matchingKeys: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const lsKey = localStorage.key(i);
           if (lsKey && lsKey.startsWith(`query_cache:${cleanPattern}`)) {
-            const stored = localStorage.getItem(lsKey);
-            if (stored) {
-              try {
-                const parsed = JSON.parse(stored);
-                parsed.timestamp = 0;
-                localStorage.setItem(lsKey, JSON.stringify(parsed));
-              } catch {
-                localStorage.removeItem(lsKey);
-              }
+            matchingKeys.push(lsKey);
+          }
+        }
+
+        for (const lsKey of matchingKeys) {
+          const stored = localStorage.getItem(lsKey);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              parsed.timestamp = 0;
+              localStorage.setItem(lsKey, JSON.stringify(parsed));
+            } catch {
+              localStorage.removeItem(lsKey);
             }
           }
         }

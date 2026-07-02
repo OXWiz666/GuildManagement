@@ -26,19 +26,19 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  ign          String?
-  cp           Int?
-  class        String?
-  weapon       String?
+  ign    String?
+  cp     Int?
+  class  String?
+  weapon String?
 
-  refreshTokens       RefreshToken[]
-  sessions            Session[]
-  guildMembers        GuildMember[]
-  auditLogsAsActor    AuditLog[]    @relation("AuditActor")
-  ledgerEntriesAsActor LedgerEntry[] @relation("LedgerActor")
-  passwordResetTokens PasswordResetToken[]
-  guildJoinRequests   GuildJoinRequest[]
-  attendanceRecords   AttendanceRecord[]
+  refreshTokens        RefreshToken[]
+  sessions             Session[]
+  guildMembers         GuildMember[]
+  auditLogsAsActor     AuditLog[]            @relation("AuditActor")
+  ledgerEntriesAsActor LedgerEntry[]         @relation("LedgerActor")
+  passwordResetTokens  PasswordResetToken[]
+  guildJoinRequests    GuildJoinRequest[]
+  attendanceRecords    AttendanceRecord[]
   factionAnnouncements FactionAnnouncement[] @relation("FactionAnnouncementCreator")
   factionEvents        FactionEvent[]        @relation("FactionEventCreator")
   notifications        Notification[]
@@ -109,33 +109,35 @@ model Guild {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  inviteCode  String?  @unique @map("invite_code")
+  inviteCode String? @unique @map("invite_code")
 
-  settings      GuildSettings?
-  members       GuildMember[]
-  ledgerEntries LedgerEntry[]
-  auditLogs     AuditLog[]
-  joinRequests  GuildJoinRequest[]
+  settings           GuildSettings?
+  members            GuildMember[]
+  ledgerEntries      LedgerEntry[]
+  auditLogs          AuditLog[]
+  joinRequests       GuildJoinRequest[]
   attendanceSessions AttendanceSession[]
   bossSchedules      BossSchedule[]
-  bossTurnSchedules  BossSchedule[] @relation("BossTurnGuild")
+  bossTurnSchedules  BossSchedule[]             @relation("BossTurnGuild")
   lootSales          LootSale[]
   pointsSnapshots    GuildPointsSnapshot[]
   auctionItems       AuctionItem[]
   itemRequests       ItemRequest[]
+  legendaryRequests  LegendaryPriorityRequest[]
+  itemDistributions  ItemDistribution[]
 
   @@map("guilds")
 }
 
 model GuildSettings {
-  id       String @id @default(cuid())
-  guildId  String @unique @map("guild_id")
-  guild    Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  guildId String @unique @map("guild_id")
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   // Currency config — never hard-coded
-  currencyCode           String @default("PHP") @map("currency_code")
-  currencySymbol         String @default("₱") @map("currency_symbol")
-  secondaryCurrencyCode   String? @map("secondary_currency_code")   // e.g. "DIAMOND"
+  currencyCode            String  @default("PHP") @map("currency_code")
+  currencySymbol          String  @default("₱") @map("currency_symbol")
+  secondaryCurrencyCode   String? @map("secondary_currency_code") // e.g. "DIAMOND"
   secondaryCurrencySymbol String? @map("secondary_currency_symbol") // e.g. "💎"
 
   // Economy settings (integer basis points / percentages)
@@ -158,6 +160,10 @@ model GuildSettings {
   // Per-rank item request limits per cycle (JSON: { "CORE_MEMBER": 7, "ELITE_MEMBER": 7, "MEMBER": 5, "OFFICER": 5 })
   itemRequestLimits Json @default("{}") @map("item_request_limits")
 
+  // Guild Market distribution rules — CP tier thresholds + per-tier item limits + priority weights
+  // Shape: { cpTiers: { eliteMinCp, upperMinCp }, limits: { CORE/ELITE/UPPER/LOWER: { logs, temporalPieces, materials } }, weights: {...} }
+  marketRules Json @default("{}") @map("market_rules")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -165,18 +171,18 @@ model GuildSettings {
 }
 
 model GuildMember {
-  id       String @id @default(cuid())
-  userId   String @map("user_id")
-  guildId  String @map("guild_id")
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  guild    Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  guildId String @map("guild_id")
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   role       GuildRole @default(MEMBER)
   rankName   String    @default("Lower Rank") @map("rank_name")
-  ign        String?   @map("ign")          // In-Game Name
-  cp         Int?      @map("cp")           // Combat Power
-  class      String?   @map("class")        // Character class (e.g. Warrior, Mage)
-  weapon     String?   @map("weapon")       // Equipped weapon
+  ign        String?   @map("ign") // In-Game Name
+  cp         Int?      @map("cp") // Combat Power
+  class      String?   @map("class") // Character class (e.g. Warrior, Mage)
+  weapon     String?   @map("weapon") // Equipped weapon
   memberCode String?   @unique @map("member_code") // Unique member identifier
   joinedAt   DateTime  @default(now()) @map("joined_at")
   isActive   Boolean   @default(true) @map("is_active")
@@ -186,8 +192,18 @@ model GuildMember {
   bidPoints          Int       @default(0) @map("bid_points")
   bidPointsLastReset DateTime? @map("bid_points_last_reset")
 
-  auctionBids  AuctionBid[]
-  itemRequests ItemRequest[]
+  // Guild Market: officer manual priority-sequence override (audited)
+  marketPrioritySeq    Int?    @map("market_priority_seq")
+  marketPriorityReason String? @map("market_priority_reason")
+
+  // Guild Market: member's chosen/wanted items (array of slot keys) shown to officers
+  marketWishlist Json @default("[]") @map("market_wishlist")
+
+  auctionBids       AuctionBid[]
+  itemRequests      ItemRequest[]
+  legendaryRequests LegendaryPriorityRequest[]
+  itemDistributions ItemDistribution[]
+  equipment         MemberEquipment[]
 
   @@unique([userId, guildId])
   @@index([guildId])
@@ -215,11 +231,11 @@ model GuildPointsSnapshot {
   guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   // Who triggered the reset
-  actorId     String   @map("actor_id")
-  resetCycle  String   @map("reset_cycle") // "WEEKLY" | "MONTHLY" | "MANUAL"
-  snapshotData Json    @map("snapshot_data") // Array of { memberId, userId, ign, dkp, bidPoints }
-  membersCount Int     @map("members_count")
-  createdAt   DateTime @default(now()) @map("created_at")
+  actorId      String   @map("actor_id")
+  resetCycle   String   @map("reset_cycle") // "WEEKLY" | "MONTHLY" | "MANUAL"
+  snapshotData Json     @map("snapshot_data") // Array of { memberId, userId, ign, dkp, bidPoints }
+  membersCount Int      @map("members_count")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([guildId])
   @@index([createdAt])
@@ -231,10 +247,10 @@ model GuildPointsSnapshot {
 // Leaders create auction items; members bid with bid points
 // ═══════════════════════════════════════════════════
 model AuctionItem {
-  id          String        @id @default(cuid())
-  guildId     String        @map("guild_id")
-  guild       Guild         @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  creatorId   String        @map("creator_id")
+  id        String @id @default(cuid())
+  guildId   String @map("guild_id")
+  guild     Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  creatorId String @map("creator_id")
 
   itemName    String        @map("item_name")
   description String?
@@ -247,7 +263,7 @@ model AuctionItem {
   endsAt      DateTime      @map("ends_at")
   createdAt   DateTime      @default(now()) @map("created_at")
 
-  bids        AuctionBid[]
+  bids AuctionBid[]
 
   @@index([guildId, status])
   @@index([endsAt])
@@ -256,13 +272,13 @@ model AuctionItem {
 }
 
 model AuctionBid {
-  id          String      @id @default(cuid())
-  auctionId   String      @map("auction_id")
-  auction     AuctionItem @relation(fields: [auctionId], references: [id], onDelete: Cascade)
-  memberId    String      @map("member_id")
-  member      GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  bidAmount   Int         @map("bid_amount") // in bid points
-  createdAt   DateTime    @default(now()) @map("created_at")
+  id        String      @id @default(cuid())
+  auctionId String      @map("auction_id")
+  auction   AuctionItem @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  memberId  String      @map("member_id")
+  member    GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  bidAmount Int         @map("bid_amount") // in bid points
+  createdAt DateTime    @default(now()) @map("created_at")
 
   @@index([auctionId])
   @@index([memberId])
@@ -281,29 +297,29 @@ enum AuctionStatus {
 // leaders approve/decline/fulfill
 // ═══════════════════════════════════════════════════
 model ItemRequest {
-  id        String            @id @default(cuid())
-  guildId   String            @map("guild_id")
-  guild     Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  memberId  String            @map("member_id")
-  member    GuildMember       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  id       String      @id @default(cuid())
+  guildId  String      @map("guild_id")
+  guild    Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  memberId String      @map("member_id")
+  member   GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  type      ItemRequestType   // ITEM | WITHDRAWAL
-  status    ItemRequestStatus @default(PENDING)
+  type   ItemRequestType // ITEM | WITHDRAWAL
+  status ItemRequestStatus @default(PENDING)
 
   // For ITEM requests
-  itemName    String?   @map("item_name")
-  quantity    Int?      @default(1)
-  itemCategory String?  @map("item_category") // matches CATEGORIES list
+  itemName     String? @map("item_name")
+  quantity     Int?    @default(1)
+  itemCategory String? @map("item_category") // matches CATEGORIES list
 
   // For WITHDRAWAL requests
   withdrawalAmount   Decimal? @map("withdrawal_amount") @db.Decimal(12, 2)
   withdrawalCurrency String?  @map("withdrawal_currency") // "PHP" | "DIAMOND"
 
-  note          String?   // Applicant's note
-  reviewNote    String?   @map("review_note") // Leader/officer's response note
-  reviewedById  String?   @map("reviewed_by_id") // Actor who reviewed
-  reviewedAt    DateTime? @map("reviewed_at")
-  fulfilledAt   DateTime? @map("fulfilled_at")
+  note         String? // Applicant's note
+  reviewNote   String?   @map("review_note") // Leader/officer's response note
+  reviewedById String?   @map("reviewed_by_id") // Actor who reviewed
+  reviewedAt   DateTime? @map("reviewed_at")
+  fulfilledAt  DateTime? @map("fulfilled_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -328,14 +344,118 @@ enum ItemRequestStatus {
 }
 
 // ═══════════════════════════════════════════════════
+// GUILD MARKET — LEGENDARY PRIORITY REQUESTS
+// Members request priority for legendary-tier rewards;
+// officers review, assign a priority sequence, and complete.
+// ═══════════════════════════════════════════════════
+model LegendaryPriorityRequest {
+  id       String      @id @default(cuid())
+  guildId  String      @map("guild_id")
+  guild    Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  memberId String      @map("member_id")
+  member   GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  // WEAPON | LEGEND_ACCESSORIES | LEGEND_CLOAK | ABILITY_REROLL | ABILITY_PASSIVE
+  category    String
+  currentGear String? @map("current_gear") // Current gear status / context
+  reason      String? // Reason for priority
+  prioritySeq Int?    @map("priority_seq") // Officer-assigned sequence
+
+  // PENDING | APPROVED | REJECTED | COMPLETED
+  status       String    @default("PENDING")
+  officerNote  String?   @map("officer_note")
+  reviewedById String?   @map("reviewed_by_id")
+  reviewedAt   DateTime? @map("reviewed_at")
+  completedAt  DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([guildId, status])
+  @@index([memberId])
+  @@map("legendary_priority_requests")
+}
+
+// ═══════════════════════════════════════════════════
+// GUILD MARKET — ITEM DISTRIBUTIONS
+// Officer-recorded distribution events. Wide per-slot gear
+// data is stored as JSON (`items`) for future expansion.
+// ═══════════════════════════════════════════════════
+model ItemDistribution {
+  id       String      @id @default(cuid())
+  guildId  String      @map("guild_id")
+  guild    Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  memberId String      @map("member_id")
+  member   GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  formType String  @map("form_type") // CORE | NON_CORE
+  rankTier String? @map("rank_tier") // CORE | ELITE | UPPER | LOWER
+
+  // Snapshots captured at distribution time (members change over time)
+  ignSnapshot    String? @map("ign_snapshot")
+  classSnapshot  String? @map("class_snapshot")
+  cpSnapshot     Int?    @map("cp_snapshot")
+  pointsSnapshot Int?    @map("points_snapshot")
+  prioritySeq    Int?    @map("priority_seq")
+
+  // { weapon: 1, headpiece: 1, logs: 5, temporalPieces: 3, materials: 2, ... }
+  items Json    @default("{}")
+  note  String?
+
+  distributedById String   @map("distributed_by_id")
+  overridden      Boolean  @default(false) // Rank limit override used
+  overrideReason  String?  @map("override_reason")
+  distributedAt   DateTime @default(now()) @map("distributed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([guildId, distributedAt])
+  @@index([memberId])
+  @@map("item_distributions")
+}
+
+// ═══════════════════════════════════════════════════
+// MEMBER EQUIPMENT — Item Screenshot Update feature
+// Per-slot gear detected from an uploaded equipment screenshot
+// (OCR in the browser) and matched to existing Supabase icon objects.
+// One current item per slot (upsert on re-scan). We only ever REFERENCE
+// existing icon storage paths here — never write to the icon buckets.
+// ═══════════════════════════════════════════════════
+model MemberEquipment {
+  id       String      @id @default(cuid())
+  memberId String      @map("member_id")
+  member   GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  slotType String @map("slot_type") // one of EQUIPMENT_SLOTS keys (weapon, helm, ...)
+  itemName String @map("item_name")
+
+  // Storage PATH (bucket-relative object key), signed on read — never a raw public URL
+  iconUrl    String @map("icon_url")
+  iconBucket String @map("icon_bucket")
+  rarity     String?
+
+  confidence  Float   @default(0)
+  needsReview Boolean @default(false) @map("needs_review")
+
+  // Storage path of the uploaded source screenshot (EquipmentScreenshots bucket)
+  sourceScreenshotUrl String? @map("source_screenshot_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([memberId, slotType])
+  @@index([memberId])
+  @@map("member_equipment")
+}
+
+// ═══════════════════════════════════════════════════
 // IMMUTABLE LEDGER
 // Balances are ALWAYS derived by summing entries.
 // Entries are NEVER updated or deleted.
 // ═══════════════════════════════════════════════════
 model LedgerEntry {
-  id          String @id @default(cuid())
-  guildId     String @map("guild_id")
-  guild       Guild  @relation(fields: [guildId], references: [id])
+  id      String @id @default(cuid())
+  guildId String @map("guild_id")
+  guild   Guild  @relation(fields: [guildId], references: [id])
 
   // Who is affected
   accountType AccountType @map("account_type")
@@ -343,8 +463,8 @@ model LedgerEntry {
 
   // What changed — integer units (cents), never float
   currency  String
-  amount    BigInt           // Stored as integer cents/smallest unit
-  entryType LedgerEntryType  @map("entry_type")
+  amount    BigInt // Stored as integer cents/smallest unit
+  entryType LedgerEntryType @map("entry_type")
 
   // Why — links to the source event
   referenceType String @map("reference_type") // "BOSS_KILL", "SALE", "PAYOUT", etc.
@@ -389,7 +509,7 @@ enum LedgerEntryType {
 // AUDIT LOG — append-only, every significant action
 // ═══════════════════════════════════════════════════
 model AuditLog {
-  id       String @id @default(cuid())
+  id String @id @default(cuid())
 
   // Who performed the action
   actorId String @map("actor_id")
@@ -400,9 +520,9 @@ model AuditLog {
   guild   Guild?  @relation(fields: [guildId], references: [id])
 
   // What happened
-  action   String            // "USER_LOGIN", "MEMBER_PROMOTED", etc.
-  target   String?           // Target entity type
-  targetId String?  @map("target_id")
+  action   String // "USER_LOGIN", "MEMBER_PROMOTED", etc.
+  target   String? // Target entity type
+  targetId String? @map("target_id")
 
   // Details — before/after state, extra context
   detail    Json?
@@ -476,17 +596,23 @@ enum JoinRequestStatus {
 }
 
 model GuildJoinRequest {
-  id        String            @id @default(cuid())
-  guildId   String            @map("guild_id")
-  userId    String            @map("user_id")
-  guild     Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id      String @id @default(cuid())
+  guildId String @map("guild_id")
+  userId  String @map("user_id")
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   ign       String            @map("ign")
   cp        Int               @map("cp")
   class     String            @map("class")
   weapon    String            @map("weapon")
   status    JoinRequestStatus @default(PENDING)
+
+  // Equipment captured at apply time (Item Screenshot Update). Array of
+  // { slotType, itemName, iconPath, iconBucket, rarity?, confidence }. Shown to
+  // the reviewing leader and materialised into MemberEquipment on acceptance.
+  gearItems Json? @map("gear_items")
+
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @updatedAt @map("updated_at")
 
@@ -513,18 +639,18 @@ enum BossEventStatus {
 }
 
 model AttendanceSession {
-  id             String            @id @default(cuid())
-  guildId        String            @map("guild_id")
-  guild          Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  code           String            @unique
-  type           AttendanceType    @default(GUILD)
+  id             String             @id @default(cuid())
+  guildId        String             @map("guild_id")
+  guild          Guild              @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  code           String             @unique
+  type           AttendanceType     @default(GUILD)
   title          String
-  isActive       Boolean           @default(true) @map("is_active")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  expiresAt      DateTime          @map("expires_at")
+  isActive       Boolean            @default(true) @map("is_active")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  expiresAt      DateTime           @map("expires_at")
   records        AttendanceRecord[]
-  bossScheduleId String?           @map("boss_schedule_id")
-  bossSchedule   BossSchedule?     @relation(fields: [bossScheduleId], references: [id], onDelete: SetNull)
+  bossScheduleId String?            @map("boss_schedule_id")
+  bossSchedule   BossSchedule?      @relation(fields: [bossScheduleId], references: [id], onDelete: SetNull)
 
   @@index([guildId])
   @@index([guildId, createdAt])
@@ -545,6 +671,8 @@ model AttendanceRecord {
   @@unique([userId, sessionId])
   @@index([sessionId])
   @@index([userId])
+  // Officer "pending verification" queue filters by session + status.
+  @@index([sessionId, status])
   @@map("attendance_records")
 }
 
@@ -565,9 +693,9 @@ model BossSchedule {
   createdAt          DateTime            @default(now()) @map("created_at")
   attendanceSessions AttendanceSession[]
 
-  lootDrop           String?             @map("loot_drop")
-  screenshotUrl      String?             @map("screenshot_url")
-  lootSales          LootSale[]
+  lootDrop      String?    @map("loot_drop")
+  screenshotUrl String?    @map("screenshot_url")
+  lootSales     LootSale[]
 
   @@index([guildId])
   @@index([guildTurnGuildId])
@@ -580,15 +708,15 @@ model BossSchedule {
 }
 
 model BossRotation {
-  id             String    @id @default(cuid())
-  bossName       String    @unique @map("boss_name")
-  queueGuildIds  Json      @map("queue_guild_ids")
-  currentIndex   Int       @default(0) @map("current_index")
-  nextSpawnTime  DateTime? @map("next_spawn_time")
-  updatedById    String?   @map("updated_by_id")
-  updatedBy      User?     @relation("BossRotationUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id            String    @id @default(cuid())
+  bossName      String    @unique @map("boss_name")
+  queueGuildIds Json      @map("queue_guild_ids")
+  currentIndex  Int       @default(0) @map("current_index")
+  nextSpawnTime DateTime? @map("next_spawn_time")
+  updatedById   String?   @map("updated_by_id")
+  updatedBy     User?     @relation("BossRotationUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@index([bossName])
   @@map("boss_rotations")
@@ -598,7 +726,7 @@ model Boss {
   id            String   @id @default(cuid())
   name          String   @unique
   level         Int
-  type          String   // "LONG_CYCLE" | "FIXED_SCHEDULE"
+  type          String // "LONG_CYCLE" | "FIXED_SCHEDULE"
   cooldownHours Int?     @map("cooldown_hours")
   location      String
   fixedSpawns   Json?    @map("fixed_spawns")
@@ -615,7 +743,7 @@ model LootSale {
   bossScheduleId    String?       @map("boss_schedule_id")
   bossSchedule      BossSchedule? @relation(fields: [bossScheduleId], references: [id], onDelete: SetNull)
   itemName          String        @map("item_name")
-  category          String        // e.g. "WEAPON", "ARMOR", "ACCESSORY", "MATERIAL", "SCROLL", "OTHER"
+  category          String // e.g. "WEAPON", "ARMOR", "ACCESSORY", "MATERIAL", "SCROLL", "OTHER"
   saleValue         BigInt        @map("sale_value") // Integer cents
   taxRatePercent    Int           @map("tax_rate_percent")
   taxAmount         BigInt        @map("tax_amount") // Integer cents
@@ -627,5 +755,7 @@ model LootSale {
 
   @@index([guildId])
   @@index([bossScheduleId])
+  // Sold-item log is read newest-first per guild.
+  @@index([guildId, createdAt])
   @@map("loot_sales")
 }

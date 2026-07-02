@@ -63,6 +63,16 @@ const navGroups: NavGroup[] = [
           </svg>
         ),
       },
+      {
+        label: "My Gear",
+        href: "/dashboard/equipment",
+        icon: (
+          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 2.5l-2.5 2.5-2.5-2.5-6 3.5 2.5 4 1.5-1v9.5h9v-9.5l1.5 1 2.5-4-6-3.5z" />
+            <path d="M9.5 5l2.5 2.5 2.5-2.5" />
+          </svg>
+        ),
+      },
     ],
   },
   {
@@ -128,7 +138,7 @@ const navGroups: NavGroup[] = [
         roles: ["ADMIN", "FACTION_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER"],
       },
       {
-        label: "Guild Market",
+        label: "Guild Inventory",
         href: "/dashboard/guild-market",
         icon: (
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

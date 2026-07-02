@@ -40,20 +40,45 @@ export function useReveal(threshold = 0.12, once = true) {
 // REVEAL — fades + lifts on scroll-in (no blur on text for clarity)
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * Reads `prefers-reduced-motion` after mount. Returns `false` on the server and
+ * on the first client render so SSR and hydration always match, then updates to
+ * the real preference (and stays in sync if it changes).
+ */
+function useReducedMotion() {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduce(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+  return reduce;
+}
+
 export function Reveal({
   children,
   delay = 0,
   className = "",
   from = "bottom",
   distance = 32,
+  blur = 0,
+  duration = 800,
 }: {
   children: ReactNode;
   delay?: number;
   className?: string;
-  from?: "bottom" | "left" | "right" | "scale";
+  /** "morph" combines a scale + blur dissolve for a fluid reveal of visual blocks. */
+  from?: "bottom" | "left" | "right" | "scale" | "morph";
   distance?: number;
+  /** Adds a blur-to-sharp morph. Auto-on for from="morph". */
+  blur?: number;
+  duration?: number;
 }) {
   const { ref, visible } = useReveal(0.08);
+  const reduce = useReducedMotion();
+  const blurPx = from === "morph" && blur === 0 ? 12 : blur;
 
   const hidden: CSSProperties =
     from === "left"
@@ -62,21 +87,103 @@ export function Reveal({
       ? { opacity: 0, transform: `translateX(${distance}px)` }
       : from === "scale"
       ? { opacity: 0, transform: "scale(0.94)" }
-      : { opacity: 0, transform: `translateY(${distance}px)` };
+      : from === "morph"
+      ? { opacity: 0, transform: `translateY(${distance * 0.6}px) scale(0.96)`, filter: `blur(${blurPx}px)` }
+      : { opacity: 0, transform: `translateY(${distance}px)`, ...(blurPx ? { filter: `blur(${blurPx}px)` } : {}) };
 
   const shown: CSSProperties = {
     opacity: 1,
     transform: "translate(0) scale(1)",
+    filter: "blur(0px)",
   };
+
+  // Reduced motion: render the resolved state with no transition.
+  if (reduce) {
+    return (
+      <div ref={ref} className={className} style={shown}>
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div
       ref={ref}
       className={className}
       style={{
+        willChange: "transform, opacity, filter",
         transition: [
-          `opacity 800ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
-          `transform 800ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+          `opacity ${duration}ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+          `transform ${duration}ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+          `filter ${duration}ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+        ].join(", "),
+        ...(visible ? shown : hidden),
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION REVEAL — fades + lifts a whole <section> as it scrolls
+// into view. Once the entrance finishes it drops the transform so
+// it never establishes a containing block for inner `sticky`/`fixed`
+// descendants (HowItWorks' sticky stage, InteractivePreview's toast).
+// ═══════════════════════════════════════════════════════════
+
+export function SectionReveal({
+  children,
+  className = "",
+  from = "bottom",
+  distance = 44,
+  duration = 850,
+  delay = 0,
+}: {
+  children: ReactNode;
+  className?: string;
+  from?: "bottom" | "left" | "right";
+  distance?: number;
+  duration?: number;
+  delay?: number;
+}) {
+  const { ref, visible } = useReveal(0.06);
+  const reduce = useReducedMotion();
+  const [settled, setSettled] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    const t = window.setTimeout(() => setSettled(true), duration + delay + 80);
+    return () => window.clearTimeout(t);
+  }, [visible, duration, delay]);
+
+  // Reduced motion (or after the entrance settles): plain, transform-free render.
+  if (reduce || settled) {
+    return (
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    );
+  }
+
+  const hidden: CSSProperties =
+    from === "left"
+      ? { opacity: 0, transform: `translate3d(-${distance}px, 0, 0)` }
+      : from === "right"
+      ? { opacity: 0, transform: `translate3d(${distance}px, 0, 0)` }
+      : { opacity: 0, transform: `translate3d(0, ${distance}px, 0)` };
+
+  const shown: CSSProperties = { opacity: 1, transform: "translate3d(0, 0, 0)" };
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        willChange: "transform, opacity",
+        transition: [
+          `opacity ${duration}ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+          `transform ${duration}ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
         ].join(", "),
         ...(visible ? shown : hidden),
       }}
@@ -193,6 +300,55 @@ export function TiltCard({
       <div
         ref={shineRef}
         className="absolute inset-0 rounded-[inherit] pointer-events-none transition-opacity duration-500"
+        style={{ opacity: 0 }}
+      />
+      {children}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPOTLIGHT CARD — soft gold glow that tracks the cursor.
+// Renders an overlay div (not a pseudo-element) so it composes
+// cleanly with `.card-obsidian` which already owns ::before.
+// ═══════════════════════════════════════════════════════════
+
+export function SpotlightCard({
+  children,
+  className = "",
+  radius = 260,
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  radius?: number;
+  style?: CSSProperties;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
+
+  const onMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const el = ref.current;
+      const glow = glowRef.current;
+      if (!el || !glow) return;
+      const r = el.getBoundingClientRect();
+      glow.style.opacity = "1";
+      glow.style.background = `radial-gradient(${radius}px circle at ${e.clientX - r.left}px ${e.clientY - r.top}px, rgba(245,197,66,0.10), transparent 68%)`;
+    },
+    [radius]
+  );
+
+  const onLeave = useCallback(() => {
+    if (glowRef.current) glowRef.current.style.opacity = "0";
+  }, []);
+
+  return (
+    <div ref={ref} onMouseMove={onMove} onMouseLeave={onLeave} className={`relative ${className}`} style={style}>
+      <div
+        ref={glowRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[inherit] transition-opacity duration-300 z-10"
         style={{ opacity: 0 }}
       />
       {children}

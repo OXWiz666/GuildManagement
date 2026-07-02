@@ -17,6 +17,13 @@ const failedAttemptsMap = new Map<string, SpamRecord>();
 
 const ROTATION_MANAGER_ROLES = ["FACTION_LEADER", "GUILD_LEADER", "ADMIN"];
 const BOSS_KILL_AUDIT_ACTIONS = ["BOSS_ROTATION_KILLED", "BOSS_KILLED_LOGGED", "BOSS_KILL_RECORDED"];
+const SCHEDULE_CREATOR_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN", "OFFICER"];
+
+// How long the self check-in window stays open after a boss kill is logged.
+const CHECK_IN_WINDOW_MINUTES = 30;
+
+// Process-level guard so we reconcile the boss registry at most once per server boot.
+let registrySynced = false;
 
 type PendingNotification = {
   userId: string;
@@ -168,19 +175,18 @@ async function getBossRegistryForRotation() {
   }
 }
 
+/**
+ * Reconcile the `Boss` registry with the authoritative `PREDEFINED_BOSSES` list.
+ * Upserts every boss so corrections (e.g. level/cooldown changes) reach an
+ * already-seeded database, not just missing rows. Runs once per process.
+ */
 async function ensureBossRegistrySeeded() {
-  const existingBosses = await prisma.boss.findMany({
-    select: { name: true },
-  });
-  const existingNames = new Set(existingBosses.map((boss) => boss.name.toLowerCase()));
-  const missingBosses = PREDEFINED_BOSSES.filter((boss) => !existingNames.has(boss.name.toLowerCase()));
-
-  if (missingBosses.length === 0) {
+  if (registrySynced) {
     return;
   }
 
   await prisma.$transaction(
-    missingBosses.map((boss) =>
+    PREDEFINED_BOSSES.map((boss) =>
       prisma.boss.upsert({
         where: { name: boss.name },
         update: {
@@ -201,6 +207,129 @@ async function ensureBossRegistrySeeded() {
       }),
     ),
   );
+
+  registrySynced = true;
+}
+
+/**
+ * Pick a sensible creator for system-generated boss schedules — an officer or
+ * leader when possible, otherwise any active member. Returns null for an empty guild.
+ */
+async function getDefaultScheduleCreator(guildId: string): Promise<string | null> {
+  const officer = await prisma.guildMember.findFirst({
+    where: { guildId, isActive: true, role: { in: SCHEDULE_CREATOR_ROLES as any } },
+    select: { userId: true },
+    orderBy: { joinedAt: "asc" },
+  });
+  if (officer) return officer.userId;
+
+  const anyMember = await prisma.guildMember.findFirst({
+    where: { guildId, isActive: true },
+    select: { userId: true },
+    orderBy: { joinedAt: "asc" },
+  });
+  return anyMember?.userId ?? null;
+}
+
+/**
+ * Ensure every registry boss has a live upcoming spawn for this guild so the
+ * Boss Schedule / Rotation / Attendance pages always have something to count
+ * down. Fixed-schedule bosses get their next Singapore-time spawn; cycle bosses
+ * start "live" (now) until their first logged kill establishes the real cadence.
+ * Idempotent — only creates rows for bosses that have no UPCOMING/SPAWNED entry.
+ */
+async function ensureUpcomingSpawns(guildId: string) {
+  const existing = await prisma.bossSchedule.findMany({
+    where: {
+      guildId,
+      status: { in: [BossEventStatus.UPCOMING, BossEventStatus.SPAWNED] },
+    },
+    select: { id: true, bossName: true, spawnTime: true },
+  });
+
+  const now = new Date();
+
+  // Roll forward stale FIXED_SCHEDULE spawns. Their cadence is deterministic, so
+  // a passed spawn time can be advanced to the next Singapore-time occurrence
+  // without waiting for a kill log — keeping every countdown valid across the
+  // Rotation / Schedule / Attendance pages. (Cooldown bosses intentionally stay
+  // "live / ready" until their first kill establishes the real timer.)
+  const fixedByName = new Map(
+    PREDEFINED_BOSSES.filter((b) => b.type === "FIXED_SCHEDULE").map((b) => [b.name.toLowerCase(), b]),
+  );
+  const staleFixed = existing.filter(
+    (s) => fixedByName.has(s.bossName.toLowerCase()) && s.spawnTime.getTime() <= now.getTime(),
+  );
+  if (staleFixed.length > 0) {
+    await prisma.$transaction(
+      staleFixed.map((s) =>
+        prisma.bossSchedule.update({
+          where: { id: s.id },
+          data: {
+            spawnTime: getNextBossSpawnTime(s.bossName, now),
+            status: BossEventStatus.UPCOMING,
+          },
+        }),
+      ),
+    );
+  }
+
+  const have = new Set(existing.map((s) => s.bossName.toLowerCase()));
+  const missing = PREDEFINED_BOSSES.filter((boss) => !have.has(boss.name.toLowerCase()));
+
+  if (missing.length === 0) {
+    return;
+  }
+
+  const creatorId = await getDefaultScheduleCreator(guildId);
+  if (!creatorId) {
+    return; // empty guild — nothing to attribute the schedules to
+  }
+
+  await prisma.bossSchedule.createMany({
+    data: missing.map((boss) => ({
+      guildId,
+      bossName: boss.name,
+      bossImageUrl: getBossImageUrl(boss.name),
+      spawnTime: boss.type === "FIXED_SCHEDULE" ? getNextBossSpawnTime(boss.name, now) : now,
+      location: boss.location,
+      status: BossEventStatus.UPCOMING,
+      creatorId,
+    })),
+  });
+}
+
+/**
+ * Open a code-free, single-active check-in window tied to a freshly-killed boss.
+ * Members claim attendance via `checkInToBoss` (no code typing); officers verify
+ * through the existing `confirmAttendanceRecord` flow. A `code` is still stored
+ * internally to satisfy the unique constraint but is never surfaced.
+ */
+async function openBossCheckInSession(
+  guildId: string,
+  bossScheduleId: string,
+  bossName: string,
+) {
+  await prisma.attendanceSession.updateMany({
+    where: { guildId, isActive: true },
+    data: { isActive: false },
+  });
+
+  const randomPin = crypto.randomBytes(3).toString("hex").toUpperCase();
+  const code = `ATT-${randomPin.substring(0, 4)}`;
+  const expiresAt = new Date(Date.now() + CHECK_IN_WINDOW_MINUTES * 60 * 1000);
+
+  return prisma.attendanceSession.create({
+    data: {
+      guildId,
+      code,
+      type: AttendanceType.GUILD,
+      title: `${bossName} Check-In`,
+      isActive: true,
+      expiresAt,
+      bossScheduleId,
+    },
+  });
 }
 
 
@@ -226,7 +355,7 @@ export async function createAttendanceSession(
     },
   });
 
-  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER")) {
+  if (!actorMembership || !actorMembership.isActive || !SCHEDULE_CREATOR_ROLES.includes(actorMembership.role as any)) {
     throw new ForbiddenError("Only Guild Leaders and Officers can start attendance sessions");
   }
 
@@ -375,6 +504,67 @@ export async function submitAttendanceCode(userId: string, code: string) {
   };
 }
 
+/**
+ * Code-free self check-in for a specific killed boss. Resolves the active,
+ * non-expired check-in window attached to that boss schedule and records the
+ * member as PENDING for officer verification. Mirrors `submitAttendanceCode`
+ * without the code-entry / anti-spam machinery (the boss id is the key).
+ */
+export async function checkInToBoss(userId: string, guildId: string, bossScheduleId: string) {
+  const now = new Date();
+
+  const membership = await prisma.guildMember.findUnique({
+    where: { userId_guildId: { userId, guildId } },
+  });
+  if (!membership || !membership.isActive) {
+    throw new ForbiddenError("You must be an active member of the guild to check in");
+  }
+
+  const session = await prisma.attendanceSession.findFirst({
+    where: {
+      bossScheduleId,
+      isActive: true,
+      expiresAt: { gt: now },
+    },
+    include: { guild: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!session) {
+    throw new BadRequestError("Check-in is closed for this boss");
+  }
+  if (session.guildId !== guildId) {
+    throw new ForbiddenError("This check-in belongs to another guild");
+  }
+
+  const existingRecord = await prisma.attendanceRecord.findUnique({
+    where: { userId_sessionId: { userId, sessionId: session.id } },
+  });
+  if (existingRecord) {
+    throw new BadRequestError("You have already checked in for this boss");
+  }
+
+  const record = await prisma.attendanceRecord.create({
+    data: {
+      sessionId: session.id,
+      userId,
+      status: AttendanceRecordStatus.PENDING,
+    },
+    include: {
+      user: { select: { id: true, displayName: true, email: true } },
+    },
+  });
+
+  return {
+    success: true,
+    sessionTitle: session.title,
+    guildName: session.guild.name,
+    guildId: session.guildId,
+    bossScheduleId,
+    record,
+  };
+}
+
 export async function getGuildPendingAttendance(guildId: string, actorId: string) {
   // Parallelize actor verification and active session query
   const [actorMembership, activeSession] = await Promise.all([
@@ -391,7 +581,7 @@ export async function getGuildPendingAttendance(guildId: string, actorId: string
     }),
   ]);
 
-  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER")) {
+  if (!actorMembership || !actorMembership.isActive || !SCHEDULE_CREATOR_ROLES.includes(actorMembership.role as any)) {
     throw new ForbiddenError("Only Guild Leaders and Officers can view pending attendance");
   }
 
@@ -437,7 +627,7 @@ export async function confirmAttendanceRecord(
     },
   });
 
-  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER")) {
+  if (!actorMembership || !actorMembership.isActive || !SCHEDULE_CREATOR_ROLES.includes(actorMembership.role as any)) {
     throw new ForbiddenError("Only Guild Leaders and Officers can confirm check-ins");
   }
 
@@ -515,6 +705,9 @@ export async function confirmAttendanceRecord(
 // ─── Boss schedules & Calendar systems ───────────
 
 export async function getBossSchedules(guildId: string, requestingUserId?: string) {
+  // Make sure every boss has a live upcoming spawn so countdowns are never empty.
+  await ensureUpcomingSpawns(guildId);
+
   // Retrieve combining both guild-specific events AND unified faction-wide events (guildId: null)
   const schedules = await prisma.bossSchedule.findMany({
     where: {
@@ -1198,7 +1391,7 @@ export async function createBossSchedule(
     },
   });
 
-  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER")) {
+  if (!actorMembership || !actorMembership.isActive || !SCHEDULE_CREATOR_ROLES.includes(actorMembership.role as any)) {
     throw new ForbiddenError("Only Guild Leaders and Officers can schedule boss events");
   }
 
@@ -1250,7 +1443,7 @@ export async function logBossKill(
     },
   });
 
-  if (!actorMembership || !actorMembership.isActive || (actorMembership.role !== "GUILD_LEADER" && actorMembership.role !== "OFFICER")) {
+  if (!actorMembership || !actorMembership.isActive || !SCHEDULE_CREATOR_ROLES.includes(actorMembership.role as any)) {
     throw new ForbiddenError("Only Guild Leaders and Officers can log boss kills");
   }
 
@@ -1281,10 +1474,28 @@ export async function logBossKill(
     },
   });
 
-  // Automatically calculate next spawn for audit logging (scheduling is done manually)
+  // Roll the timer forward: create the next upcoming spawn so the countdown
+  // continues automatically (Singapore-time aware via getNextBossSpawnTime).
   const killDate = new Date(killedAt);
   const nextSpawnTime = getNextBossSpawnTime(schedule.bossName, killDate);
-  const nextSchedule: any = null;
+
+  const nextSchedule = await prisma.bossSchedule.create({
+    data: {
+      guildId: schedule.guildId,
+      bossName: schedule.bossName,
+      bossImageUrl: schedule.bossImageUrl,
+      spawnTime: nextSpawnTime,
+      location: schedule.location,
+      guildTurn: schedule.guildTurn,
+      guildTurnGuildId: schedule.guildTurnGuildId,
+      status: BossEventStatus.UPCOMING,
+      creatorId: actorId,
+    },
+  });
+
+  // Open the code-free check-in window for the boss that was just killed.
+  // Faction-wide (null guild) kills attribute the session to the actor's guild.
+  const checkInSession = await openBossCheckInSession(guildId, scheduleId, schedule.bossName);
 
   await writeAuditLog({
     actorId,
@@ -1292,11 +1503,12 @@ export async function logBossKill(
     action: "BOSS_KILLED_LOGGED",
     target: "BossSchedule",
     targetId: scheduleId,
-    detail: { 
-      bossName: schedule.bossName, 
-      killedAt, 
+    detail: {
+      bossName: schedule.bossName,
+      killedAt,
       nextSpawnTime: nextSpawnTime.toISOString(),
-      nextGuildTurn: nextSchedule ? nextSchedule.guildTurn : undefined,
+      nextScheduleId: nextSchedule.id,
+      checkInSessionId: checkInSession.id,
       lootDrop,
       screenshotUrl
     },
@@ -1304,7 +1516,7 @@ export async function logBossKill(
     userAgent,
   });
 
-  return { updatedEvent, nextSchedule };
+  return { updatedEvent, nextSchedule, checkInSession };
 }
 
 export async function updateBossSchedule(

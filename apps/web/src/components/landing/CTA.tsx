@@ -1,27 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Reveal, Magnetic, Scroll3D } from "./LandingHelpers";
 
 function CircularRunes() {
-  const [scrollY, setScrollY] = useState(0);
+  const ringARef = useRef<SVGCircleElement>(null);
+  const ringBRef = useRef<SVGCircleElement>(null);
+  const polyARef = useRef<SVGPolygonElement>(null);
+  const polyBRef = useRef<SVGPolygonElement>(null);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    let raf = 0;
+    const update = () => {
+      const scrollY = window.scrollY;
+      const rotationA = scrollY * 0.04;
+      const rotationB = scrollY * -0.03;
+      const dashoffset = scrollY * 0.22;
 
-  const rotationA = scrollY * 0.04;
-  const rotationB = scrollY * -0.03;
-  const dashoffset = scrollY * 0.22;
+      ringARef.current?.setAttribute("stroke-dashoffset", String(dashoffset));
+      ringBRef.current?.setAttribute("stroke-dashoffset", String(-dashoffset * 1.3));
+      if (polyARef.current) polyARef.current.style.transform = `rotate(${rotationA}deg)`;
+      if (polyBRef.current) polyBRef.current.style.transform = `rotate(${rotationB}deg)`;
+
+      raf = requestAnimationFrame(update);
+    };
+    raf = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   return (
     <div
-      className="absolute left-1/2 top-1/2 w-[600px] h-[600px] pointer-events-none opacity-[0.05] select-none -z-10 transition-transform duration-200 ease-out"
+      className="absolute left-1/2 top-1/2 w-[600px] h-[600px] pointer-events-none opacity-[0.05] select-none -z-10"
       style={{
         transform: "translate3d(-50%, -50%, 0)"
       }}
@@ -30,49 +40,43 @@ function CircularRunes() {
         viewBox="0 0 200 200"
         className="w-full h-full text-[#d4a853]"
       >
-        <circle 
-          cx="100" 
-          cy="100" 
-          r="95" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="0.3" 
-          strokeDasharray="4, 5" 
-          strokeDashoffset={dashoffset}
+        <circle
+          ref={ringARef}
+          cx="100"
+          cy="100"
+          r="95"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.3"
+          strokeDasharray="4, 5"
         />
-        <circle 
-          cx="100" 
-          cy="100" 
-          r="85" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="0.5" 
-          strokeDasharray="30, 8, 4, 8" 
-          strokeDashoffset={-dashoffset * 1.3}
+        <circle
+          ref={ringBRef}
+          cx="100"
+          cy="100"
+          r="85"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.5"
+          strokeDasharray="30, 8, 4, 8"
         />
         <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" strokeWidth="0.2" strokeDasharray="6, 2" />
-        
-        <polygon 
-          points="100,15 173.6,142.5 26.4,142.5" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="0.3" 
-          style={{
-            transform: `rotate(${rotationA}deg)`,
-            transformOrigin: "100px 100px",
-          }}
-          className="transition-transform duration-200 ease-out"
+
+        <polygon
+          ref={polyARef}
+          points="100,15 173.6,142.5 26.4,142.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.3"
+          style={{ transformOrigin: "100px 100px" }}
         />
-        <polygon 
-          points="100,185 173.6,57.5 26.4,57.5" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="0.3" 
-          style={{
-            transform: `rotate(${rotationB}deg)`,
-            transformOrigin: "100px 100px",
-          }}
-          className="transition-transform duration-200 ease-out"
+        <polygon
+          ref={polyBRef}
+          points="100,185 173.6,57.5 26.4,57.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.3"
+          style={{ transformOrigin: "100px 100px" }}
         />
         <circle cx="100" cy="100" r="12" fill="none" stroke="currentColor" strokeWidth="0.5" />
       </svg>
@@ -102,7 +106,7 @@ function FloatingEmbers() {
         return (
           <div
             key={i}
-            className="absolute rounded-full bg-[#f5c542]/20 blur-[0.5px] animate-particle"
+            className="absolute rounded-full bg-[#f5c542]/25 blur-[0.5px] ember"
             style={{
               width: size,
               height: size,
@@ -123,7 +127,7 @@ export default function CTA() {
   return (
     <section id="cta" className="py-32 relative overflow-hidden bg-[#050608]">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Reveal>
+        <Reveal from="morph">
           <Scroll3D rotateX={6} scaleFrom={0.96} liftFrom={30}>
             <div className="relative rounded-3xl border border-white/[0.08] bg-[#0d0d14]/70 backdrop-blur-md overflow-hidden card-obsidian shadow-[0_20px_50px_rgba(0,0,0,0.85)]">
               <CircularRunes />
@@ -145,13 +149,9 @@ export default function CTA() {
               />
 
               <div className="relative p-12 lg:p-20 text-center space-y-8 z-10">
-                <div className="text-[10px] text-[#d4a853] uppercase tracking-[0.24em] font-mono font-bold">
-                  ESTABLISH YOUR GUILD NOW!
-                </div>
-
                 <h2 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-white tracking-tight font-fantasy max-w-3xl mx-auto">
                   Level up your guild.<br />
-                  <span className="text-gold-gradient mt-2 block">Command with absolute precision.</span>
+                  <span className="text-gold-sheen mt-2 block">Command with absolute precision.</span>
                 </h2>
 
                 <p className="text-xs text-[#8B8F98] max-w-xl mx-auto leading-relaxed">
@@ -162,9 +162,10 @@ export default function CTA() {
                   <Magnetic strength={8}>
                     <Link
                       href="/register"
-                      className="group inline-flex items-center gap-2 px-8 h-12 rounded-xl font-bold text-xs uppercase tracking-wider btn-primary shadow-[0_0_16px_rgba(212,168,83,0.3)] transition-all cursor-pointer"
+                      className="beam-host group inline-flex items-center gap-2 px-8 h-12 rounded-xl font-bold text-xs uppercase tracking-wider btn-primary shadow-[0_0_16px_rgba(212,168,83,0.3)] transition-all cursor-pointer"
                     >
-                      Create your guild
+                      <span className="beam" aria-hidden />
+                      Start free trial
                       <svg
                         className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1"
                         viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"

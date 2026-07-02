@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Reveal, SectionLabel } from "./LandingHelpers";
+import { Reveal } from "./LandingHelpers";
 
 // ═══════════════════════════════════════════════════════════
 // HIGH-FIDELITY SCENES INSIDE VIDEO MOCKUP
@@ -350,12 +350,11 @@ export default function HowItWorks() {
           
           {/* Section Header */}
           <Reveal className="text-center mb-14">
-            <SectionLabel>Process Flow</SectionLabel>
-            <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-[-0.022em] font-fantasy">
-              How it works
+            <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-[-0.022em] font-fantasy">
+              From sign-up to <span className="text-gold-sheen">raid-ready.</span>
             </h2>
             <p className="mt-3 text-sm text-[#8B8F98] max-w-md mx-auto leading-relaxed">
-              Command your guild operations with ease. Scroll through each step to see the flow in action.
+              Four steps take a guild from an empty roster to a coordinated operation running clean.
             </p>
           </Reveal>
 

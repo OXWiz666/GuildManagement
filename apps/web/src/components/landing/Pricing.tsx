@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Reveal, SectionLabel, Scroll3D } from "./LandingHelpers";
+import { Reveal, Scroll3D, SpotlightCard } from "./LandingHelpers";
 
 const PRICING_PLANS = [
   {
@@ -66,14 +66,14 @@ export default function Pricing() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-r from-[#d4a853]/5 to-[#f5c542]/5 blur-[120px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <Reveal className="text-center mb-20">
-          <SectionLabel>Citadel Pricing</SectionLabel>
-          <h2 className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-semibold text-white tracking-[-0.02em] font-fantasy">
-            Simple, transparent tribute
-            <span className="block text-gold-gradient mt-2">Built for any size division.</span>
+        <Reveal className="mb-20 text-center">
+          <h2 className="font-fantasy text-4xl font-semibold tracking-[-0.02em] text-white sm:text-5xl lg:text-6xl">
+            Simple, transparent tribute.
+            <span className="mt-2 block text-gold-sheen">Sized for any division.</span>
           </h2>
-          <p className="mt-4 text-sm text-[#8B8F98] max-w-xl mx-auto leading-relaxed">
-            Choose your operations tier. Formulate your team, claim boss loops, coordinate GCash dividends, and track GP. Upgrade or cancel anytime.
+          <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-[#8B8F98]">
+            Pick your operations tier, claim boss loops, coordinate payouts, and
+            track guild points. Upgrade or cancel anytime.
           </p>
         </Reveal>
 
@@ -81,8 +81,9 @@ export default function Pricing() {
           {PRICING_PLANS.map((plan, i) => (
             <Reveal key={plan.name} delay={i * 100} className="h-full">
               <Scroll3D rotateX={4} rotateY={plan.popular ? 2 : 0} scaleFrom={0.96} liftFrom={25} className="h-full">
-                <div
-                  className={`relative rounded-2xl p-8 h-full flex flex-col transition-all duration-300 card-obsidian border border-white/[0.05] ${
+                <SpotlightCard
+                  style={plan.popular ? { overflow: "visible" } : undefined}
+                  className={`rounded-2xl p-8 h-full flex flex-col transition-all duration-300 card-obsidian border border-white/[0.05] ${
                     plan.popular
                       ? "border-[#d4a853]/45 glow-gold bg-[#0d0d14]/85 scale-[1.02] z-10 shadow-[0_20px_50px_rgba(212,168,83,0.1)]"
                       : "bg-[#0b0b10]/80 hover:border-white/[0.12] hover:bg-white/[0.02]"
@@ -110,8 +111,11 @@ export default function Pricing() {
 
                   {/* Price */}
                   <div className="flex items-baseline gap-2 mb-8 pb-8 border-b border-white/[0.06]">
-                    <span className="text-5xl font-extrabold text-white tracking-wide font-fantasy text-gold-gradient">
-                      {plan.price}
+                    <span className={`inline-flex items-baseline ${plan.popular ? "text-gold-sheen" : "text-gold-gradient"}`}>
+                      <span className="font-sans text-3xl font-bold leading-none mr-0.5">₱</span>
+                      <span className="text-5xl font-extrabold tracking-wide font-fantasy leading-none">
+                        {plan.price.replace("₱", "")}
+                      </span>
                     </span>
                     <span className="text-xs text-white/40 font-mono">/ {plan.period}</span>
                   </div>
@@ -137,24 +141,29 @@ export default function Pricing() {
                   {/* CTA */}
                   <Link
                     href={plan.href}
-                    className={`block w-full py-3 px-6 rounded-xl text-center font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                    className={`beam-host relative block w-full py-3 px-6 rounded-xl text-center font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                       plan.popular
                         ? "btn-primary shadow-[0_0_16px_rgba(212,168,83,0.25)]"
                         : "border border-white/[0.08] text-white hover:bg-white/[0.05] hover:border-white/20"
                     }`}
                   >
+                    <span className="beam" aria-hidden />
                     {plan.cta}
                   </Link>
-                </div>
+                </SpotlightCard>
               </Scroll3D>
             </Reveal>
           ))}
         </div>
 
         {/* Footnote */}
-        <Reveal delay={400} className="mt-16 text-center">
-          <p className="text-[9px] uppercase tracking-[0.2em] text-[#8B8F98]/40 font-mono">
-            🛡️ ALL PLAN PRIVILEGES SECURED VIA RSA-4096 SHA256 ENCRYPTION · SOC-2 COMPLIANT LEDGERS
+        <Reveal delay={400} className="mt-16 flex items-center justify-center">
+          <p className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.2em] text-[#8B8F98]/40 font-mono">
+            <svg className="h-3 w-3 text-[#d4a853]/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0110 0v4" />
+            </svg>
+            Every plan secured with RSA-4096 encryption and SOC-2 compliant ledgers
           </p>
         </Reveal>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Logo, { TAGLINE } from "@/components/common/Logo";
 
 export default function Footer() {
   return (
@@ -11,27 +12,16 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-10 mb-16">
           {/* Brand */}
           <div className="md:col-span-5 space-y-5">
-            <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-              <div className="relative h-8 w-8 rounded-lg border border-white/10 bg-white/[0.03] flex items-center justify-center transition-all group-hover:border-[#d4a853]/40 group-hover:bg-[#d4a853]/5">
-                {/* Spinning outer accent dot */}
-                <div className="absolute -inset-0.5 rounded-lg border border-transparent group-hover:border-t-[#d4a853]/30 animate-spin-slow pointer-events-none" />
-                <svg className="h-4 w-4 text-[#f5c542] transition-transform duration-500 group-hover:rotate-12" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-              </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-sm font-semibold text-white tracking-tight group-hover:text-[#f5c542] transition-colors">
-                  ForgeKeep
-                </span>
-                <span className="text-[8px] text-[#d4a853]/60 tracking-[0.2em] uppercase mt-0.5 font-mono">
-                  Guild Management
-                </span>
-              </div>
+            <Link href="/" className="shrink-0 group inline-flex">
+              <Logo size={32} descriptor="Guild Command" />
             </Link>
-            
+
+            <p className="text-sm text-[var(--forge-gold)]/80 font-medium tracking-tight">
+              {TAGLINE}
+            </p>
             <p className="text-xs text-[#8B8F98] leading-relaxed max-w-sm">
-              The professional guild management platform for competitive MMORPG guilds.
-              Built for guild leaders who want absolute operations control.
+              The guild command center for competitive MMORPG teams. Boss timers,
+              attendance, and an audited treasury, all in one place.
             </p>
             <div className="flex items-center gap-3 pt-2">
               {[

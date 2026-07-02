@@ -1,6 +1,7 @@
 import { prisma } from "@guild/db";
 import { JoinRequestStatus, GuildRole } from "@guild/db";
 import { writeAuditLog } from "./audit.service";
+import { saveEquipmentRows, type EquipmentItemInput } from "./equipment.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import * as crypto from "crypto";
 
@@ -15,6 +16,7 @@ export interface JoinRequestWithUser {
   class: string;
   weapon: string;
   status: string;
+  gearItems: unknown;
   createdAt: string;
   user: {
     id: string;
@@ -71,6 +73,7 @@ export async function createJoinRequest(
   cp: number,
   classType: string,
   weapon: string,
+  gearItems?: EquipmentItemInput[],
 ) {
   // Validate invite code
   const guild = await verifyInviteCode(inviteCode);
@@ -117,6 +120,7 @@ export async function createJoinRequest(
       class: classType,
       weapon,
       status: JoinRequestStatus.PENDING,
+      gearItems: gearItems && gearItems.length > 0 ? (gearItems as object) : undefined,
     },
     create: {
       userId,
@@ -126,6 +130,7 @@ export async function createJoinRequest(
       class: classType,
       weapon,
       status: JoinRequestStatus.PENDING,
+      gearItems: gearItems && gearItems.length > 0 ? (gearItems as object) : undefined,
     },
   });
 
@@ -167,6 +172,7 @@ export async function getUserPendingRequest(userId: string) {
     class: request.class,
     weapon: request.weapon,
     status: request.status,
+    gearItems: request.gearItems ?? null,
     createdAt: request.createdAt.toISOString(),
   };
 }
@@ -231,6 +237,7 @@ export async function getGuildApplications(
     class: app.class,
     weapon: app.weapon,
     status: app.status,
+    gearItems: app.gearItems ?? null,
     createdAt: app.createdAt.toISOString(),
     user: app.user,
   }));
@@ -410,6 +417,19 @@ export async function handleApplicationAction(
 
     return { newMember, memberCode };
   });
+
+  // Materialise any gear captured at apply time into the new member's profile.
+  // Best-effort: never block acceptance if an icon is stale or storage hiccups.
+  const gear = Array.isArray(request.gearItems)
+    ? (request.gearItems as unknown as EquipmentItemInput[])
+    : [];
+  if (gear.length > 0) {
+    try {
+      await saveEquipmentRows(result.newMember.id, gear, null, false);
+    } catch (err) {
+      console.error("[application] failed to materialise gear on accept:", err);
+    }
+  }
 
   // Log acceptance in audit logs
   await writeAuditLog({

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { guildApi, type JoinRequestData } from "@/lib/api";
+import { guildApi, type JoinRequestData, type ConfirmEquipmentItem } from "@/lib/api";
+import GearScanField from "@/app/(dashboard)/dashboard/equipment/components/GearScanField";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -33,6 +34,7 @@ export default function OnboardingDashboard() {
   const [cp, setCp] = useState(user?.cp ? user.cp.toLocaleString() : "");
   const [classType, setClassType] = useState(user?.class || "");
   const [weapon, setWeapon] = useState(user?.weapon || "");
+  const [gear, setGear] = useState<ConfirmEquipmentItem[]>([]);
   const [isSubmittingApp, setIsSubmittingApp] = useState(false);
 
   useEffect(() => {
@@ -107,6 +109,7 @@ export default function OnboardingDashboard() {
         cp: cpNumber,
         class: classType,
         weapon: weapon.trim(),
+        gear: gear.length > 0 ? gear : undefined,
       });
 
       if (result.success) {
@@ -437,6 +440,26 @@ export default function OnboardingDashboard() {
                             onChange={setWeapon}
                           />
                         </div>
+
+                        <div className="flex items-center gap-2 pt-2">
+                          <span className="text-[10px] text-white/40 uppercase tracking-[0.22em]">
+                            Step 03 · Current Gear
+                          </span>
+                          <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
+                          <span className="text-[10px] text-white/30 uppercase tracking-wider">
+                            Optional
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-white/50 leading-relaxed -mt-1">
+                          Upload an equipment screenshot — we&apos;ll detect each slot and match it
+                          to the guild icon library so leaders can review your gear.
+                          {gear.length > 0 && (
+                            <span className="ml-1 text-emerald-300">
+                              {gear.length} item{gear.length === 1 ? "" : "s"} attached.
+                            </span>
+                          )}
+                        </p>
+                        <GearScanField onChange={setGear} />
 
                         <div className="flex justify-end gap-2 border-t border-white/[0.06] pt-4">
                           <Button

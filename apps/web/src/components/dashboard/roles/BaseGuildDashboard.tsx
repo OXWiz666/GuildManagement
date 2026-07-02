@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { dashboardApi, type BossScheduleData } from "@/lib/api";
+import { getRealtimeBossTimer } from "@guild/shared";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useToast } from "@/components/ui/Toast";
 import Badge from "@/components/ui/Badge";
@@ -150,26 +151,18 @@ export default function BaseGuildDashboard({
     }
   }
 
-  // Countdown formatter
-  function getTickingCountdown(spawnTimeStr: string) {
-    const target = new Date(spawnTimeStr).getTime();
-    const diff = target - currentTime;
-    if (diff <= 0) return { expired: true, text: "LIVE", warning: false };
-
-    const hrs = Math.floor(diff / (3600 * 1000));
-    const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
-    const secs = Math.floor((diff % (60 * 1000)) / 1000);
-    const text = `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-    const warning = diff <= 5 * 60 * 1000;
-
-    return { expired: false, text, warning };
+  // Real-time respawn timer for a specific boss. An overdue spawn rolls forward
+  // to the boss's next real respawn instead of freezing on "LIVE" forever.
+  function getTickingCountdown(boss: BossScheduleData) {
+    const t = getRealtimeBossTimer(boss.bossName, boss.spawnTime, currentTime, { status: boss.status });
+    return { expired: t.live, live: t.live, warning: t.warning, text: t.text, liveText: t.liveElapsedText };
   }
 
   if (!user || !activeGuild) return null;
 
   // Get next boss for the dedicated widget
   const nextBoss = bossSchedules[0] || null;
-  const nextBossCountdown = nextBoss ? getTickingCountdown(nextBoss.spawnTime) : null;
+  const nextBossCountdown = nextBoss ? getTickingCountdown(nextBoss) : null;
   const canManageBossRotations =
     activeGuild.role === "GUILD_LEADER" ||
     activeGuild.role === "FACTION_LEADER" ||
@@ -345,7 +338,7 @@ export default function BaseGuildDashboard({
                       <BossRow
                         key={boss.id}
                         boss={boss}
-                        tick={getTickingCountdown(boss.spawnTime)}
+                        tick={getTickingCountdown(boss)}
                         canLogKill={canManageBossRotations}
                         onLogKill={() => {
                           setShowKillModal(boss);
@@ -482,28 +475,56 @@ export default function BaseGuildDashboard({
                   <div className="mt-4 pt-4 border-t border-white/[0.06]">
                     <p
                       className={`text-center text-[28px] font-mono font-bold tracking-tight tabular-nums ${
-                        nextBossCountdown.expired
+                        nextBossCountdown.live
                           ? "text-red-400"
                           : nextBossCountdown.warning
                             ? "text-[var(--forge-gold-bright)]"
                             : "text-[var(--forge-gold)]"
                       }`}
                     >
-                      {nextBossCountdown.text}
+                      {nextBossCountdown.live ? nextBossCountdown.liveText : nextBossCountdown.text}
                     </p>
                     <p className="text-center text-[10px] text-white/30 uppercase tracking-[0.2em] mt-1">
-                      {nextBossCountdown.expired ? "Boss is live" : "Until spawn"}
+                      {nextBossCountdown.live ? "Live · up time" : "Until spawn"}
                     </p>
                   </div>
 
                   {/* Status badge */}
                   <div className="mt-3 flex justify-center">
                     <BossStatusBadge
-                      expired={nextBossCountdown.expired}
+                      expired={nextBossCountdown.live}
                       warning={nextBossCountdown.warning}
                       status={nextBoss.status}
                     />
                   </div>
+
+                  {/* Log kill — officers can record the death straight from the widget */}
+                  {canManageBossRotations && (
+                    <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                      <Magnetic strength={4}>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => {
+                            setShowKillModal(nextBoss);
+                            setKillTimeInput(
+                              new Date().toLocaleTimeString("en-US", { hour12: false }).substring(0, 5),
+                            );
+                          }}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                              <line x1="12" y1="9" x2="12" y2="13" />
+                              <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                            Log kill
+                          </span>
+                        </Button>
+                      </Magnetic>
+                    </div>
+                  )}
                 </section>
               </Reveal>
             )}
@@ -802,7 +823,7 @@ function BossRow({
   onLogKill,
 }: {
   boss: BossScheduleData;
-  tick: { expired: boolean; text: string; warning: boolean };
+  tick: { expired: boolean; live: boolean; text: string; warning: boolean; liveText: string };
   canLogKill: boolean;
   onLogKill: () => void;
 }) {
@@ -867,16 +888,14 @@ function BossRow({
           <p
             className={`text-[15px] font-mono font-semibold tracking-tight tabular-nums ${valueColor}`}
           >
-            {tick.text}
+            {tick.live ? tick.liveText : tick.text}
           </p>
-          {boss.guildTurn && (
-            <p className="text-[10px] text-white/40 mt-1 truncate max-w-[110px]">
-              Turn: {boss.guildTurn}
-            </p>
-          )}
+          <p className="text-[10px] text-white/40 mt-1 truncate max-w-[130px]">
+            {tick.live ? "Live · up time" : boss.guildTurn ? `Turn: ${boss.guildTurn}` : "Until spawn"}
+          </p>
         </div>
 
-        {canLogKill && (tick.expired || tick.warning) && (
+        {canLogKill && (
           <Magnetic strength={4}>
             <Button
               variant="ghost"

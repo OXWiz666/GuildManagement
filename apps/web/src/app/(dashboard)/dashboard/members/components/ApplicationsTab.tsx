@@ -1,6 +1,8 @@
 "use client";
 
 import { type JoinRequestData } from "@/lib/api";
+import { EQUIPMENT_SLOT_LABELS } from "@guild/shared";
+import { publicIconUrl } from "@/lib/storage";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
@@ -82,6 +84,30 @@ export default function ApplicationsTab({
                     <p className="text-xs font-semibold text-white mt-0.5 truncate">{app.weapon}</p>
                   </div>
                 </div>
+
+                {app.gearItems && app.gearItems.length > 0 && (
+                  <div>
+                    <p className="text-[9px] font-medium text-white/35 uppercase mb-1.5">
+                      Submitted gear · {app.gearItems.length}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {app.gearItems.map((g) => (
+                        <div
+                          key={g.slotType}
+                          title={`${EQUIPMENT_SLOT_LABELS[g.slotType as keyof typeof EQUIPMENT_SLOT_LABELS] || g.slotType}: ${g.itemName}${g.rarity ? ` (${g.rarity})` : ""}`}
+                          className="h-9 w-9 overflow-hidden rounded-md border border-white/[0.1] bg-black/30"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={publicIconUrl(g.iconBucket, g.iconPath)}
+                            alt={g.itemName}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex sm:flex-row md:flex-col lg:flex-row gap-2 shrink-0 self-end md:self-center w-full md:w-auto">

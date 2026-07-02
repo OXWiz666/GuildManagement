@@ -134,6 +134,20 @@
   50%      { transform: translateY(8px); }
 }
 
+/* Hero scroll-down cue: a dot that drifts down inside the mouse outline. */
+@keyframes scroll-nudge {
+  0%   { transform: translateY(0);    opacity: 0; }
+  25%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translateY(8px);  opacity: 0; }
+}
+
+/* The chevron stack under the cue: a soft staggered down-pulse. */
+@keyframes scroll-chevrons {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50%      { opacity: 0.9;  transform: translateY(3px); }
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
@@ -157,6 +171,18 @@
 @keyframes border-glow {
   0%, 100% { border-color: rgba(212, 168, 83, 0.12); }
   50%      { border-color: rgba(212, 168, 83, 0.28); }
+}
+
+/* ForgeKeep logo ember spark twinkle */
+@keyframes fk-spark-twinkle {
+  0%, 100% { opacity: 0.55; transform: scale(0.8) rotate(0deg); }
+  50%      { opacity: 1;    transform: scale(1.15) rotate(45deg); }
+}
+.fk-spark {
+  animation: fk-spark-twinkle 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fk-spark { animation: none; opacity: 0.9; }
 }
 
 @keyframes particle-float {
@@ -497,6 +523,201 @@ input:-webkit-autofill:focus {
   * {
     scroll-behavior: auto !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REDESIGN ADDITIONS — kinetic identity + scroll choreography
+   ═══════════════════════════════════════════════════════════ */
+
+/* Headline gold sheen — a slow light pass across gradient text */
+@keyframes gold-sheen {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+.text-gold-sheen {
+  background: linear-gradient(
+    100deg,
+    #d4a853 0%, #f5c542 18%, #fff3cf 30%, #f5c542 42%, #d4a853 60%, #a78332 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-sheen 7s linear infinite;
+}
+
+/* Word-by-word headline rise — used with --i index for stagger */
+@keyframes word-rise {
+  from { opacity: 0; transform: translateY(0.55em) rotate(1.5deg); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0) rotate(0deg);        filter: blur(0); }
+}
+.word-rise {
+  display: inline-block;
+  animation: word-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms + var(--base, 0ms));
+}
+
+/* Conic forge ring — slow rotating accent halo behind the brand mark */
+@keyframes forge-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Sweeping beam highlight for buttons / cards on hover */
+@keyframes beam-sweep {
+  0%   { transform: translateX(-130%) skewX(-18deg); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translateX(230%) skewX(-18deg); opacity: 0; }
+}
+
+/* Ember rise that fades — richer than the old particle-float */
+@keyframes ember-rise {
+  0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+  12%  { opacity: 0.9; }
+  80%  { opacity: 0.65; }
+  100% { transform: translateY(-180px) translateX(var(--drift-x, 18px)) scale(0.35); opacity: 0; }
+}
+
+/* Tagline keyline reveal */
+@keyframes keyline-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Breathing glow for live status orbs */
+@keyframes live-breathe {
+  0%, 100% { opacity: 0.5; box-shadow: 0 0 0 0 rgba(16, 217, 154, 0.35); }
+  50%      { opacity: 1;   box-shadow: 0 0 10px 2px rgba(16, 217, 154, 0.45); }
+}
+
+/* ─── Tagline lockup ─────────────────────────── */
+.brand-keyline {
+  display: inline-block;
+  height: 1px;
+  background: linear-gradient(90deg, var(--forge-gold), transparent);
+  transform-origin: left center;
+  animation: keyline-grow 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Spotlight border card — illuminates under cursor ──── */
+.spotlight-card {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(
+    220px circle at var(--mx, 50%) var(--my, 0%),
+    rgba(245, 197, 66, 0.55),
+    rgba(212, 168, 83, 0.12) 40%,
+    transparent 70%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.spotlight-card:hover::before { opacity: 1; }
+
+/* ─── Hover beam (wrap a relative+overflow-hidden element) ─── */
+.beam-host { position: relative; overflow: hidden; }
+.beam-host .beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgba(255, 243, 207, 0.18), transparent);
+  pointer-events: none;
+  opacity: 0;
+}
+.beam-host:hover .beam {
+  animation: beam-sweep 0.9s ease-out;
+}
+
+/* Richer ember utility (replaces flat particle look where used) */
+.ember {
+  animation: ember-rise 11s ease-in-out infinite;
+}
+
+.scroll-cue-dot { animation: scroll-nudge 2.2s ease-in-out infinite; }
+.scroll-cue-chevrons { animation: scroll-chevrons 2.2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .text-gold-sheen { animation: none; }
+  .word-rise { animation: none; opacity: 1; transform: none; filter: none; }
+  .ember { animation: none; opacity: 0; }
+  .brand-keyline { animation: none; transform: none; }
+  .scroll-cue-dot, .scroll-cue-chevrons { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CINEMATIC OVERHAUL v2 — staging, portals, kinetic reveals
+   ═══════════════════════════════════════════════════════════ */
+
+/* Breathing forge portal behind the hero headline */
+@keyframes portal-breathe {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 0.9;  transform: translate(-50%, -50%) scale(1.06); }
+}
+.forge-portal { animation: portal-breathe 8s ease-in-out infinite; }
+
+/* Slow rune ring rotation (ambient) */
+@keyframes rune-orbit { to { transform: rotate(360deg); } }
+.rune-orbit { animation: rune-orbit 60s linear infinite; }
+.rune-orbit-rev { animation: rune-orbit 90s linear infinite reverse; }
+
+/* Vertical light shaft that falls and fades — cinematic top-lighting */
+@keyframes shaft-fall {
+  0%   { opacity: 0; transform: translateY(-30px) scaleY(0.8); }
+  40%  { opacity: 1; }
+  100% { opacity: 0.65; transform: translateY(0) scaleY(1); }
+}
+.light-shaft { animation: shaft-fall 1.6s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* Kinetic headline line-reveal (clip from below, no blur for legibility) */
+@keyframes line-rise {
+  from { opacity: 0; transform: translateY(115%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.line-rise {
+  display: inline-block;
+  will-change: transform;
+  animation: line-rise 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 130ms + var(--base, 0ms));
+}
+.line-clip { overflow: hidden; display: block; }
+
+/* Soft float for hero depth chips */
+@keyframes chip-float-a { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes chip-float-b { 0%,100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+.chip-float-a { animation: chip-float-a 6.5s ease-in-out infinite; }
+.chip-float-b { animation: chip-float-b 7.5s ease-in-out infinite; }
+
+/* Metallic edge for premium tiles (brighter top-left facet) */
+.edge-forge {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 243, 207, 0.10),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* Marquee track (single, for the trust band) */
+@keyframes marquee-x { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee-track { animation: marquee-x 34s linear infinite; }
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+          mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forge-portal, .rune-orbit, .rune-orbit-rev, .light-shaft,
+  .chip-float-a, .chip-float-b, .marquee-track { animation: none !important; }
+  .line-rise { animation: none; opacity: 1; transform: none; }
 }
 
 /* ─── Premium Loader Classes ──────────────────── */

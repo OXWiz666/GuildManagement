@@ -8,7 +8,7 @@ import type { ApiResponse } from "@guild/shared";
 import { AttendanceType } from "@guild/db";
 import { cache } from "../lib/cache";
 import { broadcastToGuild } from "../lib/socket";
-import { checkInLimiter } from "../middleware/rateLimiter";
+import { checkInLimiter, dashboardLimiter, attendanceSubmitLimiter } from "../middleware/rateLimiter";
 
 const router: Router = Router();
 
@@ -100,6 +100,7 @@ router.post(
   "/attendance/check-in",
   requireAuth,
   checkInLimiter,
+  attendanceSubmitLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { code } = req.body as { code: string };
@@ -146,6 +147,59 @@ router.post(
           ...result,
           record: serializedRecord,
         },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Code-free self check-in for a specific killed boss. Requires auth. Available to all members.
+router.post(
+  "/attendance/check-in/boss/:bossScheduleId",
+  requireAuth,
+  checkInLimiter,
+  attendanceSubmitLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const bossScheduleId = req.params['bossScheduleId'] as string;
+      const { guildId } = req.body as { guildId: string };
+
+      if (!guildId) {
+        const response: ApiResponse = {
+          success: false,
+          error: { code: "VALIDATION_ERROR", message: "guildId is required" },
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const result = await dashboardService.checkInToBoss(
+        req.user!.userId,
+        guildId,
+        bossScheduleId,
+      );
+
+      await Promise.all([
+        cache.invalidatePattern(`boss-schedule:${result.guildId}:*`),
+        cache.invalidatePattern(`attendance:pending:${result.guildId}:*`),
+        cache.invalidatePattern(`attendance:stats:${result.guildId}:*`),
+      ]);
+
+      const serializedRecord = {
+        ...result.record,
+        joinedAt: result.record.joinedAt.toISOString(),
+      };
+
+      broadcastToGuild(result.guildId, "attendance_record_created", {
+        ...result,
+        record: serializedRecord,
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        data: { ...result, record: serializedRecord },
       };
       res.json(response);
     } catch (error) {
@@ -286,6 +340,7 @@ router.get(
 router.get(
   "/stats/:guildId",
   requireAuth,
+  dashboardLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
@@ -319,6 +374,7 @@ router.get(
 router.get(
   "/boss-rotation/:guildId",
   requireAuth,
+  dashboardLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params["guildId"] as string;
@@ -499,6 +555,7 @@ router.post(
 router.get(
   "/boss-schedule/:guildId",
   requireAuth,
+  dashboardLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;
@@ -622,7 +679,7 @@ router.patch(
 
       const { ipAddress, userAgent } = getClientInfo(req);
 
-      const { updatedEvent, nextSchedule } = await dashboardService.logBossKill(
+      const { updatedEvent, nextSchedule, checkInSession } = await dashboardService.logBossKill(
         guildId,
         scheduleId,
         killedAt,
@@ -633,11 +690,23 @@ router.patch(
         userAgent,
       );
 
-      // Invalidate schedule and stats in-memory caches
+      // Invalidate schedule, stats and attendance in-memory caches (a check-in
+      // window was just opened for this boss).
       await Promise.all([
         invalidateBossScheduleCache(updatedEvent.guildId || guildId),
         cache.invalidatePattern(`stats:${guildId}:*`),
+        cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+        cache.invalidatePattern(`attendance:stats:${guildId}:*`),
       ]);
+
+      // Announce the freshly opened check-in window to the guild.
+      if (checkInSession) {
+        broadcastToGuild(guildId, "attendance_session_created", {
+          ...checkInSession,
+          expiresAt: checkInSession.expiresAt.toISOString(),
+          createdAt: checkInSession.createdAt.toISOString(),
+        });
+      }
 
       // Serialize Date fields to ISO strings for socket transmission compatibility
       const socketPayload = {
@@ -1103,6 +1172,7 @@ router.get(
 router.get(
   "/accounting/:guildId",
   requireAuth,
+  dashboardLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const guildId = req.params['guildId'] as string;

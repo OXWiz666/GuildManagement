@@ -193,6 +193,7 @@ exports.Prisma.GuildSettingsScalarFieldEnum = {
   activeShareModel: 'activeShareModel',
   pointsResetCycle: 'pointsResetCycle',
   itemRequestLimits: 'itemRequestLimits',
+  marketRules: 'marketRules',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -211,7 +212,10 @@ exports.Prisma.GuildMemberScalarFieldEnum = {
   joinedAt: 'joinedAt',
   isActive: 'isActive',
   bidPoints: 'bidPoints',
-  bidPointsLastReset: 'bidPointsLastReset'
+  bidPointsLastReset: 'bidPointsLastReset',
+  marketPrioritySeq: 'marketPrioritySeq',
+  marketPriorityReason: 'marketPriorityReason',
+  marketWishlist: 'marketWishlist'
 };
 
 exports.Prisma.GuildPointsSnapshotScalarFieldEnum = {
@@ -264,6 +268,58 @@ exports.Prisma.ItemRequestScalarFieldEnum = {
   reviewedById: 'reviewedById',
   reviewedAt: 'reviewedAt',
   fulfilledAt: 'fulfilledAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.LegendaryPriorityRequestScalarFieldEnum = {
+  id: 'id',
+  guildId: 'guildId',
+  memberId: 'memberId',
+  category: 'category',
+  currentGear: 'currentGear',
+  reason: 'reason',
+  prioritySeq: 'prioritySeq',
+  status: 'status',
+  officerNote: 'officerNote',
+  reviewedById: 'reviewedById',
+  reviewedAt: 'reviewedAt',
+  completedAt: 'completedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ItemDistributionScalarFieldEnum = {
+  id: 'id',
+  guildId: 'guildId',
+  memberId: 'memberId',
+  formType: 'formType',
+  rankTier: 'rankTier',
+  ignSnapshot: 'ignSnapshot',
+  classSnapshot: 'classSnapshot',
+  cpSnapshot: 'cpSnapshot',
+  pointsSnapshot: 'pointsSnapshot',
+  prioritySeq: 'prioritySeq',
+  items: 'items',
+  note: 'note',
+  distributedById: 'distributedById',
+  overridden: 'overridden',
+  overrideReason: 'overrideReason',
+  distributedAt: 'distributedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MemberEquipmentScalarFieldEnum = {
+  id: 'id',
+  memberId: 'memberId',
+  slotType: 'slotType',
+  itemName: 'itemName',
+  iconUrl: 'iconUrl',
+  iconBucket: 'iconBucket',
+  rarity: 'rarity',
+  confidence: 'confidence',
+  needsReview: 'needsReview',
+  sourceScreenshotUrl: 'sourceScreenshotUrl',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -342,6 +398,7 @@ exports.Prisma.GuildJoinRequestScalarFieldEnum = {
   class: 'class',
   weapon: 'weapon',
   status: 'status',
+  gearItems: 'gearItems',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -524,6 +581,9 @@ exports.Prisma.ModelName = {
   AuctionItem: 'AuctionItem',
   AuctionBid: 'AuctionBid',
   ItemRequest: 'ItemRequest',
+  LegendaryPriorityRequest: 'LegendaryPriorityRequest',
+  ItemDistribution: 'ItemDistribution',
+  MemberEquipment: 'MemberEquipment',
   LedgerEntry: 'LedgerEntry',
   AuditLog: 'AuditLog',
   FactionAnnouncement: 'FactionAnnouncement',

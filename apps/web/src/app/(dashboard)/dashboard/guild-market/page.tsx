@@ -15,6 +15,10 @@ import AccountingTab from "./components/AccountingTab";
 import RankingsTab from "./components/RankingsTab";
 import RecordSaleModal from "./components/RecordSaleModal";
 import TreasuryAdjModal from "./components/TreasuryAdjModal";
+import RequestItemPanel from "./components/RequestItemPanel";
+import LegendaryPriorityTab from "./components/LegendaryPriorityTab";
+import ItemDistributionTab from "./components/ItemDistributionTab";
+import DistributionHistoryTab from "./components/DistributionHistoryTab";
 import { useQuery, queryClient } from "@/lib/query";
 
 export default function GuildMarketPage() {
@@ -22,7 +26,9 @@ export default function GuildMarketPage() {
   const { addToast } = useToast();
   const { socket } = useSocket();
 
-  const [activeTab, setActiveTab] = useState<"loot" | "accounting" | "rankings">("loot");
+  const [activeTab, setActiveTab] = useState<
+    "loot" | "accounting" | "rankings" | "legendary" | "distribution" | "history"
+  >("loot");
 
   // Loot & Accounting inputs
   const [saleCurrency, setSaleCurrency] = useState("PHP");
@@ -152,12 +158,37 @@ export default function GuildMarketPage() {
       invalidateAll();
     };
 
+    // Distribution-module events → refresh the relevant tab caches
+    const gid = activeGuild.guildId;
+    const handleRequests = () => {
+      queryClient.invalidateQueries(`market_requests:${gid}`);
+      queryClient.invalidateQueries(`market_my_requests:${gid}`);
+    };
+    const handleLegendary = () => queryClient.invalidateQueries(`market_legendary:${gid}`);
+    const handleDistribution = () => {
+      queryClient.invalidateQueries(`market_priority:${gid}`);
+      queryClient.invalidateQueries(`market_distributions:${gid}`);
+      queryClient.invalidateQueries(`market_distributions_mine:${gid}`);
+      queryClient.invalidateQueries(`market_audit:${gid}`);
+    };
+    const handlePriority = () => queryClient.invalidateQueries(`market_priority:${gid}`);
+
     socket.on("loot_sale_recorded", handleMarketUpdate);
     socket.on("treasury_adjusted", handleMarketUpdate);
+    socket.on("legendary_priority_submitted", handleLegendary);
+    socket.on("legendary_priority_updated", handleLegendary);
+    socket.on("item_distributed", handleDistribution);
+    socket.on("priority_sequence_changed", handlePriority);
+    socket.on("market_rules_updated", handlePriority);
 
     return () => {
       socket.off("loot_sale_recorded", handleMarketUpdate);
       socket.off("treasury_adjusted", handleMarketUpdate);
+      socket.off("legendary_priority_submitted", handleLegendary);
+      socket.off("legendary_priority_updated", handleLegendary);
+      socket.off("item_distributed", handleDistribution);
+      socket.off("priority_sequence_changed", handlePriority);
+      socket.off("market_rules_updated", handlePriority);
     };
   }, [socket, activeGuild]);
 
@@ -376,7 +407,7 @@ export default function GuildMarketPage() {
         />
 
         {/* Tab Headers */}
-        <div className="flex border-b border-white/[0.06] gap-4 mb-4">
+        <div className="flex border-b border-white/[0.06] gap-4 mb-4 overflow-x-auto whitespace-nowrap [&>button]:shrink-0">
           <button
             onClick={() => setActiveTab("loot")}
             className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
@@ -410,6 +441,39 @@ export default function GuildMarketPage() {
               <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("legendary")}
+            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
+              activeTab === "legendary" ? "text-white" : "text-white/40 hover:text-white/70"
+            }`}
+          >
+            ✨ Legendary Priority
+            {activeTab === "legendary" && (
+              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("distribution")}
+            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
+              activeTab === "distribution" ? "text-white" : "text-white/40 hover:text-white/70"
+            }`}
+          >
+            ⚖️ Item Distribution
+            {activeTab === "distribution" && (
+              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
+              activeTab === "history" ? "text-white" : "text-white/40 hover:text-white/70"
+            }`}
+          >
+            📜 Distribution History
+            {activeTab === "history" && (
+              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+            )}
+          </button>
         </div>
 
         {/* Tab Content 1: LOOT SALES & HISTORY */}
@@ -429,6 +493,7 @@ export default function GuildMarketPage() {
                   totalDividendsVal={totalDividendsVal}
                   taxRatePercent={settings?.taxRatePercent ?? 10}
                 />
+                <RequestItemPanel guildId={activeGuild.guildId} isOfficer={isOfficer} />
                 <SoldItemsTable
                   sales={filteredSales}
                   lootSearch={lootSearch}
@@ -478,6 +543,19 @@ export default function GuildMarketPage() {
               />
             )}
           </>
+        )}
+
+        {/* Tab Content 4: LEGENDARY PRIORITY */}
+        {activeTab === "legendary" && <LegendaryPriorityTab guildId={activeGuild.guildId} />}
+
+        {/* Tab Content 5: ITEM DISTRIBUTION */}
+        {activeTab === "distribution" && (
+          <ItemDistributionTab guildId={activeGuild.guildId} isOfficer={isOfficer} />
+        )}
+
+        {/* Tab Content 6: DISTRIBUTION HISTORY / AUDIT */}
+        {activeTab === "history" && (
+          <DistributionHistoryTab guildId={activeGuild.guildId} isOfficer={isOfficer} />
         )}
 
         {/* Modal: Record Drop Loot Sale */}

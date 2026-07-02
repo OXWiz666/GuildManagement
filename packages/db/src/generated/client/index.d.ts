@@ -69,6 +69,21 @@ export type AuctionBid = $Result.DefaultSelection<Prisma.$AuctionBidPayload>
  */
 export type ItemRequest = $Result.DefaultSelection<Prisma.$ItemRequestPayload>
 /**
+ * Model LegendaryPriorityRequest
+ * 
+ */
+export type LegendaryPriorityRequest = $Result.DefaultSelection<Prisma.$LegendaryPriorityRequestPayload>
+/**
+ * Model ItemDistribution
+ * 
+ */
+export type ItemDistribution = $Result.DefaultSelection<Prisma.$ItemDistributionPayload>
+/**
+ * Model MemberEquipment
+ * 
+ */
+export type MemberEquipment = $Result.DefaultSelection<Prisma.$MemberEquipmentPayload>
+/**
  * Model LedgerEntry
  * 
  */
@@ -492,6 +507,36 @@ export class PrismaClient<
     * ```
     */
   get itemRequest(): Prisma.ItemRequestDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.legendaryPriorityRequest`: Exposes CRUD operations for the **LegendaryPriorityRequest** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more LegendaryPriorityRequests
+    * const legendaryPriorityRequests = await prisma.legendaryPriorityRequest.findMany()
+    * ```
+    */
+  get legendaryPriorityRequest(): Prisma.LegendaryPriorityRequestDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.itemDistribution`: Exposes CRUD operations for the **ItemDistribution** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more ItemDistributions
+    * const itemDistributions = await prisma.itemDistribution.findMany()
+    * ```
+    */
+  get itemDistribution(): Prisma.ItemDistributionDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.memberEquipment`: Exposes CRUD operations for the **MemberEquipment** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MemberEquipments
+    * const memberEquipments = await prisma.memberEquipment.findMany()
+    * ```
+    */
+  get memberEquipment(): Prisma.MemberEquipmentDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.ledgerEntry`: Exposes CRUD operations for the **LedgerEntry** model.
@@ -1064,6 +1109,9 @@ export namespace Prisma {
     AuctionItem: 'AuctionItem',
     AuctionBid: 'AuctionBid',
     ItemRequest: 'ItemRequest',
+    LegendaryPriorityRequest: 'LegendaryPriorityRequest',
+    ItemDistribution: 'ItemDistribution',
+    MemberEquipment: 'MemberEquipment',
     LedgerEntry: 'LedgerEntry',
     AuditLog: 'AuditLog',
     FactionAnnouncement: 'FactionAnnouncement',
@@ -1094,7 +1142,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "refreshToken" | "session" | "passwordResetToken" | "guild" | "guildSettings" | "guildMember" | "guildPointsSnapshot" | "auctionItem" | "auctionBid" | "itemRequest" | "ledgerEntry" | "auditLog" | "factionAnnouncement" | "factionEvent" | "notification" | "guildJoinRequest" | "attendanceSession" | "attendanceRecord" | "bossSchedule" | "bossRotation" | "boss" | "lootSale"
+      modelProps: "user" | "refreshToken" | "session" | "passwordResetToken" | "guild" | "guildSettings" | "guildMember" | "guildPointsSnapshot" | "auctionItem" | "auctionBid" | "itemRequest" | "legendaryPriorityRequest" | "itemDistribution" | "memberEquipment" | "ledgerEntry" | "auditLog" | "factionAnnouncement" | "factionEvent" | "notification" | "guildJoinRequest" | "attendanceSession" | "attendanceRecord" | "bossSchedule" | "bossRotation" | "boss" | "lootSale"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1909,6 +1957,228 @@ export namespace Prisma {
           count: {
             args: Prisma.ItemRequestCountArgs<ExtArgs>
             result: $Utils.Optional<ItemRequestCountAggregateOutputType> | number
+          }
+        }
+      }
+      LegendaryPriorityRequest: {
+        payload: Prisma.$LegendaryPriorityRequestPayload<ExtArgs>
+        fields: Prisma.LegendaryPriorityRequestFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.LegendaryPriorityRequestFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.LegendaryPriorityRequestFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>
+          }
+          findFirst: {
+            args: Prisma.LegendaryPriorityRequestFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.LegendaryPriorityRequestFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>
+          }
+          findMany: {
+            args: Prisma.LegendaryPriorityRequestFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>[]
+          }
+          create: {
+            args: Prisma.LegendaryPriorityRequestCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>
+          }
+          createMany: {
+            args: Prisma.LegendaryPriorityRequestCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.LegendaryPriorityRequestCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>[]
+          }
+          delete: {
+            args: Prisma.LegendaryPriorityRequestDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>
+          }
+          update: {
+            args: Prisma.LegendaryPriorityRequestUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>
+          }
+          deleteMany: {
+            args: Prisma.LegendaryPriorityRequestDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.LegendaryPriorityRequestUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.LegendaryPriorityRequestUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>[]
+          }
+          upsert: {
+            args: Prisma.LegendaryPriorityRequestUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$LegendaryPriorityRequestPayload>
+          }
+          aggregate: {
+            args: Prisma.LegendaryPriorityRequestAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateLegendaryPriorityRequest>
+          }
+          groupBy: {
+            args: Prisma.LegendaryPriorityRequestGroupByArgs<ExtArgs>
+            result: $Utils.Optional<LegendaryPriorityRequestGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.LegendaryPriorityRequestCountArgs<ExtArgs>
+            result: $Utils.Optional<LegendaryPriorityRequestCountAggregateOutputType> | number
+          }
+        }
+      }
+      ItemDistribution: {
+        payload: Prisma.$ItemDistributionPayload<ExtArgs>
+        fields: Prisma.ItemDistributionFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.ItemDistributionFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.ItemDistributionFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>
+          }
+          findFirst: {
+            args: Prisma.ItemDistributionFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.ItemDistributionFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>
+          }
+          findMany: {
+            args: Prisma.ItemDistributionFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>[]
+          }
+          create: {
+            args: Prisma.ItemDistributionCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>
+          }
+          createMany: {
+            args: Prisma.ItemDistributionCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.ItemDistributionCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>[]
+          }
+          delete: {
+            args: Prisma.ItemDistributionDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>
+          }
+          update: {
+            args: Prisma.ItemDistributionUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>
+          }
+          deleteMany: {
+            args: Prisma.ItemDistributionDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.ItemDistributionUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.ItemDistributionUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>[]
+          }
+          upsert: {
+            args: Prisma.ItemDistributionUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ItemDistributionPayload>
+          }
+          aggregate: {
+            args: Prisma.ItemDistributionAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateItemDistribution>
+          }
+          groupBy: {
+            args: Prisma.ItemDistributionGroupByArgs<ExtArgs>
+            result: $Utils.Optional<ItemDistributionGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.ItemDistributionCountArgs<ExtArgs>
+            result: $Utils.Optional<ItemDistributionCountAggregateOutputType> | number
+          }
+        }
+      }
+      MemberEquipment: {
+        payload: Prisma.$MemberEquipmentPayload<ExtArgs>
+        fields: Prisma.MemberEquipmentFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MemberEquipmentFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MemberEquipmentFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>
+          }
+          findFirst: {
+            args: Prisma.MemberEquipmentFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MemberEquipmentFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>
+          }
+          findMany: {
+            args: Prisma.MemberEquipmentFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>[]
+          }
+          create: {
+            args: Prisma.MemberEquipmentCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>
+          }
+          createMany: {
+            args: Prisma.MemberEquipmentCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MemberEquipmentCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>[]
+          }
+          delete: {
+            args: Prisma.MemberEquipmentDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>
+          }
+          update: {
+            args: Prisma.MemberEquipmentUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>
+          }
+          deleteMany: {
+            args: Prisma.MemberEquipmentDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MemberEquipmentUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MemberEquipmentUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>[]
+          }
+          upsert: {
+            args: Prisma.MemberEquipmentUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MemberEquipmentPayload>
+          }
+          aggregate: {
+            args: Prisma.MemberEquipmentAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMemberEquipment>
+          }
+          groupBy: {
+            args: Prisma.MemberEquipmentGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MemberEquipmentGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MemberEquipmentCountArgs<ExtArgs>
+            result: $Utils.Optional<MemberEquipmentCountAggregateOutputType> | number
           }
         }
       }
@@ -2907,6 +3177,9 @@ export namespace Prisma {
     auctionItem?: AuctionItemOmit
     auctionBid?: AuctionBidOmit
     itemRequest?: ItemRequestOmit
+    legendaryPriorityRequest?: LegendaryPriorityRequestOmit
+    itemDistribution?: ItemDistributionOmit
+    memberEquipment?: MemberEquipmentOmit
     ledgerEntry?: LedgerEntryOmit
     auditLog?: AuditLogOmit
     factionAnnouncement?: FactionAnnouncementOmit
@@ -3140,6 +3413,8 @@ export namespace Prisma {
     pointsSnapshots: number
     auctionItems: number
     itemRequests: number
+    legendaryRequests: number
+    itemDistributions: number
   }
 
   export type GuildCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -3154,6 +3429,8 @@ export namespace Prisma {
     pointsSnapshots?: boolean | GuildCountOutputTypeCountPointsSnapshotsArgs
     auctionItems?: boolean | GuildCountOutputTypeCountAuctionItemsArgs
     itemRequests?: boolean | GuildCountOutputTypeCountItemRequestsArgs
+    legendaryRequests?: boolean | GuildCountOutputTypeCountLegendaryRequestsArgs
+    itemDistributions?: boolean | GuildCountOutputTypeCountItemDistributionsArgs
   }
 
   // Custom InputTypes
@@ -3244,6 +3521,20 @@ export namespace Prisma {
     where?: ItemRequestWhereInput
   }
 
+  /**
+   * GuildCountOutputType without action
+   */
+  export type GuildCountOutputTypeCountLegendaryRequestsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: LegendaryPriorityRequestWhereInput
+  }
+
+  /**
+   * GuildCountOutputType without action
+   */
+  export type GuildCountOutputTypeCountItemDistributionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ItemDistributionWhereInput
+  }
+
 
   /**
    * Count Type GuildMemberCountOutputType
@@ -3252,11 +3543,17 @@ export namespace Prisma {
   export type GuildMemberCountOutputType = {
     auctionBids: number
     itemRequests: number
+    legendaryRequests: number
+    itemDistributions: number
+    equipment: number
   }
 
   export type GuildMemberCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     auctionBids?: boolean | GuildMemberCountOutputTypeCountAuctionBidsArgs
     itemRequests?: boolean | GuildMemberCountOutputTypeCountItemRequestsArgs
+    legendaryRequests?: boolean | GuildMemberCountOutputTypeCountLegendaryRequestsArgs
+    itemDistributions?: boolean | GuildMemberCountOutputTypeCountItemDistributionsArgs
+    equipment?: boolean | GuildMemberCountOutputTypeCountEquipmentArgs
   }
 
   // Custom InputTypes
@@ -3282,6 +3579,27 @@ export namespace Prisma {
    */
   export type GuildMemberCountOutputTypeCountItemRequestsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: ItemRequestWhereInput
+  }
+
+  /**
+   * GuildMemberCountOutputType without action
+   */
+  export type GuildMemberCountOutputTypeCountLegendaryRequestsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: LegendaryPriorityRequestWhereInput
+  }
+
+  /**
+   * GuildMemberCountOutputType without action
+   */
+  export type GuildMemberCountOutputTypeCountItemDistributionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ItemDistributionWhereInput
+  }
+
+  /**
+   * GuildMemberCountOutputType without action
+   */
+  export type GuildMemberCountOutputTypeCountEquipmentArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MemberEquipmentWhereInput
   }
 
 
@@ -8362,6 +8680,8 @@ export namespace Prisma {
     pointsSnapshots?: boolean | Guild$pointsSnapshotsArgs<ExtArgs>
     auctionItems?: boolean | Guild$auctionItemsArgs<ExtArgs>
     itemRequests?: boolean | Guild$itemRequestsArgs<ExtArgs>
+    legendaryRequests?: boolean | Guild$legendaryRequestsArgs<ExtArgs>
+    itemDistributions?: boolean | Guild$itemDistributionsArgs<ExtArgs>
     _count?: boolean | GuildCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["guild"]>
 
@@ -8418,6 +8738,8 @@ export namespace Prisma {
     pointsSnapshots?: boolean | Guild$pointsSnapshotsArgs<ExtArgs>
     auctionItems?: boolean | Guild$auctionItemsArgs<ExtArgs>
     itemRequests?: boolean | Guild$itemRequestsArgs<ExtArgs>
+    legendaryRequests?: boolean | Guild$legendaryRequestsArgs<ExtArgs>
+    itemDistributions?: boolean | Guild$itemDistributionsArgs<ExtArgs>
     _count?: boolean | GuildCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type GuildIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -8438,6 +8760,8 @@ export namespace Prisma {
       pointsSnapshots: Prisma.$GuildPointsSnapshotPayload<ExtArgs>[]
       auctionItems: Prisma.$AuctionItemPayload<ExtArgs>[]
       itemRequests: Prisma.$ItemRequestPayload<ExtArgs>[]
+      legendaryRequests: Prisma.$LegendaryPriorityRequestPayload<ExtArgs>[]
+      itemDistributions: Prisma.$ItemDistributionPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -8856,6 +9180,8 @@ export namespace Prisma {
     pointsSnapshots<T extends Guild$pointsSnapshotsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$pointsSnapshotsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$GuildPointsSnapshotPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     auctionItems<T extends Guild$auctionItemsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$auctionItemsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AuctionItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     itemRequests<T extends Guild$itemRequestsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$itemRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ItemRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    legendaryRequests<T extends Guild$legendaryRequestsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$legendaryRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    itemDistributions<T extends Guild$itemDistributionsArgs<ExtArgs> = {}>(args?: Subset<T, Guild$itemDistributionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -9566,6 +9892,54 @@ export namespace Prisma {
   }
 
   /**
+   * Guild.legendaryRequests
+   */
+  export type Guild$legendaryRequestsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    where?: LegendaryPriorityRequestWhereInput
+    orderBy?: LegendaryPriorityRequestOrderByWithRelationInput | LegendaryPriorityRequestOrderByWithRelationInput[]
+    cursor?: LegendaryPriorityRequestWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: LegendaryPriorityRequestScalarFieldEnum | LegendaryPriorityRequestScalarFieldEnum[]
+  }
+
+  /**
+   * Guild.itemDistributions
+   */
+  export type Guild$itemDistributionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    where?: ItemDistributionWhereInput
+    orderBy?: ItemDistributionOrderByWithRelationInput | ItemDistributionOrderByWithRelationInput[]
+    cursor?: ItemDistributionWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ItemDistributionScalarFieldEnum | ItemDistributionScalarFieldEnum[]
+  }
+
+  /**
    * Guild without action
    */
   export type GuildDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -9654,6 +10028,7 @@ export namespace Prisma {
     activeShareModel: number
     pointsResetCycle: number
     itemRequestLimits: number
+    marketRules: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -9718,6 +10093,7 @@ export namespace Prisma {
     activeShareModel?: true
     pointsResetCycle?: true
     itemRequestLimits?: true
+    marketRules?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -9823,6 +10199,7 @@ export namespace Prisma {
     activeShareModel: string
     pointsResetCycle: string
     itemRequestLimits: JsonValue
+    marketRules: JsonValue
     createdAt: Date
     updatedAt: Date
     _count: GuildSettingsCountAggregateOutputType | null
@@ -9860,6 +10237,7 @@ export namespace Prisma {
     activeShareModel?: boolean
     pointsResetCycle?: boolean
     itemRequestLimits?: boolean
+    marketRules?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     guild?: boolean | GuildDefaultArgs<ExtArgs>
@@ -9879,6 +10257,7 @@ export namespace Prisma {
     activeShareModel?: boolean
     pointsResetCycle?: boolean
     itemRequestLimits?: boolean
+    marketRules?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     guild?: boolean | GuildDefaultArgs<ExtArgs>
@@ -9898,6 +10277,7 @@ export namespace Prisma {
     activeShareModel?: boolean
     pointsResetCycle?: boolean
     itemRequestLimits?: boolean
+    marketRules?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     guild?: boolean | GuildDefaultArgs<ExtArgs>
@@ -9917,11 +10297,12 @@ export namespace Prisma {
     activeShareModel?: boolean
     pointsResetCycle?: boolean
     itemRequestLimits?: boolean
+    marketRules?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type GuildSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "currencyCode" | "currencySymbol" | "secondaryCurrencyCode" | "secondaryCurrencySymbol" | "taxRatePercent" | "attendancePoints" | "bossKillPoints" | "rankMultipliers" | "activeShareModel" | "pointsResetCycle" | "itemRequestLimits" | "createdAt" | "updatedAt", ExtArgs["result"]["guildSettings"]>
+  export type GuildSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "currencyCode" | "currencySymbol" | "secondaryCurrencyCode" | "secondaryCurrencySymbol" | "taxRatePercent" | "attendancePoints" | "bossKillPoints" | "rankMultipliers" | "activeShareModel" | "pointsResetCycle" | "itemRequestLimits" | "marketRules" | "createdAt" | "updatedAt", ExtArgs["result"]["guildSettings"]>
   export type GuildSettingsInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     guild?: boolean | GuildDefaultArgs<ExtArgs>
   }
@@ -9951,6 +10332,7 @@ export namespace Prisma {
       activeShareModel: string
       pointsResetCycle: string
       itemRequestLimits: Prisma.JsonValue
+      marketRules: Prisma.JsonValue
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["guildSettings"]>
@@ -10390,6 +10772,7 @@ export namespace Prisma {
     readonly activeShareModel: FieldRef<"GuildSettings", 'String'>
     readonly pointsResetCycle: FieldRef<"GuildSettings", 'String'>
     readonly itemRequestLimits: FieldRef<"GuildSettings", 'Json'>
+    readonly marketRules: FieldRef<"GuildSettings", 'Json'>
     readonly createdAt: FieldRef<"GuildSettings", 'DateTime'>
     readonly updatedAt: FieldRef<"GuildSettings", 'DateTime'>
   }
@@ -10821,11 +11204,13 @@ export namespace Prisma {
   export type GuildMemberAvgAggregateOutputType = {
     cp: number | null
     bidPoints: number | null
+    marketPrioritySeq: number | null
   }
 
   export type GuildMemberSumAggregateOutputType = {
     cp: number | null
     bidPoints: number | null
+    marketPrioritySeq: number | null
   }
 
   export type GuildMemberMinAggregateOutputType = {
@@ -10843,6 +11228,8 @@ export namespace Prisma {
     isActive: boolean | null
     bidPoints: number | null
     bidPointsLastReset: Date | null
+    marketPrioritySeq: number | null
+    marketPriorityReason: string | null
   }
 
   export type GuildMemberMaxAggregateOutputType = {
@@ -10860,6 +11247,8 @@ export namespace Prisma {
     isActive: boolean | null
     bidPoints: number | null
     bidPointsLastReset: Date | null
+    marketPrioritySeq: number | null
+    marketPriorityReason: string | null
   }
 
   export type GuildMemberCountAggregateOutputType = {
@@ -10877,6 +11266,9 @@ export namespace Prisma {
     isActive: number
     bidPoints: number
     bidPointsLastReset: number
+    marketPrioritySeq: number
+    marketPriorityReason: number
+    marketWishlist: number
     _all: number
   }
 
@@ -10884,11 +11276,13 @@ export namespace Prisma {
   export type GuildMemberAvgAggregateInputType = {
     cp?: true
     bidPoints?: true
+    marketPrioritySeq?: true
   }
 
   export type GuildMemberSumAggregateInputType = {
     cp?: true
     bidPoints?: true
+    marketPrioritySeq?: true
   }
 
   export type GuildMemberMinAggregateInputType = {
@@ -10906,6 +11300,8 @@ export namespace Prisma {
     isActive?: true
     bidPoints?: true
     bidPointsLastReset?: true
+    marketPrioritySeq?: true
+    marketPriorityReason?: true
   }
 
   export type GuildMemberMaxAggregateInputType = {
@@ -10923,6 +11319,8 @@ export namespace Prisma {
     isActive?: true
     bidPoints?: true
     bidPointsLastReset?: true
+    marketPrioritySeq?: true
+    marketPriorityReason?: true
   }
 
   export type GuildMemberCountAggregateInputType = {
@@ -10940,6 +11338,9 @@ export namespace Prisma {
     isActive?: true
     bidPoints?: true
     bidPointsLastReset?: true
+    marketPrioritySeq?: true
+    marketPriorityReason?: true
+    marketWishlist?: true
     _all?: true
   }
 
@@ -11044,6 +11445,9 @@ export namespace Prisma {
     isActive: boolean
     bidPoints: number
     bidPointsLastReset: Date | null
+    marketPrioritySeq: number | null
+    marketPriorityReason: string | null
+    marketWishlist: JsonValue
     _count: GuildMemberCountAggregateOutputType | null
     _avg: GuildMemberAvgAggregateOutputType | null
     _sum: GuildMemberSumAggregateOutputType | null
@@ -11080,10 +11484,16 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: boolean
     bidPointsLastReset?: boolean
+    marketPrioritySeq?: boolean
+    marketPriorityReason?: boolean
+    marketWishlist?: boolean
     user?: boolean | UserDefaultArgs<ExtArgs>
     guild?: boolean | GuildDefaultArgs<ExtArgs>
     auctionBids?: boolean | GuildMember$auctionBidsArgs<ExtArgs>
     itemRequests?: boolean | GuildMember$itemRequestsArgs<ExtArgs>
+    legendaryRequests?: boolean | GuildMember$legendaryRequestsArgs<ExtArgs>
+    itemDistributions?: boolean | GuildMember$itemDistributionsArgs<ExtArgs>
+    equipment?: boolean | GuildMember$equipmentArgs<ExtArgs>
     _count?: boolean | GuildMemberCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["guildMember"]>
 
@@ -11102,6 +11512,9 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: boolean
     bidPointsLastReset?: boolean
+    marketPrioritySeq?: boolean
+    marketPriorityReason?: boolean
+    marketWishlist?: boolean
     user?: boolean | UserDefaultArgs<ExtArgs>
     guild?: boolean | GuildDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["guildMember"]>
@@ -11121,6 +11534,9 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: boolean
     bidPointsLastReset?: boolean
+    marketPrioritySeq?: boolean
+    marketPriorityReason?: boolean
+    marketWishlist?: boolean
     user?: boolean | UserDefaultArgs<ExtArgs>
     guild?: boolean | GuildDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["guildMember"]>
@@ -11140,14 +11556,20 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: boolean
     bidPointsLastReset?: boolean
+    marketPrioritySeq?: boolean
+    marketPriorityReason?: boolean
+    marketWishlist?: boolean
   }
 
-  export type GuildMemberOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "guildId" | "role" | "rankName" | "ign" | "cp" | "class" | "weapon" | "memberCode" | "joinedAt" | "isActive" | "bidPoints" | "bidPointsLastReset", ExtArgs["result"]["guildMember"]>
+  export type GuildMemberOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "guildId" | "role" | "rankName" | "ign" | "cp" | "class" | "weapon" | "memberCode" | "joinedAt" | "isActive" | "bidPoints" | "bidPointsLastReset" | "marketPrioritySeq" | "marketPriorityReason" | "marketWishlist", ExtArgs["result"]["guildMember"]>
   export type GuildMemberInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     guild?: boolean | GuildDefaultArgs<ExtArgs>
     auctionBids?: boolean | GuildMember$auctionBidsArgs<ExtArgs>
     itemRequests?: boolean | GuildMember$itemRequestsArgs<ExtArgs>
+    legendaryRequests?: boolean | GuildMember$legendaryRequestsArgs<ExtArgs>
+    itemDistributions?: boolean | GuildMember$itemDistributionsArgs<ExtArgs>
+    equipment?: boolean | GuildMember$equipmentArgs<ExtArgs>
     _count?: boolean | GuildMemberCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type GuildMemberIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -11166,6 +11588,9 @@ export namespace Prisma {
       guild: Prisma.$GuildPayload<ExtArgs>
       auctionBids: Prisma.$AuctionBidPayload<ExtArgs>[]
       itemRequests: Prisma.$ItemRequestPayload<ExtArgs>[]
+      legendaryRequests: Prisma.$LegendaryPriorityRequestPayload<ExtArgs>[]
+      itemDistributions: Prisma.$ItemDistributionPayload<ExtArgs>[]
+      equipment: Prisma.$MemberEquipmentPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -11182,6 +11607,9 @@ export namespace Prisma {
       isActive: boolean
       bidPoints: number
       bidPointsLastReset: Date | null
+      marketPrioritySeq: number | null
+      marketPriorityReason: string | null
+      marketWishlist: Prisma.JsonValue
     }, ExtArgs["result"]["guildMember"]>
     composites: {}
   }
@@ -11580,6 +12008,9 @@ export namespace Prisma {
     guild<T extends GuildDefaultArgs<ExtArgs> = {}>(args?: Subset<T, GuildDefaultArgs<ExtArgs>>): Prisma__GuildClient<$Result.GetResult<Prisma.$GuildPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     auctionBids<T extends GuildMember$auctionBidsArgs<ExtArgs> = {}>(args?: Subset<T, GuildMember$auctionBidsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AuctionBidPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     itemRequests<T extends GuildMember$itemRequestsArgs<ExtArgs> = {}>(args?: Subset<T, GuildMember$itemRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ItemRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    legendaryRequests<T extends GuildMember$legendaryRequestsArgs<ExtArgs> = {}>(args?: Subset<T, GuildMember$legendaryRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    itemDistributions<T extends GuildMember$itemDistributionsArgs<ExtArgs> = {}>(args?: Subset<T, GuildMember$itemDistributionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    equipment<T extends GuildMember$equipmentArgs<ExtArgs> = {}>(args?: Subset<T, GuildMember$equipmentArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -11623,6 +12054,9 @@ export namespace Prisma {
     readonly isActive: FieldRef<"GuildMember", 'Boolean'>
     readonly bidPoints: FieldRef<"GuildMember", 'Int'>
     readonly bidPointsLastReset: FieldRef<"GuildMember", 'DateTime'>
+    readonly marketPrioritySeq: FieldRef<"GuildMember", 'Int'>
+    readonly marketPriorityReason: FieldRef<"GuildMember", 'String'>
+    readonly marketWishlist: FieldRef<"GuildMember", 'Json'>
   }
     
 
@@ -12064,6 +12498,78 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: ItemRequestScalarFieldEnum | ItemRequestScalarFieldEnum[]
+  }
+
+  /**
+   * GuildMember.legendaryRequests
+   */
+  export type GuildMember$legendaryRequestsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    where?: LegendaryPriorityRequestWhereInput
+    orderBy?: LegendaryPriorityRequestOrderByWithRelationInput | LegendaryPriorityRequestOrderByWithRelationInput[]
+    cursor?: LegendaryPriorityRequestWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: LegendaryPriorityRequestScalarFieldEnum | LegendaryPriorityRequestScalarFieldEnum[]
+  }
+
+  /**
+   * GuildMember.itemDistributions
+   */
+  export type GuildMember$itemDistributionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    where?: ItemDistributionWhereInput
+    orderBy?: ItemDistributionOrderByWithRelationInput | ItemDistributionOrderByWithRelationInput[]
+    cursor?: ItemDistributionWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ItemDistributionScalarFieldEnum | ItemDistributionScalarFieldEnum[]
+  }
+
+  /**
+   * GuildMember.equipment
+   */
+  export type GuildMember$equipmentArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    where?: MemberEquipmentWhereInput
+    orderBy?: MemberEquipmentOrderByWithRelationInput | MemberEquipmentOrderByWithRelationInput[]
+    cursor?: MemberEquipmentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MemberEquipmentScalarFieldEnum | MemberEquipmentScalarFieldEnum[]
   }
 
   /**
@@ -16786,6 +17292,3666 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: ItemRequestInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model LegendaryPriorityRequest
+   */
+
+  export type AggregateLegendaryPriorityRequest = {
+    _count: LegendaryPriorityRequestCountAggregateOutputType | null
+    _avg: LegendaryPriorityRequestAvgAggregateOutputType | null
+    _sum: LegendaryPriorityRequestSumAggregateOutputType | null
+    _min: LegendaryPriorityRequestMinAggregateOutputType | null
+    _max: LegendaryPriorityRequestMaxAggregateOutputType | null
+  }
+
+  export type LegendaryPriorityRequestAvgAggregateOutputType = {
+    prioritySeq: number | null
+  }
+
+  export type LegendaryPriorityRequestSumAggregateOutputType = {
+    prioritySeq: number | null
+  }
+
+  export type LegendaryPriorityRequestMinAggregateOutputType = {
+    id: string | null
+    guildId: string | null
+    memberId: string | null
+    category: string | null
+    currentGear: string | null
+    reason: string | null
+    prioritySeq: number | null
+    status: string | null
+    officerNote: string | null
+    reviewedById: string | null
+    reviewedAt: Date | null
+    completedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type LegendaryPriorityRequestMaxAggregateOutputType = {
+    id: string | null
+    guildId: string | null
+    memberId: string | null
+    category: string | null
+    currentGear: string | null
+    reason: string | null
+    prioritySeq: number | null
+    status: string | null
+    officerNote: string | null
+    reviewedById: string | null
+    reviewedAt: Date | null
+    completedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type LegendaryPriorityRequestCountAggregateOutputType = {
+    id: number
+    guildId: number
+    memberId: number
+    category: number
+    currentGear: number
+    reason: number
+    prioritySeq: number
+    status: number
+    officerNote: number
+    reviewedById: number
+    reviewedAt: number
+    completedAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type LegendaryPriorityRequestAvgAggregateInputType = {
+    prioritySeq?: true
+  }
+
+  export type LegendaryPriorityRequestSumAggregateInputType = {
+    prioritySeq?: true
+  }
+
+  export type LegendaryPriorityRequestMinAggregateInputType = {
+    id?: true
+    guildId?: true
+    memberId?: true
+    category?: true
+    currentGear?: true
+    reason?: true
+    prioritySeq?: true
+    status?: true
+    officerNote?: true
+    reviewedById?: true
+    reviewedAt?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type LegendaryPriorityRequestMaxAggregateInputType = {
+    id?: true
+    guildId?: true
+    memberId?: true
+    category?: true
+    currentGear?: true
+    reason?: true
+    prioritySeq?: true
+    status?: true
+    officerNote?: true
+    reviewedById?: true
+    reviewedAt?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type LegendaryPriorityRequestCountAggregateInputType = {
+    id?: true
+    guildId?: true
+    memberId?: true
+    category?: true
+    currentGear?: true
+    reason?: true
+    prioritySeq?: true
+    status?: true
+    officerNote?: true
+    reviewedById?: true
+    reviewedAt?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type LegendaryPriorityRequestAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which LegendaryPriorityRequest to aggregate.
+     */
+    where?: LegendaryPriorityRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of LegendaryPriorityRequests to fetch.
+     */
+    orderBy?: LegendaryPriorityRequestOrderByWithRelationInput | LegendaryPriorityRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: LegendaryPriorityRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` LegendaryPriorityRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` LegendaryPriorityRequests.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned LegendaryPriorityRequests
+    **/
+    _count?: true | LegendaryPriorityRequestCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: LegendaryPriorityRequestAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: LegendaryPriorityRequestSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: LegendaryPriorityRequestMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: LegendaryPriorityRequestMaxAggregateInputType
+  }
+
+  export type GetLegendaryPriorityRequestAggregateType<T extends LegendaryPriorityRequestAggregateArgs> = {
+        [P in keyof T & keyof AggregateLegendaryPriorityRequest]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateLegendaryPriorityRequest[P]>
+      : GetScalarType<T[P], AggregateLegendaryPriorityRequest[P]>
+  }
+
+
+
+
+  export type LegendaryPriorityRequestGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: LegendaryPriorityRequestWhereInput
+    orderBy?: LegendaryPriorityRequestOrderByWithAggregationInput | LegendaryPriorityRequestOrderByWithAggregationInput[]
+    by: LegendaryPriorityRequestScalarFieldEnum[] | LegendaryPriorityRequestScalarFieldEnum
+    having?: LegendaryPriorityRequestScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: LegendaryPriorityRequestCountAggregateInputType | true
+    _avg?: LegendaryPriorityRequestAvgAggregateInputType
+    _sum?: LegendaryPriorityRequestSumAggregateInputType
+    _min?: LegendaryPriorityRequestMinAggregateInputType
+    _max?: LegendaryPriorityRequestMaxAggregateInputType
+  }
+
+  export type LegendaryPriorityRequestGroupByOutputType = {
+    id: string
+    guildId: string
+    memberId: string
+    category: string
+    currentGear: string | null
+    reason: string | null
+    prioritySeq: number | null
+    status: string
+    officerNote: string | null
+    reviewedById: string | null
+    reviewedAt: Date | null
+    completedAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: LegendaryPriorityRequestCountAggregateOutputType | null
+    _avg: LegendaryPriorityRequestAvgAggregateOutputType | null
+    _sum: LegendaryPriorityRequestSumAggregateOutputType | null
+    _min: LegendaryPriorityRequestMinAggregateOutputType | null
+    _max: LegendaryPriorityRequestMaxAggregateOutputType | null
+  }
+
+  type GetLegendaryPriorityRequestGroupByPayload<T extends LegendaryPriorityRequestGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<LegendaryPriorityRequestGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof LegendaryPriorityRequestGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], LegendaryPriorityRequestGroupByOutputType[P]>
+            : GetScalarType<T[P], LegendaryPriorityRequestGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type LegendaryPriorityRequestSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    category?: boolean
+    currentGear?: boolean
+    reason?: boolean
+    prioritySeq?: boolean
+    status?: boolean
+    officerNote?: boolean
+    reviewedById?: boolean
+    reviewedAt?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["legendaryPriorityRequest"]>
+
+  export type LegendaryPriorityRequestSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    category?: boolean
+    currentGear?: boolean
+    reason?: boolean
+    prioritySeq?: boolean
+    status?: boolean
+    officerNote?: boolean
+    reviewedById?: boolean
+    reviewedAt?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["legendaryPriorityRequest"]>
+
+  export type LegendaryPriorityRequestSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    category?: boolean
+    currentGear?: boolean
+    reason?: boolean
+    prioritySeq?: boolean
+    status?: boolean
+    officerNote?: boolean
+    reviewedById?: boolean
+    reviewedAt?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["legendaryPriorityRequest"]>
+
+  export type LegendaryPriorityRequestSelectScalar = {
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    category?: boolean
+    currentGear?: boolean
+    reason?: boolean
+    prioritySeq?: boolean
+    status?: boolean
+    officerNote?: boolean
+    reviewedById?: boolean
+    reviewedAt?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type LegendaryPriorityRequestOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "memberId" | "category" | "currentGear" | "reason" | "prioritySeq" | "status" | "officerNote" | "reviewedById" | "reviewedAt" | "completedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["legendaryPriorityRequest"]>
+  export type LegendaryPriorityRequestInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+  export type LegendaryPriorityRequestIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+  export type LegendaryPriorityRequestIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+
+  export type $LegendaryPriorityRequestPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "LegendaryPriorityRequest"
+    objects: {
+      guild: Prisma.$GuildPayload<ExtArgs>
+      member: Prisma.$GuildMemberPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      guildId: string
+      memberId: string
+      category: string
+      currentGear: string | null
+      reason: string | null
+      prioritySeq: number | null
+      status: string
+      officerNote: string | null
+      reviewedById: string | null
+      reviewedAt: Date | null
+      completedAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["legendaryPriorityRequest"]>
+    composites: {}
+  }
+
+  type LegendaryPriorityRequestGetPayload<S extends boolean | null | undefined | LegendaryPriorityRequestDefaultArgs> = $Result.GetResult<Prisma.$LegendaryPriorityRequestPayload, S>
+
+  type LegendaryPriorityRequestCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<LegendaryPriorityRequestFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: LegendaryPriorityRequestCountAggregateInputType | true
+    }
+
+  export interface LegendaryPriorityRequestDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['LegendaryPriorityRequest'], meta: { name: 'LegendaryPriorityRequest' } }
+    /**
+     * Find zero or one LegendaryPriorityRequest that matches the filter.
+     * @param {LegendaryPriorityRequestFindUniqueArgs} args - Arguments to find a LegendaryPriorityRequest
+     * @example
+     * // Get one LegendaryPriorityRequest
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends LegendaryPriorityRequestFindUniqueArgs>(args: SelectSubset<T, LegendaryPriorityRequestFindUniqueArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one LegendaryPriorityRequest that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {LegendaryPriorityRequestFindUniqueOrThrowArgs} args - Arguments to find a LegendaryPriorityRequest
+     * @example
+     * // Get one LegendaryPriorityRequest
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends LegendaryPriorityRequestFindUniqueOrThrowArgs>(args: SelectSubset<T, LegendaryPriorityRequestFindUniqueOrThrowArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first LegendaryPriorityRequest that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {LegendaryPriorityRequestFindFirstArgs} args - Arguments to find a LegendaryPriorityRequest
+     * @example
+     * // Get one LegendaryPriorityRequest
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends LegendaryPriorityRequestFindFirstArgs>(args?: SelectSubset<T, LegendaryPriorityRequestFindFirstArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first LegendaryPriorityRequest that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {LegendaryPriorityRequestFindFirstOrThrowArgs} args - Arguments to find a LegendaryPriorityRequest
+     * @example
+     * // Get one LegendaryPriorityRequest
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends LegendaryPriorityRequestFindFirstOrThrowArgs>(args?: SelectSubset<T, LegendaryPriorityRequestFindFirstOrThrowArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more LegendaryPriorityRequests that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {LegendaryPriorityRequestFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all LegendaryPriorityRequests
+     * const legendaryPriorityRequests = await prisma.legendaryPriorityRequest.findMany()
+     * 
+     * // Get first 10 LegendaryPriorityRequests
+     * const legendaryPriorityRequests = await prisma.legendaryPriorityRequest.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const legendaryPriorityRequestWithIdOnly = await prisma.legendaryPriorityRequest.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends LegendaryPriorityRequestFindManyArgs>(args?: SelectSubset<T, LegendaryPriorityRequestFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a LegendaryPriorityRequest.
+     * @param {LegendaryPriorityRequestCreateArgs} args - Arguments to create a LegendaryPriorityRequest.
+     * @example
+     * // Create one LegendaryPriorityRequest
+     * const LegendaryPriorityRequest = await prisma.legendaryPriorityRequest.create({
+     *   data: {
+     *     // ... data to create a LegendaryPriorityRequest
+     *   }
+     * })
+     * 
+     */
+    create<T extends LegendaryPriorityRequestCreateArgs>(args: SelectSubset<T, LegendaryPriorityRequestCreateArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many LegendaryPriorityRequests.
+     * @param {LegendaryPriorityRequestCreateManyArgs} args - Arguments to create many LegendaryPriorityRequests.
+     * @example
+     * // Create many LegendaryPriorityRequests
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends LegendaryPriorityRequestCreateManyArgs>(args?: SelectSubset<T, LegendaryPriorityRequestCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many LegendaryPriorityRequests and returns the data saved in the database.
+     * @param {LegendaryPriorityRequestCreateManyAndReturnArgs} args - Arguments to create many LegendaryPriorityRequests.
+     * @example
+     * // Create many LegendaryPriorityRequests
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many LegendaryPriorityRequests and only return the `id`
+     * const legendaryPriorityRequestWithIdOnly = await prisma.legendaryPriorityRequest.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends LegendaryPriorityRequestCreateManyAndReturnArgs>(args?: SelectSubset<T, LegendaryPriorityRequestCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a LegendaryPriorityRequest.
+     * @param {LegendaryPriorityRequestDeleteArgs} args - Arguments to delete one LegendaryPriorityRequest.
+     * @example
+     * // Delete one LegendaryPriorityRequest
+     * const LegendaryPriorityRequest = await prisma.legendaryPriorityRequest.delete({
+     *   where: {
+     *     // ... filter to delete one LegendaryPriorityRequest
+     *   }
+     * })
+     * 
+     */
+    delete<T extends LegendaryPriorityRequestDeleteArgs>(args: SelectSubset<T, LegendaryPriorityRequestDeleteArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one LegendaryPriorityRequest.
+     * @param {LegendaryPriorityRequestUpdateArgs} args - Arguments to update one LegendaryPriorityRequest.
+     * @example
+     * // Update one LegendaryPriorityRequest
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends LegendaryPriorityRequestUpdateArgs>(args: SelectSubset<T, LegendaryPriorityRequestUpdateArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more LegendaryPriorityRequests.
+     * @param {LegendaryPriorityRequestDeleteManyArgs} args - Arguments to filter LegendaryPriorityRequests to delete.
+     * @example
+     * // Delete a few LegendaryPriorityRequests
+     * const { count } = await prisma.legendaryPriorityRequest.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends LegendaryPriorityRequestDeleteManyArgs>(args?: SelectSubset<T, LegendaryPriorityRequestDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more LegendaryPriorityRequests.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {LegendaryPriorityRequestUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many LegendaryPriorityRequests
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends LegendaryPriorityRequestUpdateManyArgs>(args: SelectSubset<T, LegendaryPriorityRequestUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more LegendaryPriorityRequests and returns the data updated in the database.
+     * @param {LegendaryPriorityRequestUpdateManyAndReturnArgs} args - Arguments to update many LegendaryPriorityRequests.
+     * @example
+     * // Update many LegendaryPriorityRequests
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more LegendaryPriorityRequests and only return the `id`
+     * const legendaryPriorityRequestWithIdOnly = await prisma.legendaryPriorityRequest.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends LegendaryPriorityRequestUpdateManyAndReturnArgs>(args: SelectSubset<T, LegendaryPriorityRequestUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one LegendaryPriorityRequest.
+     * @param {LegendaryPriorityRequestUpsertArgs} args - Arguments to update or create a LegendaryPriorityRequest.
+     * @example
+     * // Update or create a LegendaryPriorityRequest
+     * const legendaryPriorityRequest = await prisma.legendaryPriorityRequest.upsert({
+     *   create: {
+     *     // ... data to create a LegendaryPriorityRequest
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the LegendaryPriorityRequest we want to update
+     *   }
+     * })
+     */
+    upsert<T extends LegendaryPriorityRequestUpsertArgs>(args: SelectSubset<T, LegendaryPriorityRequestUpsertArgs<ExtArgs>>): Prisma__LegendaryPriorityRequestClient<$Result.GetResult<Prisma.$LegendaryPriorityRequestPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of LegendaryPriorityRequests.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {LegendaryPriorityRequestCountArgs} args - Arguments to filter LegendaryPriorityRequests to count.
+     * @example
+     * // Count the number of LegendaryPriorityRequests
+     * const count = await prisma.legendaryPriorityRequest.count({
+     *   where: {
+     *     // ... the filter for the LegendaryPriorityRequests we want to count
+     *   }
+     * })
+    **/
+    count<T extends LegendaryPriorityRequestCountArgs>(
+      args?: Subset<T, LegendaryPriorityRequestCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], LegendaryPriorityRequestCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a LegendaryPriorityRequest.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {LegendaryPriorityRequestAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends LegendaryPriorityRequestAggregateArgs>(args: Subset<T, LegendaryPriorityRequestAggregateArgs>): Prisma.PrismaPromise<GetLegendaryPriorityRequestAggregateType<T>>
+
+    /**
+     * Group by LegendaryPriorityRequest.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {LegendaryPriorityRequestGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends LegendaryPriorityRequestGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: LegendaryPriorityRequestGroupByArgs['orderBy'] }
+        : { orderBy?: LegendaryPriorityRequestGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, LegendaryPriorityRequestGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetLegendaryPriorityRequestGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the LegendaryPriorityRequest model
+   */
+  readonly fields: LegendaryPriorityRequestFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for LegendaryPriorityRequest.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__LegendaryPriorityRequestClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    guild<T extends GuildDefaultArgs<ExtArgs> = {}>(args?: Subset<T, GuildDefaultArgs<ExtArgs>>): Prisma__GuildClient<$Result.GetResult<Prisma.$GuildPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    member<T extends GuildMemberDefaultArgs<ExtArgs> = {}>(args?: Subset<T, GuildMemberDefaultArgs<ExtArgs>>): Prisma__GuildMemberClient<$Result.GetResult<Prisma.$GuildMemberPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the LegendaryPriorityRequest model
+   */
+  interface LegendaryPriorityRequestFieldRefs {
+    readonly id: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly guildId: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly memberId: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly category: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly currentGear: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly reason: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly prioritySeq: FieldRef<"LegendaryPriorityRequest", 'Int'>
+    readonly status: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly officerNote: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly reviewedById: FieldRef<"LegendaryPriorityRequest", 'String'>
+    readonly reviewedAt: FieldRef<"LegendaryPriorityRequest", 'DateTime'>
+    readonly completedAt: FieldRef<"LegendaryPriorityRequest", 'DateTime'>
+    readonly createdAt: FieldRef<"LegendaryPriorityRequest", 'DateTime'>
+    readonly updatedAt: FieldRef<"LegendaryPriorityRequest", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * LegendaryPriorityRequest findUnique
+   */
+  export type LegendaryPriorityRequestFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * Filter, which LegendaryPriorityRequest to fetch.
+     */
+    where: LegendaryPriorityRequestWhereUniqueInput
+  }
+
+  /**
+   * LegendaryPriorityRequest findUniqueOrThrow
+   */
+  export type LegendaryPriorityRequestFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * Filter, which LegendaryPriorityRequest to fetch.
+     */
+    where: LegendaryPriorityRequestWhereUniqueInput
+  }
+
+  /**
+   * LegendaryPriorityRequest findFirst
+   */
+  export type LegendaryPriorityRequestFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * Filter, which LegendaryPriorityRequest to fetch.
+     */
+    where?: LegendaryPriorityRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of LegendaryPriorityRequests to fetch.
+     */
+    orderBy?: LegendaryPriorityRequestOrderByWithRelationInput | LegendaryPriorityRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for LegendaryPriorityRequests.
+     */
+    cursor?: LegendaryPriorityRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` LegendaryPriorityRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` LegendaryPriorityRequests.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of LegendaryPriorityRequests.
+     */
+    distinct?: LegendaryPriorityRequestScalarFieldEnum | LegendaryPriorityRequestScalarFieldEnum[]
+  }
+
+  /**
+   * LegendaryPriorityRequest findFirstOrThrow
+   */
+  export type LegendaryPriorityRequestFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * Filter, which LegendaryPriorityRequest to fetch.
+     */
+    where?: LegendaryPriorityRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of LegendaryPriorityRequests to fetch.
+     */
+    orderBy?: LegendaryPriorityRequestOrderByWithRelationInput | LegendaryPriorityRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for LegendaryPriorityRequests.
+     */
+    cursor?: LegendaryPriorityRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` LegendaryPriorityRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` LegendaryPriorityRequests.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of LegendaryPriorityRequests.
+     */
+    distinct?: LegendaryPriorityRequestScalarFieldEnum | LegendaryPriorityRequestScalarFieldEnum[]
+  }
+
+  /**
+   * LegendaryPriorityRequest findMany
+   */
+  export type LegendaryPriorityRequestFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * Filter, which LegendaryPriorityRequests to fetch.
+     */
+    where?: LegendaryPriorityRequestWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of LegendaryPriorityRequests to fetch.
+     */
+    orderBy?: LegendaryPriorityRequestOrderByWithRelationInput | LegendaryPriorityRequestOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing LegendaryPriorityRequests.
+     */
+    cursor?: LegendaryPriorityRequestWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` LegendaryPriorityRequests from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` LegendaryPriorityRequests.
+     */
+    skip?: number
+    distinct?: LegendaryPriorityRequestScalarFieldEnum | LegendaryPriorityRequestScalarFieldEnum[]
+  }
+
+  /**
+   * LegendaryPriorityRequest create
+   */
+  export type LegendaryPriorityRequestCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * The data needed to create a LegendaryPriorityRequest.
+     */
+    data: XOR<LegendaryPriorityRequestCreateInput, LegendaryPriorityRequestUncheckedCreateInput>
+  }
+
+  /**
+   * LegendaryPriorityRequest createMany
+   */
+  export type LegendaryPriorityRequestCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many LegendaryPriorityRequests.
+     */
+    data: LegendaryPriorityRequestCreateManyInput | LegendaryPriorityRequestCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * LegendaryPriorityRequest createManyAndReturn
+   */
+  export type LegendaryPriorityRequestCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * The data used to create many LegendaryPriorityRequests.
+     */
+    data: LegendaryPriorityRequestCreateManyInput | LegendaryPriorityRequestCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * LegendaryPriorityRequest update
+   */
+  export type LegendaryPriorityRequestUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * The data needed to update a LegendaryPriorityRequest.
+     */
+    data: XOR<LegendaryPriorityRequestUpdateInput, LegendaryPriorityRequestUncheckedUpdateInput>
+    /**
+     * Choose, which LegendaryPriorityRequest to update.
+     */
+    where: LegendaryPriorityRequestWhereUniqueInput
+  }
+
+  /**
+   * LegendaryPriorityRequest updateMany
+   */
+  export type LegendaryPriorityRequestUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update LegendaryPriorityRequests.
+     */
+    data: XOR<LegendaryPriorityRequestUpdateManyMutationInput, LegendaryPriorityRequestUncheckedUpdateManyInput>
+    /**
+     * Filter which LegendaryPriorityRequests to update
+     */
+    where?: LegendaryPriorityRequestWhereInput
+    /**
+     * Limit how many LegendaryPriorityRequests to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * LegendaryPriorityRequest updateManyAndReturn
+   */
+  export type LegendaryPriorityRequestUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * The data used to update LegendaryPriorityRequests.
+     */
+    data: XOR<LegendaryPriorityRequestUpdateManyMutationInput, LegendaryPriorityRequestUncheckedUpdateManyInput>
+    /**
+     * Filter which LegendaryPriorityRequests to update
+     */
+    where?: LegendaryPriorityRequestWhereInput
+    /**
+     * Limit how many LegendaryPriorityRequests to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * LegendaryPriorityRequest upsert
+   */
+  export type LegendaryPriorityRequestUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * The filter to search for the LegendaryPriorityRequest to update in case it exists.
+     */
+    where: LegendaryPriorityRequestWhereUniqueInput
+    /**
+     * In case the LegendaryPriorityRequest found by the `where` argument doesn't exist, create a new LegendaryPriorityRequest with this data.
+     */
+    create: XOR<LegendaryPriorityRequestCreateInput, LegendaryPriorityRequestUncheckedCreateInput>
+    /**
+     * In case the LegendaryPriorityRequest was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<LegendaryPriorityRequestUpdateInput, LegendaryPriorityRequestUncheckedUpdateInput>
+  }
+
+  /**
+   * LegendaryPriorityRequest delete
+   */
+  export type LegendaryPriorityRequestDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+    /**
+     * Filter which LegendaryPriorityRequest to delete.
+     */
+    where: LegendaryPriorityRequestWhereUniqueInput
+  }
+
+  /**
+   * LegendaryPriorityRequest deleteMany
+   */
+  export type LegendaryPriorityRequestDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which LegendaryPriorityRequests to delete
+     */
+    where?: LegendaryPriorityRequestWhereInput
+    /**
+     * Limit how many LegendaryPriorityRequests to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * LegendaryPriorityRequest without action
+   */
+  export type LegendaryPriorityRequestDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the LegendaryPriorityRequest
+     */
+    select?: LegendaryPriorityRequestSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the LegendaryPriorityRequest
+     */
+    omit?: LegendaryPriorityRequestOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: LegendaryPriorityRequestInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model ItemDistribution
+   */
+
+  export type AggregateItemDistribution = {
+    _count: ItemDistributionCountAggregateOutputType | null
+    _avg: ItemDistributionAvgAggregateOutputType | null
+    _sum: ItemDistributionSumAggregateOutputType | null
+    _min: ItemDistributionMinAggregateOutputType | null
+    _max: ItemDistributionMaxAggregateOutputType | null
+  }
+
+  export type ItemDistributionAvgAggregateOutputType = {
+    cpSnapshot: number | null
+    pointsSnapshot: number | null
+    prioritySeq: number | null
+  }
+
+  export type ItemDistributionSumAggregateOutputType = {
+    cpSnapshot: number | null
+    pointsSnapshot: number | null
+    prioritySeq: number | null
+  }
+
+  export type ItemDistributionMinAggregateOutputType = {
+    id: string | null
+    guildId: string | null
+    memberId: string | null
+    formType: string | null
+    rankTier: string | null
+    ignSnapshot: string | null
+    classSnapshot: string | null
+    cpSnapshot: number | null
+    pointsSnapshot: number | null
+    prioritySeq: number | null
+    note: string | null
+    distributedById: string | null
+    overridden: boolean | null
+    overrideReason: string | null
+    distributedAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type ItemDistributionMaxAggregateOutputType = {
+    id: string | null
+    guildId: string | null
+    memberId: string | null
+    formType: string | null
+    rankTier: string | null
+    ignSnapshot: string | null
+    classSnapshot: string | null
+    cpSnapshot: number | null
+    pointsSnapshot: number | null
+    prioritySeq: number | null
+    note: string | null
+    distributedById: string | null
+    overridden: boolean | null
+    overrideReason: string | null
+    distributedAt: Date | null
+    createdAt: Date | null
+  }
+
+  export type ItemDistributionCountAggregateOutputType = {
+    id: number
+    guildId: number
+    memberId: number
+    formType: number
+    rankTier: number
+    ignSnapshot: number
+    classSnapshot: number
+    cpSnapshot: number
+    pointsSnapshot: number
+    prioritySeq: number
+    items: number
+    note: number
+    distributedById: number
+    overridden: number
+    overrideReason: number
+    distributedAt: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type ItemDistributionAvgAggregateInputType = {
+    cpSnapshot?: true
+    pointsSnapshot?: true
+    prioritySeq?: true
+  }
+
+  export type ItemDistributionSumAggregateInputType = {
+    cpSnapshot?: true
+    pointsSnapshot?: true
+    prioritySeq?: true
+  }
+
+  export type ItemDistributionMinAggregateInputType = {
+    id?: true
+    guildId?: true
+    memberId?: true
+    formType?: true
+    rankTier?: true
+    ignSnapshot?: true
+    classSnapshot?: true
+    cpSnapshot?: true
+    pointsSnapshot?: true
+    prioritySeq?: true
+    note?: true
+    distributedById?: true
+    overridden?: true
+    overrideReason?: true
+    distributedAt?: true
+    createdAt?: true
+  }
+
+  export type ItemDistributionMaxAggregateInputType = {
+    id?: true
+    guildId?: true
+    memberId?: true
+    formType?: true
+    rankTier?: true
+    ignSnapshot?: true
+    classSnapshot?: true
+    cpSnapshot?: true
+    pointsSnapshot?: true
+    prioritySeq?: true
+    note?: true
+    distributedById?: true
+    overridden?: true
+    overrideReason?: true
+    distributedAt?: true
+    createdAt?: true
+  }
+
+  export type ItemDistributionCountAggregateInputType = {
+    id?: true
+    guildId?: true
+    memberId?: true
+    formType?: true
+    rankTier?: true
+    ignSnapshot?: true
+    classSnapshot?: true
+    cpSnapshot?: true
+    pointsSnapshot?: true
+    prioritySeq?: true
+    items?: true
+    note?: true
+    distributedById?: true
+    overridden?: true
+    overrideReason?: true
+    distributedAt?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type ItemDistributionAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ItemDistribution to aggregate.
+     */
+    where?: ItemDistributionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ItemDistributions to fetch.
+     */
+    orderBy?: ItemDistributionOrderByWithRelationInput | ItemDistributionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: ItemDistributionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ItemDistributions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ItemDistributions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned ItemDistributions
+    **/
+    _count?: true | ItemDistributionCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: ItemDistributionAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: ItemDistributionSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: ItemDistributionMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: ItemDistributionMaxAggregateInputType
+  }
+
+  export type GetItemDistributionAggregateType<T extends ItemDistributionAggregateArgs> = {
+        [P in keyof T & keyof AggregateItemDistribution]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateItemDistribution[P]>
+      : GetScalarType<T[P], AggregateItemDistribution[P]>
+  }
+
+
+
+
+  export type ItemDistributionGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ItemDistributionWhereInput
+    orderBy?: ItemDistributionOrderByWithAggregationInput | ItemDistributionOrderByWithAggregationInput[]
+    by: ItemDistributionScalarFieldEnum[] | ItemDistributionScalarFieldEnum
+    having?: ItemDistributionScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: ItemDistributionCountAggregateInputType | true
+    _avg?: ItemDistributionAvgAggregateInputType
+    _sum?: ItemDistributionSumAggregateInputType
+    _min?: ItemDistributionMinAggregateInputType
+    _max?: ItemDistributionMaxAggregateInputType
+  }
+
+  export type ItemDistributionGroupByOutputType = {
+    id: string
+    guildId: string
+    memberId: string
+    formType: string
+    rankTier: string | null
+    ignSnapshot: string | null
+    classSnapshot: string | null
+    cpSnapshot: number | null
+    pointsSnapshot: number | null
+    prioritySeq: number | null
+    items: JsonValue
+    note: string | null
+    distributedById: string
+    overridden: boolean
+    overrideReason: string | null
+    distributedAt: Date
+    createdAt: Date
+    _count: ItemDistributionCountAggregateOutputType | null
+    _avg: ItemDistributionAvgAggregateOutputType | null
+    _sum: ItemDistributionSumAggregateOutputType | null
+    _min: ItemDistributionMinAggregateOutputType | null
+    _max: ItemDistributionMaxAggregateOutputType | null
+  }
+
+  type GetItemDistributionGroupByPayload<T extends ItemDistributionGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<ItemDistributionGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof ItemDistributionGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], ItemDistributionGroupByOutputType[P]>
+            : GetScalarType<T[P], ItemDistributionGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type ItemDistributionSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    formType?: boolean
+    rankTier?: boolean
+    ignSnapshot?: boolean
+    classSnapshot?: boolean
+    cpSnapshot?: boolean
+    pointsSnapshot?: boolean
+    prioritySeq?: boolean
+    items?: boolean
+    note?: boolean
+    distributedById?: boolean
+    overridden?: boolean
+    overrideReason?: boolean
+    distributedAt?: boolean
+    createdAt?: boolean
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["itemDistribution"]>
+
+  export type ItemDistributionSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    formType?: boolean
+    rankTier?: boolean
+    ignSnapshot?: boolean
+    classSnapshot?: boolean
+    cpSnapshot?: boolean
+    pointsSnapshot?: boolean
+    prioritySeq?: boolean
+    items?: boolean
+    note?: boolean
+    distributedById?: boolean
+    overridden?: boolean
+    overrideReason?: boolean
+    distributedAt?: boolean
+    createdAt?: boolean
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["itemDistribution"]>
+
+  export type ItemDistributionSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    formType?: boolean
+    rankTier?: boolean
+    ignSnapshot?: boolean
+    classSnapshot?: boolean
+    cpSnapshot?: boolean
+    pointsSnapshot?: boolean
+    prioritySeq?: boolean
+    items?: boolean
+    note?: boolean
+    distributedById?: boolean
+    overridden?: boolean
+    overrideReason?: boolean
+    distributedAt?: boolean
+    createdAt?: boolean
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["itemDistribution"]>
+
+  export type ItemDistributionSelectScalar = {
+    id?: boolean
+    guildId?: boolean
+    memberId?: boolean
+    formType?: boolean
+    rankTier?: boolean
+    ignSnapshot?: boolean
+    classSnapshot?: boolean
+    cpSnapshot?: boolean
+    pointsSnapshot?: boolean
+    prioritySeq?: boolean
+    items?: boolean
+    note?: boolean
+    distributedById?: boolean
+    overridden?: boolean
+    overrideReason?: boolean
+    distributedAt?: boolean
+    createdAt?: boolean
+  }
+
+  export type ItemDistributionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "memberId" | "formType" | "rankTier" | "ignSnapshot" | "classSnapshot" | "cpSnapshot" | "pointsSnapshot" | "prioritySeq" | "items" | "note" | "distributedById" | "overridden" | "overrideReason" | "distributedAt" | "createdAt", ExtArgs["result"]["itemDistribution"]>
+  export type ItemDistributionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+  export type ItemDistributionIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+  export type ItemDistributionIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    guild?: boolean | GuildDefaultArgs<ExtArgs>
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+
+  export type $ItemDistributionPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "ItemDistribution"
+    objects: {
+      guild: Prisma.$GuildPayload<ExtArgs>
+      member: Prisma.$GuildMemberPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      guildId: string
+      memberId: string
+      formType: string
+      rankTier: string | null
+      ignSnapshot: string | null
+      classSnapshot: string | null
+      cpSnapshot: number | null
+      pointsSnapshot: number | null
+      prioritySeq: number | null
+      items: Prisma.JsonValue
+      note: string | null
+      distributedById: string
+      overridden: boolean
+      overrideReason: string | null
+      distributedAt: Date
+      createdAt: Date
+    }, ExtArgs["result"]["itemDistribution"]>
+    composites: {}
+  }
+
+  type ItemDistributionGetPayload<S extends boolean | null | undefined | ItemDistributionDefaultArgs> = $Result.GetResult<Prisma.$ItemDistributionPayload, S>
+
+  type ItemDistributionCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<ItemDistributionFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: ItemDistributionCountAggregateInputType | true
+    }
+
+  export interface ItemDistributionDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['ItemDistribution'], meta: { name: 'ItemDistribution' } }
+    /**
+     * Find zero or one ItemDistribution that matches the filter.
+     * @param {ItemDistributionFindUniqueArgs} args - Arguments to find a ItemDistribution
+     * @example
+     * // Get one ItemDistribution
+     * const itemDistribution = await prisma.itemDistribution.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends ItemDistributionFindUniqueArgs>(args: SelectSubset<T, ItemDistributionFindUniqueArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one ItemDistribution that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {ItemDistributionFindUniqueOrThrowArgs} args - Arguments to find a ItemDistribution
+     * @example
+     * // Get one ItemDistribution
+     * const itemDistribution = await prisma.itemDistribution.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends ItemDistributionFindUniqueOrThrowArgs>(args: SelectSubset<T, ItemDistributionFindUniqueOrThrowArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ItemDistribution that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ItemDistributionFindFirstArgs} args - Arguments to find a ItemDistribution
+     * @example
+     * // Get one ItemDistribution
+     * const itemDistribution = await prisma.itemDistribution.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends ItemDistributionFindFirstArgs>(args?: SelectSubset<T, ItemDistributionFindFirstArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ItemDistribution that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ItemDistributionFindFirstOrThrowArgs} args - Arguments to find a ItemDistribution
+     * @example
+     * // Get one ItemDistribution
+     * const itemDistribution = await prisma.itemDistribution.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends ItemDistributionFindFirstOrThrowArgs>(args?: SelectSubset<T, ItemDistributionFindFirstOrThrowArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more ItemDistributions that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ItemDistributionFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all ItemDistributions
+     * const itemDistributions = await prisma.itemDistribution.findMany()
+     * 
+     * // Get first 10 ItemDistributions
+     * const itemDistributions = await prisma.itemDistribution.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const itemDistributionWithIdOnly = await prisma.itemDistribution.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends ItemDistributionFindManyArgs>(args?: SelectSubset<T, ItemDistributionFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a ItemDistribution.
+     * @param {ItemDistributionCreateArgs} args - Arguments to create a ItemDistribution.
+     * @example
+     * // Create one ItemDistribution
+     * const ItemDistribution = await prisma.itemDistribution.create({
+     *   data: {
+     *     // ... data to create a ItemDistribution
+     *   }
+     * })
+     * 
+     */
+    create<T extends ItemDistributionCreateArgs>(args: SelectSubset<T, ItemDistributionCreateArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many ItemDistributions.
+     * @param {ItemDistributionCreateManyArgs} args - Arguments to create many ItemDistributions.
+     * @example
+     * // Create many ItemDistributions
+     * const itemDistribution = await prisma.itemDistribution.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends ItemDistributionCreateManyArgs>(args?: SelectSubset<T, ItemDistributionCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many ItemDistributions and returns the data saved in the database.
+     * @param {ItemDistributionCreateManyAndReturnArgs} args - Arguments to create many ItemDistributions.
+     * @example
+     * // Create many ItemDistributions
+     * const itemDistribution = await prisma.itemDistribution.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many ItemDistributions and only return the `id`
+     * const itemDistributionWithIdOnly = await prisma.itemDistribution.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends ItemDistributionCreateManyAndReturnArgs>(args?: SelectSubset<T, ItemDistributionCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a ItemDistribution.
+     * @param {ItemDistributionDeleteArgs} args - Arguments to delete one ItemDistribution.
+     * @example
+     * // Delete one ItemDistribution
+     * const ItemDistribution = await prisma.itemDistribution.delete({
+     *   where: {
+     *     // ... filter to delete one ItemDistribution
+     *   }
+     * })
+     * 
+     */
+    delete<T extends ItemDistributionDeleteArgs>(args: SelectSubset<T, ItemDistributionDeleteArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one ItemDistribution.
+     * @param {ItemDistributionUpdateArgs} args - Arguments to update one ItemDistribution.
+     * @example
+     * // Update one ItemDistribution
+     * const itemDistribution = await prisma.itemDistribution.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends ItemDistributionUpdateArgs>(args: SelectSubset<T, ItemDistributionUpdateArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more ItemDistributions.
+     * @param {ItemDistributionDeleteManyArgs} args - Arguments to filter ItemDistributions to delete.
+     * @example
+     * // Delete a few ItemDistributions
+     * const { count } = await prisma.itemDistribution.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends ItemDistributionDeleteManyArgs>(args?: SelectSubset<T, ItemDistributionDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ItemDistributions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ItemDistributionUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many ItemDistributions
+     * const itemDistribution = await prisma.itemDistribution.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends ItemDistributionUpdateManyArgs>(args: SelectSubset<T, ItemDistributionUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ItemDistributions and returns the data updated in the database.
+     * @param {ItemDistributionUpdateManyAndReturnArgs} args - Arguments to update many ItemDistributions.
+     * @example
+     * // Update many ItemDistributions
+     * const itemDistribution = await prisma.itemDistribution.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more ItemDistributions and only return the `id`
+     * const itemDistributionWithIdOnly = await prisma.itemDistribution.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends ItemDistributionUpdateManyAndReturnArgs>(args: SelectSubset<T, ItemDistributionUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one ItemDistribution.
+     * @param {ItemDistributionUpsertArgs} args - Arguments to update or create a ItemDistribution.
+     * @example
+     * // Update or create a ItemDistribution
+     * const itemDistribution = await prisma.itemDistribution.upsert({
+     *   create: {
+     *     // ... data to create a ItemDistribution
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the ItemDistribution we want to update
+     *   }
+     * })
+     */
+    upsert<T extends ItemDistributionUpsertArgs>(args: SelectSubset<T, ItemDistributionUpsertArgs<ExtArgs>>): Prisma__ItemDistributionClient<$Result.GetResult<Prisma.$ItemDistributionPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of ItemDistributions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ItemDistributionCountArgs} args - Arguments to filter ItemDistributions to count.
+     * @example
+     * // Count the number of ItemDistributions
+     * const count = await prisma.itemDistribution.count({
+     *   where: {
+     *     // ... the filter for the ItemDistributions we want to count
+     *   }
+     * })
+    **/
+    count<T extends ItemDistributionCountArgs>(
+      args?: Subset<T, ItemDistributionCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], ItemDistributionCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a ItemDistribution.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ItemDistributionAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends ItemDistributionAggregateArgs>(args: Subset<T, ItemDistributionAggregateArgs>): Prisma.PrismaPromise<GetItemDistributionAggregateType<T>>
+
+    /**
+     * Group by ItemDistribution.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ItemDistributionGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends ItemDistributionGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: ItemDistributionGroupByArgs['orderBy'] }
+        : { orderBy?: ItemDistributionGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, ItemDistributionGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetItemDistributionGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the ItemDistribution model
+   */
+  readonly fields: ItemDistributionFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for ItemDistribution.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__ItemDistributionClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    guild<T extends GuildDefaultArgs<ExtArgs> = {}>(args?: Subset<T, GuildDefaultArgs<ExtArgs>>): Prisma__GuildClient<$Result.GetResult<Prisma.$GuildPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    member<T extends GuildMemberDefaultArgs<ExtArgs> = {}>(args?: Subset<T, GuildMemberDefaultArgs<ExtArgs>>): Prisma__GuildMemberClient<$Result.GetResult<Prisma.$GuildMemberPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the ItemDistribution model
+   */
+  interface ItemDistributionFieldRefs {
+    readonly id: FieldRef<"ItemDistribution", 'String'>
+    readonly guildId: FieldRef<"ItemDistribution", 'String'>
+    readonly memberId: FieldRef<"ItemDistribution", 'String'>
+    readonly formType: FieldRef<"ItemDistribution", 'String'>
+    readonly rankTier: FieldRef<"ItemDistribution", 'String'>
+    readonly ignSnapshot: FieldRef<"ItemDistribution", 'String'>
+    readonly classSnapshot: FieldRef<"ItemDistribution", 'String'>
+    readonly cpSnapshot: FieldRef<"ItemDistribution", 'Int'>
+    readonly pointsSnapshot: FieldRef<"ItemDistribution", 'Int'>
+    readonly prioritySeq: FieldRef<"ItemDistribution", 'Int'>
+    readonly items: FieldRef<"ItemDistribution", 'Json'>
+    readonly note: FieldRef<"ItemDistribution", 'String'>
+    readonly distributedById: FieldRef<"ItemDistribution", 'String'>
+    readonly overridden: FieldRef<"ItemDistribution", 'Boolean'>
+    readonly overrideReason: FieldRef<"ItemDistribution", 'String'>
+    readonly distributedAt: FieldRef<"ItemDistribution", 'DateTime'>
+    readonly createdAt: FieldRef<"ItemDistribution", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * ItemDistribution findUnique
+   */
+  export type ItemDistributionFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * Filter, which ItemDistribution to fetch.
+     */
+    where: ItemDistributionWhereUniqueInput
+  }
+
+  /**
+   * ItemDistribution findUniqueOrThrow
+   */
+  export type ItemDistributionFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * Filter, which ItemDistribution to fetch.
+     */
+    where: ItemDistributionWhereUniqueInput
+  }
+
+  /**
+   * ItemDistribution findFirst
+   */
+  export type ItemDistributionFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * Filter, which ItemDistribution to fetch.
+     */
+    where?: ItemDistributionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ItemDistributions to fetch.
+     */
+    orderBy?: ItemDistributionOrderByWithRelationInput | ItemDistributionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ItemDistributions.
+     */
+    cursor?: ItemDistributionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ItemDistributions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ItemDistributions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ItemDistributions.
+     */
+    distinct?: ItemDistributionScalarFieldEnum | ItemDistributionScalarFieldEnum[]
+  }
+
+  /**
+   * ItemDistribution findFirstOrThrow
+   */
+  export type ItemDistributionFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * Filter, which ItemDistribution to fetch.
+     */
+    where?: ItemDistributionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ItemDistributions to fetch.
+     */
+    orderBy?: ItemDistributionOrderByWithRelationInput | ItemDistributionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ItemDistributions.
+     */
+    cursor?: ItemDistributionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ItemDistributions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ItemDistributions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ItemDistributions.
+     */
+    distinct?: ItemDistributionScalarFieldEnum | ItemDistributionScalarFieldEnum[]
+  }
+
+  /**
+   * ItemDistribution findMany
+   */
+  export type ItemDistributionFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * Filter, which ItemDistributions to fetch.
+     */
+    where?: ItemDistributionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ItemDistributions to fetch.
+     */
+    orderBy?: ItemDistributionOrderByWithRelationInput | ItemDistributionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing ItemDistributions.
+     */
+    cursor?: ItemDistributionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ItemDistributions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ItemDistributions.
+     */
+    skip?: number
+    distinct?: ItemDistributionScalarFieldEnum | ItemDistributionScalarFieldEnum[]
+  }
+
+  /**
+   * ItemDistribution create
+   */
+  export type ItemDistributionCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * The data needed to create a ItemDistribution.
+     */
+    data: XOR<ItemDistributionCreateInput, ItemDistributionUncheckedCreateInput>
+  }
+
+  /**
+   * ItemDistribution createMany
+   */
+  export type ItemDistributionCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many ItemDistributions.
+     */
+    data: ItemDistributionCreateManyInput | ItemDistributionCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * ItemDistribution createManyAndReturn
+   */
+  export type ItemDistributionCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * The data used to create many ItemDistributions.
+     */
+    data: ItemDistributionCreateManyInput | ItemDistributionCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ItemDistribution update
+   */
+  export type ItemDistributionUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * The data needed to update a ItemDistribution.
+     */
+    data: XOR<ItemDistributionUpdateInput, ItemDistributionUncheckedUpdateInput>
+    /**
+     * Choose, which ItemDistribution to update.
+     */
+    where: ItemDistributionWhereUniqueInput
+  }
+
+  /**
+   * ItemDistribution updateMany
+   */
+  export type ItemDistributionUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update ItemDistributions.
+     */
+    data: XOR<ItemDistributionUpdateManyMutationInput, ItemDistributionUncheckedUpdateManyInput>
+    /**
+     * Filter which ItemDistributions to update
+     */
+    where?: ItemDistributionWhereInput
+    /**
+     * Limit how many ItemDistributions to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * ItemDistribution updateManyAndReturn
+   */
+  export type ItemDistributionUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * The data used to update ItemDistributions.
+     */
+    data: XOR<ItemDistributionUpdateManyMutationInput, ItemDistributionUncheckedUpdateManyInput>
+    /**
+     * Filter which ItemDistributions to update
+     */
+    where?: ItemDistributionWhereInput
+    /**
+     * Limit how many ItemDistributions to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ItemDistribution upsert
+   */
+  export type ItemDistributionUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * The filter to search for the ItemDistribution to update in case it exists.
+     */
+    where: ItemDistributionWhereUniqueInput
+    /**
+     * In case the ItemDistribution found by the `where` argument doesn't exist, create a new ItemDistribution with this data.
+     */
+    create: XOR<ItemDistributionCreateInput, ItemDistributionUncheckedCreateInput>
+    /**
+     * In case the ItemDistribution was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<ItemDistributionUpdateInput, ItemDistributionUncheckedUpdateInput>
+  }
+
+  /**
+   * ItemDistribution delete
+   */
+  export type ItemDistributionDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+    /**
+     * Filter which ItemDistribution to delete.
+     */
+    where: ItemDistributionWhereUniqueInput
+  }
+
+  /**
+   * ItemDistribution deleteMany
+   */
+  export type ItemDistributionDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ItemDistributions to delete
+     */
+    where?: ItemDistributionWhereInput
+    /**
+     * Limit how many ItemDistributions to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * ItemDistribution without action
+   */
+  export type ItemDistributionDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ItemDistribution
+     */
+    select?: ItemDistributionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ItemDistribution
+     */
+    omit?: ItemDistributionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ItemDistributionInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MemberEquipment
+   */
+
+  export type AggregateMemberEquipment = {
+    _count: MemberEquipmentCountAggregateOutputType | null
+    _avg: MemberEquipmentAvgAggregateOutputType | null
+    _sum: MemberEquipmentSumAggregateOutputType | null
+    _min: MemberEquipmentMinAggregateOutputType | null
+    _max: MemberEquipmentMaxAggregateOutputType | null
+  }
+
+  export type MemberEquipmentAvgAggregateOutputType = {
+    confidence: number | null
+  }
+
+  export type MemberEquipmentSumAggregateOutputType = {
+    confidence: number | null
+  }
+
+  export type MemberEquipmentMinAggregateOutputType = {
+    id: string | null
+    memberId: string | null
+    slotType: string | null
+    itemName: string | null
+    iconUrl: string | null
+    iconBucket: string | null
+    rarity: string | null
+    confidence: number | null
+    needsReview: boolean | null
+    sourceScreenshotUrl: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MemberEquipmentMaxAggregateOutputType = {
+    id: string | null
+    memberId: string | null
+    slotType: string | null
+    itemName: string | null
+    iconUrl: string | null
+    iconBucket: string | null
+    rarity: string | null
+    confidence: number | null
+    needsReview: boolean | null
+    sourceScreenshotUrl: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MemberEquipmentCountAggregateOutputType = {
+    id: number
+    memberId: number
+    slotType: number
+    itemName: number
+    iconUrl: number
+    iconBucket: number
+    rarity: number
+    confidence: number
+    needsReview: number
+    sourceScreenshotUrl: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MemberEquipmentAvgAggregateInputType = {
+    confidence?: true
+  }
+
+  export type MemberEquipmentSumAggregateInputType = {
+    confidence?: true
+  }
+
+  export type MemberEquipmentMinAggregateInputType = {
+    id?: true
+    memberId?: true
+    slotType?: true
+    itemName?: true
+    iconUrl?: true
+    iconBucket?: true
+    rarity?: true
+    confidence?: true
+    needsReview?: true
+    sourceScreenshotUrl?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MemberEquipmentMaxAggregateInputType = {
+    id?: true
+    memberId?: true
+    slotType?: true
+    itemName?: true
+    iconUrl?: true
+    iconBucket?: true
+    rarity?: true
+    confidence?: true
+    needsReview?: true
+    sourceScreenshotUrl?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MemberEquipmentCountAggregateInputType = {
+    id?: true
+    memberId?: true
+    slotType?: true
+    itemName?: true
+    iconUrl?: true
+    iconBucket?: true
+    rarity?: true
+    confidence?: true
+    needsReview?: true
+    sourceScreenshotUrl?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MemberEquipmentAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MemberEquipment to aggregate.
+     */
+    where?: MemberEquipmentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MemberEquipments to fetch.
+     */
+    orderBy?: MemberEquipmentOrderByWithRelationInput | MemberEquipmentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MemberEquipmentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MemberEquipments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MemberEquipments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MemberEquipments
+    **/
+    _count?: true | MemberEquipmentCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MemberEquipmentAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MemberEquipmentSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MemberEquipmentMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MemberEquipmentMaxAggregateInputType
+  }
+
+  export type GetMemberEquipmentAggregateType<T extends MemberEquipmentAggregateArgs> = {
+        [P in keyof T & keyof AggregateMemberEquipment]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMemberEquipment[P]>
+      : GetScalarType<T[P], AggregateMemberEquipment[P]>
+  }
+
+
+
+
+  export type MemberEquipmentGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MemberEquipmentWhereInput
+    orderBy?: MemberEquipmentOrderByWithAggregationInput | MemberEquipmentOrderByWithAggregationInput[]
+    by: MemberEquipmentScalarFieldEnum[] | MemberEquipmentScalarFieldEnum
+    having?: MemberEquipmentScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MemberEquipmentCountAggregateInputType | true
+    _avg?: MemberEquipmentAvgAggregateInputType
+    _sum?: MemberEquipmentSumAggregateInputType
+    _min?: MemberEquipmentMinAggregateInputType
+    _max?: MemberEquipmentMaxAggregateInputType
+  }
+
+  export type MemberEquipmentGroupByOutputType = {
+    id: string
+    memberId: string
+    slotType: string
+    itemName: string
+    iconUrl: string
+    iconBucket: string
+    rarity: string | null
+    confidence: number
+    needsReview: boolean
+    sourceScreenshotUrl: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MemberEquipmentCountAggregateOutputType | null
+    _avg: MemberEquipmentAvgAggregateOutputType | null
+    _sum: MemberEquipmentSumAggregateOutputType | null
+    _min: MemberEquipmentMinAggregateOutputType | null
+    _max: MemberEquipmentMaxAggregateOutputType | null
+  }
+
+  type GetMemberEquipmentGroupByPayload<T extends MemberEquipmentGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MemberEquipmentGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MemberEquipmentGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MemberEquipmentGroupByOutputType[P]>
+            : GetScalarType<T[P], MemberEquipmentGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MemberEquipmentSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    memberId?: boolean
+    slotType?: boolean
+    itemName?: boolean
+    iconUrl?: boolean
+    iconBucket?: boolean
+    rarity?: boolean
+    confidence?: boolean
+    needsReview?: boolean
+    sourceScreenshotUrl?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["memberEquipment"]>
+
+  export type MemberEquipmentSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    memberId?: boolean
+    slotType?: boolean
+    itemName?: boolean
+    iconUrl?: boolean
+    iconBucket?: boolean
+    rarity?: boolean
+    confidence?: boolean
+    needsReview?: boolean
+    sourceScreenshotUrl?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["memberEquipment"]>
+
+  export type MemberEquipmentSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    memberId?: boolean
+    slotType?: boolean
+    itemName?: boolean
+    iconUrl?: boolean
+    iconBucket?: boolean
+    rarity?: boolean
+    confidence?: boolean
+    needsReview?: boolean
+    sourceScreenshotUrl?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["memberEquipment"]>
+
+  export type MemberEquipmentSelectScalar = {
+    id?: boolean
+    memberId?: boolean
+    slotType?: boolean
+    itemName?: boolean
+    iconUrl?: boolean
+    iconBucket?: boolean
+    rarity?: boolean
+    confidence?: boolean
+    needsReview?: boolean
+    sourceScreenshotUrl?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MemberEquipmentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "memberId" | "slotType" | "itemName" | "iconUrl" | "iconBucket" | "rarity" | "confidence" | "needsReview" | "sourceScreenshotUrl" | "createdAt" | "updatedAt", ExtArgs["result"]["memberEquipment"]>
+  export type MemberEquipmentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+  export type MemberEquipmentIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+  export type MemberEquipmentIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    member?: boolean | GuildMemberDefaultArgs<ExtArgs>
+  }
+
+  export type $MemberEquipmentPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MemberEquipment"
+    objects: {
+      member: Prisma.$GuildMemberPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      memberId: string
+      slotType: string
+      itemName: string
+      iconUrl: string
+      iconBucket: string
+      rarity: string | null
+      confidence: number
+      needsReview: boolean
+      sourceScreenshotUrl: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["memberEquipment"]>
+    composites: {}
+  }
+
+  type MemberEquipmentGetPayload<S extends boolean | null | undefined | MemberEquipmentDefaultArgs> = $Result.GetResult<Prisma.$MemberEquipmentPayload, S>
+
+  type MemberEquipmentCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MemberEquipmentFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MemberEquipmentCountAggregateInputType | true
+    }
+
+  export interface MemberEquipmentDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MemberEquipment'], meta: { name: 'MemberEquipment' } }
+    /**
+     * Find zero or one MemberEquipment that matches the filter.
+     * @param {MemberEquipmentFindUniqueArgs} args - Arguments to find a MemberEquipment
+     * @example
+     * // Get one MemberEquipment
+     * const memberEquipment = await prisma.memberEquipment.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MemberEquipmentFindUniqueArgs>(args: SelectSubset<T, MemberEquipmentFindUniqueArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MemberEquipment that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MemberEquipmentFindUniqueOrThrowArgs} args - Arguments to find a MemberEquipment
+     * @example
+     * // Get one MemberEquipment
+     * const memberEquipment = await prisma.memberEquipment.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MemberEquipmentFindUniqueOrThrowArgs>(args: SelectSubset<T, MemberEquipmentFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MemberEquipment that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MemberEquipmentFindFirstArgs} args - Arguments to find a MemberEquipment
+     * @example
+     * // Get one MemberEquipment
+     * const memberEquipment = await prisma.memberEquipment.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MemberEquipmentFindFirstArgs>(args?: SelectSubset<T, MemberEquipmentFindFirstArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MemberEquipment that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MemberEquipmentFindFirstOrThrowArgs} args - Arguments to find a MemberEquipment
+     * @example
+     * // Get one MemberEquipment
+     * const memberEquipment = await prisma.memberEquipment.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MemberEquipmentFindFirstOrThrowArgs>(args?: SelectSubset<T, MemberEquipmentFindFirstOrThrowArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MemberEquipments that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MemberEquipmentFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MemberEquipments
+     * const memberEquipments = await prisma.memberEquipment.findMany()
+     * 
+     * // Get first 10 MemberEquipments
+     * const memberEquipments = await prisma.memberEquipment.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const memberEquipmentWithIdOnly = await prisma.memberEquipment.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MemberEquipmentFindManyArgs>(args?: SelectSubset<T, MemberEquipmentFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MemberEquipment.
+     * @param {MemberEquipmentCreateArgs} args - Arguments to create a MemberEquipment.
+     * @example
+     * // Create one MemberEquipment
+     * const MemberEquipment = await prisma.memberEquipment.create({
+     *   data: {
+     *     // ... data to create a MemberEquipment
+     *   }
+     * })
+     * 
+     */
+    create<T extends MemberEquipmentCreateArgs>(args: SelectSubset<T, MemberEquipmentCreateArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MemberEquipments.
+     * @param {MemberEquipmentCreateManyArgs} args - Arguments to create many MemberEquipments.
+     * @example
+     * // Create many MemberEquipments
+     * const memberEquipment = await prisma.memberEquipment.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MemberEquipmentCreateManyArgs>(args?: SelectSubset<T, MemberEquipmentCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MemberEquipments and returns the data saved in the database.
+     * @param {MemberEquipmentCreateManyAndReturnArgs} args - Arguments to create many MemberEquipments.
+     * @example
+     * // Create many MemberEquipments
+     * const memberEquipment = await prisma.memberEquipment.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MemberEquipments and only return the `id`
+     * const memberEquipmentWithIdOnly = await prisma.memberEquipment.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MemberEquipmentCreateManyAndReturnArgs>(args?: SelectSubset<T, MemberEquipmentCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MemberEquipment.
+     * @param {MemberEquipmentDeleteArgs} args - Arguments to delete one MemberEquipment.
+     * @example
+     * // Delete one MemberEquipment
+     * const MemberEquipment = await prisma.memberEquipment.delete({
+     *   where: {
+     *     // ... filter to delete one MemberEquipment
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MemberEquipmentDeleteArgs>(args: SelectSubset<T, MemberEquipmentDeleteArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MemberEquipment.
+     * @param {MemberEquipmentUpdateArgs} args - Arguments to update one MemberEquipment.
+     * @example
+     * // Update one MemberEquipment
+     * const memberEquipment = await prisma.memberEquipment.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MemberEquipmentUpdateArgs>(args: SelectSubset<T, MemberEquipmentUpdateArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MemberEquipments.
+     * @param {MemberEquipmentDeleteManyArgs} args - Arguments to filter MemberEquipments to delete.
+     * @example
+     * // Delete a few MemberEquipments
+     * const { count } = await prisma.memberEquipment.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MemberEquipmentDeleteManyArgs>(args?: SelectSubset<T, MemberEquipmentDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MemberEquipments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MemberEquipmentUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MemberEquipments
+     * const memberEquipment = await prisma.memberEquipment.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MemberEquipmentUpdateManyArgs>(args: SelectSubset<T, MemberEquipmentUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MemberEquipments and returns the data updated in the database.
+     * @param {MemberEquipmentUpdateManyAndReturnArgs} args - Arguments to update many MemberEquipments.
+     * @example
+     * // Update many MemberEquipments
+     * const memberEquipment = await prisma.memberEquipment.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MemberEquipments and only return the `id`
+     * const memberEquipmentWithIdOnly = await prisma.memberEquipment.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MemberEquipmentUpdateManyAndReturnArgs>(args: SelectSubset<T, MemberEquipmentUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MemberEquipment.
+     * @param {MemberEquipmentUpsertArgs} args - Arguments to update or create a MemberEquipment.
+     * @example
+     * // Update or create a MemberEquipment
+     * const memberEquipment = await prisma.memberEquipment.upsert({
+     *   create: {
+     *     // ... data to create a MemberEquipment
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MemberEquipment we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MemberEquipmentUpsertArgs>(args: SelectSubset<T, MemberEquipmentUpsertArgs<ExtArgs>>): Prisma__MemberEquipmentClient<$Result.GetResult<Prisma.$MemberEquipmentPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MemberEquipments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MemberEquipmentCountArgs} args - Arguments to filter MemberEquipments to count.
+     * @example
+     * // Count the number of MemberEquipments
+     * const count = await prisma.memberEquipment.count({
+     *   where: {
+     *     // ... the filter for the MemberEquipments we want to count
+     *   }
+     * })
+    **/
+    count<T extends MemberEquipmentCountArgs>(
+      args?: Subset<T, MemberEquipmentCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MemberEquipmentCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MemberEquipment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MemberEquipmentAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MemberEquipmentAggregateArgs>(args: Subset<T, MemberEquipmentAggregateArgs>): Prisma.PrismaPromise<GetMemberEquipmentAggregateType<T>>
+
+    /**
+     * Group by MemberEquipment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MemberEquipmentGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MemberEquipmentGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MemberEquipmentGroupByArgs['orderBy'] }
+        : { orderBy?: MemberEquipmentGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MemberEquipmentGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMemberEquipmentGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MemberEquipment model
+   */
+  readonly fields: MemberEquipmentFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MemberEquipment.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MemberEquipmentClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    member<T extends GuildMemberDefaultArgs<ExtArgs> = {}>(args?: Subset<T, GuildMemberDefaultArgs<ExtArgs>>): Prisma__GuildMemberClient<$Result.GetResult<Prisma.$GuildMemberPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MemberEquipment model
+   */
+  interface MemberEquipmentFieldRefs {
+    readonly id: FieldRef<"MemberEquipment", 'String'>
+    readonly memberId: FieldRef<"MemberEquipment", 'String'>
+    readonly slotType: FieldRef<"MemberEquipment", 'String'>
+    readonly itemName: FieldRef<"MemberEquipment", 'String'>
+    readonly iconUrl: FieldRef<"MemberEquipment", 'String'>
+    readonly iconBucket: FieldRef<"MemberEquipment", 'String'>
+    readonly rarity: FieldRef<"MemberEquipment", 'String'>
+    readonly confidence: FieldRef<"MemberEquipment", 'Float'>
+    readonly needsReview: FieldRef<"MemberEquipment", 'Boolean'>
+    readonly sourceScreenshotUrl: FieldRef<"MemberEquipment", 'String'>
+    readonly createdAt: FieldRef<"MemberEquipment", 'DateTime'>
+    readonly updatedAt: FieldRef<"MemberEquipment", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MemberEquipment findUnique
+   */
+  export type MemberEquipmentFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * Filter, which MemberEquipment to fetch.
+     */
+    where: MemberEquipmentWhereUniqueInput
+  }
+
+  /**
+   * MemberEquipment findUniqueOrThrow
+   */
+  export type MemberEquipmentFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * Filter, which MemberEquipment to fetch.
+     */
+    where: MemberEquipmentWhereUniqueInput
+  }
+
+  /**
+   * MemberEquipment findFirst
+   */
+  export type MemberEquipmentFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * Filter, which MemberEquipment to fetch.
+     */
+    where?: MemberEquipmentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MemberEquipments to fetch.
+     */
+    orderBy?: MemberEquipmentOrderByWithRelationInput | MemberEquipmentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MemberEquipments.
+     */
+    cursor?: MemberEquipmentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MemberEquipments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MemberEquipments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MemberEquipments.
+     */
+    distinct?: MemberEquipmentScalarFieldEnum | MemberEquipmentScalarFieldEnum[]
+  }
+
+  /**
+   * MemberEquipment findFirstOrThrow
+   */
+  export type MemberEquipmentFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * Filter, which MemberEquipment to fetch.
+     */
+    where?: MemberEquipmentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MemberEquipments to fetch.
+     */
+    orderBy?: MemberEquipmentOrderByWithRelationInput | MemberEquipmentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MemberEquipments.
+     */
+    cursor?: MemberEquipmentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MemberEquipments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MemberEquipments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MemberEquipments.
+     */
+    distinct?: MemberEquipmentScalarFieldEnum | MemberEquipmentScalarFieldEnum[]
+  }
+
+  /**
+   * MemberEquipment findMany
+   */
+  export type MemberEquipmentFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * Filter, which MemberEquipments to fetch.
+     */
+    where?: MemberEquipmentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MemberEquipments to fetch.
+     */
+    orderBy?: MemberEquipmentOrderByWithRelationInput | MemberEquipmentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MemberEquipments.
+     */
+    cursor?: MemberEquipmentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MemberEquipments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MemberEquipments.
+     */
+    skip?: number
+    distinct?: MemberEquipmentScalarFieldEnum | MemberEquipmentScalarFieldEnum[]
+  }
+
+  /**
+   * MemberEquipment create
+   */
+  export type MemberEquipmentCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MemberEquipment.
+     */
+    data: XOR<MemberEquipmentCreateInput, MemberEquipmentUncheckedCreateInput>
+  }
+
+  /**
+   * MemberEquipment createMany
+   */
+  export type MemberEquipmentCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MemberEquipments.
+     */
+    data: MemberEquipmentCreateManyInput | MemberEquipmentCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MemberEquipment createManyAndReturn
+   */
+  export type MemberEquipmentCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * The data used to create many MemberEquipments.
+     */
+    data: MemberEquipmentCreateManyInput | MemberEquipmentCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MemberEquipment update
+   */
+  export type MemberEquipmentUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MemberEquipment.
+     */
+    data: XOR<MemberEquipmentUpdateInput, MemberEquipmentUncheckedUpdateInput>
+    /**
+     * Choose, which MemberEquipment to update.
+     */
+    where: MemberEquipmentWhereUniqueInput
+  }
+
+  /**
+   * MemberEquipment updateMany
+   */
+  export type MemberEquipmentUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MemberEquipments.
+     */
+    data: XOR<MemberEquipmentUpdateManyMutationInput, MemberEquipmentUncheckedUpdateManyInput>
+    /**
+     * Filter which MemberEquipments to update
+     */
+    where?: MemberEquipmentWhereInput
+    /**
+     * Limit how many MemberEquipments to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MemberEquipment updateManyAndReturn
+   */
+  export type MemberEquipmentUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * The data used to update MemberEquipments.
+     */
+    data: XOR<MemberEquipmentUpdateManyMutationInput, MemberEquipmentUncheckedUpdateManyInput>
+    /**
+     * Filter which MemberEquipments to update
+     */
+    where?: MemberEquipmentWhereInput
+    /**
+     * Limit how many MemberEquipments to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MemberEquipment upsert
+   */
+  export type MemberEquipmentUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MemberEquipment to update in case it exists.
+     */
+    where: MemberEquipmentWhereUniqueInput
+    /**
+     * In case the MemberEquipment found by the `where` argument doesn't exist, create a new MemberEquipment with this data.
+     */
+    create: XOR<MemberEquipmentCreateInput, MemberEquipmentUncheckedCreateInput>
+    /**
+     * In case the MemberEquipment was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MemberEquipmentUpdateInput, MemberEquipmentUncheckedUpdateInput>
+  }
+
+  /**
+   * MemberEquipment delete
+   */
+  export type MemberEquipmentDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
+    /**
+     * Filter which MemberEquipment to delete.
+     */
+    where: MemberEquipmentWhereUniqueInput
+  }
+
+  /**
+   * MemberEquipment deleteMany
+   */
+  export type MemberEquipmentDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MemberEquipments to delete
+     */
+    where?: MemberEquipmentWhereInput
+    /**
+     * Limit how many MemberEquipments to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MemberEquipment without action
+   */
+  export type MemberEquipmentDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MemberEquipment
+     */
+    select?: MemberEquipmentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MemberEquipment
+     */
+    omit?: MemberEquipmentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MemberEquipmentInclude<ExtArgs> | null
   }
 
 
@@ -22516,6 +26682,7 @@ export namespace Prisma {
     class: number
     weapon: number
     status: number
+    gearItems: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -22565,6 +26732,7 @@ export namespace Prisma {
     class?: true
     weapon?: true
     status?: true
+    gearItems?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -22665,6 +26833,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status: $Enums.JoinRequestStatus
+    gearItems: JsonValue | null
     createdAt: Date
     updatedAt: Date
     _count: GuildJoinRequestCountAggregateOutputType | null
@@ -22697,6 +26866,7 @@ export namespace Prisma {
     class?: boolean
     weapon?: boolean
     status?: boolean
+    gearItems?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     guild?: boolean | GuildDefaultArgs<ExtArgs>
@@ -22712,6 +26882,7 @@ export namespace Prisma {
     class?: boolean
     weapon?: boolean
     status?: boolean
+    gearItems?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     guild?: boolean | GuildDefaultArgs<ExtArgs>
@@ -22727,6 +26898,7 @@ export namespace Prisma {
     class?: boolean
     weapon?: boolean
     status?: boolean
+    gearItems?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     guild?: boolean | GuildDefaultArgs<ExtArgs>
@@ -22742,11 +26914,12 @@ export namespace Prisma {
     class?: boolean
     weapon?: boolean
     status?: boolean
+    gearItems?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type GuildJoinRequestOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "userId" | "ign" | "cp" | "class" | "weapon" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["guildJoinRequest"]>
+  export type GuildJoinRequestOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "guildId" | "userId" | "ign" | "cp" | "class" | "weapon" | "status" | "gearItems" | "createdAt" | "updatedAt", ExtArgs["result"]["guildJoinRequest"]>
   export type GuildJoinRequestInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     guild?: boolean | GuildDefaultArgs<ExtArgs>
     user?: boolean | UserDefaultArgs<ExtArgs>
@@ -22775,6 +26948,7 @@ export namespace Prisma {
       class: string
       weapon: string
       status: $Enums.JoinRequestStatus
+      gearItems: Prisma.JsonValue | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["guildJoinRequest"]>
@@ -23210,6 +27384,7 @@ export namespace Prisma {
     readonly class: FieldRef<"GuildJoinRequest", 'String'>
     readonly weapon: FieldRef<"GuildJoinRequest", 'String'>
     readonly status: FieldRef<"GuildJoinRequest", 'JoinRequestStatus'>
+    readonly gearItems: FieldRef<"GuildJoinRequest", 'Json'>
     readonly createdAt: FieldRef<"GuildJoinRequest", 'DateTime'>
     readonly updatedAt: FieldRef<"GuildJoinRequest", 'DateTime'>
   }
@@ -30701,6 +34876,7 @@ export namespace Prisma {
     activeShareModel: 'activeShareModel',
     pointsResetCycle: 'pointsResetCycle',
     itemRequestLimits: 'itemRequestLimits',
+    marketRules: 'marketRules',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -30722,7 +34898,10 @@ export namespace Prisma {
     joinedAt: 'joinedAt',
     isActive: 'isActive',
     bidPoints: 'bidPoints',
-    bidPointsLastReset: 'bidPointsLastReset'
+    bidPointsLastReset: 'bidPointsLastReset',
+    marketPrioritySeq: 'marketPrioritySeq',
+    marketPriorityReason: 'marketPriorityReason',
+    marketWishlist: 'marketWishlist'
   };
 
   export type GuildMemberScalarFieldEnum = (typeof GuildMemberScalarFieldEnum)[keyof typeof GuildMemberScalarFieldEnum]
@@ -30792,6 +34971,67 @@ export namespace Prisma {
   };
 
   export type ItemRequestScalarFieldEnum = (typeof ItemRequestScalarFieldEnum)[keyof typeof ItemRequestScalarFieldEnum]
+
+
+  export const LegendaryPriorityRequestScalarFieldEnum: {
+    id: 'id',
+    guildId: 'guildId',
+    memberId: 'memberId',
+    category: 'category',
+    currentGear: 'currentGear',
+    reason: 'reason',
+    prioritySeq: 'prioritySeq',
+    status: 'status',
+    officerNote: 'officerNote',
+    reviewedById: 'reviewedById',
+    reviewedAt: 'reviewedAt',
+    completedAt: 'completedAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type LegendaryPriorityRequestScalarFieldEnum = (typeof LegendaryPriorityRequestScalarFieldEnum)[keyof typeof LegendaryPriorityRequestScalarFieldEnum]
+
+
+  export const ItemDistributionScalarFieldEnum: {
+    id: 'id',
+    guildId: 'guildId',
+    memberId: 'memberId',
+    formType: 'formType',
+    rankTier: 'rankTier',
+    ignSnapshot: 'ignSnapshot',
+    classSnapshot: 'classSnapshot',
+    cpSnapshot: 'cpSnapshot',
+    pointsSnapshot: 'pointsSnapshot',
+    prioritySeq: 'prioritySeq',
+    items: 'items',
+    note: 'note',
+    distributedById: 'distributedById',
+    overridden: 'overridden',
+    overrideReason: 'overrideReason',
+    distributedAt: 'distributedAt',
+    createdAt: 'createdAt'
+  };
+
+  export type ItemDistributionScalarFieldEnum = (typeof ItemDistributionScalarFieldEnum)[keyof typeof ItemDistributionScalarFieldEnum]
+
+
+  export const MemberEquipmentScalarFieldEnum: {
+    id: 'id',
+    memberId: 'memberId',
+    slotType: 'slotType',
+    itemName: 'itemName',
+    iconUrl: 'iconUrl',
+    iconBucket: 'iconBucket',
+    rarity: 'rarity',
+    confidence: 'confidence',
+    needsReview: 'needsReview',
+    sourceScreenshotUrl: 'sourceScreenshotUrl',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MemberEquipmentScalarFieldEnum = (typeof MemberEquipmentScalarFieldEnum)[keyof typeof MemberEquipmentScalarFieldEnum]
 
 
   export const LedgerEntryScalarFieldEnum: {
@@ -30883,6 +35123,7 @@ export namespace Prisma {
     class: 'class',
     weapon: 'weapon',
     status: 'status',
+    gearItems: 'gearItems',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -31171,6 +35412,20 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'Float'
+   */
+  export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+  /**
+   * Reference to a field of type 'Float[]'
+   */
+  export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
+
+
+  /**
    * Reference to a field of type 'AccountType'
    */
   export type EnumAccountTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AccountType'>
@@ -31265,20 +35520,6 @@ export namespace Prisma {
    * Reference to a field of type 'BossEventStatus[]'
    */
   export type ListEnumBossEventStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BossEventStatus[]'>
-    
-
-
-  /**
-   * Reference to a field of type 'Float'
-   */
-  export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
-    
-
-
-  /**
-   * Reference to a field of type 'Float[]'
-   */
-  export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
     
   /**
    * Deep Input Types
@@ -31631,6 +35872,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotListRelationFilter
     auctionItems?: AuctionItemListRelationFilter
     itemRequests?: ItemRequestListRelationFilter
+    legendaryRequests?: LegendaryPriorityRequestListRelationFilter
+    itemDistributions?: ItemDistributionListRelationFilter
   }
 
   export type GuildOrderByWithRelationInput = {
@@ -31656,6 +35899,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotOrderByRelationAggregateInput
     auctionItems?: AuctionItemOrderByRelationAggregateInput
     itemRequests?: ItemRequestOrderByRelationAggregateInput
+    legendaryRequests?: LegendaryPriorityRequestOrderByRelationAggregateInput
+    itemDistributions?: ItemDistributionOrderByRelationAggregateInput
   }
 
   export type GuildWhereUniqueInput = Prisma.AtLeast<{
@@ -31684,6 +35929,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotListRelationFilter
     auctionItems?: AuctionItemListRelationFilter
     itemRequests?: ItemRequestListRelationFilter
+    legendaryRequests?: LegendaryPriorityRequestListRelationFilter
+    itemDistributions?: ItemDistributionListRelationFilter
   }, "id" | "slug" | "inviteCode">
 
   export type GuildOrderByWithAggregationInput = {
@@ -31735,6 +35982,7 @@ export namespace Prisma {
     activeShareModel?: StringFilter<"GuildSettings"> | string
     pointsResetCycle?: StringFilter<"GuildSettings"> | string
     itemRequestLimits?: JsonFilter<"GuildSettings">
+    marketRules?: JsonFilter<"GuildSettings">
     createdAt?: DateTimeFilter<"GuildSettings"> | Date | string
     updatedAt?: DateTimeFilter<"GuildSettings"> | Date | string
     guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
@@ -31754,6 +36002,7 @@ export namespace Prisma {
     activeShareModel?: SortOrder
     pointsResetCycle?: SortOrder
     itemRequestLimits?: SortOrder
+    marketRules?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     guild?: GuildOrderByWithRelationInput
@@ -31776,6 +36025,7 @@ export namespace Prisma {
     activeShareModel?: StringFilter<"GuildSettings"> | string
     pointsResetCycle?: StringFilter<"GuildSettings"> | string
     itemRequestLimits?: JsonFilter<"GuildSettings">
+    marketRules?: JsonFilter<"GuildSettings">
     createdAt?: DateTimeFilter<"GuildSettings"> | Date | string
     updatedAt?: DateTimeFilter<"GuildSettings"> | Date | string
     guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
@@ -31795,6 +36045,7 @@ export namespace Prisma {
     activeShareModel?: SortOrder
     pointsResetCycle?: SortOrder
     itemRequestLimits?: SortOrder
+    marketRules?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: GuildSettingsCountOrderByAggregateInput
@@ -31821,6 +36072,7 @@ export namespace Prisma {
     activeShareModel?: StringWithAggregatesFilter<"GuildSettings"> | string
     pointsResetCycle?: StringWithAggregatesFilter<"GuildSettings"> | string
     itemRequestLimits?: JsonWithAggregatesFilter<"GuildSettings">
+    marketRules?: JsonWithAggregatesFilter<"GuildSettings">
     createdAt?: DateTimeWithAggregatesFilter<"GuildSettings"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"GuildSettings"> | Date | string
   }
@@ -31843,10 +36095,16 @@ export namespace Prisma {
     isActive?: BoolFilter<"GuildMember"> | boolean
     bidPoints?: IntFilter<"GuildMember"> | number
     bidPointsLastReset?: DateTimeNullableFilter<"GuildMember"> | Date | string | null
+    marketPrioritySeq?: IntNullableFilter<"GuildMember"> | number | null
+    marketPriorityReason?: StringNullableFilter<"GuildMember"> | string | null
+    marketWishlist?: JsonFilter<"GuildMember">
     user?: XOR<UserScalarRelationFilter, UserWhereInput>
     guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
     auctionBids?: AuctionBidListRelationFilter
     itemRequests?: ItemRequestListRelationFilter
+    legendaryRequests?: LegendaryPriorityRequestListRelationFilter
+    itemDistributions?: ItemDistributionListRelationFilter
+    equipment?: MemberEquipmentListRelationFilter
   }
 
   export type GuildMemberOrderByWithRelationInput = {
@@ -31864,10 +36122,16 @@ export namespace Prisma {
     isActive?: SortOrder
     bidPoints?: SortOrder
     bidPointsLastReset?: SortOrderInput | SortOrder
+    marketPrioritySeq?: SortOrderInput | SortOrder
+    marketPriorityReason?: SortOrderInput | SortOrder
+    marketWishlist?: SortOrder
     user?: UserOrderByWithRelationInput
     guild?: GuildOrderByWithRelationInput
     auctionBids?: AuctionBidOrderByRelationAggregateInput
     itemRequests?: ItemRequestOrderByRelationAggregateInput
+    legendaryRequests?: LegendaryPriorityRequestOrderByRelationAggregateInput
+    itemDistributions?: ItemDistributionOrderByRelationAggregateInput
+    equipment?: MemberEquipmentOrderByRelationAggregateInput
   }
 
   export type GuildMemberWhereUniqueInput = Prisma.AtLeast<{
@@ -31889,10 +36153,16 @@ export namespace Prisma {
     isActive?: BoolFilter<"GuildMember"> | boolean
     bidPoints?: IntFilter<"GuildMember"> | number
     bidPointsLastReset?: DateTimeNullableFilter<"GuildMember"> | Date | string | null
+    marketPrioritySeq?: IntNullableFilter<"GuildMember"> | number | null
+    marketPriorityReason?: StringNullableFilter<"GuildMember"> | string | null
+    marketWishlist?: JsonFilter<"GuildMember">
     user?: XOR<UserScalarRelationFilter, UserWhereInput>
     guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
     auctionBids?: AuctionBidListRelationFilter
     itemRequests?: ItemRequestListRelationFilter
+    legendaryRequests?: LegendaryPriorityRequestListRelationFilter
+    itemDistributions?: ItemDistributionListRelationFilter
+    equipment?: MemberEquipmentListRelationFilter
   }, "id" | "memberCode" | "userId_guildId">
 
   export type GuildMemberOrderByWithAggregationInput = {
@@ -31910,6 +36180,9 @@ export namespace Prisma {
     isActive?: SortOrder
     bidPoints?: SortOrder
     bidPointsLastReset?: SortOrderInput | SortOrder
+    marketPrioritySeq?: SortOrderInput | SortOrder
+    marketPriorityReason?: SortOrderInput | SortOrder
+    marketWishlist?: SortOrder
     _count?: GuildMemberCountOrderByAggregateInput
     _avg?: GuildMemberAvgOrderByAggregateInput
     _max?: GuildMemberMaxOrderByAggregateInput
@@ -31935,6 +36208,9 @@ export namespace Prisma {
     isActive?: BoolWithAggregatesFilter<"GuildMember"> | boolean
     bidPoints?: IntWithAggregatesFilter<"GuildMember"> | number
     bidPointsLastReset?: DateTimeNullableWithAggregatesFilter<"GuildMember"> | Date | string | null
+    marketPrioritySeq?: IntNullableWithAggregatesFilter<"GuildMember"> | number | null
+    marketPriorityReason?: StringNullableWithAggregatesFilter<"GuildMember"> | string | null
+    marketWishlist?: JsonWithAggregatesFilter<"GuildMember">
   }
 
   export type GuildPointsSnapshotWhereInput = {
@@ -32282,6 +36558,324 @@ export namespace Prisma {
     fulfilledAt?: DateTimeNullableWithAggregatesFilter<"ItemRequest"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"ItemRequest"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"ItemRequest"> | Date | string
+  }
+
+  export type LegendaryPriorityRequestWhereInput = {
+    AND?: LegendaryPriorityRequestWhereInput | LegendaryPriorityRequestWhereInput[]
+    OR?: LegendaryPriorityRequestWhereInput[]
+    NOT?: LegendaryPriorityRequestWhereInput | LegendaryPriorityRequestWhereInput[]
+    id?: StringFilter<"LegendaryPriorityRequest"> | string
+    guildId?: StringFilter<"LegendaryPriorityRequest"> | string
+    memberId?: StringFilter<"LegendaryPriorityRequest"> | string
+    category?: StringFilter<"LegendaryPriorityRequest"> | string
+    currentGear?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reason?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    prioritySeq?: IntNullableFilter<"LegendaryPriorityRequest"> | number | null
+    status?: StringFilter<"LegendaryPriorityRequest"> | string
+    officerNote?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedById?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedAt?: DateTimeNullableFilter<"LegendaryPriorityRequest"> | Date | string | null
+    completedAt?: DateTimeNullableFilter<"LegendaryPriorityRequest"> | Date | string | null
+    createdAt?: DateTimeFilter<"LegendaryPriorityRequest"> | Date | string
+    updatedAt?: DateTimeFilter<"LegendaryPriorityRequest"> | Date | string
+    guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
+    member?: XOR<GuildMemberScalarRelationFilter, GuildMemberWhereInput>
+  }
+
+  export type LegendaryPriorityRequestOrderByWithRelationInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    category?: SortOrder
+    currentGear?: SortOrderInput | SortOrder
+    reason?: SortOrderInput | SortOrder
+    prioritySeq?: SortOrderInput | SortOrder
+    status?: SortOrder
+    officerNote?: SortOrderInput | SortOrder
+    reviewedById?: SortOrderInput | SortOrder
+    reviewedAt?: SortOrderInput | SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    guild?: GuildOrderByWithRelationInput
+    member?: GuildMemberOrderByWithRelationInput
+  }
+
+  export type LegendaryPriorityRequestWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: LegendaryPriorityRequestWhereInput | LegendaryPriorityRequestWhereInput[]
+    OR?: LegendaryPriorityRequestWhereInput[]
+    NOT?: LegendaryPriorityRequestWhereInput | LegendaryPriorityRequestWhereInput[]
+    guildId?: StringFilter<"LegendaryPriorityRequest"> | string
+    memberId?: StringFilter<"LegendaryPriorityRequest"> | string
+    category?: StringFilter<"LegendaryPriorityRequest"> | string
+    currentGear?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reason?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    prioritySeq?: IntNullableFilter<"LegendaryPriorityRequest"> | number | null
+    status?: StringFilter<"LegendaryPriorityRequest"> | string
+    officerNote?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedById?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedAt?: DateTimeNullableFilter<"LegendaryPriorityRequest"> | Date | string | null
+    completedAt?: DateTimeNullableFilter<"LegendaryPriorityRequest"> | Date | string | null
+    createdAt?: DateTimeFilter<"LegendaryPriorityRequest"> | Date | string
+    updatedAt?: DateTimeFilter<"LegendaryPriorityRequest"> | Date | string
+    guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
+    member?: XOR<GuildMemberScalarRelationFilter, GuildMemberWhereInput>
+  }, "id">
+
+  export type LegendaryPriorityRequestOrderByWithAggregationInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    category?: SortOrder
+    currentGear?: SortOrderInput | SortOrder
+    reason?: SortOrderInput | SortOrder
+    prioritySeq?: SortOrderInput | SortOrder
+    status?: SortOrder
+    officerNote?: SortOrderInput | SortOrder
+    reviewedById?: SortOrderInput | SortOrder
+    reviewedAt?: SortOrderInput | SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: LegendaryPriorityRequestCountOrderByAggregateInput
+    _avg?: LegendaryPriorityRequestAvgOrderByAggregateInput
+    _max?: LegendaryPriorityRequestMaxOrderByAggregateInput
+    _min?: LegendaryPriorityRequestMinOrderByAggregateInput
+    _sum?: LegendaryPriorityRequestSumOrderByAggregateInput
+  }
+
+  export type LegendaryPriorityRequestScalarWhereWithAggregatesInput = {
+    AND?: LegendaryPriorityRequestScalarWhereWithAggregatesInput | LegendaryPriorityRequestScalarWhereWithAggregatesInput[]
+    OR?: LegendaryPriorityRequestScalarWhereWithAggregatesInput[]
+    NOT?: LegendaryPriorityRequestScalarWhereWithAggregatesInput | LegendaryPriorityRequestScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"LegendaryPriorityRequest"> | string
+    guildId?: StringWithAggregatesFilter<"LegendaryPriorityRequest"> | string
+    memberId?: StringWithAggregatesFilter<"LegendaryPriorityRequest"> | string
+    category?: StringWithAggregatesFilter<"LegendaryPriorityRequest"> | string
+    currentGear?: StringNullableWithAggregatesFilter<"LegendaryPriorityRequest"> | string | null
+    reason?: StringNullableWithAggregatesFilter<"LegendaryPriorityRequest"> | string | null
+    prioritySeq?: IntNullableWithAggregatesFilter<"LegendaryPriorityRequest"> | number | null
+    status?: StringWithAggregatesFilter<"LegendaryPriorityRequest"> | string
+    officerNote?: StringNullableWithAggregatesFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedById?: StringNullableWithAggregatesFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedAt?: DateTimeNullableWithAggregatesFilter<"LegendaryPriorityRequest"> | Date | string | null
+    completedAt?: DateTimeNullableWithAggregatesFilter<"LegendaryPriorityRequest"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"LegendaryPriorityRequest"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"LegendaryPriorityRequest"> | Date | string
+  }
+
+  export type ItemDistributionWhereInput = {
+    AND?: ItemDistributionWhereInput | ItemDistributionWhereInput[]
+    OR?: ItemDistributionWhereInput[]
+    NOT?: ItemDistributionWhereInput | ItemDistributionWhereInput[]
+    id?: StringFilter<"ItemDistribution"> | string
+    guildId?: StringFilter<"ItemDistribution"> | string
+    memberId?: StringFilter<"ItemDistribution"> | string
+    formType?: StringFilter<"ItemDistribution"> | string
+    rankTier?: StringNullableFilter<"ItemDistribution"> | string | null
+    ignSnapshot?: StringNullableFilter<"ItemDistribution"> | string | null
+    classSnapshot?: StringNullableFilter<"ItemDistribution"> | string | null
+    cpSnapshot?: IntNullableFilter<"ItemDistribution"> | number | null
+    pointsSnapshot?: IntNullableFilter<"ItemDistribution"> | number | null
+    prioritySeq?: IntNullableFilter<"ItemDistribution"> | number | null
+    items?: JsonFilter<"ItemDistribution">
+    note?: StringNullableFilter<"ItemDistribution"> | string | null
+    distributedById?: StringFilter<"ItemDistribution"> | string
+    overridden?: BoolFilter<"ItemDistribution"> | boolean
+    overrideReason?: StringNullableFilter<"ItemDistribution"> | string | null
+    distributedAt?: DateTimeFilter<"ItemDistribution"> | Date | string
+    createdAt?: DateTimeFilter<"ItemDistribution"> | Date | string
+    guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
+    member?: XOR<GuildMemberScalarRelationFilter, GuildMemberWhereInput>
+  }
+
+  export type ItemDistributionOrderByWithRelationInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    formType?: SortOrder
+    rankTier?: SortOrderInput | SortOrder
+    ignSnapshot?: SortOrderInput | SortOrder
+    classSnapshot?: SortOrderInput | SortOrder
+    cpSnapshot?: SortOrderInput | SortOrder
+    pointsSnapshot?: SortOrderInput | SortOrder
+    prioritySeq?: SortOrderInput | SortOrder
+    items?: SortOrder
+    note?: SortOrderInput | SortOrder
+    distributedById?: SortOrder
+    overridden?: SortOrder
+    overrideReason?: SortOrderInput | SortOrder
+    distributedAt?: SortOrder
+    createdAt?: SortOrder
+    guild?: GuildOrderByWithRelationInput
+    member?: GuildMemberOrderByWithRelationInput
+  }
+
+  export type ItemDistributionWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: ItemDistributionWhereInput | ItemDistributionWhereInput[]
+    OR?: ItemDistributionWhereInput[]
+    NOT?: ItemDistributionWhereInput | ItemDistributionWhereInput[]
+    guildId?: StringFilter<"ItemDistribution"> | string
+    memberId?: StringFilter<"ItemDistribution"> | string
+    formType?: StringFilter<"ItemDistribution"> | string
+    rankTier?: StringNullableFilter<"ItemDistribution"> | string | null
+    ignSnapshot?: StringNullableFilter<"ItemDistribution"> | string | null
+    classSnapshot?: StringNullableFilter<"ItemDistribution"> | string | null
+    cpSnapshot?: IntNullableFilter<"ItemDistribution"> | number | null
+    pointsSnapshot?: IntNullableFilter<"ItemDistribution"> | number | null
+    prioritySeq?: IntNullableFilter<"ItemDistribution"> | number | null
+    items?: JsonFilter<"ItemDistribution">
+    note?: StringNullableFilter<"ItemDistribution"> | string | null
+    distributedById?: StringFilter<"ItemDistribution"> | string
+    overridden?: BoolFilter<"ItemDistribution"> | boolean
+    overrideReason?: StringNullableFilter<"ItemDistribution"> | string | null
+    distributedAt?: DateTimeFilter<"ItemDistribution"> | Date | string
+    createdAt?: DateTimeFilter<"ItemDistribution"> | Date | string
+    guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
+    member?: XOR<GuildMemberScalarRelationFilter, GuildMemberWhereInput>
+  }, "id">
+
+  export type ItemDistributionOrderByWithAggregationInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    formType?: SortOrder
+    rankTier?: SortOrderInput | SortOrder
+    ignSnapshot?: SortOrderInput | SortOrder
+    classSnapshot?: SortOrderInput | SortOrder
+    cpSnapshot?: SortOrderInput | SortOrder
+    pointsSnapshot?: SortOrderInput | SortOrder
+    prioritySeq?: SortOrderInput | SortOrder
+    items?: SortOrder
+    note?: SortOrderInput | SortOrder
+    distributedById?: SortOrder
+    overridden?: SortOrder
+    overrideReason?: SortOrderInput | SortOrder
+    distributedAt?: SortOrder
+    createdAt?: SortOrder
+    _count?: ItemDistributionCountOrderByAggregateInput
+    _avg?: ItemDistributionAvgOrderByAggregateInput
+    _max?: ItemDistributionMaxOrderByAggregateInput
+    _min?: ItemDistributionMinOrderByAggregateInput
+    _sum?: ItemDistributionSumOrderByAggregateInput
+  }
+
+  export type ItemDistributionScalarWhereWithAggregatesInput = {
+    AND?: ItemDistributionScalarWhereWithAggregatesInput | ItemDistributionScalarWhereWithAggregatesInput[]
+    OR?: ItemDistributionScalarWhereWithAggregatesInput[]
+    NOT?: ItemDistributionScalarWhereWithAggregatesInput | ItemDistributionScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"ItemDistribution"> | string
+    guildId?: StringWithAggregatesFilter<"ItemDistribution"> | string
+    memberId?: StringWithAggregatesFilter<"ItemDistribution"> | string
+    formType?: StringWithAggregatesFilter<"ItemDistribution"> | string
+    rankTier?: StringNullableWithAggregatesFilter<"ItemDistribution"> | string | null
+    ignSnapshot?: StringNullableWithAggregatesFilter<"ItemDistribution"> | string | null
+    classSnapshot?: StringNullableWithAggregatesFilter<"ItemDistribution"> | string | null
+    cpSnapshot?: IntNullableWithAggregatesFilter<"ItemDistribution"> | number | null
+    pointsSnapshot?: IntNullableWithAggregatesFilter<"ItemDistribution"> | number | null
+    prioritySeq?: IntNullableWithAggregatesFilter<"ItemDistribution"> | number | null
+    items?: JsonWithAggregatesFilter<"ItemDistribution">
+    note?: StringNullableWithAggregatesFilter<"ItemDistribution"> | string | null
+    distributedById?: StringWithAggregatesFilter<"ItemDistribution"> | string
+    overridden?: BoolWithAggregatesFilter<"ItemDistribution"> | boolean
+    overrideReason?: StringNullableWithAggregatesFilter<"ItemDistribution"> | string | null
+    distributedAt?: DateTimeWithAggregatesFilter<"ItemDistribution"> | Date | string
+    createdAt?: DateTimeWithAggregatesFilter<"ItemDistribution"> | Date | string
+  }
+
+  export type MemberEquipmentWhereInput = {
+    AND?: MemberEquipmentWhereInput | MemberEquipmentWhereInput[]
+    OR?: MemberEquipmentWhereInput[]
+    NOT?: MemberEquipmentWhereInput | MemberEquipmentWhereInput[]
+    id?: StringFilter<"MemberEquipment"> | string
+    memberId?: StringFilter<"MemberEquipment"> | string
+    slotType?: StringFilter<"MemberEquipment"> | string
+    itemName?: StringFilter<"MemberEquipment"> | string
+    iconUrl?: StringFilter<"MemberEquipment"> | string
+    iconBucket?: StringFilter<"MemberEquipment"> | string
+    rarity?: StringNullableFilter<"MemberEquipment"> | string | null
+    confidence?: FloatFilter<"MemberEquipment"> | number
+    needsReview?: BoolFilter<"MemberEquipment"> | boolean
+    sourceScreenshotUrl?: StringNullableFilter<"MemberEquipment"> | string | null
+    createdAt?: DateTimeFilter<"MemberEquipment"> | Date | string
+    updatedAt?: DateTimeFilter<"MemberEquipment"> | Date | string
+    member?: XOR<GuildMemberScalarRelationFilter, GuildMemberWhereInput>
+  }
+
+  export type MemberEquipmentOrderByWithRelationInput = {
+    id?: SortOrder
+    memberId?: SortOrder
+    slotType?: SortOrder
+    itemName?: SortOrder
+    iconUrl?: SortOrder
+    iconBucket?: SortOrder
+    rarity?: SortOrderInput | SortOrder
+    confidence?: SortOrder
+    needsReview?: SortOrder
+    sourceScreenshotUrl?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    member?: GuildMemberOrderByWithRelationInput
+  }
+
+  export type MemberEquipmentWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    memberId_slotType?: MemberEquipmentMemberIdSlotTypeCompoundUniqueInput
+    AND?: MemberEquipmentWhereInput | MemberEquipmentWhereInput[]
+    OR?: MemberEquipmentWhereInput[]
+    NOT?: MemberEquipmentWhereInput | MemberEquipmentWhereInput[]
+    memberId?: StringFilter<"MemberEquipment"> | string
+    slotType?: StringFilter<"MemberEquipment"> | string
+    itemName?: StringFilter<"MemberEquipment"> | string
+    iconUrl?: StringFilter<"MemberEquipment"> | string
+    iconBucket?: StringFilter<"MemberEquipment"> | string
+    rarity?: StringNullableFilter<"MemberEquipment"> | string | null
+    confidence?: FloatFilter<"MemberEquipment"> | number
+    needsReview?: BoolFilter<"MemberEquipment"> | boolean
+    sourceScreenshotUrl?: StringNullableFilter<"MemberEquipment"> | string | null
+    createdAt?: DateTimeFilter<"MemberEquipment"> | Date | string
+    updatedAt?: DateTimeFilter<"MemberEquipment"> | Date | string
+    member?: XOR<GuildMemberScalarRelationFilter, GuildMemberWhereInput>
+  }, "id" | "memberId_slotType">
+
+  export type MemberEquipmentOrderByWithAggregationInput = {
+    id?: SortOrder
+    memberId?: SortOrder
+    slotType?: SortOrder
+    itemName?: SortOrder
+    iconUrl?: SortOrder
+    iconBucket?: SortOrder
+    rarity?: SortOrderInput | SortOrder
+    confidence?: SortOrder
+    needsReview?: SortOrder
+    sourceScreenshotUrl?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MemberEquipmentCountOrderByAggregateInput
+    _avg?: MemberEquipmentAvgOrderByAggregateInput
+    _max?: MemberEquipmentMaxOrderByAggregateInput
+    _min?: MemberEquipmentMinOrderByAggregateInput
+    _sum?: MemberEquipmentSumOrderByAggregateInput
+  }
+
+  export type MemberEquipmentScalarWhereWithAggregatesInput = {
+    AND?: MemberEquipmentScalarWhereWithAggregatesInput | MemberEquipmentScalarWhereWithAggregatesInput[]
+    OR?: MemberEquipmentScalarWhereWithAggregatesInput[]
+    NOT?: MemberEquipmentScalarWhereWithAggregatesInput | MemberEquipmentScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MemberEquipment"> | string
+    memberId?: StringWithAggregatesFilter<"MemberEquipment"> | string
+    slotType?: StringWithAggregatesFilter<"MemberEquipment"> | string
+    itemName?: StringWithAggregatesFilter<"MemberEquipment"> | string
+    iconUrl?: StringWithAggregatesFilter<"MemberEquipment"> | string
+    iconBucket?: StringWithAggregatesFilter<"MemberEquipment"> | string
+    rarity?: StringNullableWithAggregatesFilter<"MemberEquipment"> | string | null
+    confidence?: FloatWithAggregatesFilter<"MemberEquipment"> | number
+    needsReview?: BoolWithAggregatesFilter<"MemberEquipment"> | boolean
+    sourceScreenshotUrl?: StringNullableWithAggregatesFilter<"MemberEquipment"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MemberEquipment"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MemberEquipment"> | Date | string
   }
 
   export type LedgerEntryWhereInput = {
@@ -32704,6 +37298,7 @@ export namespace Prisma {
     class?: StringFilter<"GuildJoinRequest"> | string
     weapon?: StringFilter<"GuildJoinRequest"> | string
     status?: EnumJoinRequestStatusFilter<"GuildJoinRequest"> | $Enums.JoinRequestStatus
+    gearItems?: JsonNullableFilter<"GuildJoinRequest">
     createdAt?: DateTimeFilter<"GuildJoinRequest"> | Date | string
     updatedAt?: DateTimeFilter<"GuildJoinRequest"> | Date | string
     guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
@@ -32719,6 +37314,7 @@ export namespace Prisma {
     class?: SortOrder
     weapon?: SortOrder
     status?: SortOrder
+    gearItems?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     guild?: GuildOrderByWithRelationInput
@@ -32738,6 +37334,7 @@ export namespace Prisma {
     class?: StringFilter<"GuildJoinRequest"> | string
     weapon?: StringFilter<"GuildJoinRequest"> | string
     status?: EnumJoinRequestStatusFilter<"GuildJoinRequest"> | $Enums.JoinRequestStatus
+    gearItems?: JsonNullableFilter<"GuildJoinRequest">
     createdAt?: DateTimeFilter<"GuildJoinRequest"> | Date | string
     updatedAt?: DateTimeFilter<"GuildJoinRequest"> | Date | string
     guild?: XOR<GuildScalarRelationFilter, GuildWhereInput>
@@ -32753,6 +37350,7 @@ export namespace Prisma {
     class?: SortOrder
     weapon?: SortOrder
     status?: SortOrder
+    gearItems?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: GuildJoinRequestCountOrderByAggregateInput
@@ -32774,6 +37372,7 @@ export namespace Prisma {
     class?: StringWithAggregatesFilter<"GuildJoinRequest"> | string
     weapon?: StringWithAggregatesFilter<"GuildJoinRequest"> | string
     status?: EnumJoinRequestStatusWithAggregatesFilter<"GuildJoinRequest"> | $Enums.JoinRequestStatus
+    gearItems?: JsonNullableWithAggregatesFilter<"GuildJoinRequest">
     createdAt?: DateTimeWithAggregatesFilter<"GuildJoinRequest"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"GuildJoinRequest"> | Date | string
   }
@@ -33656,6 +38255,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateInput = {
@@ -33681,6 +38282,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUpdateInput = {
@@ -33706,6 +38309,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateInput = {
@@ -33731,6 +38336,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildCreateManyInput = {
@@ -33785,6 +38392,7 @@ export namespace Prisma {
     activeShareModel?: string
     pointsResetCycle?: string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
     guild: GuildCreateNestedOneWithoutSettingsInput
@@ -33804,6 +38412,7 @@ export namespace Prisma {
     activeShareModel?: string
     pointsResetCycle?: string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -33821,6 +38430,7 @@ export namespace Prisma {
     activeShareModel?: StringFieldUpdateOperationsInput | string
     pointsResetCycle?: StringFieldUpdateOperationsInput | string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     guild?: GuildUpdateOneRequiredWithoutSettingsNestedInput
@@ -33840,6 +38450,7 @@ export namespace Prisma {
     activeShareModel?: StringFieldUpdateOperationsInput | string
     pointsResetCycle?: StringFieldUpdateOperationsInput | string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -33858,6 +38469,7 @@ export namespace Prisma {
     activeShareModel?: string
     pointsResetCycle?: string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -33875,6 +38487,7 @@ export namespace Prisma {
     activeShareModel?: StringFieldUpdateOperationsInput | string
     pointsResetCycle?: StringFieldUpdateOperationsInput | string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -33893,6 +38506,7 @@ export namespace Prisma {
     activeShareModel?: StringFieldUpdateOperationsInput | string
     pointsResetCycle?: StringFieldUpdateOperationsInput | string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -33910,10 +38524,16 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user: UserCreateNestedOneWithoutGuildMembersInput
     guild: GuildCreateNestedOneWithoutMembersInput
     auctionBids?: AuctionBidCreateNestedManyWithoutMemberInput
     itemRequests?: ItemRequestCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberUncheckedCreateInput = {
@@ -33931,8 +38551,14 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedCreateNestedManyWithoutMemberInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberUpdateInput = {
@@ -33948,10 +38574,16 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user?: UserUpdateOneRequiredWithoutGuildMembersNestedInput
     guild?: GuildUpdateOneRequiredWithoutMembersNestedInput
     auctionBids?: AuctionBidUpdateManyWithoutMemberNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberUncheckedUpdateInput = {
@@ -33969,8 +38601,14 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedUpdateManyWithoutMemberNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberCreateManyInput = {
@@ -33988,6 +38626,9 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
   }
 
   export type GuildMemberUpdateManyMutationInput = {
@@ -34003,6 +38644,9 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
   }
 
   export type GuildMemberUncheckedUpdateManyInput = {
@@ -34020,6 +38664,9 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
   }
 
   export type GuildPointsSnapshotCreateInput = {
@@ -34394,6 +39041,365 @@ export namespace Prisma {
     reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
     reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fulfilledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type LegendaryPriorityRequestCreateInput = {
+    id?: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    guild: GuildCreateNestedOneWithoutLegendaryRequestsInput
+    member: GuildMemberCreateNestedOneWithoutLegendaryRequestsInput
+  }
+
+  export type LegendaryPriorityRequestUncheckedCreateInput = {
+    id?: string
+    guildId: string
+    memberId: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type LegendaryPriorityRequestUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    guild?: GuildUpdateOneRequiredWithoutLegendaryRequestsNestedInput
+    member?: GuildMemberUpdateOneRequiredWithoutLegendaryRequestsNestedInput
+  }
+
+  export type LegendaryPriorityRequestUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type LegendaryPriorityRequestCreateManyInput = {
+    id?: string
+    guildId: string
+    memberId: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type LegendaryPriorityRequestUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type LegendaryPriorityRequestUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ItemDistributionCreateInput = {
+    id?: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+    guild: GuildCreateNestedOneWithoutItemDistributionsInput
+    member: GuildMemberCreateNestedOneWithoutItemDistributionsInput
+  }
+
+  export type ItemDistributionUncheckedCreateInput = {
+    id?: string
+    guildId: string
+    memberId: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type ItemDistributionUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    guild?: GuildUpdateOneRequiredWithoutItemDistributionsNestedInput
+    member?: GuildMemberUpdateOneRequiredWithoutItemDistributionsNestedInput
+  }
+
+  export type ItemDistributionUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ItemDistributionCreateManyInput = {
+    id?: string
+    guildId: string
+    memberId: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type ItemDistributionUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ItemDistributionUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MemberEquipmentCreateInput = {
+    id?: string
+    slotType: string
+    itemName: string
+    iconUrl: string
+    iconBucket: string
+    rarity?: string | null
+    confidence?: number
+    needsReview?: boolean
+    sourceScreenshotUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    member: GuildMemberCreateNestedOneWithoutEquipmentInput
+  }
+
+  export type MemberEquipmentUncheckedCreateInput = {
+    id?: string
+    memberId: string
+    slotType: string
+    itemName: string
+    iconUrl: string
+    iconBucket: string
+    rarity?: string | null
+    confidence?: number
+    needsReview?: boolean
+    sourceScreenshotUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MemberEquipmentUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    slotType?: StringFieldUpdateOperationsInput | string
+    itemName?: StringFieldUpdateOperationsInput | string
+    iconUrl?: StringFieldUpdateOperationsInput | string
+    iconBucket?: StringFieldUpdateOperationsInput | string
+    rarity?: NullableStringFieldUpdateOperationsInput | string | null
+    confidence?: FloatFieldUpdateOperationsInput | number
+    needsReview?: BoolFieldUpdateOperationsInput | boolean
+    sourceScreenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    member?: GuildMemberUpdateOneRequiredWithoutEquipmentNestedInput
+  }
+
+  export type MemberEquipmentUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    slotType?: StringFieldUpdateOperationsInput | string
+    itemName?: StringFieldUpdateOperationsInput | string
+    iconUrl?: StringFieldUpdateOperationsInput | string
+    iconBucket?: StringFieldUpdateOperationsInput | string
+    rarity?: NullableStringFieldUpdateOperationsInput | string | null
+    confidence?: FloatFieldUpdateOperationsInput | number
+    needsReview?: BoolFieldUpdateOperationsInput | boolean
+    sourceScreenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MemberEquipmentCreateManyInput = {
+    id?: string
+    memberId: string
+    slotType: string
+    itemName: string
+    iconUrl: string
+    iconBucket: string
+    rarity?: string | null
+    confidence?: number
+    needsReview?: boolean
+    sourceScreenshotUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MemberEquipmentUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    slotType?: StringFieldUpdateOperationsInput | string
+    itemName?: StringFieldUpdateOperationsInput | string
+    iconUrl?: StringFieldUpdateOperationsInput | string
+    iconBucket?: StringFieldUpdateOperationsInput | string
+    rarity?: NullableStringFieldUpdateOperationsInput | string | null
+    confidence?: FloatFieldUpdateOperationsInput | number
+    needsReview?: BoolFieldUpdateOperationsInput | boolean
+    sourceScreenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MemberEquipmentUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    slotType?: StringFieldUpdateOperationsInput | string
+    itemName?: StringFieldUpdateOperationsInput | string
+    iconUrl?: StringFieldUpdateOperationsInput | string
+    iconBucket?: StringFieldUpdateOperationsInput | string
+    rarity?: NullableStringFieldUpdateOperationsInput | string | null
+    confidence?: FloatFieldUpdateOperationsInput | number
+    needsReview?: BoolFieldUpdateOperationsInput | boolean
+    sourceScreenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -34853,6 +39859,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
     guild: GuildCreateNestedOneWithoutJoinRequestsInput
@@ -34868,6 +39875,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -34879,6 +39887,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     guild?: GuildUpdateOneRequiredWithoutJoinRequestsNestedInput
@@ -34894,6 +39903,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -34907,6 +39917,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -34918,6 +39929,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -34931,6 +39943,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -35940,6 +40953,18 @@ export namespace Prisma {
     none?: ItemRequestWhereInput
   }
 
+  export type LegendaryPriorityRequestListRelationFilter = {
+    every?: LegendaryPriorityRequestWhereInput
+    some?: LegendaryPriorityRequestWhereInput
+    none?: LegendaryPriorityRequestWhereInput
+  }
+
+  export type ItemDistributionListRelationFilter = {
+    every?: ItemDistributionWhereInput
+    some?: ItemDistributionWhereInput
+    none?: ItemDistributionWhereInput
+  }
+
   export type AttendanceSessionOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
@@ -35961,6 +40986,14 @@ export namespace Prisma {
   }
 
   export type ItemRequestOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type LegendaryPriorityRequestOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type ItemDistributionOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -36056,6 +41089,7 @@ export namespace Prisma {
     activeShareModel?: SortOrder
     pointsResetCycle?: SortOrder
     itemRequestLimits?: SortOrder
+    marketRules?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -36159,7 +41193,17 @@ export namespace Prisma {
     none?: AuctionBidWhereInput
   }
 
+  export type MemberEquipmentListRelationFilter = {
+    every?: MemberEquipmentWhereInput
+    some?: MemberEquipmentWhereInput
+    none?: MemberEquipmentWhereInput
+  }
+
   export type AuctionBidOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MemberEquipmentOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -36183,11 +41227,15 @@ export namespace Prisma {
     isActive?: SortOrder
     bidPoints?: SortOrder
     bidPointsLastReset?: SortOrder
+    marketPrioritySeq?: SortOrder
+    marketPriorityReason?: SortOrder
+    marketWishlist?: SortOrder
   }
 
   export type GuildMemberAvgOrderByAggregateInput = {
     cp?: SortOrder
     bidPoints?: SortOrder
+    marketPrioritySeq?: SortOrder
   }
 
   export type GuildMemberMaxOrderByAggregateInput = {
@@ -36205,6 +41253,8 @@ export namespace Prisma {
     isActive?: SortOrder
     bidPoints?: SortOrder
     bidPointsLastReset?: SortOrder
+    marketPrioritySeq?: SortOrder
+    marketPriorityReason?: SortOrder
   }
 
   export type GuildMemberMinOrderByAggregateInput = {
@@ -36222,11 +41272,14 @@ export namespace Prisma {
     isActive?: SortOrder
     bidPoints?: SortOrder
     bidPointsLastReset?: SortOrder
+    marketPrioritySeq?: SortOrder
+    marketPriorityReason?: SortOrder
   }
 
   export type GuildMemberSumOrderByAggregateInput = {
     cp?: SortOrder
     bidPoints?: SortOrder
+    marketPrioritySeq?: SortOrder
   }
 
   export type EnumGuildRoleWithAggregatesFilter<$PrismaModel = never> = {
@@ -36521,6 +41574,220 @@ export namespace Prisma {
     _sum?: NestedDecimalNullableFilter<$PrismaModel>
     _min?: NestedDecimalNullableFilter<$PrismaModel>
     _max?: NestedDecimalNullableFilter<$PrismaModel>
+  }
+
+  export type LegendaryPriorityRequestCountOrderByAggregateInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    category?: SortOrder
+    currentGear?: SortOrder
+    reason?: SortOrder
+    prioritySeq?: SortOrder
+    status?: SortOrder
+    officerNote?: SortOrder
+    reviewedById?: SortOrder
+    reviewedAt?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type LegendaryPriorityRequestAvgOrderByAggregateInput = {
+    prioritySeq?: SortOrder
+  }
+
+  export type LegendaryPriorityRequestMaxOrderByAggregateInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    category?: SortOrder
+    currentGear?: SortOrder
+    reason?: SortOrder
+    prioritySeq?: SortOrder
+    status?: SortOrder
+    officerNote?: SortOrder
+    reviewedById?: SortOrder
+    reviewedAt?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type LegendaryPriorityRequestMinOrderByAggregateInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    category?: SortOrder
+    currentGear?: SortOrder
+    reason?: SortOrder
+    prioritySeq?: SortOrder
+    status?: SortOrder
+    officerNote?: SortOrder
+    reviewedById?: SortOrder
+    reviewedAt?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type LegendaryPriorityRequestSumOrderByAggregateInput = {
+    prioritySeq?: SortOrder
+  }
+
+  export type ItemDistributionCountOrderByAggregateInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    formType?: SortOrder
+    rankTier?: SortOrder
+    ignSnapshot?: SortOrder
+    classSnapshot?: SortOrder
+    cpSnapshot?: SortOrder
+    pointsSnapshot?: SortOrder
+    prioritySeq?: SortOrder
+    items?: SortOrder
+    note?: SortOrder
+    distributedById?: SortOrder
+    overridden?: SortOrder
+    overrideReason?: SortOrder
+    distributedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ItemDistributionAvgOrderByAggregateInput = {
+    cpSnapshot?: SortOrder
+    pointsSnapshot?: SortOrder
+    prioritySeq?: SortOrder
+  }
+
+  export type ItemDistributionMaxOrderByAggregateInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    formType?: SortOrder
+    rankTier?: SortOrder
+    ignSnapshot?: SortOrder
+    classSnapshot?: SortOrder
+    cpSnapshot?: SortOrder
+    pointsSnapshot?: SortOrder
+    prioritySeq?: SortOrder
+    note?: SortOrder
+    distributedById?: SortOrder
+    overridden?: SortOrder
+    overrideReason?: SortOrder
+    distributedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ItemDistributionMinOrderByAggregateInput = {
+    id?: SortOrder
+    guildId?: SortOrder
+    memberId?: SortOrder
+    formType?: SortOrder
+    rankTier?: SortOrder
+    ignSnapshot?: SortOrder
+    classSnapshot?: SortOrder
+    cpSnapshot?: SortOrder
+    pointsSnapshot?: SortOrder
+    prioritySeq?: SortOrder
+    note?: SortOrder
+    distributedById?: SortOrder
+    overridden?: SortOrder
+    overrideReason?: SortOrder
+    distributedAt?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ItemDistributionSumOrderByAggregateInput = {
+    cpSnapshot?: SortOrder
+    pointsSnapshot?: SortOrder
+    prioritySeq?: SortOrder
+  }
+
+  export type FloatFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatFilter<$PrismaModel> | number
+  }
+
+  export type MemberEquipmentMemberIdSlotTypeCompoundUniqueInput = {
+    memberId: string
+    slotType: string
+  }
+
+  export type MemberEquipmentCountOrderByAggregateInput = {
+    id?: SortOrder
+    memberId?: SortOrder
+    slotType?: SortOrder
+    itemName?: SortOrder
+    iconUrl?: SortOrder
+    iconBucket?: SortOrder
+    rarity?: SortOrder
+    confidence?: SortOrder
+    needsReview?: SortOrder
+    sourceScreenshotUrl?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MemberEquipmentAvgOrderByAggregateInput = {
+    confidence?: SortOrder
+  }
+
+  export type MemberEquipmentMaxOrderByAggregateInput = {
+    id?: SortOrder
+    memberId?: SortOrder
+    slotType?: SortOrder
+    itemName?: SortOrder
+    iconUrl?: SortOrder
+    iconBucket?: SortOrder
+    rarity?: SortOrder
+    confidence?: SortOrder
+    needsReview?: SortOrder
+    sourceScreenshotUrl?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MemberEquipmentMinOrderByAggregateInput = {
+    id?: SortOrder
+    memberId?: SortOrder
+    slotType?: SortOrder
+    itemName?: SortOrder
+    iconUrl?: SortOrder
+    iconBucket?: SortOrder
+    rarity?: SortOrder
+    confidence?: SortOrder
+    needsReview?: SortOrder
+    sourceScreenshotUrl?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MemberEquipmentSumOrderByAggregateInput = {
+    confidence?: SortOrder
+  }
+
+  export type FloatWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedFloatFilter<$PrismaModel>
+    _min?: NestedFloatFilter<$PrismaModel>
+    _max?: NestedFloatFilter<$PrismaModel>
   }
 
   export type EnumAccountTypeFilter<$PrismaModel = never> = {
@@ -36856,6 +42123,7 @@ export namespace Prisma {
     class?: SortOrder
     weapon?: SortOrder
     status?: SortOrder
+    gearItems?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -37888,6 +43156,20 @@ export namespace Prisma {
     connect?: ItemRequestWhereUniqueInput | ItemRequestWhereUniqueInput[]
   }
 
+  export type LegendaryPriorityRequestCreateNestedManyWithoutGuildInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutGuildInput, LegendaryPriorityRequestUncheckedCreateWithoutGuildInput> | LegendaryPriorityRequestCreateWithoutGuildInput[] | LegendaryPriorityRequestUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutGuildInput | LegendaryPriorityRequestCreateOrConnectWithoutGuildInput[]
+    createMany?: LegendaryPriorityRequestCreateManyGuildInputEnvelope
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+  }
+
+  export type ItemDistributionCreateNestedManyWithoutGuildInput = {
+    create?: XOR<ItemDistributionCreateWithoutGuildInput, ItemDistributionUncheckedCreateWithoutGuildInput> | ItemDistributionCreateWithoutGuildInput[] | ItemDistributionUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutGuildInput | ItemDistributionCreateOrConnectWithoutGuildInput[]
+    createMany?: ItemDistributionCreateManyGuildInputEnvelope
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+  }
+
   export type GuildSettingsUncheckedCreateNestedOneWithoutGuildInput = {
     create?: XOR<GuildSettingsCreateWithoutGuildInput, GuildSettingsUncheckedCreateWithoutGuildInput>
     connectOrCreate?: GuildSettingsCreateOrConnectWithoutGuildInput
@@ -37969,6 +43251,20 @@ export namespace Prisma {
     connectOrCreate?: ItemRequestCreateOrConnectWithoutGuildInput | ItemRequestCreateOrConnectWithoutGuildInput[]
     createMany?: ItemRequestCreateManyGuildInputEnvelope
     connect?: ItemRequestWhereUniqueInput | ItemRequestWhereUniqueInput[]
+  }
+
+  export type LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutGuildInput, LegendaryPriorityRequestUncheckedCreateWithoutGuildInput> | LegendaryPriorityRequestCreateWithoutGuildInput[] | LegendaryPriorityRequestUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutGuildInput | LegendaryPriorityRequestCreateOrConnectWithoutGuildInput[]
+    createMany?: LegendaryPriorityRequestCreateManyGuildInputEnvelope
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+  }
+
+  export type ItemDistributionUncheckedCreateNestedManyWithoutGuildInput = {
+    create?: XOR<ItemDistributionCreateWithoutGuildInput, ItemDistributionUncheckedCreateWithoutGuildInput> | ItemDistributionCreateWithoutGuildInput[] | ItemDistributionUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutGuildInput | ItemDistributionCreateOrConnectWithoutGuildInput[]
+    createMany?: ItemDistributionCreateManyGuildInputEnvelope
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
   }
 
   export type GuildSettingsUpdateOneWithoutGuildNestedInput = {
@@ -38135,6 +43431,34 @@ export namespace Prisma {
     deleteMany?: ItemRequestScalarWhereInput | ItemRequestScalarWhereInput[]
   }
 
+  export type LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutGuildInput, LegendaryPriorityRequestUncheckedCreateWithoutGuildInput> | LegendaryPriorityRequestCreateWithoutGuildInput[] | LegendaryPriorityRequestUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutGuildInput | LegendaryPriorityRequestCreateOrConnectWithoutGuildInput[]
+    upsert?: LegendaryPriorityRequestUpsertWithWhereUniqueWithoutGuildInput | LegendaryPriorityRequestUpsertWithWhereUniqueWithoutGuildInput[]
+    createMany?: LegendaryPriorityRequestCreateManyGuildInputEnvelope
+    set?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    disconnect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    delete?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    update?: LegendaryPriorityRequestUpdateWithWhereUniqueWithoutGuildInput | LegendaryPriorityRequestUpdateWithWhereUniqueWithoutGuildInput[]
+    updateMany?: LegendaryPriorityRequestUpdateManyWithWhereWithoutGuildInput | LegendaryPriorityRequestUpdateManyWithWhereWithoutGuildInput[]
+    deleteMany?: LegendaryPriorityRequestScalarWhereInput | LegendaryPriorityRequestScalarWhereInput[]
+  }
+
+  export type ItemDistributionUpdateManyWithoutGuildNestedInput = {
+    create?: XOR<ItemDistributionCreateWithoutGuildInput, ItemDistributionUncheckedCreateWithoutGuildInput> | ItemDistributionCreateWithoutGuildInput[] | ItemDistributionUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutGuildInput | ItemDistributionCreateOrConnectWithoutGuildInput[]
+    upsert?: ItemDistributionUpsertWithWhereUniqueWithoutGuildInput | ItemDistributionUpsertWithWhereUniqueWithoutGuildInput[]
+    createMany?: ItemDistributionCreateManyGuildInputEnvelope
+    set?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    disconnect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    delete?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    update?: ItemDistributionUpdateWithWhereUniqueWithoutGuildInput | ItemDistributionUpdateWithWhereUniqueWithoutGuildInput[]
+    updateMany?: ItemDistributionUpdateManyWithWhereWithoutGuildInput | ItemDistributionUpdateManyWithWhereWithoutGuildInput[]
+    deleteMany?: ItemDistributionScalarWhereInput | ItemDistributionScalarWhereInput[]
+  }
+
   export type GuildSettingsUncheckedUpdateOneWithoutGuildNestedInput = {
     create?: XOR<GuildSettingsCreateWithoutGuildInput, GuildSettingsUncheckedCreateWithoutGuildInput>
     connectOrCreate?: GuildSettingsCreateOrConnectWithoutGuildInput
@@ -38299,6 +43623,34 @@ export namespace Prisma {
     deleteMany?: ItemRequestScalarWhereInput | ItemRequestScalarWhereInput[]
   }
 
+  export type LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutGuildInput, LegendaryPriorityRequestUncheckedCreateWithoutGuildInput> | LegendaryPriorityRequestCreateWithoutGuildInput[] | LegendaryPriorityRequestUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutGuildInput | LegendaryPriorityRequestCreateOrConnectWithoutGuildInput[]
+    upsert?: LegendaryPriorityRequestUpsertWithWhereUniqueWithoutGuildInput | LegendaryPriorityRequestUpsertWithWhereUniqueWithoutGuildInput[]
+    createMany?: LegendaryPriorityRequestCreateManyGuildInputEnvelope
+    set?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    disconnect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    delete?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    update?: LegendaryPriorityRequestUpdateWithWhereUniqueWithoutGuildInput | LegendaryPriorityRequestUpdateWithWhereUniqueWithoutGuildInput[]
+    updateMany?: LegendaryPriorityRequestUpdateManyWithWhereWithoutGuildInput | LegendaryPriorityRequestUpdateManyWithWhereWithoutGuildInput[]
+    deleteMany?: LegendaryPriorityRequestScalarWhereInput | LegendaryPriorityRequestScalarWhereInput[]
+  }
+
+  export type ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput = {
+    create?: XOR<ItemDistributionCreateWithoutGuildInput, ItemDistributionUncheckedCreateWithoutGuildInput> | ItemDistributionCreateWithoutGuildInput[] | ItemDistributionUncheckedCreateWithoutGuildInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutGuildInput | ItemDistributionCreateOrConnectWithoutGuildInput[]
+    upsert?: ItemDistributionUpsertWithWhereUniqueWithoutGuildInput | ItemDistributionUpsertWithWhereUniqueWithoutGuildInput[]
+    createMany?: ItemDistributionCreateManyGuildInputEnvelope
+    set?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    disconnect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    delete?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    update?: ItemDistributionUpdateWithWhereUniqueWithoutGuildInput | ItemDistributionUpdateWithWhereUniqueWithoutGuildInput[]
+    updateMany?: ItemDistributionUpdateManyWithWhereWithoutGuildInput | ItemDistributionUpdateManyWithWhereWithoutGuildInput[]
+    deleteMany?: ItemDistributionScalarWhereInput | ItemDistributionScalarWhereInput[]
+  }
+
   export type GuildCreateNestedOneWithoutSettingsInput = {
     create?: XOR<GuildCreateWithoutSettingsInput, GuildUncheckedCreateWithoutSettingsInput>
     connectOrCreate?: GuildCreateOrConnectWithoutSettingsInput
@@ -38347,6 +43699,27 @@ export namespace Prisma {
     connect?: ItemRequestWhereUniqueInput | ItemRequestWhereUniqueInput[]
   }
 
+  export type LegendaryPriorityRequestCreateNestedManyWithoutMemberInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutMemberInput, LegendaryPriorityRequestUncheckedCreateWithoutMemberInput> | LegendaryPriorityRequestCreateWithoutMemberInput[] | LegendaryPriorityRequestUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutMemberInput | LegendaryPriorityRequestCreateOrConnectWithoutMemberInput[]
+    createMany?: LegendaryPriorityRequestCreateManyMemberInputEnvelope
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+  }
+
+  export type ItemDistributionCreateNestedManyWithoutMemberInput = {
+    create?: XOR<ItemDistributionCreateWithoutMemberInput, ItemDistributionUncheckedCreateWithoutMemberInput> | ItemDistributionCreateWithoutMemberInput[] | ItemDistributionUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutMemberInput | ItemDistributionCreateOrConnectWithoutMemberInput[]
+    createMany?: ItemDistributionCreateManyMemberInputEnvelope
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+  }
+
+  export type MemberEquipmentCreateNestedManyWithoutMemberInput = {
+    create?: XOR<MemberEquipmentCreateWithoutMemberInput, MemberEquipmentUncheckedCreateWithoutMemberInput> | MemberEquipmentCreateWithoutMemberInput[] | MemberEquipmentUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: MemberEquipmentCreateOrConnectWithoutMemberInput | MemberEquipmentCreateOrConnectWithoutMemberInput[]
+    createMany?: MemberEquipmentCreateManyMemberInputEnvelope
+    connect?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+  }
+
   export type AuctionBidUncheckedCreateNestedManyWithoutMemberInput = {
     create?: XOR<AuctionBidCreateWithoutMemberInput, AuctionBidUncheckedCreateWithoutMemberInput> | AuctionBidCreateWithoutMemberInput[] | AuctionBidUncheckedCreateWithoutMemberInput[]
     connectOrCreate?: AuctionBidCreateOrConnectWithoutMemberInput | AuctionBidCreateOrConnectWithoutMemberInput[]
@@ -38359,6 +43732,27 @@ export namespace Prisma {
     connectOrCreate?: ItemRequestCreateOrConnectWithoutMemberInput | ItemRequestCreateOrConnectWithoutMemberInput[]
     createMany?: ItemRequestCreateManyMemberInputEnvelope
     connect?: ItemRequestWhereUniqueInput | ItemRequestWhereUniqueInput[]
+  }
+
+  export type LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutMemberInput, LegendaryPriorityRequestUncheckedCreateWithoutMemberInput> | LegendaryPriorityRequestCreateWithoutMemberInput[] | LegendaryPriorityRequestUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutMemberInput | LegendaryPriorityRequestCreateOrConnectWithoutMemberInput[]
+    createMany?: LegendaryPriorityRequestCreateManyMemberInputEnvelope
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+  }
+
+  export type ItemDistributionUncheckedCreateNestedManyWithoutMemberInput = {
+    create?: XOR<ItemDistributionCreateWithoutMemberInput, ItemDistributionUncheckedCreateWithoutMemberInput> | ItemDistributionCreateWithoutMemberInput[] | ItemDistributionUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutMemberInput | ItemDistributionCreateOrConnectWithoutMemberInput[]
+    createMany?: ItemDistributionCreateManyMemberInputEnvelope
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+  }
+
+  export type MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput = {
+    create?: XOR<MemberEquipmentCreateWithoutMemberInput, MemberEquipmentUncheckedCreateWithoutMemberInput> | MemberEquipmentCreateWithoutMemberInput[] | MemberEquipmentUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: MemberEquipmentCreateOrConnectWithoutMemberInput | MemberEquipmentCreateOrConnectWithoutMemberInput[]
+    createMany?: MemberEquipmentCreateManyMemberInputEnvelope
+    connect?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
   }
 
   export type EnumGuildRoleFieldUpdateOperationsInput = {
@@ -38409,6 +43803,48 @@ export namespace Prisma {
     deleteMany?: ItemRequestScalarWhereInput | ItemRequestScalarWhereInput[]
   }
 
+  export type LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutMemberInput, LegendaryPriorityRequestUncheckedCreateWithoutMemberInput> | LegendaryPriorityRequestCreateWithoutMemberInput[] | LegendaryPriorityRequestUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutMemberInput | LegendaryPriorityRequestCreateOrConnectWithoutMemberInput[]
+    upsert?: LegendaryPriorityRequestUpsertWithWhereUniqueWithoutMemberInput | LegendaryPriorityRequestUpsertWithWhereUniqueWithoutMemberInput[]
+    createMany?: LegendaryPriorityRequestCreateManyMemberInputEnvelope
+    set?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    disconnect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    delete?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    update?: LegendaryPriorityRequestUpdateWithWhereUniqueWithoutMemberInput | LegendaryPriorityRequestUpdateWithWhereUniqueWithoutMemberInput[]
+    updateMany?: LegendaryPriorityRequestUpdateManyWithWhereWithoutMemberInput | LegendaryPriorityRequestUpdateManyWithWhereWithoutMemberInput[]
+    deleteMany?: LegendaryPriorityRequestScalarWhereInput | LegendaryPriorityRequestScalarWhereInput[]
+  }
+
+  export type ItemDistributionUpdateManyWithoutMemberNestedInput = {
+    create?: XOR<ItemDistributionCreateWithoutMemberInput, ItemDistributionUncheckedCreateWithoutMemberInput> | ItemDistributionCreateWithoutMemberInput[] | ItemDistributionUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutMemberInput | ItemDistributionCreateOrConnectWithoutMemberInput[]
+    upsert?: ItemDistributionUpsertWithWhereUniqueWithoutMemberInput | ItemDistributionUpsertWithWhereUniqueWithoutMemberInput[]
+    createMany?: ItemDistributionCreateManyMemberInputEnvelope
+    set?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    disconnect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    delete?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    update?: ItemDistributionUpdateWithWhereUniqueWithoutMemberInput | ItemDistributionUpdateWithWhereUniqueWithoutMemberInput[]
+    updateMany?: ItemDistributionUpdateManyWithWhereWithoutMemberInput | ItemDistributionUpdateManyWithWhereWithoutMemberInput[]
+    deleteMany?: ItemDistributionScalarWhereInput | ItemDistributionScalarWhereInput[]
+  }
+
+  export type MemberEquipmentUpdateManyWithoutMemberNestedInput = {
+    create?: XOR<MemberEquipmentCreateWithoutMemberInput, MemberEquipmentUncheckedCreateWithoutMemberInput> | MemberEquipmentCreateWithoutMemberInput[] | MemberEquipmentUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: MemberEquipmentCreateOrConnectWithoutMemberInput | MemberEquipmentCreateOrConnectWithoutMemberInput[]
+    upsert?: MemberEquipmentUpsertWithWhereUniqueWithoutMemberInput | MemberEquipmentUpsertWithWhereUniqueWithoutMemberInput[]
+    createMany?: MemberEquipmentCreateManyMemberInputEnvelope
+    set?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    disconnect?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    delete?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    connect?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    update?: MemberEquipmentUpdateWithWhereUniqueWithoutMemberInput | MemberEquipmentUpdateWithWhereUniqueWithoutMemberInput[]
+    updateMany?: MemberEquipmentUpdateManyWithWhereWithoutMemberInput | MemberEquipmentUpdateManyWithWhereWithoutMemberInput[]
+    deleteMany?: MemberEquipmentScalarWhereInput | MemberEquipmentScalarWhereInput[]
+  }
+
   export type AuctionBidUncheckedUpdateManyWithoutMemberNestedInput = {
     create?: XOR<AuctionBidCreateWithoutMemberInput, AuctionBidUncheckedCreateWithoutMemberInput> | AuctionBidCreateWithoutMemberInput[] | AuctionBidUncheckedCreateWithoutMemberInput[]
     connectOrCreate?: AuctionBidCreateOrConnectWithoutMemberInput | AuctionBidCreateOrConnectWithoutMemberInput[]
@@ -38435,6 +43871,48 @@ export namespace Prisma {
     update?: ItemRequestUpdateWithWhereUniqueWithoutMemberInput | ItemRequestUpdateWithWhereUniqueWithoutMemberInput[]
     updateMany?: ItemRequestUpdateManyWithWhereWithoutMemberInput | ItemRequestUpdateManyWithWhereWithoutMemberInput[]
     deleteMany?: ItemRequestScalarWhereInput | ItemRequestScalarWhereInput[]
+  }
+
+  export type LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput = {
+    create?: XOR<LegendaryPriorityRequestCreateWithoutMemberInput, LegendaryPriorityRequestUncheckedCreateWithoutMemberInput> | LegendaryPriorityRequestCreateWithoutMemberInput[] | LegendaryPriorityRequestUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: LegendaryPriorityRequestCreateOrConnectWithoutMemberInput | LegendaryPriorityRequestCreateOrConnectWithoutMemberInput[]
+    upsert?: LegendaryPriorityRequestUpsertWithWhereUniqueWithoutMemberInput | LegendaryPriorityRequestUpsertWithWhereUniqueWithoutMemberInput[]
+    createMany?: LegendaryPriorityRequestCreateManyMemberInputEnvelope
+    set?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    disconnect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    delete?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    connect?: LegendaryPriorityRequestWhereUniqueInput | LegendaryPriorityRequestWhereUniqueInput[]
+    update?: LegendaryPriorityRequestUpdateWithWhereUniqueWithoutMemberInput | LegendaryPriorityRequestUpdateWithWhereUniqueWithoutMemberInput[]
+    updateMany?: LegendaryPriorityRequestUpdateManyWithWhereWithoutMemberInput | LegendaryPriorityRequestUpdateManyWithWhereWithoutMemberInput[]
+    deleteMany?: LegendaryPriorityRequestScalarWhereInput | LegendaryPriorityRequestScalarWhereInput[]
+  }
+
+  export type ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput = {
+    create?: XOR<ItemDistributionCreateWithoutMemberInput, ItemDistributionUncheckedCreateWithoutMemberInput> | ItemDistributionCreateWithoutMemberInput[] | ItemDistributionUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: ItemDistributionCreateOrConnectWithoutMemberInput | ItemDistributionCreateOrConnectWithoutMemberInput[]
+    upsert?: ItemDistributionUpsertWithWhereUniqueWithoutMemberInput | ItemDistributionUpsertWithWhereUniqueWithoutMemberInput[]
+    createMany?: ItemDistributionCreateManyMemberInputEnvelope
+    set?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    disconnect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    delete?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    connect?: ItemDistributionWhereUniqueInput | ItemDistributionWhereUniqueInput[]
+    update?: ItemDistributionUpdateWithWhereUniqueWithoutMemberInput | ItemDistributionUpdateWithWhereUniqueWithoutMemberInput[]
+    updateMany?: ItemDistributionUpdateManyWithWhereWithoutMemberInput | ItemDistributionUpdateManyWithWhereWithoutMemberInput[]
+    deleteMany?: ItemDistributionScalarWhereInput | ItemDistributionScalarWhereInput[]
+  }
+
+  export type MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput = {
+    create?: XOR<MemberEquipmentCreateWithoutMemberInput, MemberEquipmentUncheckedCreateWithoutMemberInput> | MemberEquipmentCreateWithoutMemberInput[] | MemberEquipmentUncheckedCreateWithoutMemberInput[]
+    connectOrCreate?: MemberEquipmentCreateOrConnectWithoutMemberInput | MemberEquipmentCreateOrConnectWithoutMemberInput[]
+    upsert?: MemberEquipmentUpsertWithWhereUniqueWithoutMemberInput | MemberEquipmentUpsertWithWhereUniqueWithoutMemberInput[]
+    createMany?: MemberEquipmentCreateManyMemberInputEnvelope
+    set?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    disconnect?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    delete?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    connect?: MemberEquipmentWhereUniqueInput | MemberEquipmentWhereUniqueInput[]
+    update?: MemberEquipmentUpdateWithWhereUniqueWithoutMemberInput | MemberEquipmentUpdateWithWhereUniqueWithoutMemberInput[]
+    updateMany?: MemberEquipmentUpdateManyWithWhereWithoutMemberInput | MemberEquipmentUpdateManyWithWhereWithoutMemberInput[]
+    deleteMany?: MemberEquipmentScalarWhereInput | MemberEquipmentScalarWhereInput[]
   }
 
   export type GuildCreateNestedOneWithoutPointsSnapshotsInput = {
@@ -38581,6 +44059,84 @@ export namespace Prisma {
     upsert?: GuildMemberUpsertWithoutItemRequestsInput
     connect?: GuildMemberWhereUniqueInput
     update?: XOR<XOR<GuildMemberUpdateToOneWithWhereWithoutItemRequestsInput, GuildMemberUpdateWithoutItemRequestsInput>, GuildMemberUncheckedUpdateWithoutItemRequestsInput>
+  }
+
+  export type GuildCreateNestedOneWithoutLegendaryRequestsInput = {
+    create?: XOR<GuildCreateWithoutLegendaryRequestsInput, GuildUncheckedCreateWithoutLegendaryRequestsInput>
+    connectOrCreate?: GuildCreateOrConnectWithoutLegendaryRequestsInput
+    connect?: GuildWhereUniqueInput
+  }
+
+  export type GuildMemberCreateNestedOneWithoutLegendaryRequestsInput = {
+    create?: XOR<GuildMemberCreateWithoutLegendaryRequestsInput, GuildMemberUncheckedCreateWithoutLegendaryRequestsInput>
+    connectOrCreate?: GuildMemberCreateOrConnectWithoutLegendaryRequestsInput
+    connect?: GuildMemberWhereUniqueInput
+  }
+
+  export type GuildUpdateOneRequiredWithoutLegendaryRequestsNestedInput = {
+    create?: XOR<GuildCreateWithoutLegendaryRequestsInput, GuildUncheckedCreateWithoutLegendaryRequestsInput>
+    connectOrCreate?: GuildCreateOrConnectWithoutLegendaryRequestsInput
+    upsert?: GuildUpsertWithoutLegendaryRequestsInput
+    connect?: GuildWhereUniqueInput
+    update?: XOR<XOR<GuildUpdateToOneWithWhereWithoutLegendaryRequestsInput, GuildUpdateWithoutLegendaryRequestsInput>, GuildUncheckedUpdateWithoutLegendaryRequestsInput>
+  }
+
+  export type GuildMemberUpdateOneRequiredWithoutLegendaryRequestsNestedInput = {
+    create?: XOR<GuildMemberCreateWithoutLegendaryRequestsInput, GuildMemberUncheckedCreateWithoutLegendaryRequestsInput>
+    connectOrCreate?: GuildMemberCreateOrConnectWithoutLegendaryRequestsInput
+    upsert?: GuildMemberUpsertWithoutLegendaryRequestsInput
+    connect?: GuildMemberWhereUniqueInput
+    update?: XOR<XOR<GuildMemberUpdateToOneWithWhereWithoutLegendaryRequestsInput, GuildMemberUpdateWithoutLegendaryRequestsInput>, GuildMemberUncheckedUpdateWithoutLegendaryRequestsInput>
+  }
+
+  export type GuildCreateNestedOneWithoutItemDistributionsInput = {
+    create?: XOR<GuildCreateWithoutItemDistributionsInput, GuildUncheckedCreateWithoutItemDistributionsInput>
+    connectOrCreate?: GuildCreateOrConnectWithoutItemDistributionsInput
+    connect?: GuildWhereUniqueInput
+  }
+
+  export type GuildMemberCreateNestedOneWithoutItemDistributionsInput = {
+    create?: XOR<GuildMemberCreateWithoutItemDistributionsInput, GuildMemberUncheckedCreateWithoutItemDistributionsInput>
+    connectOrCreate?: GuildMemberCreateOrConnectWithoutItemDistributionsInput
+    connect?: GuildMemberWhereUniqueInput
+  }
+
+  export type GuildUpdateOneRequiredWithoutItemDistributionsNestedInput = {
+    create?: XOR<GuildCreateWithoutItemDistributionsInput, GuildUncheckedCreateWithoutItemDistributionsInput>
+    connectOrCreate?: GuildCreateOrConnectWithoutItemDistributionsInput
+    upsert?: GuildUpsertWithoutItemDistributionsInput
+    connect?: GuildWhereUniqueInput
+    update?: XOR<XOR<GuildUpdateToOneWithWhereWithoutItemDistributionsInput, GuildUpdateWithoutItemDistributionsInput>, GuildUncheckedUpdateWithoutItemDistributionsInput>
+  }
+
+  export type GuildMemberUpdateOneRequiredWithoutItemDistributionsNestedInput = {
+    create?: XOR<GuildMemberCreateWithoutItemDistributionsInput, GuildMemberUncheckedCreateWithoutItemDistributionsInput>
+    connectOrCreate?: GuildMemberCreateOrConnectWithoutItemDistributionsInput
+    upsert?: GuildMemberUpsertWithoutItemDistributionsInput
+    connect?: GuildMemberWhereUniqueInput
+    update?: XOR<XOR<GuildMemberUpdateToOneWithWhereWithoutItemDistributionsInput, GuildMemberUpdateWithoutItemDistributionsInput>, GuildMemberUncheckedUpdateWithoutItemDistributionsInput>
+  }
+
+  export type GuildMemberCreateNestedOneWithoutEquipmentInput = {
+    create?: XOR<GuildMemberCreateWithoutEquipmentInput, GuildMemberUncheckedCreateWithoutEquipmentInput>
+    connectOrCreate?: GuildMemberCreateOrConnectWithoutEquipmentInput
+    connect?: GuildMemberWhereUniqueInput
+  }
+
+  export type FloatFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
+  }
+
+  export type GuildMemberUpdateOneRequiredWithoutEquipmentNestedInput = {
+    create?: XOR<GuildMemberCreateWithoutEquipmentInput, GuildMemberUncheckedCreateWithoutEquipmentInput>
+    connectOrCreate?: GuildMemberCreateOrConnectWithoutEquipmentInput
+    upsert?: GuildMemberUpsertWithoutEquipmentInput
+    connect?: GuildMemberWhereUniqueInput
+    update?: XOR<XOR<GuildMemberUpdateToOneWithWhereWithoutEquipmentInput, GuildMemberUpdateWithoutEquipmentInput>, GuildMemberUncheckedUpdateWithoutEquipmentInput>
   }
 
   export type GuildCreateNestedOneWithoutLedgerEntriesInput = {
@@ -39324,6 +44880,22 @@ export namespace Prisma {
     _max?: NestedDecimalNullableFilter<$PrismaModel>
   }
 
+  export type NestedFloatWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedFloatFilter<$PrismaModel>
+    _min?: NestedFloatFilter<$PrismaModel>
+    _max?: NestedFloatFilter<$PrismaModel>
+  }
+
   export type NestedEnumAccountTypeFilter<$PrismaModel = never> = {
     equals?: $Enums.AccountType | EnumAccountTypeFieldRefInput<$PrismaModel>
     in?: $Enums.AccountType[] | ListEnumAccountTypeFieldRefInput<$PrismaModel>
@@ -39547,9 +45119,15 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     guild: GuildCreateNestedOneWithoutMembersInput
     auctionBids?: AuctionBidCreateNestedManyWithoutMemberInput
     itemRequests?: ItemRequestCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberUncheckedCreateWithoutUserInput = {
@@ -39566,8 +45144,14 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedCreateNestedManyWithoutMemberInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberCreateOrConnectWithoutUserInput = {
@@ -39689,6 +45273,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
     guild: GuildCreateNestedOneWithoutJoinRequestsInput
@@ -39702,6 +45287,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -39957,6 +45543,9 @@ export namespace Prisma {
     isActive?: BoolFilter<"GuildMember"> | boolean
     bidPoints?: IntFilter<"GuildMember"> | number
     bidPointsLastReset?: DateTimeNullableFilter<"GuildMember"> | Date | string | null
+    marketPrioritySeq?: IntNullableFilter<"GuildMember"> | number | null
+    marketPriorityReason?: StringNullableFilter<"GuildMember"> | string | null
+    marketWishlist?: JsonFilter<"GuildMember">
   }
 
   export type AuditLogUpsertWithWhereUniqueWithoutActorInput = {
@@ -40083,6 +45672,7 @@ export namespace Prisma {
     class?: StringFilter<"GuildJoinRequest"> | string
     weapon?: StringFilter<"GuildJoinRequest"> | string
     status?: EnumJoinRequestStatusFilter<"GuildJoinRequest"> | $Enums.JoinRequestStatus
+    gearItems?: JsonNullableFilter<"GuildJoinRequest">
     createdAt?: DateTimeFilter<"GuildJoinRequest"> | Date | string
     updatedAt?: DateTimeFilter<"GuildJoinRequest"> | Date | string
   }
@@ -40609,6 +46199,7 @@ export namespace Prisma {
     activeShareModel?: string
     pointsResetCycle?: string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -40626,6 +46217,7 @@ export namespace Prisma {
     activeShareModel?: string
     pointsResetCycle?: string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -40648,9 +46240,15 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user: UserCreateNestedOneWithoutGuildMembersInput
     auctionBids?: AuctionBidCreateNestedManyWithoutMemberInput
     itemRequests?: ItemRequestCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberUncheckedCreateWithoutGuildInput = {
@@ -40667,8 +46265,14 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedCreateNestedManyWithoutMemberInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberCreateOrConnectWithoutGuildInput = {
@@ -40764,6 +46368,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
     user: UserCreateNestedOneWithoutGuildJoinRequestsInput
@@ -40777,6 +46382,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -41075,6 +46681,96 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type LegendaryPriorityRequestCreateWithoutGuildInput = {
+    id?: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    member: GuildMemberCreateNestedOneWithoutLegendaryRequestsInput
+  }
+
+  export type LegendaryPriorityRequestUncheckedCreateWithoutGuildInput = {
+    id?: string
+    memberId: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type LegendaryPriorityRequestCreateOrConnectWithoutGuildInput = {
+    where: LegendaryPriorityRequestWhereUniqueInput
+    create: XOR<LegendaryPriorityRequestCreateWithoutGuildInput, LegendaryPriorityRequestUncheckedCreateWithoutGuildInput>
+  }
+
+  export type LegendaryPriorityRequestCreateManyGuildInputEnvelope = {
+    data: LegendaryPriorityRequestCreateManyGuildInput | LegendaryPriorityRequestCreateManyGuildInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type ItemDistributionCreateWithoutGuildInput = {
+    id?: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+    member: GuildMemberCreateNestedOneWithoutItemDistributionsInput
+  }
+
+  export type ItemDistributionUncheckedCreateWithoutGuildInput = {
+    id?: string
+    memberId: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type ItemDistributionCreateOrConnectWithoutGuildInput = {
+    where: ItemDistributionWhereUniqueInput
+    create: XOR<ItemDistributionCreateWithoutGuildInput, ItemDistributionUncheckedCreateWithoutGuildInput>
+  }
+
+  export type ItemDistributionCreateManyGuildInputEnvelope = {
+    data: ItemDistributionCreateManyGuildInput | ItemDistributionCreateManyGuildInput[]
+    skipDuplicates?: boolean
+  }
+
   export type GuildSettingsUpsertWithoutGuildInput = {
     update: XOR<GuildSettingsUpdateWithoutGuildInput, GuildSettingsUncheckedUpdateWithoutGuildInput>
     create: XOR<GuildSettingsCreateWithoutGuildInput, GuildSettingsUncheckedCreateWithoutGuildInput>
@@ -41099,6 +46795,7 @@ export namespace Prisma {
     activeShareModel?: StringFieldUpdateOperationsInput | string
     pointsResetCycle?: StringFieldUpdateOperationsInput | string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -41116,6 +46813,7 @@ export namespace Prisma {
     activeShareModel?: StringFieldUpdateOperationsInput | string
     pointsResetCycle?: StringFieldUpdateOperationsInput | string
     itemRequestLimits?: JsonNullValueInput | InputJsonValue
+    marketRules?: JsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -41405,6 +47103,81 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"ItemRequest"> | Date | string
   }
 
+  export type LegendaryPriorityRequestUpsertWithWhereUniqueWithoutGuildInput = {
+    where: LegendaryPriorityRequestWhereUniqueInput
+    update: XOR<LegendaryPriorityRequestUpdateWithoutGuildInput, LegendaryPriorityRequestUncheckedUpdateWithoutGuildInput>
+    create: XOR<LegendaryPriorityRequestCreateWithoutGuildInput, LegendaryPriorityRequestUncheckedCreateWithoutGuildInput>
+  }
+
+  export type LegendaryPriorityRequestUpdateWithWhereUniqueWithoutGuildInput = {
+    where: LegendaryPriorityRequestWhereUniqueInput
+    data: XOR<LegendaryPriorityRequestUpdateWithoutGuildInput, LegendaryPriorityRequestUncheckedUpdateWithoutGuildInput>
+  }
+
+  export type LegendaryPriorityRequestUpdateManyWithWhereWithoutGuildInput = {
+    where: LegendaryPriorityRequestScalarWhereInput
+    data: XOR<LegendaryPriorityRequestUpdateManyMutationInput, LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildInput>
+  }
+
+  export type LegendaryPriorityRequestScalarWhereInput = {
+    AND?: LegendaryPriorityRequestScalarWhereInput | LegendaryPriorityRequestScalarWhereInput[]
+    OR?: LegendaryPriorityRequestScalarWhereInput[]
+    NOT?: LegendaryPriorityRequestScalarWhereInput | LegendaryPriorityRequestScalarWhereInput[]
+    id?: StringFilter<"LegendaryPriorityRequest"> | string
+    guildId?: StringFilter<"LegendaryPriorityRequest"> | string
+    memberId?: StringFilter<"LegendaryPriorityRequest"> | string
+    category?: StringFilter<"LegendaryPriorityRequest"> | string
+    currentGear?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reason?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    prioritySeq?: IntNullableFilter<"LegendaryPriorityRequest"> | number | null
+    status?: StringFilter<"LegendaryPriorityRequest"> | string
+    officerNote?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedById?: StringNullableFilter<"LegendaryPriorityRequest"> | string | null
+    reviewedAt?: DateTimeNullableFilter<"LegendaryPriorityRequest"> | Date | string | null
+    completedAt?: DateTimeNullableFilter<"LegendaryPriorityRequest"> | Date | string | null
+    createdAt?: DateTimeFilter<"LegendaryPriorityRequest"> | Date | string
+    updatedAt?: DateTimeFilter<"LegendaryPriorityRequest"> | Date | string
+  }
+
+  export type ItemDistributionUpsertWithWhereUniqueWithoutGuildInput = {
+    where: ItemDistributionWhereUniqueInput
+    update: XOR<ItemDistributionUpdateWithoutGuildInput, ItemDistributionUncheckedUpdateWithoutGuildInput>
+    create: XOR<ItemDistributionCreateWithoutGuildInput, ItemDistributionUncheckedCreateWithoutGuildInput>
+  }
+
+  export type ItemDistributionUpdateWithWhereUniqueWithoutGuildInput = {
+    where: ItemDistributionWhereUniqueInput
+    data: XOR<ItemDistributionUpdateWithoutGuildInput, ItemDistributionUncheckedUpdateWithoutGuildInput>
+  }
+
+  export type ItemDistributionUpdateManyWithWhereWithoutGuildInput = {
+    where: ItemDistributionScalarWhereInput
+    data: XOR<ItemDistributionUpdateManyMutationInput, ItemDistributionUncheckedUpdateManyWithoutGuildInput>
+  }
+
+  export type ItemDistributionScalarWhereInput = {
+    AND?: ItemDistributionScalarWhereInput | ItemDistributionScalarWhereInput[]
+    OR?: ItemDistributionScalarWhereInput[]
+    NOT?: ItemDistributionScalarWhereInput | ItemDistributionScalarWhereInput[]
+    id?: StringFilter<"ItemDistribution"> | string
+    guildId?: StringFilter<"ItemDistribution"> | string
+    memberId?: StringFilter<"ItemDistribution"> | string
+    formType?: StringFilter<"ItemDistribution"> | string
+    rankTier?: StringNullableFilter<"ItemDistribution"> | string | null
+    ignSnapshot?: StringNullableFilter<"ItemDistribution"> | string | null
+    classSnapshot?: StringNullableFilter<"ItemDistribution"> | string | null
+    cpSnapshot?: IntNullableFilter<"ItemDistribution"> | number | null
+    pointsSnapshot?: IntNullableFilter<"ItemDistribution"> | number | null
+    prioritySeq?: IntNullableFilter<"ItemDistribution"> | number | null
+    items?: JsonFilter<"ItemDistribution">
+    note?: StringNullableFilter<"ItemDistribution"> | string | null
+    distributedById?: StringFilter<"ItemDistribution"> | string
+    overridden?: BoolFilter<"ItemDistribution"> | boolean
+    overrideReason?: StringNullableFilter<"ItemDistribution"> | string | null
+    distributedAt?: DateTimeFilter<"ItemDistribution"> | Date | string
+    createdAt?: DateTimeFilter<"ItemDistribution"> | Date | string
+  }
+
   export type GuildCreateWithoutSettingsInput = {
     id?: string
     name: string
@@ -41427,6 +47200,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutSettingsInput = {
@@ -41451,6 +47226,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutSettingsInput = {
@@ -41491,6 +47268,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutSettingsInput = {
@@ -41515,6 +47294,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type UserCreateWithoutGuildMembersInput = {
@@ -41596,6 +47377,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutMembersInput = {
@@ -41620,6 +47403,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutMembersInput = {
@@ -41696,6 +47481,134 @@ export namespace Prisma {
 
   export type ItemRequestCreateManyMemberInputEnvelope = {
     data: ItemRequestCreateManyMemberInput | ItemRequestCreateManyMemberInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type LegendaryPriorityRequestCreateWithoutMemberInput = {
+    id?: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    guild: GuildCreateNestedOneWithoutLegendaryRequestsInput
+  }
+
+  export type LegendaryPriorityRequestUncheckedCreateWithoutMemberInput = {
+    id?: string
+    guildId: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type LegendaryPriorityRequestCreateOrConnectWithoutMemberInput = {
+    where: LegendaryPriorityRequestWhereUniqueInput
+    create: XOR<LegendaryPriorityRequestCreateWithoutMemberInput, LegendaryPriorityRequestUncheckedCreateWithoutMemberInput>
+  }
+
+  export type LegendaryPriorityRequestCreateManyMemberInputEnvelope = {
+    data: LegendaryPriorityRequestCreateManyMemberInput | LegendaryPriorityRequestCreateManyMemberInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type ItemDistributionCreateWithoutMemberInput = {
+    id?: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+    guild: GuildCreateNestedOneWithoutItemDistributionsInput
+  }
+
+  export type ItemDistributionUncheckedCreateWithoutMemberInput = {
+    id?: string
+    guildId: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type ItemDistributionCreateOrConnectWithoutMemberInput = {
+    where: ItemDistributionWhereUniqueInput
+    create: XOR<ItemDistributionCreateWithoutMemberInput, ItemDistributionUncheckedCreateWithoutMemberInput>
+  }
+
+  export type ItemDistributionCreateManyMemberInputEnvelope = {
+    data: ItemDistributionCreateManyMemberInput | ItemDistributionCreateManyMemberInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MemberEquipmentCreateWithoutMemberInput = {
+    id?: string
+    slotType: string
+    itemName: string
+    iconUrl: string
+    iconBucket: string
+    rarity?: string | null
+    confidence?: number
+    needsReview?: boolean
+    sourceScreenshotUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MemberEquipmentUncheckedCreateWithoutMemberInput = {
+    id?: string
+    slotType: string
+    itemName: string
+    iconUrl: string
+    iconBucket: string
+    rarity?: string | null
+    confidence?: number
+    needsReview?: boolean
+    sourceScreenshotUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MemberEquipmentCreateOrConnectWithoutMemberInput = {
+    where: MemberEquipmentWhereUniqueInput
+    create: XOR<MemberEquipmentCreateWithoutMemberInput, MemberEquipmentUncheckedCreateWithoutMemberInput>
+  }
+
+  export type MemberEquipmentCreateManyMemberInputEnvelope = {
+    data: MemberEquipmentCreateManyMemberInput | MemberEquipmentCreateManyMemberInput[]
     skipDuplicates?: boolean
   }
 
@@ -41795,6 +47708,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutMembersInput = {
@@ -41819,6 +47734,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type AuctionBidUpsertWithWhereUniqueWithoutMemberInput = {
@@ -41864,6 +47781,72 @@ export namespace Prisma {
     data: XOR<ItemRequestUpdateManyMutationInput, ItemRequestUncheckedUpdateManyWithoutMemberInput>
   }
 
+  export type LegendaryPriorityRequestUpsertWithWhereUniqueWithoutMemberInput = {
+    where: LegendaryPriorityRequestWhereUniqueInput
+    update: XOR<LegendaryPriorityRequestUpdateWithoutMemberInput, LegendaryPriorityRequestUncheckedUpdateWithoutMemberInput>
+    create: XOR<LegendaryPriorityRequestCreateWithoutMemberInput, LegendaryPriorityRequestUncheckedCreateWithoutMemberInput>
+  }
+
+  export type LegendaryPriorityRequestUpdateWithWhereUniqueWithoutMemberInput = {
+    where: LegendaryPriorityRequestWhereUniqueInput
+    data: XOR<LegendaryPriorityRequestUpdateWithoutMemberInput, LegendaryPriorityRequestUncheckedUpdateWithoutMemberInput>
+  }
+
+  export type LegendaryPriorityRequestUpdateManyWithWhereWithoutMemberInput = {
+    where: LegendaryPriorityRequestScalarWhereInput
+    data: XOR<LegendaryPriorityRequestUpdateManyMutationInput, LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberInput>
+  }
+
+  export type ItemDistributionUpsertWithWhereUniqueWithoutMemberInput = {
+    where: ItemDistributionWhereUniqueInput
+    update: XOR<ItemDistributionUpdateWithoutMemberInput, ItemDistributionUncheckedUpdateWithoutMemberInput>
+    create: XOR<ItemDistributionCreateWithoutMemberInput, ItemDistributionUncheckedCreateWithoutMemberInput>
+  }
+
+  export type ItemDistributionUpdateWithWhereUniqueWithoutMemberInput = {
+    where: ItemDistributionWhereUniqueInput
+    data: XOR<ItemDistributionUpdateWithoutMemberInput, ItemDistributionUncheckedUpdateWithoutMemberInput>
+  }
+
+  export type ItemDistributionUpdateManyWithWhereWithoutMemberInput = {
+    where: ItemDistributionScalarWhereInput
+    data: XOR<ItemDistributionUpdateManyMutationInput, ItemDistributionUncheckedUpdateManyWithoutMemberInput>
+  }
+
+  export type MemberEquipmentUpsertWithWhereUniqueWithoutMemberInput = {
+    where: MemberEquipmentWhereUniqueInput
+    update: XOR<MemberEquipmentUpdateWithoutMemberInput, MemberEquipmentUncheckedUpdateWithoutMemberInput>
+    create: XOR<MemberEquipmentCreateWithoutMemberInput, MemberEquipmentUncheckedCreateWithoutMemberInput>
+  }
+
+  export type MemberEquipmentUpdateWithWhereUniqueWithoutMemberInput = {
+    where: MemberEquipmentWhereUniqueInput
+    data: XOR<MemberEquipmentUpdateWithoutMemberInput, MemberEquipmentUncheckedUpdateWithoutMemberInput>
+  }
+
+  export type MemberEquipmentUpdateManyWithWhereWithoutMemberInput = {
+    where: MemberEquipmentScalarWhereInput
+    data: XOR<MemberEquipmentUpdateManyMutationInput, MemberEquipmentUncheckedUpdateManyWithoutMemberInput>
+  }
+
+  export type MemberEquipmentScalarWhereInput = {
+    AND?: MemberEquipmentScalarWhereInput | MemberEquipmentScalarWhereInput[]
+    OR?: MemberEquipmentScalarWhereInput[]
+    NOT?: MemberEquipmentScalarWhereInput | MemberEquipmentScalarWhereInput[]
+    id?: StringFilter<"MemberEquipment"> | string
+    memberId?: StringFilter<"MemberEquipment"> | string
+    slotType?: StringFilter<"MemberEquipment"> | string
+    itemName?: StringFilter<"MemberEquipment"> | string
+    iconUrl?: StringFilter<"MemberEquipment"> | string
+    iconBucket?: StringFilter<"MemberEquipment"> | string
+    rarity?: StringNullableFilter<"MemberEquipment"> | string | null
+    confidence?: FloatFilter<"MemberEquipment"> | number
+    needsReview?: BoolFilter<"MemberEquipment"> | boolean
+    sourceScreenshotUrl?: StringNullableFilter<"MemberEquipment"> | string | null
+    createdAt?: DateTimeFilter<"MemberEquipment"> | Date | string
+    updatedAt?: DateTimeFilter<"MemberEquipment"> | Date | string
+  }
+
   export type GuildCreateWithoutPointsSnapshotsInput = {
     id?: string
     name: string
@@ -41886,6 +47869,8 @@ export namespace Prisma {
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutPointsSnapshotsInput = {
@@ -41910,6 +47895,8 @@ export namespace Prisma {
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutPointsSnapshotsInput = {
@@ -41950,6 +47937,8 @@ export namespace Prisma {
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutPointsSnapshotsInput = {
@@ -41974,6 +47963,8 @@ export namespace Prisma {
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildCreateWithoutAuctionItemsInput = {
@@ -41998,6 +47989,8 @@ export namespace Prisma {
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutAuctionItemsInput = {
@@ -42022,6 +48015,8 @@ export namespace Prisma {
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutAuctionItemsInput = {
@@ -42086,6 +48081,8 @@ export namespace Prisma {
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutAuctionItemsInput = {
@@ -42110,6 +48107,8 @@ export namespace Prisma {
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type AuctionBidUpsertWithWhereUniqueWithoutAuctionInput = {
@@ -42178,9 +48177,15 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user: UserCreateNestedOneWithoutGuildMembersInput
     guild: GuildCreateNestedOneWithoutMembersInput
     itemRequests?: ItemRequestCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberUncheckedCreateWithoutAuctionBidsInput = {
@@ -42198,7 +48203,13 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberCreateOrConnectWithoutAuctionBidsInput = {
@@ -42273,9 +48284,15 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user?: UserUpdateOneRequiredWithoutGuildMembersNestedInput
     guild?: GuildUpdateOneRequiredWithoutMembersNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberUncheckedUpdateWithoutAuctionBidsInput = {
@@ -42293,7 +48310,13 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildCreateWithoutItemRequestsInput = {
@@ -42318,6 +48341,8 @@ export namespace Prisma {
     lootSales?: LootSaleCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutItemRequestsInput = {
@@ -42342,6 +48367,8 @@ export namespace Prisma {
     lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutItemRequestsInput = {
@@ -42362,9 +48389,15 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user: UserCreateNestedOneWithoutGuildMembersInput
     guild: GuildCreateNestedOneWithoutMembersInput
     auctionBids?: AuctionBidCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberUncheckedCreateWithoutItemRequestsInput = {
@@ -42382,7 +48415,13 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput
   }
 
   export type GuildMemberCreateOrConnectWithoutItemRequestsInput = {
@@ -42423,6 +48462,8 @@ export namespace Prisma {
     lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutItemRequestsInput = {
@@ -42447,6 +48488,8 @@ export namespace Prisma {
     lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildMemberUpsertWithoutItemRequestsInput = {
@@ -42473,9 +48516,15 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user?: UserUpdateOneRequiredWithoutGuildMembersNestedInput
     guild?: GuildUpdateOneRequiredWithoutMembersNestedInput
     auctionBids?: AuctionBidUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberUncheckedUpdateWithoutItemRequestsInput = {
@@ -42493,7 +48542,589 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput
+  }
+
+  export type GuildCreateWithoutLegendaryRequestsInput = {
+    id?: string
+    name: string
+    slug: string
+    description?: string | null
+    avatarUrl?: string | null
+    bannerUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    inviteCode?: string | null
+    settings?: GuildSettingsCreateNestedOneWithoutGuildInput
+    members?: GuildMemberCreateNestedManyWithoutGuildInput
+    ledgerEntries?: LedgerEntryCreateNestedManyWithoutGuildInput
+    auditLogs?: AuditLogCreateNestedManyWithoutGuildInput
+    joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
+    attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
+    bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
+    lootSales?: LootSaleCreateNestedManyWithoutGuildInput
+    pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
+    auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
+    itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
+  }
+
+  export type GuildUncheckedCreateWithoutLegendaryRequestsInput = {
+    id?: string
+    name: string
+    slug: string
+    description?: string | null
+    avatarUrl?: string | null
+    bannerUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    inviteCode?: string | null
+    settings?: GuildSettingsUncheckedCreateNestedOneWithoutGuildInput
+    members?: GuildMemberUncheckedCreateNestedManyWithoutGuildInput
+    ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutGuildInput
+    auditLogs?: AuditLogUncheckedCreateNestedManyWithoutGuildInput
+    joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
+    attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
+    bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
+    lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
+    pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
+    auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
+    itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
+  }
+
+  export type GuildCreateOrConnectWithoutLegendaryRequestsInput = {
+    where: GuildWhereUniqueInput
+    create: XOR<GuildCreateWithoutLegendaryRequestsInput, GuildUncheckedCreateWithoutLegendaryRequestsInput>
+  }
+
+  export type GuildMemberCreateWithoutLegendaryRequestsInput = {
+    id?: string
+    role?: $Enums.GuildRole
+    rankName?: string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    memberCode?: string | null
+    joinedAt?: Date | string
+    isActive?: boolean
+    bidPoints?: number
+    bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    user: UserCreateNestedOneWithoutGuildMembersInput
+    guild: GuildCreateNestedOneWithoutMembersInput
+    auctionBids?: AuctionBidCreateNestedManyWithoutMemberInput
+    itemRequests?: ItemRequestCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentCreateNestedManyWithoutMemberInput
+  }
+
+  export type GuildMemberUncheckedCreateWithoutLegendaryRequestsInput = {
+    id?: string
+    userId: string
+    guildId: string
+    role?: $Enums.GuildRole
+    rankName?: string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    memberCode?: string | null
+    joinedAt?: Date | string
+    isActive?: boolean
+    bidPoints?: number
+    bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    auctionBids?: AuctionBidUncheckedCreateNestedManyWithoutMemberInput
+    itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput
+  }
+
+  export type GuildMemberCreateOrConnectWithoutLegendaryRequestsInput = {
+    where: GuildMemberWhereUniqueInput
+    create: XOR<GuildMemberCreateWithoutLegendaryRequestsInput, GuildMemberUncheckedCreateWithoutLegendaryRequestsInput>
+  }
+
+  export type GuildUpsertWithoutLegendaryRequestsInput = {
+    update: XOR<GuildUpdateWithoutLegendaryRequestsInput, GuildUncheckedUpdateWithoutLegendaryRequestsInput>
+    create: XOR<GuildCreateWithoutLegendaryRequestsInput, GuildUncheckedCreateWithoutLegendaryRequestsInput>
+    where?: GuildWhereInput
+  }
+
+  export type GuildUpdateToOneWithWhereWithoutLegendaryRequestsInput = {
+    where?: GuildWhereInput
+    data: XOR<GuildUpdateWithoutLegendaryRequestsInput, GuildUncheckedUpdateWithoutLegendaryRequestsInput>
+  }
+
+  export type GuildUpdateWithoutLegendaryRequestsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bannerUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    inviteCode?: NullableStringFieldUpdateOperationsInput | string | null
+    settings?: GuildSettingsUpdateOneWithoutGuildNestedInput
+    members?: GuildMemberUpdateManyWithoutGuildNestedInput
+    ledgerEntries?: LedgerEntryUpdateManyWithoutGuildNestedInput
+    auditLogs?: AuditLogUpdateManyWithoutGuildNestedInput
+    joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
+    attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
+    bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
+    lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
+    pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
+    auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
+    itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
+  }
+
+  export type GuildUncheckedUpdateWithoutLegendaryRequestsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bannerUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    inviteCode?: NullableStringFieldUpdateOperationsInput | string | null
+    settings?: GuildSettingsUncheckedUpdateOneWithoutGuildNestedInput
+    members?: GuildMemberUncheckedUpdateManyWithoutGuildNestedInput
+    ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutGuildNestedInput
+    auditLogs?: AuditLogUncheckedUpdateManyWithoutGuildNestedInput
+    joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
+    attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
+    bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
+    lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
+    pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
+    auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
+    itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
+  }
+
+  export type GuildMemberUpsertWithoutLegendaryRequestsInput = {
+    update: XOR<GuildMemberUpdateWithoutLegendaryRequestsInput, GuildMemberUncheckedUpdateWithoutLegendaryRequestsInput>
+    create: XOR<GuildMemberCreateWithoutLegendaryRequestsInput, GuildMemberUncheckedCreateWithoutLegendaryRequestsInput>
+    where?: GuildMemberWhereInput
+  }
+
+  export type GuildMemberUpdateToOneWithWhereWithoutLegendaryRequestsInput = {
+    where?: GuildMemberWhereInput
+    data: XOR<GuildMemberUpdateWithoutLegendaryRequestsInput, GuildMemberUncheckedUpdateWithoutLegendaryRequestsInput>
+  }
+
+  export type GuildMemberUpdateWithoutLegendaryRequestsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumGuildRoleFieldUpdateOperationsInput | $Enums.GuildRole
+    rankName?: StringFieldUpdateOperationsInput | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    memberCode?: NullableStringFieldUpdateOperationsInput | string | null
+    joinedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    bidPoints?: IntFieldUpdateOperationsInput | number
+    bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    user?: UserUpdateOneRequiredWithoutGuildMembersNestedInput
+    guild?: GuildUpdateOneRequiredWithoutMembersNestedInput
+    auctionBids?: AuctionBidUpdateManyWithoutMemberNestedInput
+    itemRequests?: ItemRequestUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUpdateManyWithoutMemberNestedInput
+  }
+
+  export type GuildMemberUncheckedUpdateWithoutLegendaryRequestsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    role?: EnumGuildRoleFieldUpdateOperationsInput | $Enums.GuildRole
+    rankName?: StringFieldUpdateOperationsInput | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    memberCode?: NullableStringFieldUpdateOperationsInput | string | null
+    joinedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    bidPoints?: IntFieldUpdateOperationsInput | number
+    bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    auctionBids?: AuctionBidUncheckedUpdateManyWithoutMemberNestedInput
+    itemRequests?: ItemRequestUncheckedUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput
+  }
+
+  export type GuildCreateWithoutItemDistributionsInput = {
+    id?: string
+    name: string
+    slug: string
+    description?: string | null
+    avatarUrl?: string | null
+    bannerUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    inviteCode?: string | null
+    settings?: GuildSettingsCreateNestedOneWithoutGuildInput
+    members?: GuildMemberCreateNestedManyWithoutGuildInput
+    ledgerEntries?: LedgerEntryCreateNestedManyWithoutGuildInput
+    auditLogs?: AuditLogCreateNestedManyWithoutGuildInput
+    joinRequests?: GuildJoinRequestCreateNestedManyWithoutGuildInput
+    attendanceSessions?: AttendanceSessionCreateNestedManyWithoutGuildInput
+    bossSchedules?: BossScheduleCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleCreateNestedManyWithoutGuildTurnGuildInput
+    lootSales?: LootSaleCreateNestedManyWithoutGuildInput
+    pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
+    auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
+    itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+  }
+
+  export type GuildUncheckedCreateWithoutItemDistributionsInput = {
+    id?: string
+    name: string
+    slug: string
+    description?: string | null
+    avatarUrl?: string | null
+    bannerUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    inviteCode?: string | null
+    settings?: GuildSettingsUncheckedCreateNestedOneWithoutGuildInput
+    members?: GuildMemberUncheckedCreateNestedManyWithoutGuildInput
+    ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutGuildInput
+    auditLogs?: AuditLogUncheckedCreateNestedManyWithoutGuildInput
+    joinRequests?: GuildJoinRequestUncheckedCreateNestedManyWithoutGuildInput
+    attendanceSessions?: AttendanceSessionUncheckedCreateNestedManyWithoutGuildInput
+    bossSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildInput
+    bossTurnSchedules?: BossScheduleUncheckedCreateNestedManyWithoutGuildTurnGuildInput
+    lootSales?: LootSaleUncheckedCreateNestedManyWithoutGuildInput
+    pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
+    auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
+    itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+  }
+
+  export type GuildCreateOrConnectWithoutItemDistributionsInput = {
+    where: GuildWhereUniqueInput
+    create: XOR<GuildCreateWithoutItemDistributionsInput, GuildUncheckedCreateWithoutItemDistributionsInput>
+  }
+
+  export type GuildMemberCreateWithoutItemDistributionsInput = {
+    id?: string
+    role?: $Enums.GuildRole
+    rankName?: string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    memberCode?: string | null
+    joinedAt?: Date | string
+    isActive?: boolean
+    bidPoints?: number
+    bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    user: UserCreateNestedOneWithoutGuildMembersInput
+    guild: GuildCreateNestedOneWithoutMembersInput
+    auctionBids?: AuctionBidCreateNestedManyWithoutMemberInput
+    itemRequests?: ItemRequestCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentCreateNestedManyWithoutMemberInput
+  }
+
+  export type GuildMemberUncheckedCreateWithoutItemDistributionsInput = {
+    id?: string
+    userId: string
+    guildId: string
+    role?: $Enums.GuildRole
+    rankName?: string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    memberCode?: string | null
+    joinedAt?: Date | string
+    isActive?: boolean
+    bidPoints?: number
+    bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    auctionBids?: AuctionBidUncheckedCreateNestedManyWithoutMemberInput
+    itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput
+    equipment?: MemberEquipmentUncheckedCreateNestedManyWithoutMemberInput
+  }
+
+  export type GuildMemberCreateOrConnectWithoutItemDistributionsInput = {
+    where: GuildMemberWhereUniqueInput
+    create: XOR<GuildMemberCreateWithoutItemDistributionsInput, GuildMemberUncheckedCreateWithoutItemDistributionsInput>
+  }
+
+  export type GuildUpsertWithoutItemDistributionsInput = {
+    update: XOR<GuildUpdateWithoutItemDistributionsInput, GuildUncheckedUpdateWithoutItemDistributionsInput>
+    create: XOR<GuildCreateWithoutItemDistributionsInput, GuildUncheckedCreateWithoutItemDistributionsInput>
+    where?: GuildWhereInput
+  }
+
+  export type GuildUpdateToOneWithWhereWithoutItemDistributionsInput = {
+    where?: GuildWhereInput
+    data: XOR<GuildUpdateWithoutItemDistributionsInput, GuildUncheckedUpdateWithoutItemDistributionsInput>
+  }
+
+  export type GuildUpdateWithoutItemDistributionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bannerUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    inviteCode?: NullableStringFieldUpdateOperationsInput | string | null
+    settings?: GuildSettingsUpdateOneWithoutGuildNestedInput
+    members?: GuildMemberUpdateManyWithoutGuildNestedInput
+    ledgerEntries?: LedgerEntryUpdateManyWithoutGuildNestedInput
+    auditLogs?: AuditLogUpdateManyWithoutGuildNestedInput
+    joinRequests?: GuildJoinRequestUpdateManyWithoutGuildNestedInput
+    attendanceSessions?: AttendanceSessionUpdateManyWithoutGuildNestedInput
+    bossSchedules?: BossScheduleUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUpdateManyWithoutGuildTurnGuildNestedInput
+    lootSales?: LootSaleUpdateManyWithoutGuildNestedInput
+    pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
+    auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
+    itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+  }
+
+  export type GuildUncheckedUpdateWithoutItemDistributionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bannerUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    inviteCode?: NullableStringFieldUpdateOperationsInput | string | null
+    settings?: GuildSettingsUncheckedUpdateOneWithoutGuildNestedInput
+    members?: GuildMemberUncheckedUpdateManyWithoutGuildNestedInput
+    ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutGuildNestedInput
+    auditLogs?: AuditLogUncheckedUpdateManyWithoutGuildNestedInput
+    joinRequests?: GuildJoinRequestUncheckedUpdateManyWithoutGuildNestedInput
+    attendanceSessions?: AttendanceSessionUncheckedUpdateManyWithoutGuildNestedInput
+    bossSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildNestedInput
+    bossTurnSchedules?: BossScheduleUncheckedUpdateManyWithoutGuildTurnGuildNestedInput
+    lootSales?: LootSaleUncheckedUpdateManyWithoutGuildNestedInput
+    pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
+    auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
+    itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+  }
+
+  export type GuildMemberUpsertWithoutItemDistributionsInput = {
+    update: XOR<GuildMemberUpdateWithoutItemDistributionsInput, GuildMemberUncheckedUpdateWithoutItemDistributionsInput>
+    create: XOR<GuildMemberCreateWithoutItemDistributionsInput, GuildMemberUncheckedCreateWithoutItemDistributionsInput>
+    where?: GuildMemberWhereInput
+  }
+
+  export type GuildMemberUpdateToOneWithWhereWithoutItemDistributionsInput = {
+    where?: GuildMemberWhereInput
+    data: XOR<GuildMemberUpdateWithoutItemDistributionsInput, GuildMemberUncheckedUpdateWithoutItemDistributionsInput>
+  }
+
+  export type GuildMemberUpdateWithoutItemDistributionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumGuildRoleFieldUpdateOperationsInput | $Enums.GuildRole
+    rankName?: StringFieldUpdateOperationsInput | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    memberCode?: NullableStringFieldUpdateOperationsInput | string | null
+    joinedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    bidPoints?: IntFieldUpdateOperationsInput | number
+    bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    user?: UserUpdateOneRequiredWithoutGuildMembersNestedInput
+    guild?: GuildUpdateOneRequiredWithoutMembersNestedInput
+    auctionBids?: AuctionBidUpdateManyWithoutMemberNestedInput
+    itemRequests?: ItemRequestUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUpdateManyWithoutMemberNestedInput
+  }
+
+  export type GuildMemberUncheckedUpdateWithoutItemDistributionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    role?: EnumGuildRoleFieldUpdateOperationsInput | $Enums.GuildRole
+    rankName?: StringFieldUpdateOperationsInput | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    memberCode?: NullableStringFieldUpdateOperationsInput | string | null
+    joinedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    bidPoints?: IntFieldUpdateOperationsInput | number
+    bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    auctionBids?: AuctionBidUncheckedUpdateManyWithoutMemberNestedInput
+    itemRequests?: ItemRequestUncheckedUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput
+  }
+
+  export type GuildMemberCreateWithoutEquipmentInput = {
+    id?: string
+    role?: $Enums.GuildRole
+    rankName?: string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    memberCode?: string | null
+    joinedAt?: Date | string
+    isActive?: boolean
+    bidPoints?: number
+    bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    user: UserCreateNestedOneWithoutGuildMembersInput
+    guild: GuildCreateNestedOneWithoutMembersInput
+    auctionBids?: AuctionBidCreateNestedManyWithoutMemberInput
+    itemRequests?: ItemRequestCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutMemberInput
+  }
+
+  export type GuildMemberUncheckedCreateWithoutEquipmentInput = {
+    id?: string
+    userId: string
+    guildId: string
+    role?: $Enums.GuildRole
+    rankName?: string
+    ign?: string | null
+    cp?: number | null
+    class?: string | null
+    weapon?: string | null
+    memberCode?: string | null
+    joinedAt?: Date | string
+    isActive?: boolean
+    bidPoints?: number
+    bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    auctionBids?: AuctionBidUncheckedCreateNestedManyWithoutMemberInput
+    itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutMemberInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutMemberInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutMemberInput
+  }
+
+  export type GuildMemberCreateOrConnectWithoutEquipmentInput = {
+    where: GuildMemberWhereUniqueInput
+    create: XOR<GuildMemberCreateWithoutEquipmentInput, GuildMemberUncheckedCreateWithoutEquipmentInput>
+  }
+
+  export type GuildMemberUpsertWithoutEquipmentInput = {
+    update: XOR<GuildMemberUpdateWithoutEquipmentInput, GuildMemberUncheckedUpdateWithoutEquipmentInput>
+    create: XOR<GuildMemberCreateWithoutEquipmentInput, GuildMemberUncheckedCreateWithoutEquipmentInput>
+    where?: GuildMemberWhereInput
+  }
+
+  export type GuildMemberUpdateToOneWithWhereWithoutEquipmentInput = {
+    where?: GuildMemberWhereInput
+    data: XOR<GuildMemberUpdateWithoutEquipmentInput, GuildMemberUncheckedUpdateWithoutEquipmentInput>
+  }
+
+  export type GuildMemberUpdateWithoutEquipmentInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumGuildRoleFieldUpdateOperationsInput | $Enums.GuildRole
+    rankName?: StringFieldUpdateOperationsInput | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    memberCode?: NullableStringFieldUpdateOperationsInput | string | null
+    joinedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    bidPoints?: IntFieldUpdateOperationsInput | number
+    bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    user?: UserUpdateOneRequiredWithoutGuildMembersNestedInput
+    guild?: GuildUpdateOneRequiredWithoutMembersNestedInput
+    auctionBids?: AuctionBidUpdateManyWithoutMemberNestedInput
+    itemRequests?: ItemRequestUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutMemberNestedInput
+  }
+
+  export type GuildMemberUncheckedUpdateWithoutEquipmentInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    role?: EnumGuildRoleFieldUpdateOperationsInput | $Enums.GuildRole
+    rankName?: StringFieldUpdateOperationsInput | string
+    ign?: NullableStringFieldUpdateOperationsInput | string | null
+    cp?: NullableIntFieldUpdateOperationsInput | number | null
+    class?: NullableStringFieldUpdateOperationsInput | string | null
+    weapon?: NullableStringFieldUpdateOperationsInput | string | null
+    memberCode?: NullableStringFieldUpdateOperationsInput | string | null
+    joinedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    bidPoints?: IntFieldUpdateOperationsInput | number
+    bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
+    auctionBids?: AuctionBidUncheckedUpdateManyWithoutMemberNestedInput
+    itemRequests?: ItemRequestUncheckedUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildCreateWithoutLedgerEntriesInput = {
@@ -42518,6 +49149,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutLedgerEntriesInput = {
@@ -42542,6 +49175,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutLedgerEntriesInput = {
@@ -42639,6 +49274,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutLedgerEntriesInput = {
@@ -42663,6 +49300,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type UserUpsertWithoutLedgerEntriesAsActorInput = {
@@ -42807,6 +49446,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutAuditLogsInput = {
@@ -42831,6 +49472,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutAuditLogsInput = {
@@ -42934,6 +49577,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutAuditLogsInput = {
@@ -42958,6 +49603,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type UserCreateWithoutFactionAnnouncementsInput = {
@@ -43342,6 +49989,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutJoinRequestsInput = {
@@ -43366,6 +50015,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutJoinRequestsInput = {
@@ -43463,6 +50114,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutJoinRequestsInput = {
@@ -43487,6 +50140,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type UserUpsertWithoutGuildJoinRequestsInput = {
@@ -43574,6 +50229,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutAttendanceSessionsInput = {
@@ -43598,6 +50255,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutAttendanceSessionsInput = {
@@ -43703,6 +50362,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutAttendanceSessionsInput = {
@@ -43727,6 +50388,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type AttendanceRecordUpsertWithWhereUniqueWithoutSessionInput = {
@@ -43998,6 +50661,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutBossSchedulesInput = {
@@ -44022,6 +50687,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutBossSchedulesInput = {
@@ -44051,6 +50718,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutBossTurnSchedulesInput = {
@@ -44075,6 +50744,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutBossTurnSchedulesInput = {
@@ -44189,6 +50860,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutBossSchedulesInput = {
@@ -44213,6 +50886,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUpsertWithoutBossTurnSchedulesInput = {
@@ -44248,6 +50923,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutBossTurnSchedulesInput = {
@@ -44272,6 +50949,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type AttendanceSessionUpsertWithWhereUniqueWithoutBossScheduleInput = {
@@ -44448,6 +51127,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionCreateNestedManyWithoutGuildInput
   }
 
   export type GuildUncheckedCreateWithoutLootSalesInput = {
@@ -44472,6 +51153,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedCreateNestedManyWithoutGuildInput
     auctionItems?: AuctionItemUncheckedCreateNestedManyWithoutGuildInput
     itemRequests?: ItemRequestUncheckedCreateNestedManyWithoutGuildInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedCreateNestedManyWithoutGuildInput
+    itemDistributions?: ItemDistributionUncheckedCreateNestedManyWithoutGuildInput
   }
 
   export type GuildCreateOrConnectWithoutLootSalesInput = {
@@ -44553,6 +51236,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutGuildNestedInput
   }
 
   export type GuildUncheckedUpdateWithoutLootSalesInput = {
@@ -44577,6 +51262,8 @@ export namespace Prisma {
     pointsSnapshots?: GuildPointsSnapshotUncheckedUpdateManyWithoutGuildNestedInput
     auctionItems?: AuctionItemUncheckedUpdateManyWithoutGuildNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutGuildNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutGuildNestedInput
   }
 
   export type BossScheduleUpsertWithoutLootSalesInput = {
@@ -44659,6 +51346,9 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
   }
 
   export type AuditLogCreateManyActorInput = {
@@ -44705,6 +51395,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -44828,9 +51519,15 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     guild?: GuildUpdateOneRequiredWithoutMembersNestedInput
     auctionBids?: AuctionBidUpdateManyWithoutMemberNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberUncheckedUpdateWithoutUserInput = {
@@ -44847,8 +51544,14 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedUpdateManyWithoutMemberNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberUncheckedUpdateManyWithoutUserInput = {
@@ -44865,6 +51568,9 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
   }
 
   export type AuditLogUpdateWithoutActorInput = {
@@ -44982,6 +51688,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     guild?: GuildUpdateOneRequiredWithoutJoinRequestsNestedInput
@@ -44995,6 +51702,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -45007,6 +51715,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -45172,6 +51881,9 @@ export namespace Prisma {
     isActive?: boolean
     bidPoints?: number
     bidPointsLastReset?: Date | string | null
+    marketPrioritySeq?: number | null
+    marketPriorityReason?: string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
   }
 
   export type LedgerEntryCreateManyGuildInput = {
@@ -45210,6 +51922,7 @@ export namespace Prisma {
     class: string
     weapon: string
     status?: $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -45315,6 +52028,41 @@ export namespace Prisma {
     updatedAt?: Date | string
   }
 
+  export type LegendaryPriorityRequestCreateManyGuildInput = {
+    id?: string
+    memberId: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ItemDistributionCreateManyGuildInput = {
+    id?: string
+    memberId: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+  }
+
   export type GuildMemberUpdateWithoutGuildInput = {
     id?: StringFieldUpdateOperationsInput | string
     role?: EnumGuildRoleFieldUpdateOperationsInput | $Enums.GuildRole
@@ -45328,9 +52076,15 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     user?: UserUpdateOneRequiredWithoutGuildMembersNestedInput
     auctionBids?: AuctionBidUpdateManyWithoutMemberNestedInput
     itemRequests?: ItemRequestUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberUncheckedUpdateWithoutGuildInput = {
@@ -45347,8 +52101,14 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
     auctionBids?: AuctionBidUncheckedUpdateManyWithoutMemberNestedInput
     itemRequests?: ItemRequestUncheckedUpdateManyWithoutMemberNestedInput
+    legendaryRequests?: LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberNestedInput
+    itemDistributions?: ItemDistributionUncheckedUpdateManyWithoutMemberNestedInput
+    equipment?: MemberEquipmentUncheckedUpdateManyWithoutMemberNestedInput
   }
 
   export type GuildMemberUncheckedUpdateManyWithoutGuildInput = {
@@ -45365,6 +52125,9 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     bidPoints?: IntFieldUpdateOperationsInput | number
     bidPointsLastReset?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    marketPrioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    marketPriorityReason?: NullableStringFieldUpdateOperationsInput | string | null
+    marketWishlist?: JsonNullValueInput | InputJsonValue
   }
 
   export type LedgerEntryUpdateWithoutGuildInput = {
@@ -45458,6 +52221,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     user?: UserUpdateOneRequiredWithoutGuildJoinRequestsNestedInput
@@ -45471,6 +52235,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -45483,6 +52248,7 @@ export namespace Prisma {
     class?: StringFieldUpdateOperationsInput | string
     weapon?: StringFieldUpdateOperationsInput | string
     status?: EnumJoinRequestStatusFieldUpdateOperationsInput | $Enums.JoinRequestStatus
+    gearItems?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -45802,6 +52568,111 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type LegendaryPriorityRequestUpdateWithoutGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    member?: GuildMemberUpdateOneRequiredWithoutLegendaryRequestsNestedInput
+  }
+
+  export type LegendaryPriorityRequestUncheckedUpdateWithoutGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type LegendaryPriorityRequestUncheckedUpdateManyWithoutGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ItemDistributionUpdateWithoutGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    member?: GuildMemberUpdateOneRequiredWithoutItemDistributionsNestedInput
+  }
+
+  export type ItemDistributionUncheckedUpdateWithoutGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ItemDistributionUncheckedUpdateManyWithoutGuildInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    memberId?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type AuctionBidCreateManyMemberInput = {
     id?: string
     auctionId: string
@@ -45824,6 +52695,55 @@ export namespace Prisma {
     reviewedById?: string | null
     reviewedAt?: Date | string | null
     fulfilledAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type LegendaryPriorityRequestCreateManyMemberInput = {
+    id?: string
+    guildId: string
+    category: string
+    currentGear?: string | null
+    reason?: string | null
+    prioritySeq?: number | null
+    status?: string
+    officerNote?: string | null
+    reviewedById?: string | null
+    reviewedAt?: Date | string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ItemDistributionCreateManyMemberInput = {
+    id?: string
+    guildId: string
+    formType: string
+    rankTier?: string | null
+    ignSnapshot?: string | null
+    classSnapshot?: string | null
+    cpSnapshot?: number | null
+    pointsSnapshot?: number | null
+    prioritySeq?: number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: string | null
+    distributedById: string
+    overridden?: boolean
+    overrideReason?: string | null
+    distributedAt?: Date | string
+    createdAt?: Date | string
+  }
+
+  export type MemberEquipmentCreateManyMemberInput = {
+    id?: string
+    slotType: string
+    itemName: string
+    iconUrl: string
+    iconBucket: string
+    rarity?: string | null
+    confidence?: number
+    needsReview?: boolean
+    sourceScreenshotUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -45902,6 +52822,153 @@ export namespace Prisma {
     reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
     reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fulfilledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type LegendaryPriorityRequestUpdateWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    guild?: GuildUpdateOneRequiredWithoutLegendaryRequestsNestedInput
+  }
+
+  export type LegendaryPriorityRequestUncheckedUpdateWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type LegendaryPriorityRequestUncheckedUpdateManyWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    currentGear?: NullableStringFieldUpdateOperationsInput | string | null
+    reason?: NullableStringFieldUpdateOperationsInput | string | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    officerNote?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedById?: NullableStringFieldUpdateOperationsInput | string | null
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ItemDistributionUpdateWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    guild?: GuildUpdateOneRequiredWithoutItemDistributionsNestedInput
+  }
+
+  export type ItemDistributionUncheckedUpdateWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ItemDistributionUncheckedUpdateManyWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    guildId?: StringFieldUpdateOperationsInput | string
+    formType?: StringFieldUpdateOperationsInput | string
+    rankTier?: NullableStringFieldUpdateOperationsInput | string | null
+    ignSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    classSnapshot?: NullableStringFieldUpdateOperationsInput | string | null
+    cpSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    pointsSnapshot?: NullableIntFieldUpdateOperationsInput | number | null
+    prioritySeq?: NullableIntFieldUpdateOperationsInput | number | null
+    items?: JsonNullValueInput | InputJsonValue
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedById?: StringFieldUpdateOperationsInput | string
+    overridden?: BoolFieldUpdateOperationsInput | boolean
+    overrideReason?: NullableStringFieldUpdateOperationsInput | string | null
+    distributedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MemberEquipmentUpdateWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    slotType?: StringFieldUpdateOperationsInput | string
+    itemName?: StringFieldUpdateOperationsInput | string
+    iconUrl?: StringFieldUpdateOperationsInput | string
+    iconBucket?: StringFieldUpdateOperationsInput | string
+    rarity?: NullableStringFieldUpdateOperationsInput | string | null
+    confidence?: FloatFieldUpdateOperationsInput | number
+    needsReview?: BoolFieldUpdateOperationsInput | boolean
+    sourceScreenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MemberEquipmentUncheckedUpdateWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    slotType?: StringFieldUpdateOperationsInput | string
+    itemName?: StringFieldUpdateOperationsInput | string
+    iconUrl?: StringFieldUpdateOperationsInput | string
+    iconBucket?: StringFieldUpdateOperationsInput | string
+    rarity?: NullableStringFieldUpdateOperationsInput | string | null
+    confidence?: FloatFieldUpdateOperationsInput | number
+    needsReview?: BoolFieldUpdateOperationsInput | boolean
+    sourceScreenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MemberEquipmentUncheckedUpdateManyWithoutMemberInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    slotType?: StringFieldUpdateOperationsInput | string
+    itemName?: StringFieldUpdateOperationsInput | string
+    iconUrl?: StringFieldUpdateOperationsInput | string
+    iconBucket?: StringFieldUpdateOperationsInput | string
+    rarity?: NullableStringFieldUpdateOperationsInput | string | null
+    confidence?: FloatFieldUpdateOperationsInput | number
+    needsReview?: BoolFieldUpdateOperationsInput | boolean
+    sourceScreenshotUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

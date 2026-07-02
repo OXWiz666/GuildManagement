@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
-import { dashboardApi, type BossScheduleData, type AttendanceSessionData, type AttendanceRecordData } from "@/lib/api";
+import { dashboardApi, type BossScheduleData, type BossData, type AttendanceSessionData, type AttendanceRecordData } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
@@ -14,12 +14,11 @@ import {
 } from "@/components/dashboard/DashboardHelpers";
 
 // Imports from co-located components
-import WeeklyTracker from "./components/WeeklyTracker";
-import TimelineSpawns from "./components/TimelineSpawns";
+import OpenCheckIns from "./components/OpenCheckIns";
+import CheckInHistory, { type CheckInHistoryItem } from "./components/CheckInHistory";
 import VerificationQueue from "./components/VerificationQueue";
-import CheckInModal from "./components/CheckInModal";
-import CreateSessionModal from "./components/CreateSessionModal";
 import EditSessionModal from "./components/EditSessionModal";
+import AddScheduleModal from "../boss-schedule/components/AddScheduleModal";
 
 interface AttendanceStats {
   presenceRate: number;
@@ -32,6 +31,7 @@ interface AttendanceStats {
     createdAt: string;
     expiresAt: string;
   }>;
+  history: CheckInHistoryItem[];
 }
 
 export default function BossAttendancePage() {
@@ -41,21 +41,8 @@ export default function BossAttendancePage() {
 
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-  // Weekly Planner Navigation State
-  const [anchorDate, setAnchorDate] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
-
-  // Smart Check-in Code Submission State
-  const [showCheckInModal, setShowCheckInModal] = useState<BossScheduleData | null>(null);
-  const [attendanceCode, setAttendanceCode] = useState("");
-  const [isSubmittingCode, setIsSubmittingCode] = useState(false);
-
-  // Officer Session Generation State
-  const [showCreateSessionModal, setShowCreateSessionModal] = useState<BossScheduleData | null>(null);
-  const [sessionDuration, setSessionDuration] = useState("10"); // default 10 minutes
-  const [sessionType, setSessionType] = useState<"GUILD" | "FACTION">("GUILD");
-  const [isGeneratingSession, setIsGeneratingSession] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  // Smart one-click Check-in state (no codes — boss id is the key)
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
 
   // Officer Session Editing State
   const [showEditSessionModal, setShowEditSessionModal] = useState<AttendanceSessionData | null>(null);
@@ -65,9 +52,17 @@ export default function BossAttendancePage() {
   const [isVerifying, setIsVerifying] = useState<string | null>(null); // recordId of loading verification
   const [isVerifyingAll, setIsVerifyingAll] = useState(false);
 
+  // Officer "Edit Boss" state (reuses the schedule's AddScheduleModal in edit mode)
+  const [editingEvent, setEditingEvent] = useState<BossScheduleData | null>(null);
+  const [showBossModal, setShowBossModal] = useState(false);
+  const [isSubmittingBoss, setIsSubmittingBoss] = useState(false);
+  const [spawnDate, setSpawnDate] = useState("");
+  const [spawnTime, setSpawnTime] = useState("");
+
   const activeGuild = user?.guilds?.[0];
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
-  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader;
+  const isFactionLeader = activeGuild?.role === "FACTION_LEADER" || activeGuild?.role === "ADMIN";
+  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader || isFactionLeader;
 
   // Sync clocks every second
   useEffect(() => {
@@ -77,7 +72,7 @@ export default function BossAttendancePage() {
 
   // ─── Persistent Queries ────────────────────────────────
 
-  // 1. Boss Schedules Query (shares cache key!)
+  // 1. Boss Schedules Query (shares cache key with Boss Schedule hub!)
   const {
     data: schedulesRaw,
     isLoading: isLoadingSchedules,
@@ -101,7 +96,7 @@ export default function BossAttendancePage() {
     async () => {
       if (!activeGuild) return null;
       const result = await dashboardApi.getAttendanceStats(activeGuild.guildId);
-      return result.success && result.data ? result.data : null;
+      return result.success && result.data ? (result.data as AttendanceStats) : null;
     },
     { persist: true, staleTime: 30000 }
   );
@@ -121,27 +116,37 @@ export default function BossAttendancePage() {
     { persist: true, staleTime: 15000 }
   );
 
+  // 4. Boss registry (for the Edit Boss modal)
+  const { data: bossRegistryRaw } = useQuery<BossData[]>(
+    "boss_registry",
+    async () => {
+      const result = await dashboardApi.getBosses();
+      return result.success && result.data?.bosses ? result.data.bosses : [];
+    },
+    { persist: true, staleTime: 300000 }
+  );
+  const bosses = bossRegistryRaw || [];
+
   const selectedActiveSession = pendingAttendanceRaw?.activeSession || null;
   const pendingRecords = pendingAttendanceRaw?.pendingRecords || [];
 
   const isLoading = isLoadingSchedules || isLoadingStats;
 
   // Helper to trigger refetch / invalidation for all active queues
-  const invalidateAll = () => {
+  const invalidateAll = useCallback(() => {
     if (!activeGuild) return;
     queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
     queryClient.invalidateQueries(`attendance_stats:${activeGuild.guildId}`);
     if (isOfficer) {
       queryClient.invalidateQueries(`pending_attendance:${activeGuild.guildId}`);
     }
-  };
+  }, [activeGuild, isOfficer]);
 
   // Listen to Socket.IO real-time events for instant cache invalidation
   useEffect(() => {
     if (!socket || !activeGuild) return;
 
     const handleAttendanceUpdate = () => {
-      console.log("[Attendance Socket]: Attendance updated. Invalidating caches...");
       invalidateAll();
     };
 
@@ -150,6 +155,7 @@ export default function BossAttendancePage() {
     socket.on("attendance_session_deleted", handleAttendanceUpdate);
     socket.on("attendance_record_created", handleAttendanceUpdate);
     socket.on("attendance_record_confirmed", handleAttendanceUpdate);
+    socket.on("boss_rotation_updated", handleAttendanceUpdate);
 
     return () => {
       socket.off("attendance_session_created", handleAttendanceUpdate);
@@ -157,58 +163,95 @@ export default function BossAttendancePage() {
       socket.off("attendance_session_deleted", handleAttendanceUpdate);
       socket.off("attendance_record_created", handleAttendanceUpdate);
       socket.off("attendance_record_confirmed", handleAttendanceUpdate);
+      socket.off("boss_rotation_updated", handleAttendanceUpdate);
     };
-  }, [socket, activeGuild, isOfficer]);
+  }, [socket, activeGuild, invalidateAll]);
 
-  // Submit check-in code
-  const handleSubmitCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!attendanceCode.trim()) {
-      addToast("error", "Please enter a valid check-in code");
-      return;
-    }
-
-    setIsSubmittingCode(true);
+  // One-click check-in for a killed boss (no code typing). The boss id resolves
+  // the active check-in window server-side.
+  const handleCheckIn = useCallback(async (item: BossScheduleData) => {
+    if (!activeGuild) return;
+    setCheckingInId(item.id);
     try {
-      const result = await dashboardApi.submitAttendanceCode(attendanceCode.trim());
+      const result = await dashboardApi.checkInToBoss(activeGuild.guildId, item.id);
       if (result.success) {
-        addToast("success", `Checked in. Awaiting verification.`);
-        setShowCheckInModal(null);
-        setAttendanceCode("");
+        addToast("success", `Checked in for ${item.bossName}. Awaiting officer verification.`);
         invalidateAll();
       }
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to submit attendance code");
+      addToast("error", err?.message || "Failed to check in");
     } finally {
-      setIsSubmittingCode(false);
+      setCheckingInId(null);
     }
-  };
+  }, [activeGuild, addToast, invalidateAll]);
 
-  // Start attendance session for boss schedule (Officer)
-  const handleStartSession = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeGuild || !showCreateSessionModal) return;
-
-    setIsGeneratingSession(true);
+  // Edit a boss schedule entry (Officer) — reuses the schedule's AddScheduleModal.
+  const handleEditSchedule = async (
+    scheduleId: string,
+    payload: {
+      bossName?: string;
+      bossImageUrl?: string;
+      spawnTime?: string;
+      location?: string;
+      guildTurn?: string;
+      isFaction?: boolean;
+    }
+  ) => {
+    if (!activeGuild) return;
+    setIsSubmittingBoss(true);
     try {
-      const result = await dashboardApi.startAttendanceSession({
-        guildId: activeGuild.guildId,
-        type: sessionType,
-        minutes: parseInt(sessionDuration, 10),
-        bossScheduleId: showCreateSessionModal.id,
-      });
-
-      if (result.success && result.data?.session) {
-        addToast("success", `Raid session started.`);
-        setGeneratedCode(result.data.session.code);
+      const result = await dashboardApi.updateBossSchedule(activeGuild.guildId, scheduleId, payload);
+      if (result.success && result.data?.schedule) {
+        addToast("success", "Boss updated successfully!");
+        setShowBossModal(false);
+        setEditingEvent(null);
         invalidateAll();
       }
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to create attendance session");
+      addToast("error", err?.message || "Failed to update boss");
     } finally {
-      setIsGeneratingSession(false);
+      setIsSubmittingBoss(false);
     }
   };
+
+  // Schedule new boss spawn(s) (Officer) — required by AddScheduleModal's add mode.
+  const handleAddScheduleBatch = async (
+    spawnDateArg: string,
+    isFactionWide: boolean,
+    items: Array<{ bossName: string; bossImageUrl?: string; spawnTime: string; location: string; guildTurn?: string }>
+  ) => {
+    if (!activeGuild || items.length === 0) return;
+    setIsSubmittingBoss(true);
+    try {
+      let succeeded = 0;
+      for (const item of items) {
+        const result = await dashboardApi.addBossSchedule(activeGuild.guildId, {
+          bossName: item.bossName,
+          bossImageUrl: item.bossImageUrl,
+          spawnTime: item.spawnTime,
+          location: item.location,
+          guildTurn: item.guildTurn,
+          isFaction: isFactionWide,
+        });
+        if (result.success && result.data?.schedule) succeeded++;
+      }
+      addToast("success", `Scheduled ${succeeded} boss spawn(s)!`);
+      setShowBossModal(false);
+      invalidateAll();
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to schedule boss");
+    } finally {
+      setIsSubmittingBoss(false);
+    }
+  };
+
+  const openEditBoss = useCallback((item: BossScheduleData) => {
+    setEditingEvent(item);
+    const d = new Date(item.spawnTime);
+    setSpawnDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    setSpawnTime(d.toTimeString().substring(0, 5));
+    setShowBossModal(true);
+  }, []);
 
   // Edit attendance session (Officer)
   const handleEditSession = async (title: string, minutes: number, isActive: boolean) => {
@@ -224,12 +267,12 @@ export default function BossAttendancePage() {
       );
 
       if (result.success) {
-        addToast("success", "Attendance session updated successfully!");
+        addToast("success", "Check-in window updated successfully!");
         setShowEditSessionModal(null);
         invalidateAll();
       }
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to update attendance session");
+      addToast("error", err?.message || "Failed to update check-in window");
     } finally {
       setIsEditingSession(false);
     }
@@ -241,20 +284,20 @@ export default function BossAttendancePage() {
 
     addToast(
       "warning",
-      "Are you sure you want to delete this attendance session? All pending check-in requests for this session will be removed.",
+      "Are you sure you want to close this check-in window? All pending check-in requests for it will be removed.",
       0, // stays until action or dismiss
       {
-        label: "Delete",
+        label: "Close",
         variant: "danger",
         onClick: async () => {
           try {
             const result = await dashboardApi.deleteAttendanceSession(activeGuild.guildId, sessionId);
             if (result.success) {
-              addToast("success", "Attendance session deleted successfully!");
+              addToast("success", "Check-in window closed.");
               invalidateAll();
             }
           } catch (err: any) {
-            addToast("error", err?.message || "Failed to delete attendance session");
+            addToast("error", err?.message || "Failed to close check-in window");
           }
         },
       }
@@ -301,42 +344,11 @@ export default function BossAttendancePage() {
     }
   };
 
-  // Calendar Weekly Math calculations
-  const getDaysOfWeek = (date: Date) => {
-    const start = new Date(date);
-    const day = start.getDay(); // 0 = Sunday
-    start.setDate(start.getDate() - day); // Move to Sunday
-    start.setHours(0, 0, 0, 0);
-
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      days.push(d);
-    }
-    return days;
-  };
-
-  const daysOfWeek = getDaysOfWeek(anchorDate);
-
-  const getEventsForDay = (date: Date) => {
-    return schedules
-      .filter((s) => {
-        const sDate = new Date(s.spawnTime);
-        return (
-          sDate.getDate() === date.getDate() &&
-          sDate.getMonth() === date.getMonth() &&
-          sDate.getFullYear() === date.getFullYear()
-        );
-      })
-      .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
-  };
-
   // Helper to determine logged-in user's attendance status for a boss schedule
   const getUserRecordStatus = useCallback((item: BossScheduleData) => {
     if (!user) return { status: "NONE", label: "No Session", color: "text-white/40 bg-white/[0.015] border-white/[0.03]", dotColor: "bg-zinc-650" };
     if (!item.attendanceSessions || item.attendanceSessions.length === 0) {
-      return item.status === "KILLED" 
+      return item.status === "KILLED"
         ? { status: "EXPIRED_NO_SESSION", label: "No Session Run", color: "text-white/40 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-700" }
         : { status: "NONE", label: "Scheduled Spawn", color: "text-white/55 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-650" };
     }
@@ -353,13 +365,13 @@ export default function BossAttendancePage() {
     }
 
     if (isSessionActive) {
-      return { status: "ACTIVE_CHECKIN", label: "Check In Open", color: "text-white bg-violet-500/5 border-white/[0.08]", dotColor: "bg-violet-500 border border-violet-400/20" };
+      return { status: "ACTIVE_CHECKIN", label: "Check In Open", color: "text-violet-300 bg-violet-500/5 border-violet-500/20", dotColor: "bg-violet-500 border border-violet-400/20" };
     }
 
     return { status: "MISSED", label: "Missed", color: "text-rose-400 bg-rose-500/5 border-rose-500/10", dotColor: "bg-rose-500" };
   }, [user, currentTime]);
 
-  // Countdown formatter for active attendance session portals
+  // Countdown formatter for active attendance session windows
   const getCountdownText = useCallback((expiresAtStr: string) => {
     const target = new Date(expiresAtStr).getTime();
     const diff = target - currentTime;
@@ -374,20 +386,28 @@ export default function BossAttendancePage() {
     return { expired: false, text, warning };
   }, [currentTime]);
 
-  // SMART DETECT ACTIVE ATTENDANCE SESSION FOR QUICK PORTAL
+  // Bosses with an open check-in window (auto-opened when a kill is logged).
+  const openCheckIns = useMemo(() => {
+    return schedules
+      .filter((s) => {
+        const session = s.attendanceSessions?.[0];
+        return session && session.isActive && new Date(session.expiresAt).getTime() > currentTime;
+      })
+      .sort((a, b) => {
+        const aExp = new Date(a.attendanceSessions![0].expiresAt).getTime();
+        const bExp = new Date(b.attendanceSessions![0].expiresAt).getTime();
+        return aExp - bExp;
+      });
+  }, [schedules, currentTime]);
+
+  // Smart detect the first open window the user has NOT claimed (for the banner)
   const activeSessionEvent = useMemo(() => {
     if (!user) return null;
-    return schedules.find(s => {
-      if (!s.attendanceSessions || s.attendanceSessions.length === 0) return false;
-      const session = s.attendanceSessions[0];
-      const isExpired = new Date(session.expiresAt).getTime() < currentTime;
-      const userRecord = session.records?.find(r => r.userId === user.id);
-      return session.isActive && !isExpired && !userRecord;
-    });
-  }, [schedules, user, currentTime]);
-
-  // Dynamic Day Timeline Events List for selected highlighted day column
-  const dayEvents = selectedDate ? getEventsForDay(selectedDate) : [];
+    return openCheckIns.find((s) => {
+      const userRecord = s.attendanceSessions![0].records?.find(r => r.userId === user.id);
+      return !userRecord;
+    }) || null;
+  }, [openCheckIns, user]);
 
   if (!user || !activeGuild) {
     return (
@@ -410,24 +430,12 @@ export default function BossAttendancePage() {
             <Skeleton className="h-8 w-32 rounded-lg animate-pulse" />
           </div>
         </div>
-        <div className="h-[480px] rounded-2xl bg-[#111116]/40 border border-white/[0.04] backdrop-blur-md relative overflow-hidden animate-pulse shadow-[0_0_15px_rgba(139,92,246,0.03)] flex flex-col justify-between p-6">
-          <div className="space-y-6 flex-1 flex flex-col">
-            <Skeleton className="h-6 w-1/4" />
-            <div className="grid grid-cols-7 gap-4 flex-1">
-              {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                <div key={i} className="rounded-xl bg-white/[0.015] border border-white/[0.04] p-3 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-1.5 pb-2 border-b border-white/5">
-                    <Skeleton className="h-3 w-10" />
-                    <Skeleton className="h-4 w-16" />
-                  </div>
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="h-8 w-8 rounded-full bg-white/[0.02] border border-dashed border-white/10" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-xl animate-pulse" />
+          ))}
         </div>
+        <Skeleton className="h-[360px] rounded-2xl animate-pulse" />
       </div>
     );
   }
@@ -440,7 +448,7 @@ export default function BossAttendancePage() {
         <ModuleHeader
           eyebrow="Raids"
           title="Boss attendance"
-          description="Track weekly raid sessions, verify check-ins, and manage member presence."
+          description="One-tap check-ins for every boss killed in Boss Schedule — plus your attendance stats."
           right={
             <div className="flex items-center gap-2">
               {isOfficer && (
@@ -463,31 +471,28 @@ export default function BossAttendancePage() {
                   onClick={invalidateAll}
                   className="px-3 py-1.5 rounded-full bg-white text-black hover:bg-white/90 text-[11px] font-semibold transition-all cursor-pointer"
                 >
-                  Refresh dashboard
+                  Refresh
                 </button>
               </Magnetic>
             </div>
           }
         />
 
-        {/* SMART INLINE CHECK-IN ALERT */}
+        {/* SMART INLINE CHECK-IN ALERT (one-click, no codes) */}
         {activeSessionEvent && (
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 shadow-sm transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="rounded-2xl border border-violet-500/25 bg-violet-950/10 p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div className="flex items-start gap-4">
-              <div className="h-10 w-10 rounded-xl bg-white/[0.06] border border-white/[0.18]/30 flex items-center justify-center text-white text-base shrink-0">
+              <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-300 text-base shrink-0">
                 ✦
               </div>
               <div>
-                <span className="text-[10px] font-bold text-white uppercase tracking-widest block">
-                  Raid Check-in Active
+                <span className="text-[10px] font-bold text-violet-300 uppercase tracking-widest block">
+                  Check-in Open
                 </span>
                 <h3 className="font-bold text-white text-sm mt-0.5">
-                  {activeSessionEvent.bossName} spawn check-in portal running
+                  {activeSessionEvent.bossName} was killed — claim your attendance
                 </h3>
-                <p className="text-xs text-white/40 mt-1 max-w-xl">
-                  Raid is currently underway. Input the check-in code shared by the officer to claim attendance points.
-                </p>
-                <div className="flex items-center gap-2 mt-3 text-xs text-white/55">
+                <div className="flex items-center gap-2 mt-2 text-xs text-white/55">
                   <span className="text-[11px] text-white/40">Closes in</span>
                   <span className="font-mono bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded font-bold text-xs text-amber-400">
                     {getCountdownText(activeSessionEvent.attendanceSessions![0].expiresAt).text}
@@ -496,25 +501,14 @@ export default function BossAttendancePage() {
               </div>
             </div>
 
-            {/* Inline Check-in Form */}
-            <form onSubmit={handleSubmitCode} className="flex gap-2 w-full lg:max-w-xs bg-white/[0.02] border border-white/[0.06] p-1.5 rounded-xl">
-              <input
-                type="text"
-                placeholder="CODE (e.g. ATT-D3FB)"
-                value={attendanceCode}
-                onChange={(e) => setAttendanceCode(e.target.value.toUpperCase())}
-                required
-                maxLength={10}
-                className="flex-1 px-3 py-2 rounded-lg bg-transparent border-0 text-sm font-mono font-bold text-center text-white focus:outline-none placeholder-zinc-700 tracking-wider uppercase"
-              />
-              <button 
-                type="submit" 
-                disabled={isSubmittingCode}
-                className="px-3.5 py-1.5 bg-white/[0.10] hover:bg-white/[0.14] disabled:bg-white/[0.18] text-xs font-semibold text-white rounded-lg transition-all cursor-pointer shrink-0"
-              >
-                Verify
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={() => handleCheckIn(activeSessionEvent)}
+              disabled={checkingInId === activeSessionEvent.id}
+              className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 active:scale-95 disabled:opacity-50 text-sm font-bold text-white rounded-xl transition-all cursor-pointer shadow-lg shadow-violet-500/20 shrink-0"
+            >
+              {checkingInId === activeSessionEvent.id ? "Checking in…" : "Check In Now"}
+            </button>
           </div>
         )}
 
@@ -531,7 +525,7 @@ export default function BossAttendancePage() {
           </div>
         )}
 
-        {/* Minimalist Stats Grid */}
+        {/* Minimalist Stats Grid — kept as-is per spec */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Presence rate */}
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 shadow-sm">
@@ -580,63 +574,21 @@ export default function BossAttendancePage() {
           </div>
         </div>
 
-        {/* Weekly Attendance Tracker */}
-        <WeeklyTracker
-          daysOfWeek={daysOfWeek}
-          selectedDate={selectedDate}
-          setSelectedDate={setSelectedDate}
-          getEventsForDay={getEventsForDay}
-          getUserRecordStatus={getUserRecordStatus}
-          getCountdownText={getCountdownText}
-          isOfficer={isOfficer}
-          onCheckInClick={(item) => setShowCheckInModal(item)}
-          onCreateSessionClick={(item) => setShowCreateSessionModal(item)}
-          anchorDate={anchorDate}
-          setAnchorDate={setAnchorDate}
-        />
-
-        {/* Details timeline and guide */}
+        {/* Open check-ins + personal history */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="lg:col-span-2">
-            <TimelineSpawns
-              selectedDate={selectedDate}
-              dayEvents={dayEvents}
+            <OpenCheckIns
+              openCheckIns={openCheckIns}
               getUserRecordStatus={getUserRecordStatus}
               getCountdownText={getCountdownText}
+              checkingInId={checkingInId}
+              onCheckIn={handleCheckIn}
               isOfficer={isOfficer}
-              onCheckInClick={(item) => setShowCheckInModal(item)}
-              onCreateSessionClick={(item) => setShowCreateSessionModal(item)}
+              onEditBoss={openEditBoss}
             />
           </div>
-
-          {/* Minimalist Guide Panel */}
           <div className="lg:col-span-1">
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.01] p-5">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-2.5">
-                Raid Check-In Guide
-              </h3>
-              <p className="text-xs text-white/40 leading-relaxed">
-                Checking in for scheduled raids is simple and automated:
-              </p>
-              <ul className="text-xs text-white/40 mt-3 space-y-2.5">
-                <li className="flex gap-2">
-                  <span className="text-white">▪</span>
-                  <span>Active check-ins pop up automatically as a slim notification at the top of the dashboard.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-white">▪</span>
-                  <span>Input the check-in code shared by raid organizers inside the notification box.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-white">▪</span>
-                  <span>Once entered, your presence transitions to pending status, awaiting officer approval.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-white">▪</span>
-                  <span>Verification credits attendance activity points directly to your ledger wallet.</span>
-                </li>
-              </ul>
-            </div>
+            <CheckInHistory history={stats?.history || []} />
           </div>
         </div>
 
@@ -655,32 +607,7 @@ export default function BossAttendancePage() {
           />
         )}
 
-        {/* Modal: Check In */}
-        <CheckInModal
-          showCheckInModal={showCheckInModal}
-          attendanceCode={attendanceCode}
-          setAttendanceCode={setAttendanceCode}
-          isSubmittingCode={isSubmittingCode}
-          handleSubmitCode={handleSubmitCode}
-          onClose={() => setShowCheckInModal(null)}
-        />
-
-        {/* Modal: Start Raid Attendance */}
-        <CreateSessionModal
-          showCreateSessionModal={showCreateSessionModal}
-          sessionDuration={sessionDuration}
-          setSessionDuration={setSessionDuration}
-          sessionType={sessionType}
-          setSessionType={setSessionType}
-          isGeneratingSession={isGeneratingSession}
-          generatedCode={generatedCode}
-          handleStartSession={handleStartSession}
-          onClose={() => setShowCreateSessionModal(null)}
-          setGeneratedCode={setGeneratedCode}
-          addToast={addToast}
-        />
-
-        {/* Modal: Edit Raid Attendance */}
+        {/* Modal: Edit Check-in Window */}
         <EditSessionModal
           showModal={!!showEditSessionModal}
           onClose={() => setShowEditSessionModal(null)}
@@ -688,6 +615,27 @@ export default function BossAttendancePage() {
           isSubmitting={isEditingSession}
           handleEditSession={handleEditSession}
         />
+
+        {/* Modal: Edit / Schedule Boss (officers) */}
+        {isOfficer && (
+          <AddScheduleModal
+            showAddModal={showBossModal}
+            setShowAddModal={(val) => {
+              setShowBossModal(val);
+              if (!val) setEditingEvent(null);
+            }}
+            bosses={bosses}
+            isFactionLeader={isFactionLeader}
+            isSubmitting={isSubmittingBoss}
+            spawnDate={spawnDate}
+            setSpawnDate={setSpawnDate}
+            spawnTime={spawnTime}
+            setSpawnTime={setSpawnTime}
+            handleAddScheduleBatch={handleAddScheduleBatch}
+            editingEvent={editingEvent}
+            handleEditSchedule={handleEditSchedule}
+          />
+        )}
       </div>
     </div>
   );

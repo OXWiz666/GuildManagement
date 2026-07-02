@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Badge from "@/components/ui/Badge";
-import { Reveal, SectionLabel, Scroll3D } from "./LandingHelpers";
+import { Reveal, Scroll3D } from "./LandingHelpers";
 
 // --- Tab Configuration ---
 const PREVIEW_TABS = [
@@ -642,13 +642,13 @@ export default function InteractivePreview() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <Reveal className="text-center mb-12">
-          <SectionLabel>Application Preview</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight font-fantasy">
-            Interact with the application.
+        <Reveal className="mb-12 text-center">
+          <h2 className="font-fantasy text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+            Not a screenshot. <span className="text-gold-sheen">The real thing.</span>
           </h2>
-          <p className="mt-3.5 text-sm text-[#8B8F98] max-w-xl mx-auto leading-relaxed">
-            Click tabs, verify attendance codes, shift priority turns, or bid on equipment items to preview how the operations flow.
+          <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-[#8B8F98]">
+            Verify an attendance code, shift a rotation turn, or bid on a drop.
+            This is the live product responding to you, right here on the page.
           </p>
         </Reveal>
 
@@ -672,7 +672,7 @@ export default function InteractivePreview() {
         </Reveal>
 
         {/* Interactive Mock Window */}
-        <Reveal delay={120}>
+        <Reveal delay={120} from="morph">
           <Scroll3D rotateX={4} rotateY={0} scaleFrom={0.97} liftFrom={20}>
             <div className="rounded-2xl overflow-hidden border border-white/[0.08] bg-[#0b0d10] shadow-[0_30px_70px_-20px_rgba(0,0,0,0.95)] card-obsidian">
               

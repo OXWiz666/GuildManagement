@@ -320,6 +320,15 @@ export interface GuildMemberData {
   };
 }
 
+export interface JoinRequestGearItem {
+  slotType: string;
+  itemName: string;
+  iconPath: string;
+  iconBucket: string;
+  rarity?: string | null;
+  confidence: number;
+}
+
 export interface JoinRequestData {
   id: string;
   guildId: string;
@@ -329,6 +338,7 @@ export interface JoinRequestData {
   class: string;
   weapon: string;
   status: string;
+  gearItems?: JoinRequestGearItem[] | null;
   createdAt: string;
   guildName?: string;
   guildAvatarUrl?: string | null;
@@ -360,7 +370,14 @@ export const guildApi = {
     );
   },
 
-  async applyToGuild(payload: { inviteCode: string; ign: string; cp: number; class: string; weapon: string }) {
+  async applyToGuild(payload: {
+    inviteCode: string;
+    ign: string;
+    cp: number;
+    class: string;
+    weapon: string;
+    gear?: ConfirmEquipmentItem[];
+  }) {
     return api.post<{ id: string; guildId: string; guildName: string; status: string }>(
       `/guilds/join`,
       payload,
@@ -575,6 +592,13 @@ export const dashboardApi = {
     return api.post<{ success: boolean; sessionTitle: string; guildName: string; record: AttendanceRecordData }>(
       `/dashboard/attendance/check-in`,
       { code },
+    );
+  },
+
+  async checkInToBoss(guildId: string, bossScheduleId: string) {
+    return api.post<{ success: boolean; sessionTitle: string; guildName: string; bossScheduleId: string; record: AttendanceRecordData }>(
+      `/dashboard/attendance/check-in/boss/${bossScheduleId}`,
+      { guildId },
     );
   },
 
@@ -846,6 +870,69 @@ export const dashboardApi = {
   },
 };
 
+// ─── Member Equipment (Item Screenshot Update) ──────────────────
+
+export interface EquipmentCatalogItem {
+  slotType: string;
+  itemName: string;
+  rarity: string | null;
+  variant: string | null;
+  bucket: string;
+  path: string;
+  iconUrl: string;
+}
+
+export interface EquipmentCatalogSlot {
+  slotType: string;
+  label: string;
+  items: EquipmentCatalogItem[];
+}
+
+export interface MemberEquipmentData {
+  id: string;
+  slotType: string;
+  itemName: string;
+  iconUrl: string; // storage path
+  iconBucket: string;
+  rarity: string | null;
+  confidence: number;
+  needsReview: boolean;
+  sourceScreenshotUrl: string | null;
+  iconSignedUrl: string | null;
+  screenshotSignedUrl: string | null;
+  updatedAt: string;
+}
+
+export interface ConfirmEquipmentItem {
+  slotType: string;
+  itemName: string;
+  iconPath: string;
+  iconBucket: string;
+  rarity?: string;
+  confidence: number;
+}
+
+export const equipmentApi = {
+  async getCatalog() {
+    return api.get<{ slots: EquipmentCatalogSlot[] }>(`/equipment/catalog`);
+  },
+  async getMine(guildId: string) {
+    return api.get<{ equipment: MemberEquipmentData[] }>(`/equipment/${guildId}/mine`);
+  },
+  async uploadScreenshot(guildId: string, dataUrl: string) {
+    return api.post<{ path: string | null; signedUrl: string | null; stored: boolean }>(
+      `/equipment/${guildId}/screenshot`,
+      { dataUrl },
+    );
+  },
+  async confirm(
+    guildId: string,
+    payload: { items: ConfirmEquipmentItem[]; sourceScreenshotPath?: string },
+  ) {
+    return api.post<{ equipment: MemberEquipmentData[] }>(`/equipment/${guildId}/confirm`, payload);
+  },
+};
+
 export const notificationApi = {
   async getNotifications(limit = 20) {
     return api.get<{ notifications: NotificationData[]; unreadCount: number }>(
@@ -976,3 +1063,239 @@ export interface AuditLogEntry {
     avatarUrl: string | null;
   };
 }
+
+// ─── Guild Market (Distribution) ────────────────
+
+export interface MarketMemberRef {
+  id: string;
+  ign: string | null;
+  role: string;
+  rankName: string;
+  user?: { id: string; displayName: string; email?: string; avatarUrl: string | null };
+}
+
+export interface ItemRequestData {
+  id: string;
+  guildId: string;
+  memberId: string;
+  type: "ITEM" | "WITHDRAWAL";
+  status: "PENDING" | "APPROVED" | "DECLINED" | "FULFILLED";
+  itemName: string | null;
+  quantity: number | null;
+  itemCategory: string | null;
+  note: string | null;
+  reviewNote: string | null;
+  reviewedById: string | null;
+  reviewedAt: string | null;
+  fulfilledAt: string | null;
+  createdAt: string;
+  member?: MarketMemberRef;
+}
+
+export interface LegendaryRequestData {
+  id: string;
+  guildId: string;
+  memberId: string;
+  category: string;
+  currentGear: string | null;
+  reason: string | null;
+  prioritySeq: number | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "COMPLETED";
+  officerNote: string | null;
+  reviewedById: string | null;
+  reviewedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  member?: MarketMemberRef;
+}
+
+export interface PriorityQueueEntry {
+  memberId: string;
+  userId: string;
+  ign: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: string;
+  rankName: string;
+  tier: "CORE" | "ELITE" | "UPPER" | "LOWER";
+  cp: number;
+  dkp: number;
+  attendance: number;
+  bossParticipation: number;
+  previousReceived: number;
+  priorityScore: number;
+  manualSeq: number | null;
+  manualReason: string | null;
+  wishlist: string[];
+  position: number;
+}
+
+export interface ItemDistributionData {
+  id: string;
+  guildId: string;
+  memberId: string;
+  formType: "CORE" | "NON_CORE";
+  rankTier: string | null;
+  ignSnapshot: string | null;
+  classSnapshot: string | null;
+  cpSnapshot: number | null;
+  pointsSnapshot: number | null;
+  prioritySeq: number | null;
+  items: Record<string, number | boolean | string>;
+  note: string | null;
+  distributedById: string;
+  overridden: boolean;
+  overrideReason: string | null;
+  distributedAt: string;
+  member?: { user?: { displayName: string; avatarUrl: string | null } };
+}
+
+export interface MarketRulesData {
+  cpTiers: { eliteMinCp: number; upperMinCp: number };
+  limits: Record<"CORE" | "ELITE" | "UPPER" | "LOWER", { logs: number; temporalPieces: number; materials: number }>;
+  weights: Record<string, number>;
+}
+
+interface Paginated {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export const marketApi = {
+  // ─ Item requests ─
+  async createItemRequest(
+    guildId: string,
+    payload: { itemType: string; itemName?: string; quantity: number; reason?: string },
+  ) {
+    return api.post<{ request: ItemRequestData }>(`/market/${guildId}/requests`, payload);
+  },
+  async getRequests(guildId: string, params?: { status?: string; type?: string; page?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.type) qs.set("type", params.type);
+    if (params?.page) qs.set("page", String(params.page));
+    return api.get<{ requests: ItemRequestData[]; pagination: Paginated }>(
+      `/market/${guildId}/requests?${qs.toString()}`,
+    );
+  },
+  async getMyRequests(guildId: string, page = 1) {
+    return api.get<{
+      requests: ItemRequestData[];
+      quota: { used: number; limit: number; remaining: number };
+      pagination: Paginated;
+    }>(`/market/${guildId}/requests/mine?page=${page}`);
+  },
+  async reviewRequest(
+    guildId: string,
+    requestId: string,
+    action: "APPROVED" | "DECLINED" | "FULFILLED",
+    reviewNote?: string,
+  ) {
+    return api.patch<{ request: ItemRequestData }>(
+      `/market/${guildId}/requests/${requestId}/review`,
+      { action, reviewNote },
+    );
+  },
+
+  // ─ Legendary priority ─
+  async createLegendary(
+    guildId: string,
+    payload: { category: string; currentGear?: string; reason?: string },
+  ) {
+    return api.post<{ request: LegendaryRequestData }>(`/market/${guildId}/legendary`, payload);
+  },
+  async getLegendary(guildId: string, params?: { status?: string; category?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.category) qs.set("category", params.category);
+    return api.get<{ requests: LegendaryRequestData[]; canManage: boolean }>(
+      `/market/${guildId}/legendary?${qs.toString()}`,
+    );
+  },
+  async reviewLegendary(
+    guildId: string,
+    id: string,
+    action: "APPROVED" | "REJECTED" | "COMPLETED",
+    officerNote?: string,
+  ) {
+    return api.patch<{ request: LegendaryRequestData }>(
+      `/market/${guildId}/legendary/${id}/review`,
+      { action, officerNote },
+    );
+  },
+  async setLegendarySequence(guildId: string, id: string, prioritySeq: number) {
+    return api.patch<{ request: LegendaryRequestData }>(
+      `/market/${guildId}/legendary/${id}/sequence`,
+      { prioritySeq },
+    );
+  },
+
+  // ─ Priority & distribution ─
+  async getPriorityQueue(guildId: string) {
+    return api.get<{ queue: PriorityQueueEntry[] }>(`/market/${guildId}/priority`);
+  },
+  async overridePriority(guildId: string, memberId: string, prioritySeq: number | null, reason: string) {
+    return api.patch<{ member: unknown }>(`/market/${guildId}/priority/${memberId}`, {
+      prioritySeq,
+      reason,
+    });
+  },
+  async createDistribution(
+    guildId: string,
+    payload: {
+      memberId: string;
+      formType: "CORE" | "NON_CORE";
+      items: Record<string, number | boolean | string>;
+      note?: string;
+      overrideReason?: string;
+    },
+  ) {
+    return api.post<{ distribution: ItemDistributionData }>(
+      `/market/${guildId}/distributions`,
+      payload,
+    );
+  },
+  async getDistributions(
+    guildId: string,
+    params?: { mine?: boolean; memberId?: string; tier?: string; from?: string; to?: string; page?: number },
+  ) {
+    const qs = new URLSearchParams();
+    if (params?.mine) qs.set("mine", "true");
+    if (params?.memberId) qs.set("memberId", params.memberId);
+    if (params?.tier) qs.set("tier", params.tier);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    if (params?.page) qs.set("page", String(params.page));
+    return api.get<{ distributions: ItemDistributionData[]; pagination: Paginated }>(
+      `/market/${guildId}/distributions?${qs.toString()}`,
+    );
+  },
+
+  // ─ Member wishlist ─
+  async getMyWishlist(guildId: string) {
+    return api.get<{ items: string[]; tier: string; formType: "CORE" | "NON_CORE"; slots: string[] }>(
+      `/market/${guildId}/wishlist/mine`,
+    );
+  },
+  async setWishlist(guildId: string, items: string[]) {
+    return api.put<{ items: string[]; tier: string }>(`/market/${guildId}/wishlist`, { items });
+  },
+
+  // ─ Rules & audit ─
+  async getRules(guildId: string) {
+    return api.get<{ rules: MarketRulesData }>(`/market/${guildId}/rules`);
+  },
+  async updateRules(guildId: string, rules: MarketRulesData) {
+    return api.patch<{ rules: MarketRulesData }>(`/market/${guildId}/rules`, rules);
+  },
+  async getAuditLogs(guildId: string, params?: { action?: string; page?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.action) qs.set("action", params.action);
+    if (params?.page) qs.set("page", String(params.page));
+    return api.get<{ logs: AuditLogEntry[]; pagination: Paginated }>(
+      `/market/${guildId}/audit?${qs.toString()}`,
+    );
+  },
+};

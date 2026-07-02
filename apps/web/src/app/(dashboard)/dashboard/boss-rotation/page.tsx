@@ -20,9 +20,17 @@ import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
 import { getGuildColor } from "./utils/helpers";
-import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime } from "@guild/shared";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, getBossCycleCategory } from "@guild/shared";
 
 type RotationTab = "LIVE" | "UPCOMING" | "ACTIVITY" | "HISTORY";
+type CycleFilter = "ALL" | "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE";
+
+const CYCLE_FILTERS: Array<{ id: CycleFilter; label: string }> = [
+  { id: "ALL", label: "All cycles" },
+  { id: "FIXED_SCHEDULE", label: "Fixed Schedule" },
+  { id: "LONG_CYCLE", label: "Long Cycle Boss" },
+  { id: "SHORT_CYCLE", label: "Short Cycle Boss" },
+];
 
 type AuditLogPage = {
   logs: AuditLogEntry[];
@@ -64,6 +72,7 @@ export default function BossRotationPage() {
   const [historyMonth, setHistoryMonth] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTakingGuildId, setSelectedTakingGuildId] = useState("ALL");
+  const [selectedCycle, setSelectedCycle] = useState<CycleFilter>("ALL");
   const [now, setNow] = useState<number | null>(null);
   const [killTarget, setKillTarget] = useState<BossRotationItem | null>(null);
   const [killTime, setKillTime] = useState("");
@@ -273,9 +282,13 @@ export default function BossRotationPage() {
         (selectedTakingGuildId === "UNASSIGNED" && !takingGuildId) ||
         takingGuildId === selectedTakingGuildId;
 
-      return matchesSearch && matchesGuild;
+      const matchesCycle =
+        selectedCycle === "ALL" ||
+        getBossCycleCategory(rotation.bossName, rotation.type, rotation.cooldownHours) === selectedCycle;
+
+      return matchesSearch && matchesGuild && matchesCycle;
     });
-  }, [rotations, searchQuery, selectedTakingGuildId]);
+  }, [rotations, searchQuery, selectedTakingGuildId, selectedCycle]);
 
   const upcomingSchedules = schedules
     .filter((schedule) => schedule.status !== "KILLED")
@@ -427,7 +440,24 @@ export default function BossRotationPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(180px,240px)_minmax(220px,320px)] gap-2 w-full lg:w-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(170px,210px)_minmax(180px,240px)_minmax(200px,300px)] gap-2 w-full lg:w-auto">
+            {activeTab === "LIVE" && (
+              <label className="relative block">
+                <span className="sr-only">Filter boss cycle</span>
+                <select
+                  value={selectedCycle}
+                  onChange={(event) => setSelectedCycle(event.target.value as CycleFilter)}
+                  className="w-full h-[42px] px-3.5 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-[13px] text-white/90 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors cursor-pointer"
+                >
+                  {CYCLE_FILTERS.map((filter) => (
+                    <option className="bg-[#0c0d12]" key={filter.id} value={filter.id}>
+                      {filter.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <label className="relative block">
               <span className="sr-only">Filter taking guild</span>
               <select

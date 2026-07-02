@@ -141,7 +141,7 @@ function ResetPasswordForm() {
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[10px] text-[#F5B841] font-bold uppercase tracking-[0.24em]">
-              Recovery · Step 2
+              Recovery
             </span>
             <span className="h-px flex-1 bg-gradient-to-r from-[#F5B841]/25 to-transparent" />
           </div>

@@ -4,18 +4,29 @@ export interface PredefinedBoss {
   type: "LONG_CYCLE" | "FIXED_SCHEDULE";
   cooldownHours?: number;
   fixedSpawns?: Array<{ day: number; hour: number; minute: number }>; // 0=Sunday, 1=Monday...
+  /**
+   * Optional active-spawn window in Singapore wall-clock hours (24h). When set,
+   * a cooldown-based (LONG_CYCLE) respawn that lands outside [startHour, endHour)
+   * is pushed to the next day's startHour. Used for the "short cycle" bosses
+   * (Venatus / Viorent / Ego) whose 10:00–21:00 window the game enforces.
+   */
+  window?: { startHour: number; endHour: number };
   location: string;
 }
 
+// Singapore is UTC+8 with no daylight saving, so a fixed millisecond offset is exact.
+const SGT_OFFSET_MS = 8 * 60 * 60 * 1000;
+const SHORT_CYCLE_WINDOW = { startHour: 10, endHour: 21 } as const;
+
 export const PREDEFINED_BOSSES: PredefinedBoss[] = [
   // ─── Long Cycle Bosses ─────────────────────────────
-  { name: "Venatus", level: 60, type: "LONG_CYCLE", cooldownHours: 10, location: "Corrupted Basin" },
-  { name: "Viorent", level: 65, type: "LONG_CYCLE", cooldownHours: 10, location: "Crescent Lake" },
-  { name: "Ego", level: 70, type: "LONG_CYCLE", cooldownHours: 21, location: "Ulan Canyon" },
-  { name: "Livera", level: 75, type: "LONG_CYCLE", cooldownHours: 24, location: "Protector's Ruins" },
+  { name: "Venatus", level: 60, type: "LONG_CYCLE", cooldownHours: 10, window: SHORT_CYCLE_WINDOW, location: "Corrupted Basin" },
+  { name: "Viorent", level: 65, type: "LONG_CYCLE", cooldownHours: 10, window: SHORT_CYCLE_WINDOW, location: "Crescent Lake" },
+  { name: "Ego", level: 70, type: "LONG_CYCLE", cooldownHours: 21, window: SHORT_CYCLE_WINDOW, location: "Ulan Canyon" },
+  { name: "Livera", level: 90, type: "LONG_CYCLE", cooldownHours: 24, location: "Protector's Ruins" },
   { name: "Araneo", level: 83, type: "LONG_CYCLE", cooldownHours: 24, location: "Lower Tomb of Tyriosa 1F" },
   { name: "Undomiel", level: 85, type: "LONG_CYCLE", cooldownHours: 24, location: "Secret Laboratory" },
-  { name: "Lady Dalia", level: 85, type: "LONG_CYCLE", cooldownHours: 18, location: "Twilight Hill" },
+  { name: "Lady Dalia", level: 83, type: "LONG_CYCLE", cooldownHours: 18, location: "Twilight Hill" },
   { name: "General Aquleus", level: 85, type: "LONG_CYCLE", cooldownHours: 29, location: "Lower Tomb of Tyriosa 2F" },
   { name: "Amentis", level: 88, type: "LONG_CYCLE", cooldownHours: 29, location: "Land of Glory" },
   { name: "Baron Baraudmore", level: 88, type: "LONG_CYCLE", cooldownHours: 32, location: "Battlefield of Templar" },
@@ -183,6 +194,36 @@ export const PREDEFINED_BOSSES: PredefinedBoss[] = [
   },
 ];
 
+/**
+ * Clamp a cooldown-based respawn to a boss's daily spawn window, evaluated in
+ * Singapore wall-clock time. If the instant already falls inside the window it
+ * is returned unchanged; otherwise it is moved to the next window opening.
+ */
+function clampToWindowSGT(date: Date, window: { startHour: number; endHour: number }): Date {
+  const sgt = new Date(date.getTime() + SGT_OFFSET_MS); // SGT wall clock as UTC fields
+  const decimalHour = sgt.getUTCHours() + sgt.getUTCMinutes() / 60;
+
+  if (decimalHour >= window.startHour && decimalHour < window.endHour) {
+    return date; // already within the active window
+  }
+
+  // After the window closes, jump to the *next* day's opening; before it opens, same day.
+  const targetDay = decimalHour >= window.endHour
+    ? new Date(sgt.getTime() + 24 * 60 * 60 * 1000)
+    : sgt;
+
+  const openSgtMs = Date.UTC(
+    targetDay.getUTCFullYear(),
+    targetDay.getUTCMonth(),
+    targetDay.getUTCDate(),
+    window.startHour,
+    0,
+    0,
+    0,
+  );
+  return new Date(openSgtMs - SGT_OFFSET_MS);
+}
+
 export function getNextBossSpawnTime(bossName: string, killedAt: Date): Date {
   const boss = PREDEFINED_BOSSES.find((b) => b.name.toLowerCase() === bossName.toLowerCase());
   if (!boss) {
@@ -191,36 +232,161 @@ export function getNextBossSpawnTime(bossName: string, killedAt: Date): Date {
   }
 
   if (boss.type === "LONG_CYCLE" && boss.cooldownHours) {
-    return new Date(killedAt.getTime() + boss.cooldownHours * 60 * 60 * 1000);
+    const next = new Date(killedAt.getTime() + boss.cooldownHours * 60 * 60 * 1000);
+    // Short-cycle bosses only respawn inside their Singapore-time window.
+    return boss.window ? clampToWindowSGT(next, boss.window) : next;
   }
 
-  if (boss.type === "FIXED_SCHEDULE" && boss.fixedSpawns) {
-    let nextDate: Date | null = null;
+  if (boss.type === "FIXED_SCHEDULE" && boss.fixedSpawns && boss.fixedSpawns.length > 0) {
+    // Fixed spawns are authored in Singapore wall-clock time (24h). Search the
+    // next 7 days in SGT, then convert the chosen instant back to UTC.
+    const killedSgt = new Date(killedAt.getTime() + SGT_OFFSET_MS);
+    let bestUtc: number | null = null;
 
-    // Check days starting from killedAt up to 7 days ahead
     for (let offset = 0; offset <= 7; offset++) {
-      const candidateDay = new Date(killedAt.getTime() + offset * 24 * 60 * 60 * 1000);
-      const dayOfWeek = candidateDay.getUTCDay();
+      const daySgt = new Date(killedSgt.getTime() + offset * 24 * 60 * 60 * 1000);
+      const dayOfWeek = daySgt.getUTCDay(); // day-of-week in Singapore
 
       for (const spawn of boss.fixedSpawns) {
-        if (spawn.day === dayOfWeek) {
-          const candidate = new Date(candidateDay);
-          candidate.setUTCHours(spawn.hour, spawn.minute, 0, 0);
+        if (spawn.day !== dayOfWeek) continue;
 
-          if (candidate.getTime() > killedAt.getTime()) {
-            if (!nextDate || candidate.getTime() < nextDate.getTime()) {
-              nextDate = candidate;
-            }
-          }
+        const candidateSgtMs = Date.UTC(
+          daySgt.getUTCFullYear(),
+          daySgt.getUTCMonth(),
+          daySgt.getUTCDate(),
+          spawn.hour,
+          spawn.minute,
+          0,
+          0,
+        );
+        const candidateUtc = candidateSgtMs - SGT_OFFSET_MS;
+
+        if (candidateUtc > killedAt.getTime() && (bestUtc === null || candidateUtc < bestUtc)) {
+          bestUtc = candidateUtc;
         }
       }
     }
 
-    if (nextDate) return nextDate;
+    if (bestUtc !== null) return new Date(bestUtc);
   }
 
   // Fallback
   return new Date(killedAt.getTime() + 24 * 60 * 60 * 1000);
+}
+
+// ─── Real-time respawn timer ───────────────────────────────
+// A boss whose scheduled spawn passed should NOT read "LIVE" forever. We project
+// it forward along its real respawn cycle (cooldown / fixed schedule) so the
+// timer is always a live, future-facing countdown — exactly how an in-game boss
+// timer behaves. A boss only reads LIVE when it genuinely just appeared (within
+// `liveGraceMs` of its spawn) or the server has flagged it SPAWNED.
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+export interface RealtimeBossTimer {
+  /** Boss is up right now (server-flagged SPAWNED or within the live grace window). */
+  live: boolean;
+  /** Less than an hour until the next spawn. */
+  warning: boolean;
+  /** "HH:MM:SS" countdown to the next spawn, or "LIVE" when up. */
+  text: string;
+  /** Timestamp (ms) of the projected next spawn. */
+  nextSpawn: number;
+  /** How long the boss has been live (ms); 0 when not live. */
+  liveSinceMs: number;
+  /** Elapsed up-time formatted ("MM:SS" or "HH:MM:SS"); empty when not live. */
+  liveElapsedText: string;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function formatHMS(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+}
+
+function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h > 0 ? `${pad2(h)}:${pad2(m)}:${pad2(s)}` : `${pad2(m)}:${pad2(s)}`;
+}
+
+export function getRealtimeBossTimer(
+  bossName: string,
+  spawnTime: string,
+  now: number,
+  opts: { status?: string | null; liveGraceMs?: number } = {},
+): RealtimeBossTimer {
+  const grace = opts.liveGraceMs ?? ONE_HOUR_MS;
+  const scheduled = new Date(spawnTime).getTime();
+  const overdue = now - scheduled;
+  const isSpawned = opts.status === "SPAWNED";
+
+  // Genuinely live: server says it's up, or it just spawned within the grace window.
+  if (isSpawned || (overdue >= 0 && overdue <= grace)) {
+    const liveSince = Math.max(0, overdue);
+    return {
+      live: true,
+      warning: false,
+      text: "LIVE",
+      nextSpawn: scheduled,
+      liveSinceMs: liveSince,
+      liveElapsedText: formatElapsed(liveSince),
+    };
+  }
+
+  // Otherwise project forward along the boss's real cycle until the spawn is in the future.
+  let target = scheduled;
+  if (target <= now) {
+    let cursor = new Date(scheduled);
+    let guard = 0;
+    while (cursor.getTime() <= now && guard++ < 128) {
+      const next = getNextBossSpawnTime(bossName, cursor);
+      // Safety: never let the cursor stall (unknown boss / degenerate schedule).
+      cursor = next.getTime() > cursor.getTime() ? next : new Date(cursor.getTime() + ONE_HOUR_MS);
+    }
+    target = cursor.getTime();
+  }
+
+  const diff = Math.max(0, target - now);
+  return {
+    live: false,
+    warning: diff <= ONE_HOUR_MS,
+    text: formatHMS(diff),
+    nextSpawn: target,
+    liveSinceMs: 0,
+    liveElapsedText: "",
+  };
+}
+
+// ─── Boss cycle categorisation (for rotation filters) ───────
+export type BossCycleCategory = "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE";
+
+// Bosses that respawn at least once a day (windowed bosses or a cooldown of a
+// day or less) are "short cycle"; longer multi-day cooldowns are "long cycle".
+const SHORT_CYCLE_MAX_HOURS = 24;
+
+export function getBossCycleCategory(
+  bossName: string,
+  type?: string | null,
+  cooldownHours?: number | null,
+): BossCycleCategory {
+  const predef = PREDEFINED_BOSSES.find((b) => b.name.toLowerCase() === bossName.toLowerCase());
+  const resolvedType = type ?? predef?.type ?? "LONG_CYCLE";
+  if (resolvedType === "FIXED_SCHEDULE") return "FIXED_SCHEDULE";
+
+  const cooldown = cooldownHours ?? predef?.cooldownHours ?? null;
+  if (predef?.window || (cooldown !== null && cooldown <= SHORT_CYCLE_MAX_HOURS)) {
+    return "SHORT_CYCLE";
+  }
+  return "LONG_CYCLE";
 }
 
 export function getBossImageUrl(bossName: string): string {

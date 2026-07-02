@@ -36,7 +36,7 @@ export default function VerificationQueue({
           <p className="text-xs text-white/40 mt-1.5 flex flex-wrap items-center gap-2">
             {selectedActiveSession ? (
               <>
-                <span className="font-medium text-white/70">Active: "{selectedActiveSession.title}" (Code: <strong className="text-white font-mono">{selectedActiveSession.code}</strong>)</span>
+                <span className="font-medium text-white/70">Active window: "{selectedActiveSession.title}"</span>
                 <button
                   type="button"
                   onClick={() => onEditSession(selectedActiveSession)}
@@ -84,11 +84,11 @@ export default function VerificationQueue({
         </div>
       ) : !selectedActiveSession ? (
         <div className="text-center py-12 text-xs text-zinc-650 italic">
-          Raid verification is inactive. Open a portal for an active timeline spawn to generate check-in codes.
+          Raid verification is inactive. A check-in window opens automatically when you log a boss kill in Boss Schedule.
         </div>
       ) : pendingRecords.length === 0 ? (
         <div className="text-center py-12 text-xs text-zinc-650 italic">
-          Verification queue is empty. Members check-ins using code **"{selectedActiveSession.code}"** will show up here instantly.
+          Verification queue is empty. Member check-ins for this boss will show up here instantly.
         </div>
       ) : (
         <div className="overflow-x-auto">

@@ -136,7 +136,7 @@ export default function RegisterPage() {
             <span className="text-[#F5B841]">.</span>
           </h1>
           <p className="text-sm text-[#8B8F98] mt-2 leading-relaxed">
-            Lead your guild with a real management platform.
+            Stand up your guild&apos;s command center in minutes. No credit card.
           </p>
         </div>
 

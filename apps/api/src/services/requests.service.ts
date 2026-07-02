@@ -1,6 +1,12 @@
 import { prisma } from "@guild/db";
 import { writeAuditLog } from "./audit.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
+import { MARKET_REQUEST_TYPES, REQUEST_TYPE_LIMIT_KEY, type MarketRequestType } from "@guild/shared";
+import {
+  getEffectiveMarketRules,
+  resolveDistributionTier,
+  notifyGuildOfficers,
+} from "./market.service";
 
 // Default per-rank item limits per reset cycle
 const DEFAULT_ITEM_LIMITS: Record<string, number> = {
@@ -40,37 +46,50 @@ export async function createItemRequest(
   guildId: string,
   actorId: string,
   payload: {
-    itemName: string;
-    quantity?: number;
-    itemCategory?: string;
-    note?: string;
+    itemType: MarketRequestType;
+    itemName?: string;
+    quantity: number;
+    reason?: string;
   },
 ) {
-  const [member, settings] = await Promise.all([
+  const [member, settings, rules] = await Promise.all([
     prisma.guildMember.findUnique({
       where: { userId_guildId: { userId: actorId, guildId } },
     }),
     prisma.guildSettings.findUnique({ where: { guildId } }),
+    getEffectiveMarketRules(guildId),
   ]);
 
   if (!member || !member.isActive) {
     throw new ForbiddenError("You must be an active guild member to submit requests");
   }
 
-  if (!payload.itemName?.trim()) throw new BadRequestError("Item name is required");
+  if (!MARKET_REQUEST_TYPES.includes(payload.itemType)) {
+    throw new BadRequestError("Invalid request type");
+  }
+  const quantity = payload.quantity || 1;
+  if (quantity < 1) throw new BadRequestError("Quantity must be at least 1");
 
-  // Enforce per-rank limits
+  // Enforce rank/CP-tier per-item-type quantity limit
+  const tier = resolveDistributionTier(member, rules);
+  const typeLimit = rules.limits[tier][REQUEST_TYPE_LIMIT_KEY[payload.itemType]];
+  if (quantity > typeLimit) {
+    throw new BadRequestError(
+      `Requested ${quantity} exceeds your ${tier} limit of ${typeLimit} for ${payload.itemType}.`,
+    );
+  }
+
+  // Enforce per-cycle active-request count limit
   const limits = (settings?.itemRequestLimits as Record<string, number>) || {};
-  const limit = limits[member.role] ?? DEFAULT_ITEM_LIMITS[member.role] ?? 5;
-
+  const countLimit = limits[member.role] ?? DEFAULT_ITEM_LIMITS[member.role] ?? 5;
   const activeCount = await getMemberActiveRequestCount(
     guildId,
     member.id,
     settings?.pointsResetCycle || "MANUAL",
   );
-  if (activeCount >= limit) {
+  if (activeCount >= countLimit) {
     throw new BadRequestError(
-      `You have reached your item request limit (${limit}) for this cycle. Current role: ${member.role}`
+      `You have reached your item request limit (${countLimit}) for this cycle. Current role: ${member.role}`,
     );
   }
 
@@ -80,10 +99,10 @@ export async function createItemRequest(
       memberId: member.id,
       type: "ITEM",
       status: "PENDING",
-      itemName: payload.itemName.trim(),
-      quantity: payload.quantity || 1,
-      itemCategory: payload.itemCategory || "OTHER",
-      note: payload.note?.trim() || null,
+      itemName: payload.itemName?.trim() || payload.itemType,
+      quantity,
+      itemCategory: payload.itemType,
+      note: payload.reason?.trim() || null,
     },
     include: {
       member: { select: { ign: true, role: true, rankName: true } },
@@ -96,7 +115,15 @@ export async function createItemRequest(
     action: "ITEM_REQUEST_SUBMITTED",
     target: "ItemRequest",
     targetId: request.id,
-    detail: { itemName: payload.itemName, quantity: payload.quantity || 1, ign: member.ign },
+    detail: { itemType: payload.itemType, itemName: request.itemName, quantity, ign: member.ign },
+  });
+
+  // Notify all officers & leaders that a member/core submitted a request
+  await notifyGuildOfficers(guildId, {
+    type: "ITEM_REQUEST",
+    title: "New item request",
+    body: `${member.ign || "A member"} requested ${quantity}× ${payload.itemType}.`,
+    metadata: { requestId: request.id, itemType: payload.itemType, quantity },
   });
 
   return request;

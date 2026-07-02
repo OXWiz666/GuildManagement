@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Badge from "@/components/ui/Badge";
-import { Reveal, SectionLabel, useReveal } from "./LandingHelpers";
+import { Reveal, SpotlightCard } from "./LandingHelpers";
 
 // ═══════════════════════════════════════════════════════════
 // INLINE FEATURES VISUAL COMPONENTS
@@ -213,11 +213,24 @@ function LeaderToolsVisual() {
 // MAIN FEATURES COMPONENT
 // ═══════════════════════════════════════════════════════════
 
-const FEATURES = [
+// Bento composition — 8 tiles arranged with rhythm (3 / 2 / 3 across three
+// rows on a 6-col grid). `span` sets the desktop column width so the grid
+// breathes instead of reading as eight identical cards.
+type FeatureTile = {
+  title: string;
+  desc: string;
+  visual: React.ReactNode;
+  span: string;
+  feature?: boolean;
+  icon: React.ReactNode;
+};
+
+const FEATURES: FeatureTile[] = [
   {
     title: "Member Management",
-    desc: "Manage your member profiles, class, and roles.",
+    desc: "Profiles, class, and role tiers for the whole roster in one place.",
     visual: <MemberManagementVisual />,
+    span: "lg:col-span-2",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
@@ -228,8 +241,9 @@ const FEATURES = [
   },
   {
     title: "Smart Boss Rotations",
-    desc: "Track priority sequence values and cycle upcoming claims to ensure fair loot distribution.",
+    desc: "Priority queues cycle upcoming claims so loot stays fair.",
     visual: <BossRotationVisual />,
+    span: "lg:col-span-2",
     icon: (
       <svg
         className="block h-5 w-5"
@@ -249,8 +263,10 @@ const FEATURES = [
   },
   {
     title: "Live Spawn Scheduling",
-    desc: "Maintain countdown spawning timers, respawn parameters, and boss geographical locations.",
+    desc: "Countdown timers, respawn windows, and field locations, live.",
     visual: <BossScheduleVisual />,
+    span: "lg:col-span-2",
+    feature: true,
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="10" />
@@ -260,8 +276,9 @@ const FEATURES = [
   },
   {
     title: "Attendance Code Verifications",
-    desc: "Record real-time check-ins using random passcode validation checks to award guild points.",
+    desc: "Random passcode check-ins turn raid turnout into fair, tamper-proof guild points.",
     visual: <AttendanceVisual />,
+    span: "lg:col-span-3",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -270,8 +287,9 @@ const FEATURES = [
   },
   {
     title: "Guild Points Ledger",
-    desc: "Reward engagements automatically using guild points synced with participation logs.",
+    desc: "Reward engagement automatically with points synced to participation logs.",
     visual: <PointsVisual />,
+    span: "lg:col-span-3",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -280,8 +298,9 @@ const FEATURES = [
   },
   {
     title: "Guild Treasury",
-    desc: "Manage guild balance logs, track item logs, execute fair payouts and auction items to members.",
+    desc: "Balance logs, fair payouts, and member item auctions.",
     visual: <TreasuryVisual />,
+    span: "lg:col-span-2",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -291,8 +310,9 @@ const FEATURES = [
   },
   {
     title: "Verifiable Audit History",
-    desc: "Append-only activity logs stamped with hash signatures to prevent records tampering.",
+    desc: "Append-only logs stamped with hash signatures. Nothing gets rewritten.",
     visual: <AuditLogsVisual />,
+    span: "lg:col-span-2",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -301,8 +321,9 @@ const FEATURES = [
   },
   {
     title: "Command Console Tools",
-    desc: "Empower officers with advanced parameter configurations, raid schedules, and overrides.",
+    desc: "Officer overrides, raid locks, and multiplier controls.",
     visual: <LeaderToolsVisual />,
+    span: "lg:col-span-2",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -313,53 +334,61 @@ const FEATURES = [
 
 export default function Features() {
   return (
-    <section id="features" className="py-24 relative bg-[#050608]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Section Header */}
-        <Reveal className="text-center mb-16">
-          <SectionLabel>Features</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl lg:text-5xl font-semibold text-white tracking-[-0.022em] max-w-3xl mx-auto font-fantasy">
-            Built for serious guild operations.
+    <section id="features" className="relative bg-[#050608] py-28">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+
+        {/* Section header — headline only, no eyebrow */}
+        <Reveal className="mb-16 max-w-3xl">
+          <h2 className="font-fantasy text-4xl font-semibold tracking-[-0.022em] text-white sm:text-5xl">
+            Every guild system,
+            <br className="hidden sm:block" /> <span className="text-gold-sheen">one keep.</span>
           </h2>
-          <p className="mt-4 text-sm text-[#8B8F98] max-w-xl mx-auto leading-relaxed">
-            Eliminate chaotic spreadsheets. Manage your guild operations in one clean, integrated dashboard interface.
+          <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-[#8B8F98]">
+            Retire the tangle of spreadsheets and Discord pins. Boss timers,
+            attendance, points, and treasury run from a single, audited dashboard.
           </p>
         </Reveal>
 
-        {/* Feature Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Bento grid */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
           {FEATURES.map((feature, i) => (
-            <Reveal key={feature.title} delay={i * 80}>
-              <div className="relative p-6 h-full flex flex-col justify-between group transition-all duration-300 card-obsidian hover:shadow-[0_12px_30px_rgba(212,168,83,0.06)] hover:-translate-y-1 hover:border-[#d4a853]/20">
-                
-                {/* Header info */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="grid h-9 w-9 place-items-center rounded-lg border border-[#d4a853]/15 bg-white/[0.02] text-[#f5c542] group-hover:bg-[#d4a853]/5 group-hover:border-[#d4a853]/40 transition-all duration-300">
+            <Reveal key={feature.title} delay={(i % 3) * 90} from="morph" className={`h-full ${feature.span}`}>
+              <SpotlightCard
+                className={`group card-obsidian flex h-full flex-col justify-between rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#d4a853]/25 hover:shadow-[0_16px_40px_-12px_rgba(212,168,83,0.12)] ${
+                  feature.feature ? "edge-forge" : ""
+                }`}
+              >
+                {feature.feature && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 rounded-2xl"
+                    style={{ background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(212,168,83,0.07), transparent 65%)" }}
+                  />
+                )}
+
+                <div className="relative">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl border border-[#d4a853]/15 bg-white/[0.02] text-[#f5c542] transition-all duration-300 group-hover:border-[#d4a853]/40 group-hover:bg-[#d4a853]/[0.06]">
                       {feature.icon}
                     </div>
-                    <span className="text-[9px] font-mono font-bold text-white/20">0{i + 1}</span>
+                    <span className="font-mono text-[9px] font-bold text-white/20">0{i + 1}</span>
                   </div>
 
-                  <h3 className="text-sm font-bold text-white tracking-wide mb-1.5 uppercase group-hover:text-[#f5c542] transition-colors">
+                  <h3 className="mb-1.5 text-[15px] font-bold tracking-tight text-white transition-colors group-hover:text-[#f5c542]">
                     {feature.title}
                   </h3>
-                  <p className="text-xs text-[#8B8F98] leading-relaxed">
+                  <p className="max-w-sm text-[13px] leading-relaxed text-[#8B8F98]">
                     {feature.desc}
                   </p>
                 </div>
 
-                {/* Simulated visual widget */}
-                <div className="mt-4 pt-3 border-t border-white/[0.04]">
+                <div className="relative mt-5 border-t border-white/[0.04] pt-4">
                   {feature.visual}
                 </div>
-                
-              </div>
+              </SpotlightCard>
             </Reveal>
           ))}
         </div>
-        
       </div>
     </section>
   );

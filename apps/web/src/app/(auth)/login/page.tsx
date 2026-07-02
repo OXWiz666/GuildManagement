@@ -68,11 +68,11 @@ export default function LoginPage() {
             <span className="h-px flex-1 bg-gradient-to-r from-[#F5B841]/25 to-transparent" />
           </div>
           <h1 className="text-[28px] leading-tight font-extrabold text-white tracking-tight">
-            Sign in to ForgeKeep
+            Back to the keep
             <span className="text-[#F5B841]">.</span>
           </h1>
           <p className="text-sm text-[#8B8F98] mt-2 leading-relaxed">
-            Continue managing your guild operations.
+            Pick up your guild ops right where the roster left off.
           </p>
         </div>
 
@@ -192,7 +192,7 @@ export default function LoginPage() {
                 >
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
-                Login Now!
+                Sign in
                 {/* Right arrow icon */}
                 <svg
                   className="h-3.5 w-3.5 ml-2 text-white/80 transition-transform duration-300 group-hover:translate-x-1"

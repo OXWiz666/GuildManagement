@@ -5,7 +5,7 @@ import { requireGuildRole } from "../middleware/rbac";
 import * as guildService from "../services/guild.service";
 import * as applicationService from "../services/application.service";
 import type { ApiResponse } from "@guild/shared";
-import { GUILD_ROLES, type GuildRoleType } from "@guild/shared";
+import { GUILD_ROLES, type GuildRoleType, gearItemsSchema } from "@guild/shared";
 import { prisma } from "@guild/db";
 import { broadcastToGuild } from "../lib/socket";
 import { auditLogLimiter } from "../middleware/rateLimiter";
@@ -144,6 +144,9 @@ router.post(
         weapon: string;
       };
 
+      // Optional gear captured during onboarding (Item Screenshot Update).
+      const gearItems = gearItemsSchema.parse((req.body as { gear?: unknown }).gear);
+
       const result = await applicationService.createJoinRequest(
         req.user!.userId,
         inviteCode,
@@ -151,6 +154,7 @@ router.post(
         Number(cp),
         classType,
         weapon,
+        gearItems,
       );
 
       const fullRequest = await prisma.guildJoinRequest.findUnique({

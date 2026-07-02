@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Logo from "@/components/common/Logo";
 
 function useScrolled(threshold = 24) {
   const [scrolled, setScrolled] = useState(false);
@@ -40,22 +41,8 @@ export default function Header() {
       >
         <div className="flex items-center justify-between gap-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 shrink-0 group pl-2">
-            <div className="relative h-8 w-8 rounded-lg border border-white/10 bg-white/[0.03] flex items-center justify-center transition-all group-hover:border-[#d4a853]/40 group-hover:bg-[#d4a853]/5">
-              {/* Spinning outer accent dot */}
-              <div className="absolute -inset-0.5 rounded-lg border border-transparent group-hover:border-t-[#d4a853]/30 animate-spin-slow pointer-events-none" />
-              <svg className="h-4 w-4 text-[#f5c542] transition-transform duration-500 group-hover:rotate-12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="text-sm font-semibold text-white tracking-tight group-hover:text-[#f5c542] transition-colors">
-                ForgeKeep
-              </span>
-              <span className="text-[8px] text-[#d4a853]/60 tracking-[0.2em] uppercase mt-0.5 font-mono">
-                Guild Command
-              </span>
-            </div>
+          <Link href="/" className="shrink-0 group pl-2">
+            <Logo size={32} descriptor="Guild Command" />
           </Link>
 
           {/* Desktop links */}
@@ -84,7 +71,7 @@ export default function Header() {
               href="/register"
               className="group inline-flex items-center gap-1.5 px-4.5 py-1.5 text-[13px] font-semibold rounded-full bg-gradient-to-r from-[#d4a853] to-[#f5c542] text-[#08080c] shadow-[0_0_12px_rgba(212,168,83,0.2)] hover:shadow-[0_0_20px_rgba(212,168,83,0.4)] border border-amber-400/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
             >
-              Get started
+              Start free trial
               <svg
                 className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5"
                 viewBox="0 0 24 24"
@@ -144,7 +131,7 @@ export default function Header() {
               className="block text-center px-4 py-2.5 text-sm font-bold text-[#08080c] bg-gradient-to-r from-[#d4a853] to-[#f5c542] hover:shadow-[0_0_15px_rgba(212,168,83,0.3)] rounded-xl transition-all"
               onClick={() => setMobileOpen(false)}
             >
-              Get started
+              Start free trial
             </Link>
           </div>
         </div>

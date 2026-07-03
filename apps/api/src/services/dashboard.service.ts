@@ -61,6 +61,27 @@ function normalizeQueue(rawQueue: unknown, activeGuildIds: string[]) {
   return normalized;
 }
 
+/**
+ * Resolve the effective rotation queue for a boss, honoring the faction leader's
+ * master list. When `participantsConfigured` is set, the stored queue is the
+ * authoritative participant list — only listed (still-active) guilds take the
+ * boss, in order, with NO auto-inclusion of every active guild. Otherwise it
+ * falls back to the default "all active faction guilds" behavior.
+ */
+function resolveQueue(
+  existing: { queueGuildIds: unknown; participantsConfigured?: boolean } | null | undefined,
+  activeGuildIds: string[],
+) {
+  if (existing?.participantsConfigured) {
+    const activeSet = new Set(activeGuildIds);
+    const raw = Array.isArray(existing.queueGuildIds)
+      ? existing.queueGuildIds.filter((id): id is string => typeof id === "string")
+      : [];
+    return raw.filter((id) => activeSet.has(id));
+  }
+  return normalizeQueue(existing?.queueGuildIds, activeGuildIds);
+}
+
 async function requireActiveGuildMember(actorId: string, guildId: string) {
   const membership = await prisma.guildMember.findUnique({
     where: { userId_guildId: { userId: actorId, guildId } },
@@ -77,6 +98,22 @@ async function requireBossRotationManager(actorId: string, guildId: string) {
   const membership = await requireActiveGuildMember(actorId, guildId);
   if (!canManageBossRotation(membership.role)) {
     throw new ForbiddenError("Only Faction Leaders, Guild Leaders, and Admins can manage boss rotations");
+  }
+  return membership;
+}
+
+function isFactionLevelRole(role: string) {
+  return role === "FACTION_LEADER" || role === "ADMIN";
+}
+
+/**
+ * The master list (which guilds are scheduled for each boss) may only be edited
+ * by Faction Leaders (and Admins), per faction policy.
+ */
+async function requireFactionLeader(actorId: string, guildId: string) {
+  const membership = await requireActiveGuildMember(actorId, guildId);
+  if (!isFactionLevelRole(membership.role)) {
+    throw new ForbiddenError("Only Faction Leaders can modify the boss master list");
   }
   return membership;
 }
@@ -239,36 +276,56 @@ async function getDefaultScheduleCreator(guildId: string): Promise<string | null
  * Idempotent — only creates rows for bosses that have no UPCOMING/SPAWNED entry.
  */
 async function ensureUpcomingSpawns(guildId: string) {
-  const existing = await prisma.bossSchedule.findMany({
-    where: {
-      guildId,
-      status: { in: [BossEventStatus.UPCOMING, BossEventStatus.SPAWNED] },
-    },
-    select: { id: true, bossName: true, spawnTime: true },
-  });
+  const [existing, rotations] = await Promise.all([
+    prisma.bossSchedule.findMany({
+      where: {
+        guildId,
+        status: { in: [BossEventStatus.UPCOMING, BossEventStatus.SPAWNED] },
+      },
+      select: { id: true, bossName: true, spawnTime: true, status: true },
+    }),
+    prisma.bossRotation.findMany({
+      select: { bossName: true, nextSpawnTime: true },
+    }),
+  ]);
 
   const now = new Date();
 
-  // Roll forward stale FIXED_SCHEDULE spawns. Their cadence is deterministic, so
-  // a passed spawn time can be advanced to the next Singapore-time occurrence
-  // without waiting for a kill log — keeping every countdown valid across the
-  // Rotation / Schedule / Attendance pages. (Cooldown bosses intentionally stay
-  // "live / ready" until their first kill establishes the real timer.)
+  // The rotation table is the source of truth for a cycle boss's next spawn once
+  // it has been taken at least once. Keyed by lowercase name → future spawn time.
+  const rotationNextSpawn = new Map<string, Date>();
+  for (const r of rotations) {
+    if (r.nextSpawnTime && r.nextSpawnTime.getTime() > now.getTime()) {
+      rotationNextSpawn.set(r.bossName.toLowerCase(), r.nextSpawnTime);
+    }
+  }
+
   const fixedByName = new Map(
     PREDEFINED_BOSSES.filter((b) => b.type === "FIXED_SCHEDULE").map((b) => [b.name.toLowerCase(), b]),
   );
-  const staleFixed = existing.filter(
-    (s) => fixedByName.has(s.bossName.toLowerCase()) && s.spawnTime.getTime() <= now.getTime(),
-  );
-  if (staleFixed.length > 0) {
+
+  // Roll forward stale spawns so no boss reads "LIVE" forever:
+  //  • FIXED_SCHEDULE — advance to the next deterministic Singapore-time occurrence.
+  //  • Cycle bosses   — advance to the rotation's real `nextSpawnTime` when one has
+  //    been established by a kill. (A cycle boss with no future rotation time
+  //    intentionally stays "live / ready" until its first kill sets the cadence.)
+  const rollForward: Array<{ id: string; spawnTime: Date }> = [];
+  for (const s of existing) {
+    if (s.spawnTime.getTime() > now.getTime()) continue; // not stale
+    const key = s.bossName.toLowerCase();
+    if (fixedByName.has(key)) {
+      rollForward.push({ id: s.id, spawnTime: getNextBossSpawnTime(s.bossName, now) });
+    } else {
+      const rotationSpawn = rotationNextSpawn.get(key);
+      if (rotationSpawn) rollForward.push({ id: s.id, spawnTime: rotationSpawn });
+    }
+  }
+  if (rollForward.length > 0) {
     await prisma.$transaction(
-      staleFixed.map((s) =>
+      rollForward.map((s) =>
         prisma.bossSchedule.update({
           where: { id: s.id },
-          data: {
-            spawnTime: getNextBossSpawnTime(s.bossName, now),
-            status: BossEventStatus.UPCOMING,
-          },
+          data: { spawnTime: s.spawnTime, status: BossEventStatus.UPCOMING },
         }),
       ),
     );
@@ -287,15 +344,81 @@ async function ensureUpcomingSpawns(guildId: string) {
   }
 
   await prisma.bossSchedule.createMany({
-    data: missing.map((boss) => ({
-      guildId,
-      bossName: boss.name,
-      bossImageUrl: getBossImageUrl(boss.name),
-      spawnTime: boss.type === "FIXED_SCHEDULE" ? getNextBossSpawnTime(boss.name, now) : now,
-      location: boss.location,
+    data: missing.map((boss) => {
+      // Fixed bosses use their deterministic next spawn; cycle bosses use the
+      // rotation's established next spawn if any, otherwise start live (now).
+      const spawnTime = boss.type === "FIXED_SCHEDULE"
+        ? getNextBossSpawnTime(boss.name, now)
+        : rotationNextSpawn.get(boss.name.toLowerCase()) ?? now;
+      return {
+        guildId,
+        bossName: boss.name,
+        bossImageUrl: getBossImageUrl(boss.name),
+        spawnTime,
+        location: boss.location,
+        status: BossEventStatus.UPCOMING,
+        creatorId,
+      };
+    }),
+  });
+}
+
+/**
+ * After a rotation boss is taken, make sure its live schedule reflects the real
+ * next spawn instead of lingering at a past "live" time (which is what made a
+ * just-taken cycle boss immediately flip back to LIVE). Rolls every still-open
+ * schedule for the boss forward to `spawnTime` and assigns the next guild's turn;
+ * creates one if none exist. Returns a representative next schedule (or null).
+ */
+async function syncNextRotationSchedule(params: {
+  bossName: string;
+  fallbackGuildId: string | null;
+  bossImageUrl: string | null;
+  location: string;
+  spawnTime: Date;
+  nextGuildName: string | null;
+  nextGuildId: string | null;
+  creatorId: string;
+}) {
+  const guildTurnInclude = {
+    guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } },
+  } as const;
+
+  const openSchedules = await prisma.bossSchedule.findMany({
+    where: { bossName: params.bossName, status: { not: BossEventStatus.KILLED } },
+    orderBy: { spawnTime: "asc" },
+    select: { id: true },
+  });
+
+  if (openSchedules.length > 0) {
+    await prisma.bossSchedule.updateMany({
+      where: { bossName: params.bossName, status: { not: BossEventStatus.KILLED } },
+      data: {
+        spawnTime: params.spawnTime,
+        status: BossEventStatus.UPCOMING,
+        guildTurn: params.nextGuildName,
+        guildTurnGuildId: params.nextGuildId,
+      },
+    });
+    return prisma.bossSchedule.findUnique({
+      where: { id: openSchedules[0]!.id },
+      include: guildTurnInclude,
+    });
+  }
+
+  return prisma.bossSchedule.create({
+    data: {
+      guildId: params.fallbackGuildId,
+      bossName: params.bossName,
+      bossImageUrl: params.bossImageUrl,
+      spawnTime: params.spawnTime,
+      location: params.location,
       status: BossEventStatus.UPCOMING,
-      creatorId,
-    })),
+      guildTurn: params.nextGuildName,
+      guildTurnGuildId: params.nextGuildId,
+      creatorId: params.creatorId,
+    },
+    include: guildTurnInclude,
   });
 }
 
@@ -828,7 +951,7 @@ export async function getBossRotation(guildId: string, actorId: string) {
   const rotations = [];
   for (const boss of bosses) {
     const existing = rotationMap.get(boss.name) || null;
-    const queueGuildIds = normalizeQueue(existing?.queueGuildIds, activeGuildIds);
+    const queueGuildIds = resolveQueue(existing, activeGuildIds);
     const currentIndex = queueGuildIds.length
       ? Math.min(existing?.currentIndex || 0, queueGuildIds.length - 1)
       : 0;
@@ -969,7 +1092,7 @@ export async function markBossRotationKilled(
   const existingRotation = await prisma.bossRotation.findUnique({
     where: { bossName: schedule.bossName },
   });
-  const queueGuildIds = normalizeQueue(existingRotation?.queueGuildIds, activeGuildIds);
+  const queueGuildIds = resolveQueue(existingRotation, activeGuildIds);
   const takenIndex = queueGuildIds.indexOf(takenGuildId);
   const nextIndex = queueGuildIds.length ? ((takenIndex >= 0 ? takenIndex : 0) + 1) % queueGuildIds.length : 0;
   const nextGuildId = queueGuildIds[nextIndex] || null;
@@ -1003,6 +1126,19 @@ export async function markBossRotationKilled(
     },
   });
 
+  // Advance the boss's live schedule to its real next spawn (assigning the next
+  // guild's turn) so it no longer reads "LIVE" the instant it is taken.
+  const nextSchedule = await syncNextRotationSchedule({
+    bossName: schedule.bossName,
+    fallbackGuildId: schedule.guildId,
+    bossImageUrl: schedule.bossImageUrl,
+    location: schedule.location,
+    spawnTime: nextSpawnTime,
+    nextGuildName: nextGuild?.name ?? null,
+    nextGuildId,
+    creatorId: actorId,
+  });
+
   const [leaders, auditLog] = await Promise.all([
     nextGuildId
       ? prisma.guildMember.findMany({
@@ -1029,7 +1165,7 @@ export async function markBossRotationKilled(
           nextSpawnTime: nextSpawnTime.toISOString(),
           nextGuildId,
           nextGuildName: nextGuild?.name || null,
-          nextScheduleId: null,
+          nextScheduleId: nextSchedule?.id ?? null,
         },
         ipAddress,
         userAgent,
@@ -1090,7 +1226,7 @@ export async function markBossRotationKilled(
 
   return {
     schedule: serializeBossScheduleForApi(updatedEvent),
-    nextSchedule: null,
+    nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
   };
 }
@@ -1155,7 +1291,7 @@ export async function markBossRotationKilledByName(
     throw new BadRequestError("Selected taking guild is not active");
   }
 
-  const queueGuildIds = normalizeQueue(existingRotation?.queueGuildIds, activeGuildIds);
+  const queueGuildIds = resolveQueue(existingRotation, activeGuildIds);
   const takenIndex = queueGuildIds.indexOf(takenGuildId);
   const nextIndex = queueGuildIds.length ? ((takenIndex >= 0 ? takenIndex : 0) + 1) % queueGuildIds.length : 0;
   const nextGuildId = queueGuildIds[nextIndex] || null;
@@ -1177,6 +1313,19 @@ export async function markBossRotationKilledByName(
       nextSpawnTime,
       updatedById: actorId,
     },
+  });
+
+  // Seed the boss's first upcoming schedule at its real next spawn so the freshly
+  // established cycle stops reading "LIVE" immediately after being taken.
+  const nextSchedule = await syncNextRotationSchedule({
+    bossName: registryBoss.name,
+    fallbackGuildId: guildId,
+    bossImageUrl: getBossImageUrl(registryBoss.name),
+    location: registryBoss.location,
+    spawnTime: nextSpawnTime,
+    nextGuildName: nextGuild?.name ?? null,
+    nextGuildId,
+    creatorId: actorId,
   });
 
   const [leaders, auditLog] = await Promise.all([
@@ -1205,7 +1354,7 @@ export async function markBossRotationKilledByName(
           nextSpawnTime: nextSpawnTime.toISOString(),
           nextGuildId,
           nextGuildName: nextGuild?.name || null,
-          nextScheduleId: null,
+          nextScheduleId: nextSchedule?.id ?? null,
         },
         ipAddress,
         userAgent,
@@ -1266,9 +1415,278 @@ export async function markBossRotationKilledByName(
 
   return {
     schedule: null,
-    nextSchedule: null,
+    nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
   };
+}
+
+// ─── Boss Master List (faction-leader owned) ───────────────────
+// Defines which guilds are scheduled to take each boss. Guilds omitted from a
+// boss's list simply don't rotate on it (e.g. low-boss-only guilds). Everyone in
+// the faction can read the list; only Faction Leaders / Admins can edit it.
+
+export async function getBossMasterList(guildId: string, actorId: string) {
+  const [membership, guilds, bosses, rotations] = await Promise.all([
+    requireActiveGuildMember(actorId, guildId),
+    getActiveFactionGuilds(),
+    getBossRegistryForRotation(),
+    prisma.bossRotation.findMany(),
+  ]);
+
+  const activeGuildIds = guilds.map((g) => g.id);
+  const rotationMap = new Map(rotations.map((r) => [r.bossName.toLowerCase(), r]));
+
+  const bossEntries = bosses.map((boss) => {
+    const rotation = rotationMap.get(boss.name.toLowerCase()) || null;
+    return {
+      bossName: boss.name,
+      level: boss.level,
+      type: boss.type,
+      location: boss.location,
+      cooldownHours: boss.cooldownHours ?? null,
+      // A boss is "configured" once a faction leader has saved its participant
+      // list; until then it defaults to every active guild.
+      configured: Boolean(rotation?.participantsConfigured),
+      participantGuildIds: resolveQueue(rotation, activeGuildIds),
+    };
+  });
+
+  return {
+    canManage: isFactionLevelRole(membership.role),
+    viewerRole: membership.role,
+    guilds,
+    bosses: bossEntries,
+  };
+}
+
+export async function updateBossMasterList(
+  guildId: string,
+  actorId: string,
+  entries: Array<{ bossName: string; participantGuildIds: string[] }>,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireFactionLeader(actorId, guildId);
+
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new BadRequestError("No master list changes provided");
+  }
+
+  const [guilds, bosses] = await Promise.all([
+    getActiveFactionGuilds(),
+    getBossRegistryForRotation(),
+  ]);
+  const activeGuildIds = new Set(guilds.map((g) => g.id));
+  const bossByName = new Map(bosses.map((b) => [b.name.toLowerCase(), b]));
+
+  const normalizedEntries = entries.map((entry) => {
+    const boss = bossByName.get(entry.bossName?.trim().toLowerCase());
+    if (!boss) {
+      throw new BadRequestError(`Unknown boss: ${entry.bossName}`);
+    }
+    const ids = Array.isArray(entry.participantGuildIds) ? entry.participantGuildIds : [];
+    // Keep only active guilds, de-duped, in the given order.
+    const seen = new Set<string>();
+    const participantGuildIds = ids.filter((id) => {
+      if (typeof id !== "string" || !activeGuildIds.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return { bossName: boss.name, participantGuildIds };
+  });
+
+  const existing = await prisma.bossRotation.findMany({
+    where: { bossName: { in: normalizedEntries.map((e) => e.bossName) } },
+  });
+  const existingMap = new Map(existing.map((r) => [r.bossName, r]));
+
+  await prisma.$transaction(
+    normalizedEntries.map((entry) => {
+      const prev = existingMap.get(entry.bossName);
+      // Preserve whose turn it is where possible; clamp if the list shrank.
+      const clampedIndex = entry.participantGuildIds.length
+        ? Math.min(prev?.currentIndex ?? 0, entry.participantGuildIds.length - 1)
+        : 0;
+      return prisma.bossRotation.upsert({
+        where: { bossName: entry.bossName },
+        create: {
+          bossName: entry.bossName,
+          queueGuildIds: entry.participantGuildIds,
+          currentIndex: 0,
+          participantsConfigured: true,
+          updatedById: actorId,
+        },
+        update: {
+          queueGuildIds: entry.participantGuildIds,
+          currentIndex: clampedIndex,
+          participantsConfigured: true,
+          updatedById: actorId,
+        },
+      });
+    }),
+  );
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_ROTATION_MASTER_LIST_UPDATED",
+    target: "BossRotation",
+    targetId: guildId,
+    detail: {
+      updatedBosses: normalizedEntries.map((e) => ({
+        bossName: e.bossName,
+        participantCount: e.participantGuildIds.length,
+      })),
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  return getBossMasterList(guildId, actorId);
+}
+
+// ─── Low-boss day rotation (faction-leader owned) ──────────────
+// A single-row config: whichever guild is assigned to a day takes ALL flagged
+// "low" bosses that day. Supports a repeating WEEKLY pattern (weekday → guild)
+// and a MONTHLY calendar (date → guild).
+
+const LOW_ROTATION_ID = "singleton";
+const LOW_ROTATION_MODES = ["WEEKLY", "MONTHLY"] as const;
+
+function parseStringMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === "string") out[k] = v;
+  }
+  return out;
+}
+
+function parseStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+}
+
+export async function getLowBossRotation(guildId: string, actorId: string) {
+  const [membership, guilds, bosses, config] = await Promise.all([
+    requireActiveGuildMember(actorId, guildId),
+    getActiveFactionGuilds(),
+    getBossRegistryForRotation(),
+    prisma.bossLowRotation.findUnique({ where: { id: LOW_ROTATION_ID } }),
+  ]);
+
+  const activeIds = new Set(guilds.map((g) => g.id));
+
+  // Drop assignments to guilds that are no longer active.
+  const cleanWeekly: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parseStringMap(config?.weekly))) {
+    if (activeIds.has(v)) cleanWeekly[k] = v;
+  }
+  const cleanDays: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parseStringMap(config?.days))) {
+    if (activeIds.has(v)) cleanDays[k] = v;
+  }
+
+  const bossNameSet = new Set(bosses.map((b) => b.name.toLowerCase()));
+  const lowBossNames = parseStringArray(config?.lowBossNames).filter((n) => bossNameSet.has(n.toLowerCase()));
+
+  return {
+    canManage: isFactionLevelRole(membership.role),
+    viewerRole: membership.role,
+    mode: config?.mode === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+    lowBossNames,
+    weekly: cleanWeekly,
+    days: cleanDays,
+    guilds,
+    bosses: bosses.map((b) => ({ bossName: b.name, level: b.level, type: b.type, location: b.location })),
+  };
+}
+
+export async function updateLowBossRotation(
+  guildId: string,
+  actorId: string,
+  payload: {
+    mode?: string;
+    lowBossNames?: string[];
+    weekly?: Record<string, string>;
+    daysPatch?: Record<string, string | null>;
+  },
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireFactionLeader(actorId, guildId);
+
+  const [guilds, bosses, existing] = await Promise.all([
+    getActiveFactionGuilds(),
+    getBossRegistryForRotation(),
+    prisma.bossLowRotation.findUnique({ where: { id: LOW_ROTATION_ID } }),
+  ]);
+  const activeIds = new Set(guilds.map((g) => g.id));
+  const bossByLower = new Map(bosses.map((b) => [b.name.toLowerCase(), b.name]));
+
+  let mode = existing?.mode === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+  if (payload.mode !== undefined) {
+    if (!LOW_ROTATION_MODES.includes(payload.mode as (typeof LOW_ROTATION_MODES)[number])) {
+      throw new BadRequestError("Mode must be WEEKLY or MONTHLY");
+    }
+    mode = payload.mode;
+  }
+
+  let lowBossNames = parseStringArray(existing?.lowBossNames);
+  if (payload.lowBossNames !== undefined) {
+    const seen = new Set<string>();
+    lowBossNames = [];
+    for (const n of payload.lowBossNames) {
+      const canon = bossByLower.get(String(n).toLowerCase());
+      if (canon && !seen.has(canon)) {
+        seen.add(canon);
+        lowBossNames.push(canon);
+      }
+    }
+  }
+
+  // Weekly is a full replace (only 7 possible keys).
+  let weekly = parseStringMap(existing?.weekly);
+  if (payload.weekly !== undefined) {
+    weekly = {};
+    for (const [k, v] of Object.entries(payload.weekly)) {
+      const wd = Number(k);
+      if (Number.isInteger(wd) && wd >= 0 && wd <= 6 && typeof v === "string" && activeIds.has(v)) {
+        weekly[String(wd)] = v;
+      }
+    }
+  }
+
+  // Days is a merge patch: `null` clears a date, a valid guild id sets it.
+  const days = parseStringMap(existing?.days);
+  if (payload.daysPatch !== undefined) {
+    for (const [k, v] of Object.entries(payload.daysPatch)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
+      if (v === null) {
+        delete days[k];
+      } else if (typeof v === "string" && activeIds.has(v)) {
+        days[k] = v;
+      }
+    }
+  }
+
+  await prisma.bossLowRotation.upsert({
+    where: { id: LOW_ROTATION_ID },
+    create: { id: LOW_ROTATION_ID, mode, lowBossNames, weekly, days, updatedById: actorId },
+    update: { mode, lowBossNames, weekly, days, updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_LOW_ROTATION_UPDATED",
+    target: "BossLowRotation",
+    targetId: LOW_ROTATION_ID,
+    detail: { mode, lowBossCount: lowBossNames.length, dayCount: Object.keys(days).length },
+    ipAddress,
+    userAgent,
+  });
+
+  return getLowBossRotation(guildId, actorId);
 }
 
 export async function getBossKilledHistory(guildId: string, actorId: string, month?: string) {

@@ -19,6 +19,7 @@ import factionRoutes from "./routes/faction.routes";
 import notificationRoutes from "./routes/notification.routes";
 import marketRoutes from "./routes/market.routes";
 import equipmentRoutes from "./routes/equipment.routes";
+import activityRoutes from "./routes/activity.routes";
 
 const app: express.Express = express();
 
@@ -52,6 +53,7 @@ app.use("/api/faction", factionRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/market", marketRoutes);
 app.use("/api/equipment", equipmentRoutes);
+app.use("/api/activities", activityRoutes);
 
 app.use("/api", (_req, res) => {
   res.status(404).json({

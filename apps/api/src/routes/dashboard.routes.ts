@@ -403,6 +403,100 @@ router.get(
   },
 );
 
+router.get(
+  "/boss-rotation/:guildId/master-list",
+  requireAuth,
+  dashboardLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const data = await dashboardService.getBossMasterList(guildId, req.user!.userId);
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.put(
+  "/boss-rotation/:guildId/master-list",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const { entries } = req.body as {
+        entries: Array<{ bossName: string; participantGuildIds: string[] }>;
+      };
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const data = await dashboardService.updateBossMasterList(
+        guildId,
+        req.user!.userId,
+        entries,
+        ipAddress,
+        userAgent,
+      );
+
+      await cache.invalidatePattern(`boss-schedule:*`);
+      broadcastToGuild(null, "boss_rotation_updated", data);
+
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.get(
+  "/boss-rotation/:guildId/low-rotation",
+  requireAuth,
+  dashboardLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const data = await dashboardService.getLowBossRotation(guildId, req.user!.userId);
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.put(
+  "/boss-rotation/:guildId/low-rotation",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guildId = req.params["guildId"] as string;
+      const payload = req.body as {
+        mode?: string;
+        lowBossNames?: string[];
+        weekly?: Record<string, string>;
+        daysPatch?: Record<string, string | null>;
+      };
+      const { ipAddress, userAgent } = getClientInfo(req);
+
+      const data = await dashboardService.updateLowBossRotation(
+        guildId,
+        req.user!.userId,
+        payload,
+        ipAddress,
+        userAgent,
+      );
+
+      broadcastToGuild(null, "boss_rotation_updated", data);
+
+      const response: ApiResponse = { success: true, data };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 router.post(
   "/boss-rotation/:guildId/:bossName/queue",
   requireAuth,

@@ -1,68 +1,37 @@
 "use client";
 
-import { useId } from "react";
+/**
+ * ForgeKeep brand assets.
+ *
+ * The mark is the shipped raster logo (`/forgekeep-logo.png`) — a struck anvil
+ * with a torch flame set on a faceted keep/shield, above the wordmark. Because
+ * the artwork ships on a solid black field it is designed to sit on the app's
+ * obsidian surfaces, where the black blends seamlessly.
+ *
+ * - `/forgekeep-icon.png`  — shield-only crop, for compact / square spots.
+ * - `/forgekeep-logo.png`  — full vertical lockup (shield + wordmark + tagline).
+ */
 
 /**
- * ForgeKeep brand mark — a struck anvil set on a faceted keep/shield, crowned
- * by an ember spark. Rendered in the forge-gold gradient so it sits natively
- * in the obsidian guild-command theme. A faint conic "forge ring" wakes up on
- * hover (driven by the parent `group`).
+ * Shield-only brand icon. Sized by `className` (e.g. "h-9 w-9") just like the
+ * previous SVG mark, so existing call sites keep working. `animated` is kept for
+ * API compatibility and is intentionally unused.
  */
 export function LogoMark({
   className = "h-9 w-9",
-  animated = true,
 }: {
   className?: string;
+  /** Kept for API compatibility with the previous SVG mark; unused. */
   animated?: boolean;
 }) {
-  const gid = useId().replace(/:/g, "");
-
   return (
-    <svg viewBox="0 0 40 40" className={className} fill="none" role="img" aria-label="ForgeKeep">
-      <defs>
-        <linearGradient id={`${gid}-gold`} x1="6" y1="3" x2="34" y2="37" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#f5c542" />
-          <stop offset="52%" stopColor="#d4a853" />
-          <stop offset="100%" stopColor="#a78332" />
-        </linearGradient>
-        <linearGradient id={`${gid}-anvil`} x1="10" y1="16" x2="30" y2="26" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#fff3cf" />
-          <stop offset="100%" stopColor="#d4a853" />
-        </linearGradient>
-      </defs>
-
-      {/* Keep / faceted shield */}
-      <path
-        d="M20 2.5 L34 7.5 V19 C34 27.8 28 33.8 20 37.5 C12 33.8 6 27.8 6 19 V7.5 Z"
-        fill={`url(#${gid}-gold)`}
-        fillOpacity="0.07"
-        stroke={`url(#${gid}-gold)`}
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      {/* Inner facet line for depth */}
-      <path
-        d="M20 6 L30 9.6 V19 C30 25.4 25.6 30 20 32.8"
-        stroke={`url(#${gid}-gold)`}
-        strokeOpacity="0.35"
-        strokeWidth="0.8"
-        strokeLinejoin="round"
-      />
-
-      {/* Anvil — horn left, stepped body, sturdy base */}
-      <path
-        d="M12.5 17.4 H24 L27.5 19 L23.6 20.9 H21.2 V22.8 H23.4 V25.2 H15.6 V22.8 H17.8 V20.9 H12.5 Z"
-        fill={`url(#${gid}-anvil)`}
-      />
-
-      {/* Ember spark rising from the strike point */}
-      <path
-        className={animated ? "fk-spark" : ""}
-        d="M28.8 7.4 L29.7 10.1 L32.4 11 L29.7 11.9 L28.8 14.6 L27.9 11.9 L25.2 11 L27.9 10.1 Z"
-        fill="#f5c542"
-        style={{ transformOrigin: "28.8px 11px" }}
-      />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/forgekeep-icon.png"
+      alt="ForgeKeep"
+      className={`object-contain ${className}`}
+      draggable={false}
+    />
   );
 }
 
@@ -73,7 +42,7 @@ export function LogoMark({
 export function LogoBadge({ size = 36 }: { size?: number }) {
   return (
     <span
-      className="relative grid place-items-center rounded-xl border border-[var(--metal-border)] bg-[var(--forge-glow)]/40 transition-all duration-500 group-hover:border-[var(--forge-gold)]/50 group-hover:bg-[var(--forge-glow)] group-hover:shadow-[0_0_18px_-2px_rgba(212,168,83,0.4)]"
+      className="relative grid place-items-center overflow-hidden rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-surface)] transition-all duration-500 group-hover:border-[var(--forge-gold)]/50 group-hover:shadow-[0_0_18px_-2px_rgba(212,168,83,0.4)]"
       style={{ height: size, width: size }}
     >
       {/* Conic forge ring — only visible on hover */}
@@ -91,7 +60,7 @@ export function LogoBadge({ size = 36 }: { size?: number }) {
           animation: "forge-ring-spin 4s linear infinite",
         }}
       />
-      <LogoMark className="h-[64%] w-[64%]" />
+      <LogoMark className="h-[86%] w-[86%]" />
       <span className="sr-only">ForgeKeep</span>
     </span>
   );
@@ -135,8 +104,10 @@ export default function Logo({
 export const TAGLINE = "Forged in trust, kept in order.";
 
 /**
- * Stacked brand lockup with the full tagline keyline — for hero / auth / footer
- * moments where there is room to state the promise.
+ * Full stacked brand lockup — the shipped artwork with the shield, wordmark and
+ * tagline all together. For hero / auth / footer moments where there is room to
+ * state the promise. `size` maps to the icon height for backwards compatibility;
+ * the full lockup is scaled proportionally from it.
  */
 export function LogoTagline({
   size = 44,
@@ -145,20 +116,17 @@ export function LogoTagline({
   size?: number;
   className?: string;
 }) {
+  const width = Math.round(size * 4.6);
+  const height = Math.round((width * 486) / 621);
   return (
-    <span className={`group inline-flex items-center gap-3.5 ${className}`}>
-      <LogoBadge size={size} />
-      <span className="flex flex-col leading-none">
-        <span className="text-xl font-semibold tracking-tight text-white font-fantasy">
-          Forge<span className="text-[var(--forge-gold)]">Keep</span>
-        </span>
-        <span className="mt-2 flex items-center gap-2">
-          <span className="brand-keyline w-6" />
-          <span className="text-[10px] font-medium tracking-[0.04em] text-[var(--forge-gold)]/75">
-            {TAGLINE}
-          </span>
-        </span>
-      </span>
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/forgekeep-logo.png"
+      alt="ForgeKeep — Lead · Organize · Conquer"
+      width={width}
+      height={height}
+      className={`object-contain ${className}`}
+      draggable={false}
+    />
   );
 }

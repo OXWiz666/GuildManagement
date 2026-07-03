@@ -38,6 +38,7 @@ export {
   resetPasswordSchema,
   changePasswordSchema,
   updateUserSchema,
+  combatPowerSchema,
 } from "./validators/auth";
 export type {
   LoginInput,
@@ -46,6 +47,7 @@ export type {
   ResetPasswordInput,
   ChangePasswordInput,
   UpdateUserInput,
+  CombatPowerInput,
 } from "./validators/auth";
 
 // Constants

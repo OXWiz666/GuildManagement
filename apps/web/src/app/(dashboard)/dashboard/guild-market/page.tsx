@@ -414,7 +414,7 @@ export default function GuildMarketPage() {
               activeTab === "loot" ? "text-white" : "text-white/40 hover:text-white/70"
             }`}
           >
-            📊 Loot Sales & History
+            Loot Sales & History
             {activeTab === "loot" && (
               <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
             )}
@@ -425,7 +425,7 @@ export default function GuildMarketPage() {
               activeTab === "accounting" ? "text-white" : "text-white/40 hover:text-white/70"
             }`}
           >
-            💰 Accounting & Ledger
+            Accounting & Ledger
             {activeTab === "accounting" && (
               <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
             )}
@@ -436,7 +436,7 @@ export default function GuildMarketPage() {
               activeTab === "rankings" ? "text-white" : "text-white/40 hover:text-white/70"
             }`}
           >
-            🏆 Guild Points Ranking
+            Guild Points Ranking
             {activeTab === "rankings" && (
               <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
             )}
@@ -447,7 +447,7 @@ export default function GuildMarketPage() {
               activeTab === "legendary" ? "text-white" : "text-white/40 hover:text-white/70"
             }`}
           >
-            ✨ Legendary Priority
+            Legendary Priority
             {activeTab === "legendary" && (
               <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
             )}
@@ -458,7 +458,7 @@ export default function GuildMarketPage() {
               activeTab === "distribution" ? "text-white" : "text-white/40 hover:text-white/70"
             }`}
           >
-            ⚖️ Item Distribution
+            Item Distribution
             {activeTab === "distribution" && (
               <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
             )}
@@ -469,7 +469,7 @@ export default function GuildMarketPage() {
               activeTab === "history" ? "text-white" : "text-white/40 hover:text-white/70"
             }`}
           >
-            📜 Distribution History
+            Distribution History
             {activeTab === "history" && (
               <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
             )}

@@ -655,6 +655,19 @@ export async function updateUserProfile(
   return toUserPublic(user);
 }
 
+/**
+ * Update the member's Combat Power everywhere it's shown. CP is a character-wide
+ * stat, so we set it on the user profile AND sync every guild membership in one
+ * transaction (rosters, market, faction all read GuildMember.cp).
+ */
+export async function updateCombatPower(userId: string, cp: number) {
+  const [user] = await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { cp } }),
+    prisma.guildMember.updateMany({ where: { userId }, data: { cp } }),
+  ]);
+  return { cp: user.cp };
+}
+
 function toUserPublic(user: any): UserPublic {
   return {
     id: user.id,

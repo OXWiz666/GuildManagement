@@ -125,6 +125,7 @@ model Guild {
   itemRequests       ItemRequest[]
   legendaryRequests  LegendaryPriorityRequest[]
   itemDistributions  ItemDistribution[]
+  activities         GuildActivity[]
 
   @@map("guilds")
 }
@@ -708,18 +709,84 @@ model BossSchedule {
 }
 
 model BossRotation {
-  id            String    @id @default(cuid())
-  bossName      String    @unique @map("boss_name")
-  queueGuildIds Json      @map("queue_guild_ids")
-  currentIndex  Int       @default(0) @map("current_index")
-  nextSpawnTime DateTime? @map("next_spawn_time")
-  updatedById   String?   @map("updated_by_id")
-  updatedBy     User?     @relation("BossRotationUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id                     String    @id @default(cuid())
+  bossName               String    @unique @map("boss_name")
+  queueGuildIds          Json      @map("queue_guild_ids")
+  currentIndex           Int       @default(0) @map("current_index")
+  nextSpawnTime          DateTime? @map("next_spawn_time")
+  // When true, queueGuildIds is the faction leader's explicit master-list of
+  // participating guilds for this boss and is honored as-is (guilds NOT listed
+  // are excluded). When false, the queue defaults to all active faction guilds.
+  participantsConfigured Boolean   @default(false) @map("participants_configured")
+  updatedById            String?   @map("updated_by_id")
+  updatedBy              User?     @relation("BossRotationUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   @@index([bossName])
   @@map("boss_rotations")
+}
+
+/**
+ * Day-based low-boss rotation (faction-leader owned). A single-row config for the
+ * faction: the guild assigned to a day takes ALL flagged "low" bosses that day.
+ * - mode:         WEEKLY (weekday→guild, repeats) or MONTHLY (calendar date→guild)
+ * - lowBossNames: which registry bosses follow this day rotation (JSON string[])
+ * - weekly:       { "0".."6" (Sun..Sat) → guildId } (JSON)
+ * - days:         { "YYYY-MM-DD" → guildId } (JSON)
+ */
+model BossLowRotation {
+  id           String   @id @default("singleton")
+  mode         String   @default("MONTHLY")
+  lowBossNames Json     @default("[]") @map("low_boss_names")
+  weekly       Json     @default("{}")
+  days         Json     @default("{}")
+  updatedById  String?  @map("updated_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("boss_low_rotations")
+}
+
+/**
+ * Unified guild activity scheduler: Guild Boss, Guild War, and PK War events.
+ * A simple calendar entry with optional opponent, result, and member attendance.
+ */
+model GuildActivity {
+  id           String                  @id @default(cuid())
+  guildId      String                  @map("guild_id")
+  guild        Guild                   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  type         String // GUILD_BOSS | GUILD_WAR | PK_WAR
+  title        String
+  location     String?
+  opponent     String? // enemy / rival guild
+  notes        String?
+  scheduledAt  DateTime                @map("scheduled_at")
+  status       String                  @default("UPCOMING") // UPCOMING | COMPLETED | CANCELLED
+  result       String? // WIN | LOSS | DRAW
+  scoreFor     Int?                    @map("score_for")
+  scoreAgainst Int?                    @map("score_against")
+  creatorId    String                  @map("creator_id")
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+  attendees    GuildActivityAttendee[]
+
+  @@index([guildId, scheduledAt])
+  @@index([guildId, type, status])
+  @@map("guild_activities")
+}
+
+model GuildActivityAttendee {
+  id         String        @id @default(cuid())
+  activityId String        @map("activity_id")
+  activity   GuildActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  userId     String        @map("user_id")
+  status     String        @default("PENDING") // PENDING | CONFIRMED
+  joinedAt   DateTime      @default(now()) @map("joined_at")
+
+  @@unique([activityId, userId])
+  @@index([activityId])
+  @@map("guild_activity_attendees")
 }
 
 model Boss {

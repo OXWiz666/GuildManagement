@@ -82,8 +82,15 @@ export const updateUserSchema = z.object({
   weapon: z.string().nullable().optional(),
 });
 
+// Combat Power update (e.g. from the screenshot scanner). CP is a character-wide
+// stat; 100M is generous headroom above any real in-game value.
+export const combatPowerSchema = z.object({
+  cp: z.number().int().nonnegative().max(100_000_000),
+});
+
 // Infer types from schemas
 export type LoginInput = z.infer<typeof loginSchema>;
+export type CombatPowerInput = z.infer<typeof combatPowerSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

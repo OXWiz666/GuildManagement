@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { EquipmentCatalogItem, EquipmentCatalogSlot } from "@/lib/api";
-import { rankItemsByCrop } from "@/lib/equipment-match";
+import { rankItemsByCrop, rankItemsByCropEmbed } from "@/lib/equipment-match";
 import type { IconSignature } from "@/lib/image-hash";
 import { rarityColor } from "./SlotCard";
 
@@ -17,6 +17,7 @@ export default function CorrectionPicker({
   slot,
   currentPath,
   cropSig,
+  cropEmbed,
   onSelect,
   onClear,
   onClose,
@@ -24,6 +25,7 @@ export default function CorrectionPicker({
   slot: EquipmentCatalogSlot;
   currentPath: string | null;
   cropSig?: IconSignature | null;
+  cropEmbed?: Float32Array | null;
   onSelect: (item: EquipmentCatalogItem) => void;
   onClear: () => void;
   onClose: () => void;
@@ -34,28 +36,35 @@ export default function CorrectionPicker({
   const [visualScores, setVisualScores] = useState<Map<string, number> | null>(null);
 
   // Rank this slot's items by visual similarity to the scanned crop, if available.
+  // Prefer CLIP embeddings (stronger); fall back to the dHash signature.
   useEffect(() => {
     let cancelled = false;
-    if (!cropSig) {
-      setVisualScores(null);
-      return;
+    // No reset branch: the picker remounts per slot, so initial state (null) already
+    // covers the "no crop" case — avoids a synchronous setState in the effect body.
+    if (cropEmbed) {
+      rankItemsByCropEmbed(cropEmbed, slot.items).then((scores) => {
+        if (!cancelled) setVisualScores(scores);
+      });
+    } else if (cropSig) {
+      rankItemsByCrop(cropSig, slot.items).then((scores) => {
+        if (!cancelled) setVisualScores(scores);
+      });
     }
-    rankItemsByCrop(cropSig, slot.items).then((scores) => {
-      if (!cancelled) setVisualScores(scores);
-    });
     return () => {
       cancelled = true;
     };
-  }, [cropSig, slot.items]);
+  }, [cropEmbed, cropSig, slot.items]);
 
+  // CLIP cosine sits higher than dHash similarity — raise the floor accordingly.
+  const minVisual = cropEmbed ? 0.7 : 0.55;
   const bestMatches = useMemo(() => {
     if (!visualScores) return [];
     return [...slot.items]
       .map((it) => ({ it, score: visualScores.get(`${it.bucket}/${it.path}`) ?? 0 }))
-      .filter((x) => x.score >= 0.55)
+      .filter((x) => x.score >= minVisual)
       .sort((a, b) => b.score - a.score)
       .slice(0, 6);
-  }, [visualScores, slot.items]);
+  }, [visualScores, slot.items, minVisual]);
 
   // Distinct rarities / variants present for this slot, in sensible order.
   const rarities = useMemo(() => {

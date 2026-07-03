@@ -89,7 +89,7 @@ const navGroups: NavGroup[] = [
         roles: ["ADMIN", "FACTION_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"],
       },
       {
-        label: "Boss Schedule",
+        label: "Guild Activities",
         href: "/dashboard/boss-schedule",
         icon: (
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -233,22 +233,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               >
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-[var(--forge-gold)] shadow-[0_0_10px_2px_rgba(212,168,83,0.6)]" />
               </div>
-              <div className="absolute inset-0 rounded-xl border border-[var(--metal-border)] bg-[var(--forge-glow)] backdrop-blur flex items-center justify-center transition-all duration-300 group-hover:border-[var(--forge-gold)]/30 group-hover:shadow-[0_0_12px_2px_rgba(212,168,83,0.15)]">
-                <svg
-                  className="h-[22px] w-[22px] text-[var(--forge-gold)] transition-transform duration-500 group-hover:scale-110"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="currentColor" fillOpacity="0.1" />
-                  <path d="M12 2L4 5v7c0 6 8 10 8 10s8-4 8-10V5L12 2z" />
-                  <path d="M8 9h8" />
-                  <path d="M10 9v4l-2 2h8l-2-2V9" />
-                  <circle cx="12" cy="6" r="1.5" className="fill-[var(--forge-gold)]" />
-                </svg>
+              <div className="absolute inset-0 overflow-hidden rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-surface)] backdrop-blur flex items-center justify-center transition-all duration-300 group-hover:border-[var(--forge-gold)]/30 group-hover:shadow-[0_0_12px_2px_rgba(212,168,83,0.15)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/forgekeep-icon.png"
+                  alt="ForgeKeep"
+                  className="h-[34px] w-[34px] object-contain transition-transform duration-500 group-hover:scale-110"
+                  draggable={false}
+                />
               </div>
             </div>
             <div>

@@ -446,9 +446,47 @@ exports.Prisma.BossRotationScalarFieldEnum = {
   queueGuildIds: 'queueGuildIds',
   currentIndex: 'currentIndex',
   nextSpawnTime: 'nextSpawnTime',
+  participantsConfigured: 'participantsConfigured',
   updatedById: 'updatedById',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BossLowRotationScalarFieldEnum = {
+  id: 'id',
+  mode: 'mode',
+  lowBossNames: 'lowBossNames',
+  weekly: 'weekly',
+  days: 'days',
+  updatedById: 'updatedById',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.GuildActivityScalarFieldEnum = {
+  id: 'id',
+  guildId: 'guildId',
+  type: 'type',
+  title: 'title',
+  location: 'location',
+  opponent: 'opponent',
+  notes: 'notes',
+  scheduledAt: 'scheduledAt',
+  status: 'status',
+  result: 'result',
+  scoreFor: 'scoreFor',
+  scoreAgainst: 'scoreAgainst',
+  creatorId: 'creatorId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.GuildActivityAttendeeScalarFieldEnum = {
+  id: 'id',
+  activityId: 'activityId',
+  userId: 'userId',
+  status: 'status',
+  joinedAt: 'joinedAt'
 };
 
 exports.Prisma.BossScalarFieldEnum = {
@@ -594,6 +632,9 @@ exports.Prisma.ModelName = {
   AttendanceRecord: 'AttendanceRecord',
   BossSchedule: 'BossSchedule',
   BossRotation: 'BossRotation',
+  BossLowRotation: 'BossLowRotation',
+  GuildActivity: 'GuildActivity',
+  GuildActivityAttendee: 'GuildActivityAttendee',
   Boss: 'Boss',
   LootSale: 'LootSale'
 };

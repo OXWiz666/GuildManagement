@@ -20,9 +20,10 @@ import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
 import { getGuildColor } from "./utils/helpers";
-import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, getBossCycleCategory } from "@guild/shared";
+import MasterListTab from "./components/MasterListTab";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, getBossCycleCategory, getRealtimeBossTimer } from "@guild/shared";
 
-type RotationTab = "LIVE" | "UPCOMING" | "ACTIVITY" | "HISTORY";
+type RotationTab = "LIVE" | "UPCOMING" | "MASTER" | "ACTIVITY" | "HISTORY";
 type CycleFilter = "ALL" | "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE";
 
 const CYCLE_FILTERS: Array<{ id: CycleFilter; label: string }> = [
@@ -395,6 +396,7 @@ export default function BossRotationPage() {
   const tabs: Array<{ id: RotationTab; label: string; count?: number; hidden?: boolean }> = [
     { id: "LIVE", label: "Boss Rotation", count: filteredRotations.length },
     { id: "UPCOMING", label: "Upcoming", count: upcomingSchedules.length },
+    { id: "MASTER", label: "Master List" },
     { id: "ACTIVITY", label: "Activity", count: auditLogPage.total },
     { id: "HISTORY", label: "Killed History", count: killedHistory.total },
   ];
@@ -440,7 +442,7 @@ export default function BossRotationPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(170px,210px)_minmax(180px,240px)_minmax(200px,300px)] gap-2 w-full lg:w-auto">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(170px,210px)_minmax(180px,240px)_minmax(200px,300px)] gap-2 w-full lg:w-auto ${activeTab === "MASTER" ? "hidden" : ""}`}>
             {activeTab === "LIVE" && (
               <label className="relative block">
                 <span className="sr-only">Filter boss cycle</span>
@@ -527,6 +529,8 @@ export default function BossRotationPage() {
           </div>
         )}
 
+        {activeTab === "MASTER" && <MasterListTab guildId={activeGuild.guildId} />}
+
         {activeTab === "ACTIVITY" && (
           isLoadingLogs ? (
             <div className="space-y-2">
@@ -537,22 +541,44 @@ export default function BossRotationPage() {
           ) : (
             <div className="space-y-3">
               <div className="space-y-2">
-                {auditLogs.map((log) => (
-                  <div key={log.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex flex-col md:flex-row md:items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{log.action.replaceAll("_", " ")}</p>
-                      <p className="text-xs text-white/45 mt-1 truncate">
-                        {typeof log.detail?.bossName === "string" ? log.detail.bossName : log.target || "Boss Rotation"}
-                      </p>
-                      <p className="text-[11px] text-white/35 mt-2">
-                        Recorded by <span className="text-white/65 font-semibold">{log.actor.displayName}</span>
-                      </p>
+                {auditLogs.map((log) => {
+                  const takenGuildName = typeof log.detail?.takenGuildName === "string" ? log.detail.takenGuildName : null;
+                  const nextGuildName = typeof log.detail?.nextGuildName === "string" ? log.detail.nextGuildName : null;
+                  const takenColor = getGuildColor(takenGuildName || "");
+                  const nextColor = getGuildColor(nextGuildName || "");
+                  return (
+                    <div key={log.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex flex-col md:flex-row md:items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">{log.action.replaceAll("_", " ")}</p>
+                        <p className="text-xs text-white/45 mt-1 truncate">
+                          {typeof log.detail?.bossName === "string" ? log.detail.bossName : log.target || "Boss Rotation"}
+                        </p>
+                        {(takenGuildName || nextGuildName) && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            {takenGuildName && (
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] font-semibold ${takenColor.border} ${takenColor.bg} ${takenColor.text}`}>
+                                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: takenColor.dot }} />
+                                Taken by {takenGuildName}
+                              </span>
+                            )}
+                            {nextGuildName && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-white/35">
+                                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                <span className={`font-semibold ${nextColor.text}`}>{nextGuildName}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <p className="text-[11px] text-white/35 mt-2">
+                          Recorded by <span className="text-white/65 font-semibold">{log.actor.displayName}</span>
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-white/35 shrink-0 font-mono">
+                        {new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-white/35 shrink-0 font-mono">
-                      {new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <PaginationControls
                 page={auditLogPage.page}
@@ -918,10 +944,13 @@ function RotationCard({
 }
 
 function UpcomingCard({ schedule, serverNow }: { schedule: BossScheduleData; serverNow: number }) {
-  const tick = getCountdown(schedule.spawnTime, serverNow);
+  // Real-time countdown that projects forward along the boss's actual respawn
+  // cycle, so a passed spawn shows a live future countdown instead of "LIVE".
+  const timer = getRealtimeBossTimer(schedule.bossName, schedule.spawnTime, serverNow, { status: schedule.status });
+  const tick = { text: timer.text, warning: timer.warning, expired: timer.live };
   const color = getGuildColor(schedule.guildTurnGuildName || schedule.guildTurn || "");
-  const spawnLabel = new Date(schedule.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  const isLive = tick.expired || schedule.status === "SPAWNED";
+  const spawnLabel = new Date(timer.nextSpawn).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const isLive = timer.live;
 
   return (
     <article className={`relative min-h-[220px] rounded-2xl transition-all duration-300 bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] ${
@@ -980,11 +1009,11 @@ function UpcomingCard({ schedule, serverNow }: { schedule: BossScheduleData; ser
           <div className="relative z-10 flex items-center justify-between">
             <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30">Timer</span>
             <span className={`text-[9px] font-semibold uppercase tracking-[0.14em] ${isLive ? "text-emerald-300" : tick.warning ? "text-[var(--forge-gold)]" : "text-white/45"}`}>
-              {schedule.status === "SPAWNED" ? "Live" : tick.warning ? "Soon" : "Upcoming"}
+              {isLive ? "Live" : tick.warning ? "Soon" : "Upcoming"}
             </span>
           </div>
           <p className={`relative z-10 mt-1.5 font-mono text-lg font-bold leading-none ${isLive ? "text-emerald-300" : tick.warning ? "text-[var(--forge-gold-bright)] text-gold-gradient-light" : "text-white"}`}>
-            {schedule.status === "SPAWNED" ? "LIVE" : tick.text}
+            {isLive ? "LIVE" : tick.text}
           </p>
           <div className="relative z-10 mt-2 flex items-center gap-1 text-[10px] text-white/35 border-t border-white/[0.04] pt-2">
             <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

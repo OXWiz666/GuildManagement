@@ -43,3 +43,10 @@ coverage/
 # Misc
 *.tsbuildinfo
 .ARCHITECTURE.md
+
+# Supabase migration dump files (contain secrets/data)
+migration-dump/
+*.dump
+roles.sql
+schema.sql
+data.sql

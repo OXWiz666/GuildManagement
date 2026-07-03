@@ -246,6 +246,12 @@ export const authApi = {
     return api.put<{ user: any }>("/auth/me", data);
   },
 
+  // Update Combat Power only (from the screenshot scanner). Syncs profile + all
+  // guild memberships server-side.
+  async updateCp(cp: number) {
+    return api.put<{ cp: number | null }>("/auth/me/cp", { cp });
+  },
+
   async getSessions() {
     return api.get<{
       sessions: Array<{
@@ -535,6 +541,53 @@ export interface BossRotationResponse {
   rotations: BossRotationItem[];
 }
 
+export interface BossMasterListEntry {
+  bossName: string;
+  level: number;
+  type: "LONG_CYCLE" | "FIXED_SCHEDULE" | string;
+  location: string;
+  cooldownHours: number | null;
+  /** True once a faction leader has explicitly saved this boss's participant list. */
+  configured: boolean;
+  participantGuildIds: string[];
+}
+
+export interface BossMasterListResponse {
+  canManage: boolean;
+  viewerRole: string;
+  guilds: FactionGuildData[];
+  bosses: BossMasterListEntry[];
+}
+
+export interface LowBossRotationBoss {
+  bossName: string;
+  level: number;
+  type: string;
+  location: string;
+}
+
+export interface LowBossRotationResponse {
+  canManage: boolean;
+  viewerRole: string;
+  mode: "WEEKLY" | "MONTHLY";
+  /** Boss names flagged to follow the day rotation. */
+  lowBossNames: string[];
+  /** weekday index ("0"=Sun .. "6"=Sat) → guildId */
+  weekly: Record<string, string>;
+  /** "YYYY-MM-DD" → guildId */
+  days: Record<string, string>;
+  guilds: FactionGuildData[];
+  bosses: LowBossRotationBoss[];
+}
+
+export interface LowBossRotationUpdate {
+  mode?: "WEEKLY" | "MONTHLY";
+  lowBossNames?: string[];
+  weekly?: Record<string, string>;
+  /** date → guildId, or date → null to clear that day */
+  daysPatch?: Record<string, string | null>;
+}
+
 export interface BossKilledHistoryEntry {
   id: string;
   action: string;
@@ -573,6 +626,82 @@ export interface NotificationData {
   readAt: string | null;
   createdAt: string;
 }
+
+// ─── Guild Activities (Guild Boss / Guild War / PK War) ─────────
+export type ActivityType = "GUILD_BOSS" | "GUILD_WAR" | "PK_WAR";
+export type ActivityStatus = "UPCOMING" | "COMPLETED" | "CANCELLED";
+export type ActivityResult = "WIN" | "LOSS" | "DRAW";
+
+export interface ActivityAttendee {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: "PENDING" | "CONFIRMED";
+}
+
+export interface GuildActivityData {
+  id: string;
+  type: ActivityType;
+  title: string;
+  location: string | null;
+  opponent: string | null;
+  notes: string | null;
+  scheduledAt: string;
+  status: ActivityStatus;
+  result: ActivityResult | null;
+  scoreFor: number | null;
+  scoreAgainst: number | null;
+  creatorId: string;
+  creatorName: string;
+  createdAt: string;
+  attendeeCount: number;
+  confirmedCount: number;
+  myStatus: "NONE" | "PENDING" | "CONFIRMED";
+  attendees: ActivityAttendee[];
+}
+
+export interface GuildActivitiesResponse {
+  canManage: boolean;
+  viewerRole: string;
+  activities: GuildActivityData[];
+}
+
+export interface ActivityInput {
+  type?: ActivityType;
+  title?: string;
+  location?: string | null;
+  opponent?: string | null;
+  notes?: string | null;
+  scheduledAt?: string;
+  status?: ActivityStatus;
+  result?: ActivityResult | null;
+  scoreFor?: number | null;
+  scoreAgainst?: number | null;
+}
+
+export const activityApi = {
+  list(guildId: string) {
+    return api.get<GuildActivitiesResponse>(`/activities/${guildId}`);
+  },
+  create(guildId: string, payload: ActivityInput) {
+    return api.post<GuildActivitiesResponse>(`/activities/${guildId}`, payload);
+  },
+  update(guildId: string, activityId: string, payload: ActivityInput) {
+    return api.patch<GuildActivitiesResponse>(`/activities/${guildId}/${activityId}`, payload);
+  },
+  remove(guildId: string, activityId: string) {
+    return api.delete<GuildActivitiesResponse>(`/activities/${guildId}/${activityId}`);
+  },
+  checkIn(guildId: string, activityId: string, attending: boolean) {
+    return api.post<GuildActivitiesResponse>(`/activities/${guildId}/${activityId}/check-in`, { attending });
+  },
+  confirmAttendee(guildId: string, activityId: string, userId: string, confirmed: boolean) {
+    return api.post<GuildActivitiesResponse>(
+      `/activities/${guildId}/${activityId}/attendees/${userId}/confirm`,
+      { confirmed },
+    );
+  },
+};
 
 export const dashboardApi = {
   async startAttendanceSession(payload: {
@@ -662,6 +791,35 @@ export const dashboardApi = {
     return api.post<BossRotationResponse>(
       `/dashboard/boss-rotation/${guildId}/${encodeURIComponent(bossName)}/queue`,
       { queueGuildIds },
+    );
+  },
+
+  async getBossMasterList(guildId: string) {
+    return api.get<BossMasterListResponse>(
+      `/dashboard/boss-rotation/${guildId}/master-list`,
+    );
+  },
+
+  async updateBossMasterList(
+    guildId: string,
+    entries: Array<{ bossName: string; participantGuildIds: string[] }>,
+  ) {
+    return api.put<BossMasterListResponse>(
+      `/dashboard/boss-rotation/${guildId}/master-list`,
+      { entries },
+    );
+  },
+
+  async getLowBossRotation(guildId: string) {
+    return api.get<LowBossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}/low-rotation`,
+    );
+  },
+
+  async updateLowBossRotation(guildId: string, payload: LowBossRotationUpdate) {
+    return api.put<LowBossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}/low-rotation`,
+      payload,
     );
   },
 

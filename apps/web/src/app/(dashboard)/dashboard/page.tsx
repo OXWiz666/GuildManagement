@@ -9,12 +9,24 @@ import FactionLeaderDashboard from "@/components/dashboard/roles/FactionLeaderDa
 import AdminDashboard from "@/components/dashboard/roles/AdminDashboard";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isSessionReady } = useAuth();
 
   if (!user) return null;
 
-  // 1. If user is not in any guilds, show onboarding flow
+  // 1. If user is not in any guilds, show onboarding flow.
+  //    Guard on isSessionReady: right after login the user is seeded with an
+  //    empty guilds array while refreshUser() fetches the real membership. If
+  //    we rendered onboarding during that gap, a user who already has a guild
+  //    would briefly see the "Join Guild" screen before it flips to their real
+  //    dashboard. Wait until the profile is fully loaded before deciding.
   if (user.guilds.length === 0) {
+    if (!isSessionReady) {
+      return (
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-forge-gold/30 border-t-forge-gold" />
+        </div>
+      );
+    }
     return <OnboardingDashboard />;
   }
 

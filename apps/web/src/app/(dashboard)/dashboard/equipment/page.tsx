@@ -10,7 +10,13 @@ import {
   type EquipmentCatalogSlot,
   type MemberEquipmentData,
 } from "@/lib/api";
-import { matchEquipmentAuto, matchEquipmentByImage } from "@/lib/equipment-match";
+import {
+  matchEquipmentPanel,
+  matchEquipmentLayout,
+  matchEquipmentClip,
+  matchEquipmentAuto,
+  matchEquipmentByImage,
+} from "@/lib/equipment-match";
 import { loadDataUrl, type IconSignature } from "@/lib/image-hash";
 import { EQUIPMENT_SLOTS, type EquipmentSlot } from "@guild/shared";
 import Button from "@/components/ui/Button";
@@ -18,6 +24,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader, Magnetic } from "@/components/dashboard/DashboardHelpers";
 import UploadDropzone from "./components/UploadDropzone";
+import CombatPowerScan from "./components/CombatPowerScan";
 import ScanProgress from "./components/ScanProgress";
 import EquipmentGrid, { type SlotView } from "./components/EquipmentGrid";
 import CorrectionPicker from "./components/CorrectionPicker";
@@ -30,6 +37,7 @@ interface Detection {
   confidence: number;
   needsReview: boolean;
   cropSig?: IconSignature | null;
+  cropEmbed?: Float32Array | null;
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -123,16 +131,29 @@ export default function EquipmentPage() {
         const dataUrl = await readAsDataUrl(file);
         setPreviewUrl(dataUrl);
         const image = await loadDataUrl(dataUrl);
-        // Automatic OpenCV detection; fall back to the fixed-layout matcher if
-        // OpenCV finds too few tiles or fails to load.
-        let matched: Record<string, { item: EquipmentCatalogItem | null; confidence: number; needsReview: boolean; cropSig?: IconSignature | null }>;
+        // Primary: layout-aware per-slot matching (assign each tile to a slot by
+        // geometry, match only against that slot's bucket with a tight crop). Falls back
+        // to the fixed-layout matcher, then whole-catalog CLIP, then the dHash detectors.
+        let matched: Record<string, { item: EquipmentCatalogItem | null; confidence: number; needsReview: boolean; cropSig?: IconSignature | null; cropEmbed?: Float32Array | null }>;
         try {
-          const auto = await matchEquipmentAuto(image, catalog, setProgress);
-          matched =
-            auto.regions >= 4 ? auto.result : await matchEquipmentByImage(image, catalog, setProgress);
+          const panel = await matchEquipmentPanel(image, catalog, setProgress);
+          if (panel.located >= 8) {
+            matched = panel.result;
+          } else {
+            // Not recognised as a panel by geometry — try fixed layout, then whole-catalog.
+            const clip = await matchEquipmentClip(image, catalog, setProgress);
+            matched = clip.regions >= 4 ? clip.result : await matchEquipmentLayout(image, catalog, setProgress);
+          }
         } catch (e) {
-          console.warn("[equipment] auto detect failed, using layout fallback", e);
-          matched = await matchEquipmentByImage(image, catalog, setProgress);
+          console.warn("[equipment] panel scan failed, using CLIP/dHash fallback", e);
+          try {
+            const auto = await matchEquipmentAuto(image, catalog, setProgress);
+            matched =
+              auto.regions >= 4 ? auto.result : await matchEquipmentByImage(image, catalog, setProgress);
+          } catch (e2) {
+            console.warn("[equipment] auto detect failed, using layout fallback", e2);
+            matched = await matchEquipmentByImage(image, catalog, setProgress);
+          }
         }
         const next: Record<string, Detection> = {};
         for (const slot of EQUIPMENT_SLOTS) {
@@ -142,6 +163,7 @@ export default function EquipmentPage() {
             confidence: m?.confidence ?? 0,
             needsReview: m?.needsReview ?? false,
             cropSig: m?.cropSig ?? null,
+            cropEmbed: m?.cropEmbed ?? null,
           };
         }
         setDetections(next);
@@ -318,6 +340,7 @@ export default function EquipmentPage() {
               <Skeleton className="h-64 w-full animate-pulse rounded-2xl" />
             ) : (
               <>
+                <CombatPowerScan />
                 {hasSaved && (
                   <div className="space-y-3">
                     <h2 className="text-sm font-semibold text-white/80">Your saved equipment</h2>
@@ -342,6 +365,7 @@ export default function EquipmentPage() {
           slot={catalogBySlot.get(pickerSlot)!}
           currentPath={detections[pickerSlot]?.item?.path ?? null}
           cropSig={detections[pickerSlot]?.cropSig ?? null}
+          cropEmbed={detections[pickerSlot]?.cropEmbed ?? null}
           onSelect={pickItem}
           onClear={clearSlot}
           onClose={() => setPickerSlot(null)}

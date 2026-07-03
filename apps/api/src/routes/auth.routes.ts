@@ -6,6 +6,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   updateUserSchema,
+  combatPowerSchema,
 } from "@guild/shared";
 import { requireAuth } from "../middleware/auth";
 import { authLimiter } from "../middleware/rateLimiter";
@@ -371,6 +372,28 @@ router.put(
       const response: ApiResponse = {
         success: true,
         data: { user },
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ─── PUT /me/cp ─────────────────────────────────
+// Update Combat Power (e.g. from the screenshot scanner). Syncs the profile and
+// every guild membership.
+router.put(
+  "/me/cp",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { cp } = combatPowerSchema.parse(req.body);
+      const result = await authService.updateCombatPower(req.user!.userId, cp);
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
       };
       res.json(response);
     } catch (error) {

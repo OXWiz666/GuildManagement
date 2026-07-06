@@ -55,8 +55,9 @@ export default function CorrectionPicker({
     };
   }, [cropEmbed, cropSig, slot.items]);
 
-  // CLIP cosine sits higher than dHash similarity — raise the floor accordingly.
-  const minVisual = cropEmbed ? 0.7 : 0.55;
+  // DINOv2 embedding cosine (cropEmbed) vs dHash similarity (cropSig) sit on different
+  // scales — floor each so the "best matches" strip stays useful without noise.
+  const minVisual = cropEmbed ? 0.5 : 0.55;
   const bestMatches = useMemo(() => {
     if (!visualScores) return [];
     return [...slot.items]
@@ -115,6 +116,7 @@ export default function CorrectionPicker({
 
   const chip = (label: string, active: boolean, onClick: () => void, color?: string) => (
     <button
+      key={label}
       type="button"
       onClick={onClick}
       className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all ${

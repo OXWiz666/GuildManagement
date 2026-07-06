@@ -198,7 +198,7 @@ export default function AddGuildTab() {
           <h3 className="text-sm font-semibold text-white">Inviting a guild</h3>
         </div>
         <p className="text-[12px] text-white/55 leading-relaxed">
-          Only <span className="text-amber-400 font-medium">Faction Leaders</span> can invite guilds into the faction.
+          Only <span className="text-amber-400 font-medium">Faction Leaders </span> can invite guilds into the faction.
           When you send an invitation, the target guild&apos;s leaders are notified instantly.
         </p>
         <ul className="text-[11px] text-white/45 space-y-1.5 list-disc list-inside">

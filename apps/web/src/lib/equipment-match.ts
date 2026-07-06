@@ -16,7 +16,9 @@ import {
   detectTileRarity,
   rarityMatches,
   sampleTileInner,
+  type Rarity,
 } from "@/lib/panel-detect";
+import { orbForCanvas, orbForIcon, orbGoodMatchRatio, freeOrb } from "@/lib/orb-match";
 import { runOcr } from "@/lib/ocr";
 import type { EquipmentSlot } from "@guild/shared";
 
@@ -377,9 +379,10 @@ export async function matchEquipmentAuto(
 // similarity classifies each tile. Far stronger than the dHash signature above.
 
 // Cosine thresholds for CLIP embeddings (tunable — verify on real screenshots).
-const CLIP_ACCEPT = 0.75; // below → leave slot empty
-const CLIP_REVIEW = 0.88; // below → flag "Needs Review"
-// Text-only fallback: fill a slot CLIP left empty when OCR agrees this strongly.
+// DINOv2 scale (see scoreSlotCrop). Whole-catalog fallback — less precise than per-slot.
+const CLIP_ACCEPT = 0.55; // below → leave slot empty
+const CLIP_REVIEW = 0.7; // below → flag "Needs Review"
+// Text-only fallback: fill a slot the embedding left empty when OCR agrees this strongly.
 const OCR_FALLBACK = 0.8;
 
 /**
@@ -488,12 +491,16 @@ export async function matchEquipmentClip(
 // a CLIP+dHash ensemble, and a rarity-frame soft boost. Restricting candidates per slot
 // + cleaning the crop is what makes the match decisive instead of "same wrong set".
 
-const PANEL_ACCEPT = 0.7; // below → leave slot empty
-const PANEL_REVIEW = 0.82; // below → "Needs Review"
-const PANEL_MARGIN = 0.04; // min lead over the 2nd-best candidate to be confident
+// Thresholds are on the DINOv2 scale (lower absolute cosines than CLIP but far better
+// separation). Tunable — verify on real equipment-screen uploads.
+const PANEL_ACCEPT = 0.55; // below → leave slot empty
+const PANEL_REVIEW = 0.7; // below → "Needs Review"
+const PANEL_MARGIN = 0.03; // min lead over the 2nd-best candidate to be confident
 const RARITY_BONUS = 0.05; // soft boost for same-rarity candidates
-const CLIP_W = 0.75;
-const DHASH_W = 0.25;
+const EMB_W = 0.75; // DINOv2 embedding weight
+const DHASH_W = 0.25; // structural dHash weight
+const ORB_W = 0.3; // ORB exact-art re-rank bonus (added to top candidates only)
+const ORB_TOPK = 5; // ORB re-ranks only this many top embedding candidates (it's costly)
 
 function insetPixels(box: Box): Box {
   return {
@@ -504,6 +511,18 @@ function insetPixels(box: Box): Box {
   };
 }
 
+/** Draw an image region into a fresh canvas (for ORB feature extraction). */
+function cropCanvasOf(src: CanvasImageSource, box: Box): HTMLCanvasElement {
+  const w = Math.max(1, Math.round(box.w));
+  const h = Math.max(1, Math.round(box.h));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(src, box.x, box.y, box.w, box.h, 0, 0, w, h);
+  return canvas;
+}
+
 function emptyResult(catalog: EquipmentCatalogSlot[]): Record<string, ImageDetection> {
   const r: Record<string, ImageDetection> = {};
   for (const s of catalog) {
@@ -512,17 +531,47 @@ function emptyResult(catalog: EquipmentCatalogSlot[]): Record<string, ImageDetec
   return r;
 }
 
+// Per-slot debug info for the on-image overlay (see `ScanDebugOverlay`). All boxes are
+// in source-image pixels.
+export interface SlotDebug {
+  slotType: string;
+  box: Box; // full detected tile
+  cropBox: Box; // tight art-only crop actually matched
+  rarity: string | null; // rarity guessed from the frame colour
+  empty: boolean; // flagged as an empty placeholder
+  candidates: Array<{ itemName: string; iconUrl: string; rarity: string | null; score: number }>;
+}
+
+interface SlotScore {
+  detection: ImageDetection;
+  ranked: Array<{ it: EquipmentCatalogItem; score: number }>; // sorted desc
+  rarity: Rarity | null;
+  cropBox: Box;
+  empty: boolean;
+}
+
 /**
- * Match a single located slot tile against ONLY that slot's catalog items, using a tight
- * crop, a CLIP+dHash ensemble, and a rarity soft-boost. Shared by both the geometry and
- * fixed-layout matchers.
+ * Match a single located slot tile against ONLY that slot's catalog items. Two stages:
+ * (1) a DINOv2 embedding + dHash + rarity ensemble ranks all candidates; (2) ORB
+ * feature-matching re-ranks the top few for exact-art discrimination. Shared by both the
+ * geometry and fixed-layout matchers.
  */
 async function scoreSlotCrop(
   image: HTMLImageElement,
   box: Box,
   slot: EquipmentCatalogSlot,
   catEmbeds: Map<string, Float32Array>,
-): Promise<ImageDetection> {
+): Promise<SlotScore> {
+  const ib = insetPixels(box);
+  const emptyDet = (extra?: Partial<ImageDetection>): ImageDetection => ({
+    item: null,
+    confidence: 0,
+    needsReview: false,
+    cropSig: null,
+    cropEmbed: null,
+    ...extra,
+  });
+
   let cropEmbed: Float32Array | null = null;
   let cropSig: IconSignature | null = null;
   try {
@@ -531,53 +580,76 @@ async function scoreSlotCrop(
     cropEmbed = null;
   }
   try {
-    const ib = insetPixels(box);
     cropSig = signatureFromRegion(image, ib.x, ib.y, ib.w, ib.h);
   } catch {
     cropSig = null;
   }
-  if (!cropEmbed) return { item: null, confidence: 0, needsReview: false, cropSig, cropEmbed: null };
+  if (!cropEmbed) {
+    return { detection: emptyDet({ cropSig }), ranked: [], rarity: null, cropBox: ib, empty: false };
+  }
 
   // Empty-slot detection: a flat, desaturated inner region = the placeholder silhouette.
-  const inner = sampleTileInner(image, insetPixels(box));
+  const inner = sampleTileInner(image, ib);
   const emptyLikely = inner.saturation < 0.09 && inner.value < 0.5;
 
   const rarity = detectTileRarity(image, box);
 
-  let best: { it: EquipmentCatalogItem; score: number } | null = null;
-  let second = -Infinity;
+  // Stage 1 — base score (embedding + dHash + rarity) for every candidate in this slot.
+  const scored: Array<{ it: EquipmentCatalogItem; score: number }> = [];
   for (const it of slot.items) {
     const vec = catEmbeds.get(iconKey(it));
     if (!vec) continue;
-    const clip = cosine(cropEmbed, vec);
-    let dh = clip; // neutral fallback when a dHash signature isn't available
+    const emb = cosine(cropEmbed, vec);
+    let dh = emb; // neutral fallback when a dHash signature isn't available
     if (cropSig) {
       const dsig = await catalogSignature(it.iconUrl);
       if (dsig) dh = signatureSimilarity(cropSig, dsig);
     }
-    let score = CLIP_W * clip + DHASH_W * dh;
+    let score = EMB_W * emb + DHASH_W * dh;
     if (rarity && rarityMatches(rarity, it.rarity)) score += RARITY_BONUS;
-
-    if (!best || score > best.score) {
-      if (best) second = best.score;
-      best = { it, score };
-    } else if (score > second) {
-      second = score;
-    }
+    scored.push({ it, score });
   }
-  if (!best) return { item: null, confidence: 0, needsReview: false, cropSig, cropEmbed };
+  if (scored.length === 0) {
+    return { detection: emptyDet({ cropSig, cropEmbed }), ranked: [], rarity, cropBox: ib, empty: false };
+  }
+  scored.sort((a, b) => b.score - a.score);
 
+  // Stage 2 — ORB exact-art re-rank of the top-K (best-effort; degrades to stage 1).
+  try {
+    const cropOrb = await orbForCanvas(cropCanvasOf(image, ib));
+    if (cropOrb) {
+      const k = Math.min(ORB_TOPK, scored.length);
+      for (let i = 0; i < k; i++) {
+        const iconOrb = await orbForIcon(scored[i]!.it.iconUrl);
+        const ratio = await orbGoodMatchRatio(cropOrb, iconOrb);
+        scored[i]!.score += ORB_W * ratio;
+      }
+      freeOrb(cropOrb);
+      scored.sort((a, b) => b.score - a.score);
+    }
+  } catch {
+    /* ORB is optional — the embedding ranking already stands */
+  }
+
+  const best = scored[0]!;
+  const second = scored[1]?.score ?? -Infinity;
   const margin = best.score - (isFinite(second) ? second : 0);
   // Treat as empty when the tile looks like the placeholder AND we aren't confident —
   // a confident, colourful match (score ≥ REVIEW) is never overridden.
   const isEmpty = emptyLikely && best.score < PANEL_REVIEW;
   const accepted = best.score >= PANEL_ACCEPT && !isEmpty;
   return {
-    item: accepted ? best.it : null,
-    confidence: accepted ? Math.min(1, best.score) : 0,
-    needsReview: accepted && (best.score < PANEL_REVIEW || margin < PANEL_MARGIN),
-    cropSig,
-    cropEmbed,
+    detection: {
+      item: accepted ? best.it : null,
+      confidence: accepted ? Math.min(1, best.score) : 0,
+      needsReview: accepted && (best.score < PANEL_REVIEW || margin < PANEL_MARGIN),
+      cropSig,
+      cropEmbed,
+    },
+    ranked: scored,
+    rarity,
+    cropBox: ib,
+    empty: isEmpty,
   };
 }
 
@@ -589,7 +661,7 @@ export async function matchEquipmentPanel(
   image: HTMLImageElement,
   catalog: EquipmentCatalogSlot[],
   onProgress?: (progress: number) => void,
-): Promise<{ result: Record<string, ImageDetection>; located: number }> {
+): Promise<{ result: Record<string, ImageDetection>; located: number; debug: SlotDebug[] }> {
   const allItems = catalog.flatMap((s) => s.items);
 
   // 0..0.5 — embed catalog (cached in IndexedDB across scans).
@@ -604,9 +676,10 @@ export async function matchEquipmentPanel(
   onProgress?.(0.55);
 
   const result = emptyResult(catalog);
+  const debug: SlotDebug[] = [];
   if (!slotBoxes) {
     onProgress?.(1);
-    return { result, located: 0 };
+    return { result, located: 0, debug };
   }
 
   const bySlot = new Map(catalog.map((s) => [s.slotType, s]));
@@ -617,11 +690,25 @@ export async function matchEquipmentPanel(
     onProgress?.(0.55 + 0.45 * (processed / Math.max(1, entries.length)));
     const slot = bySlot.get(slotType);
     if (!slot || slot.items.length === 0) continue;
-    result[slotType] = await scoreSlotCrop(image, box, slot, catEmbeds);
+    const sc = await scoreSlotCrop(image, box, slot, catEmbeds);
+    result[slotType] = sc.detection;
+    debug.push({
+      slotType,
+      box,
+      cropBox: sc.cropBox,
+      rarity: sc.rarity,
+      empty: sc.empty,
+      candidates: sc.ranked.slice(0, 3).map((c) => ({
+        itemName: c.it.itemName,
+        iconUrl: c.it.iconUrl,
+        rarity: c.it.rarity,
+        score: c.score,
+      })),
+    });
   }
 
   onProgress?.(1);
-  return { result, located: entries.length };
+  return { result, located: entries.length, debug };
 }
 
 /**
@@ -654,7 +741,7 @@ export async function matchEquipmentLayout(
       w: lb.w * W,
       h: lb.h * H,
     };
-    result[slot.slotType] = await scoreSlotCrop(image, box, slot, catEmbeds);
+    result[slot.slotType] = (await scoreSlotCrop(image, box, slot, catEmbeds)).detection;
   }
   onProgress?.(1);
   return result;

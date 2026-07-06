@@ -10,6 +10,7 @@ import Input from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Magnetic } from "@/components/dashboard/DashboardHelpers";
 import { LegendaryCategoryBadge, MarketStatusBadge, PrioritySeqBadge } from "./MarketBadges";
+import { useGearIcons, GearIcon } from "./useGearIcons";
 
 interface Props {
   guildId: string;
@@ -17,6 +18,7 @@ interface Props {
 
 export default function LegendaryPriorityTab({ guildId }: Props) {
   const { addToast } = useToast();
+  const gearIcons = useGearIcons();
   const [showModal, setShowModal] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -103,10 +105,10 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
           No legendary priority requests yet.
         </div>
       ) : (
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-hidden">
+        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-auto max-h-[560px]">
           <table className="w-full text-[12px]">
-            <thead className="border-b border-white/[0.06] bg-white/[0.01]">
-              <tr className="text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">
                 <th className="px-4 py-3">Seq</th>
                 <th className="px-4 py-3">Member</th>
                 <th className="px-4 py-3">Category</th>
@@ -116,14 +118,23 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04] text-white/70">
-              {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-white/[0.02]">
+              {filtered.map((r, index) => (
+                <tr
+                  key={r.id}
+                  className="market-row hover:bg-white/[0.02]"
+                  style={{ animationDelay: `${Math.min(index, 16) * 35}ms` }}
+                >
                   <td className="px-4 py-3">{r.prioritySeq ? <PrioritySeqBadge position={r.prioritySeq} /> : <span className="text-white/25">—</span>}</td>
                   <td className="px-4 py-3">
                     <span className="font-semibold text-white">{r.member?.ign || r.member?.user?.displayName || "Member"}</span>
                     <span className="block text-[10px] text-white/40">{r.member?.rankName}</span>
                   </td>
-                  <td className="px-4 py-3"><LegendaryCategoryBadge category={r.category} /></td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-2">
+                      <GearIcon src={gearIcons.iconForLegendary(r.category)} size={24} />
+                      <LegendaryCategoryBadge category={r.category} />
+                    </span>
+                  </td>
                   <td className="px-4 py-3 hidden md:table-cell max-w-[260px]">
                     <span className="text-white/55 line-clamp-2">{r.reason || <span className="text-white/25">—</span>}</span>
                     {r.officerNote && <span className="block text-[10px] text-amber-300/70 mt-1">Officer: {r.officerNote}</span>}
@@ -159,6 +170,7 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
 
 function LegendaryRequestModal({ guildId, onClose, onSubmitted }: { guildId: string; onClose: () => void; onSubmitted: () => void }) {
   const { addToast } = useToast();
+  const gearIcons = useGearIcons();
   const [category, setCategory] = useState<string>(LEGENDARY_CATEGORIES[0]);
   const [currentGear, setCurrentGear] = useState("");
   const [reason, setReason] = useState("");
@@ -205,13 +217,14 @@ function LegendaryRequestModal({ guildId, onClose, onSubmitted }: { guildId: str
                     type="button"
                     key={c}
                     onClick={() => setCategory(c)}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${
+                    className={`flex items-center gap-2.5 py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${
                       category === c
                         ? "border-violet-500/50 bg-violet-500/10 text-white"
                         : "border-white/[0.08] bg-white/[0.02] text-white/50 hover:text-white/80 hover:border-white/20"
                     }`}
                   >
-                    {LEGENDARY_CATEGORY_LABELS[c]}
+                    <GearIcon src={gearIcons.iconForLegendary(c)} size={30} />
+                    <span className="min-w-0 truncate">{LEGENDARY_CATEGORY_LABELS[c]}</span>
                   </button>
                 ))}
               </div>

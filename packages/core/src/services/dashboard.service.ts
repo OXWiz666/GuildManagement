@@ -7,6 +7,9 @@ import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors"
 import * as crypto from "crypto";
 import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime } from "@guild/shared";
 import { broadcastToUser } from "../lib/socket";
+import { getDropCatalogMap } from "./equipment.service";
+import { getGuildMemberByUser } from "./guild.service";
+import { publicUrl } from "../lib/supabaseStorage";
 
 // Anti-spam in-memory tracking: userId -> { attempts: number, blockedUntil: Date | null }
 interface SpamRecord {
@@ -32,6 +35,60 @@ type PendingNotification = {
   body: string;
   metadata: Record<string, unknown>;
 };
+
+// A single item recorded as dropped when a boss is taken. The client sends the
+// icon's bucket+path; we resolve canonical name/rarity/type from the live catalog
+// so stored drops can't be spoofed and always point at a real icon.
+export interface BossDropInput {
+  bucket: string;
+  path: string;
+  quantity?: number;
+}
+
+type StoredBossDrop = {
+  itemName: string;
+  type: string;
+  category: string | null;
+  rarity: string | null;
+  bucket: string;
+  path: string;
+  quantity: number;
+};
+
+const MAX_DROPS_PER_KILL = 40;
+
+/**
+ * Validate submitted drops against the icon catalog and return canonical rows to
+ * persist in the audit detail. Unknown icons are dropped silently (never blocks a
+ * kill). Duplicate icons are merged by summing quantities.
+ */
+async function normalizeBossDrops(drops: BossDropInput[] | undefined): Promise<StoredBossDrop[]> {
+  if (!Array.isArray(drops) || drops.length === 0) return [];
+  const catalog = await getDropCatalogMap();
+  const merged = new Map<string, StoredBossDrop>();
+  for (const drop of drops.slice(0, MAX_DROPS_PER_KILL)) {
+    if (!drop || typeof drop.bucket !== "string" || typeof drop.path !== "string") continue;
+    const key = `${drop.bucket}::${drop.path}`;
+    const item = catalog.get(key);
+    if (!item) continue;
+    const qty = Math.max(1, Math.min(999, Math.floor(Number(drop.quantity) || 1)));
+    const existing = merged.get(key);
+    if (existing) {
+      existing.quantity += qty;
+    } else {
+      merged.set(key, {
+        itemName: item.itemName,
+        type: item.type,
+        category: item.category,
+        rarity: item.rarity,
+        bucket: item.bucket,
+        path: item.path,
+        quantity: qty,
+      });
+    }
+  }
+  return Array.from(merged.values());
+}
 
 type BossRegistryItem = {
   id: string;
@@ -83,9 +140,10 @@ function resolveQueue(
 }
 
 async function requireActiveGuildMember(actorId: string, guildId: string) {
-  const membership = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  // Shared, short-TTL cached membership read (same cache key the RBAC guard
+  // uses, so guard + dashboard requests warm each other). Role changes
+  // invalidate the key — see guild.service.updateMemberRole.
+  const membership = await getGuildMemberByUser(actorId, guildId);
 
   if (!membership || !membership.isActive) {
     throw new ForbiddenError("You must be an active member of this guild");
@@ -1056,12 +1114,14 @@ export async function markBossRotationKilled(
   actorId: string,
   ipAddress?: string,
   userAgent?: string,
+  drops?: BossDropInput[],
 ) {
   await requireBossRotationManager(actorId, guildId);
   const killedDate = new Date(killedAt);
   if (Number.isNaN(killedDate.getTime())) {
     throw new BadRequestError("Killed timestamp is invalid");
   }
+  const storedDrops = await normalizeBossDrops(drops);
 
   const [schedule, guilds] = await Promise.all([
     prisma.bossSchedule.findUnique({
@@ -1108,6 +1168,15 @@ export async function markBossRotationKilled(
       guildTurnGuildId: takenGuild.id,
     },
   });
+
+  // Auto-open a code-free check-in window for the guild that just took this boss,
+  // so its members can immediately claim attendance for the kill (feeds the loot
+  // dividend split). The session belongs to the taking guild, not the actor's.
+  const checkInSession = await openBossCheckInSession(
+    takenGuild.id,
+    updatedEvent.id,
+    schedule.bossName,
+  );
 
   const rotation = await prisma.bossRotation.upsert({
     where: { bossName: schedule.bossName },
@@ -1166,6 +1235,9 @@ export async function markBossRotationKilled(
           nextGuildId,
           nextGuildName: nextGuild?.name || null,
           nextScheduleId: nextSchedule?.id ?? null,
+          scheduleId: updatedEvent.id,
+          checkInSessionId: checkInSession.id,
+          drops: storedDrops,
         },
         ipAddress,
         userAgent,
@@ -1239,12 +1311,14 @@ export async function markBossRotationKilledByName(
   actorId: string,
   ipAddress?: string,
   userAgent?: string,
+  drops?: BossDropInput[],
 ) {
   await requireBossRotationManager(actorId, guildId);
   const killedDate = new Date(killedAt);
   if (Number.isNaN(killedDate.getTime())) {
     throw new BadRequestError("Killed timestamp is invalid");
   }
+  const storedDrops = await normalizeBossDrops(drops);
 
   // Load registry, active schedule, guilds, and existing rotation in parallel
   const [bosses, activeSchedule, guilds, existingRotation] = await Promise.all([
@@ -1280,6 +1354,7 @@ export async function markBossRotationKilledByName(
       actorId,
       ipAddress,
       userAgent,
+      drops,
     );
   }
 
@@ -1355,6 +1430,8 @@ export async function markBossRotationKilledByName(
           nextGuildId,
           nextGuildName: nextGuild?.name || null,
           nextScheduleId: nextSchedule?.id ?? null,
+          scheduleId: null,
+          drops: storedDrops,
         },
         ipAddress,
         userAgent,
@@ -1728,6 +1805,15 @@ export async function getBossKilledHistory(guildId: string, actorId: string, mon
       };
       nextGuildName: string | null;
       nextSpawnTime: string | null;
+      bossScheduleId: string | null;
+      drops: Array<{
+        itemName: string;
+        type: string | null;
+        category: string | null;
+        rarity: string | null;
+        iconUrl: string;
+        quantity: number;
+      }>;
     }>;
   }>();
 
@@ -1745,6 +1831,22 @@ export async function getBossKilledHistory(guildId: string, actorId: string, mon
     const dayKey = killedDate.toISOString().slice(0, 10);
     const existingDay = days.get(dayKey) || { date: dayKey, total: 0, kills: [] };
     const bossName = getDetailString(detail, "bossName") || log.target || "World Boss";
+    const rawDrops = detail && Array.isArray(detail["drops"]) ? (detail["drops"] as unknown[]) : [];
+    const drops = rawDrops
+      .filter((d): d is Record<string, unknown> => !!d && typeof d === "object" && !Array.isArray(d))
+      .map((d) => {
+        const bucket = typeof d["bucket"] === "string" ? (d["bucket"] as string) : "";
+        const path = typeof d["path"] === "string" ? (d["path"] as string) : "";
+        return {
+          itemName: typeof d["itemName"] === "string" ? (d["itemName"] as string) : "Item",
+          type: typeof d["type"] === "string" ? (d["type"] as string) : null,
+          category: typeof d["category"] === "string" ? (d["category"] as string) : null,
+          rarity: typeof d["rarity"] === "string" ? (d["rarity"] as string) : null,
+          iconUrl: bucket && path ? publicUrl(bucket, path) : "",
+          quantity: Math.max(1, Math.floor(Number(d["quantity"]) || 1)),
+        };
+      })
+      .filter((d) => d.iconUrl);
     existingDay.total += 1;
     existingDay.kills.push({
       id: log.id,
@@ -1760,6 +1862,8 @@ export async function getBossKilledHistory(guildId: string, actorId: string, mon
       },
       nextGuildName: getDetailString(detail, "nextGuildName") || getDetailString(detail, "nextGuildTurn"),
       nextSpawnTime: getDetailString(detail, "nextSpawnTime"),
+      bossScheduleId: getDetailString(detail, "scheduleId"),
+      drops,
     });
     days.set(dayKey, existingDay);
   }
@@ -1776,6 +1880,57 @@ export async function getBossKilledHistory(guildId: string, actorId: string, mon
     total: groupedDays.reduce((sum, day) => sum + day.total, 0),
     days: groupedDays,
   };
+}
+
+/**
+ * Distinct items a specific boss has been recorded dropping (union across recent
+ * kills, deduped by icon). Powers the "Log sold items" loot picker so a guild can
+ * only pick items that this boss actually drops.
+ */
+export async function getBossDropsForBoss(actorId: string, guildId: string, bossName: string) {
+  await requireActiveGuildMember(actorId, guildId);
+  const target = bossName.trim().toLowerCase();
+  if (!target) return { bossName: bossName.trim(), drops: [] as Array<{
+    itemName: string; type: string | null; category: string | null; rarity: string | null; iconUrl: string;
+  }> };
+
+  const logs = await prisma.auditLog.findMany({
+    where: { action: { in: BOSS_KILL_AUDIT_ACTIONS } },
+    orderBy: { createdAt: "desc" },
+    take: 300,
+  });
+
+  const seen = new Set<string>();
+  const drops: Array<{ itemName: string; type: string | null; category: string | null; rarity: string | null; iconUrl: string }> = [];
+
+  for (const log of logs) {
+    const detail = log.detail && typeof log.detail === "object" && !Array.isArray(log.detail)
+      ? (log.detail as Record<string, unknown>)
+      : null;
+    if (!detail) continue;
+    if (String(detail["bossName"] || "").toLowerCase() !== target) continue;
+    const raw = Array.isArray(detail["drops"]) ? (detail["drops"] as unknown[]) : [];
+    for (const d of raw) {
+      if (!d || typeof d !== "object" || Array.isArray(d)) continue;
+      const row = d as Record<string, unknown>;
+      const bucket = typeof row["bucket"] === "string" ? (row["bucket"] as string) : "";
+      const path = typeof row["path"] === "string" ? (row["path"] as string) : "";
+      if (!bucket || !path) continue;
+      const key = `${bucket}::${path}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      drops.push({
+        itemName: typeof row["itemName"] === "string" ? (row["itemName"] as string) : "Item",
+        type: typeof row["type"] === "string" ? (row["type"] as string) : null,
+        category: typeof row["category"] === "string" ? (row["category"] as string) : null,
+        rarity: typeof row["rarity"] === "string" ? (row["rarity"] as string) : null,
+        iconUrl: publicUrl(bucket, path),
+      });
+    }
+  }
+
+  drops.sort((a, b) => a.itemName.localeCompare(b.itemName));
+  return { bossName: bossName.trim(), drops };
 }
 
 export async function createBossSchedule(

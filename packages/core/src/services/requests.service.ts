@@ -1,4 +1,5 @@
 import { prisma } from "@guild/db";
+import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import { MARKET_REQUEST_TYPES, REQUEST_TYPE_LIMIT_KEY, type MarketRequestType } from "@guild/shared";
@@ -53,9 +54,7 @@ export async function createItemRequest(
   },
 ) {
   const [member, settings, rules] = await Promise.all([
-    prisma.guildMember.findUnique({
-      where: { userId_guildId: { userId: actorId, guildId } },
-    }),
+    getGuildMemberByUser(actorId, guildId),
     prisma.guildSettings.findUnique({ where: { guildId } }),
     getEffectiveMarketRules(guildId),
   ]);
@@ -140,9 +139,7 @@ export async function createWithdrawalRequest(
     note?: string;
   },
 ) {
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const member = await getGuildMemberByUser(actorId, guildId);
 
   if (!member || !member.isActive) {
     throw new ForbiddenError("You must be an active guild member to submit withdrawal requests");
@@ -209,9 +206,7 @@ export async function getGuildRequests(
     limit?: number;
   },
 ) {
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const member = await getGuildMemberByUser(actorId, guildId);
 
   const isOfficer = member && ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].includes(member.role);
   if (!member || !member.isActive || !isOfficer) {
@@ -253,9 +248,7 @@ export async function getGuildRequests(
 
 export async function getMyRequests(guildId: string, actorId: string, page = 1, limit = 20) {
   const [member, settings] = await Promise.all([
-    prisma.guildMember.findUnique({
-      where: { userId_guildId: { userId: actorId, guildId } },
-    }),
+    getGuildMemberByUser(actorId, guildId),
     prisma.guildSettings.findUnique({ where: { guildId } }),
   ]);
 
@@ -297,9 +290,7 @@ export async function reviewRequest(
   ipAddress?: string,
   userAgent?: string,
 ) {
-  const actor = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const actor = await getGuildMemberByUser(actorId, guildId);
 
   const allowedRoles = action === "FULFILLED"
     ? ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"]
@@ -373,9 +364,7 @@ export async function notifyItemAvailable(
   ipAddress?: string,
   userAgent?: string,
 ) {
-  const actor = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const actor = await getGuildMemberByUser(actorId, guildId);
 
   if (!actor || !actor.isActive || !["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].includes(actor.role)) {
     throw new ForbiddenError("Only officers and above can post item availability notices");
@@ -407,9 +396,7 @@ export async function notifyItemAvailable(
 
 export async function getPriorityQueue(guildId: string, actorId: string) {
   // Verify membership
-  const actor = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const actor = await getGuildMemberByUser(actorId, guildId);
   if (!actor || !actor.isActive) throw new ForbiddenError("Not a member of this guild");
 
   // Get all active members with their DKP from ledger

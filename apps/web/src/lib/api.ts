@@ -588,6 +588,31 @@ export interface LowBossRotationUpdate {
   daysPatch?: Record<string, string | null>;
 }
 
+export interface BossDropDisplay {
+  itemName: string;
+  type: string | null;
+  category: string | null;
+  rarity: string | null;
+  iconUrl: string;
+  quantity: number;
+}
+
+/** Payload sent when recording the items a boss dropped on a kill. */
+export interface BossDropInput {
+  bucket: string;
+  path: string;
+  quantity?: number;
+}
+
+/** A distinct item a boss is known to drop (for the sold-items loot picker). */
+export interface MarketBossDrop {
+  itemName: string;
+  type: string | null;
+  category: string | null;
+  rarity: string | null;
+  iconUrl: string;
+}
+
 export interface BossKilledHistoryEntry {
   id: string;
   action: string;
@@ -602,6 +627,8 @@ export interface BossKilledHistoryEntry {
   };
   nextGuildName: string | null;
   nextSpawnTime: string | null;
+  bossScheduleId: string | null;
+  drops: BossDropDisplay[];
 }
 
 export interface BossKilledHistoryDay {
@@ -780,6 +807,12 @@ export const dashboardApi = {
     );
   },
 
+  async getBossDrops(guildId: string, bossName: string) {
+    return api.get<{ bossName: string; drops: MarketBossDrop[] }>(
+      `/dashboard/boss-rotation/${guildId}/boss-drops?bossName=${encodeURIComponent(bossName)}`,
+    );
+  },
+
   async getBossKilledHistory(guildId: string, month?: string) {
     const params = month ? `?${new URLSearchParams({ month }).toString()}` : "";
     return api.get<BossKilledHistoryResponse>(
@@ -823,26 +856,26 @@ export const dashboardApi = {
     );
   },
 
-  async markBossRotationKilled(guildId: string, scheduleId: string, killedAt: string, takenGuildId: string, signal?: AbortSignal) {
+  async markBossRotationKilled(guildId: string, scheduleId: string, killedAt: string, takenGuildId: string, signal?: AbortSignal, drops?: BossDropInput[]) {
     return api.post<{
       schedule: BossScheduleData | null;
       nextSchedule: BossScheduleData | null;
       rotationId: string;
     }>(
       `/dashboard/boss-rotation/${guildId}/${scheduleId}/killed`,
-      { killedAt, takenGuildId },
+      { killedAt, takenGuildId, drops },
       signal ? { signal } : undefined,
     );
   },
 
-  async markBossRotationKilledByName(guildId: string, bossName: string, killedAt: string, takenGuildId: string, signal?: AbortSignal) {
+  async markBossRotationKilledByName(guildId: string, bossName: string, killedAt: string, takenGuildId: string, signal?: AbortSignal, drops?: BossDropInput[]) {
     return api.post<{
       schedule: BossScheduleData | null;
       nextSchedule: BossScheduleData | null;
       rotationId: string;
     }>(
       `/dashboard/boss-rotation/${guildId}/boss/${encodeURIComponent(bossName)}/killed`,
-      { killedAt, takenGuildId },
+      { killedAt, takenGuildId, drops },
       signal ? { signal } : undefined,
     );
   },
@@ -1070,9 +1103,22 @@ export interface ConfirmEquipmentItem {
   confidence: number;
 }
 
+export interface DropCatalogItem {
+  type: string; // Weapon | Armor | Accessory | Cloak | Gadget | Skill Book | Ability | Mount
+  category: string | null;
+  rarity: string | null;
+  itemName: string;
+  bucket: string;
+  path: string;
+  iconUrl: string;
+}
+
 export const equipmentApi = {
   async getCatalog() {
     return api.get<{ slots: EquipmentCatalogSlot[] }>(`/equipment/catalog`);
+  },
+  async getDropsCatalog() {
+    return api.get<{ items: DropCatalogItem[] }>(`/equipment/drops-catalog`);
   },
   async getMine(guildId: string) {
     return api.get<{ equipment: MemberEquipmentData[] }>(`/equipment/${guildId}/mine`);

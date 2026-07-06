@@ -3,6 +3,7 @@
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import MarketStatCard from "./MarketStatCard";
 
 interface AccountingTabProps {
   accounting: any;
@@ -27,45 +28,61 @@ export default function AccountingTab({
     <div className="space-y-6">
       {/* Treasury statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-5 border border-white/[0.05] bg-[#0c0d12]/40 backdrop-blur">
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Guild Fund Treasury</p>
-          <h3 className="text-xl sm:text-2xl font-bold font-mono text-white mt-1.5">
-            {accounting?.treasury?.primary?.currencySymbol || "₱"}{" "}
-            {(accounting?.treasury?.primary?.fundBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </h3>
-          {accounting?.treasury?.secondary?.currencyCode && (
-            <p className="text-[11px] font-semibold font-mono text-zinc-400 mt-1">
-              {accounting.treasury.secondary.currencySymbol}{" "}
-              {(accounting.treasury.secondary.fundBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
-          )}
-        </Card>
-        <Card className="p-5 border border-white/[0.05] bg-[#0c0d12]/40 backdrop-blur">
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Guild Tax Reserves</p>
-          <h3 className="text-xl sm:text-2xl font-bold font-mono text-cyan-400 mt-1.5">
-            {accounting?.treasury?.primary?.currencySymbol || "₱"}{" "}
-            {(accounting?.treasury?.primary?.taxBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </h3>
-          {accounting?.treasury?.secondary?.currencyCode && (
-            <p className="text-[11px] font-semibold font-mono text-cyan-500/80 mt-1">
-              {accounting.treasury.secondary.currencySymbol}{" "}
-              {(accounting.treasury.secondary.taxBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
-          )}
-        </Card>
-        <Card className="p-5 border border-white/[0.05] bg-[#0c0d12]/40 backdrop-blur">
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Total Expenses / Payouts</p>
-          <h3 className="text-xl sm:text-2xl font-bold font-mono text-rose-400 mt-1.5">
-            {accounting?.treasury?.primary?.currencySymbol || "₱"}{" "}
-            {(accounting?.treasury?.primary?.totalExpenses ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </h3>
-          {accounting?.treasury?.secondary?.currencyCode && (
-            <p className="text-[11px] font-semibold font-mono text-rose-500/80 mt-1">
-              {accounting.treasury.secondary.currencySymbol}{" "}
-              {(accounting.treasury.secondary.totalExpenses ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
-          )}
-        </Card>
+        <MarketStatCard
+          label="Guild Fund Treasury"
+          symbol={accounting?.treasury?.primary?.currencySymbol || "₱"}
+          value={accounting?.treasury?.primary?.fundBalance ?? 0}
+          tone="gold"
+          delay={0}
+          secondary={
+            accounting?.treasury?.secondary?.currencyCode
+              ? `${accounting.treasury.secondary.currencySymbol} ${(accounting.treasury.secondary.fundBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+              : undefined
+          }
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+              <rect x="3" y="7" width="18" height="12" rx="2" />
+              <path d="M3 11h18M7 15h2" />
+              <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
+            </svg>
+          }
+        />
+        <MarketStatCard
+          label="Guild Tax Reserves"
+          symbol={accounting?.treasury?.primary?.currencySymbol || "₱"}
+          value={accounting?.treasury?.primary?.taxBalance ?? 0}
+          tone="cyan"
+          delay={80}
+          secondary={
+            accounting?.treasury?.secondary?.currencyCode
+              ? `${accounting.treasury.secondary.currencySymbol} ${(accounting.treasury.secondary.taxBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+              : undefined
+          }
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+              <path d="M4 21V10l8-6 8 6v11" />
+              <path d="M9 21v-6h6v6" />
+            </svg>
+          }
+        />
+        <MarketStatCard
+          label="Total Expenses / Payouts"
+          symbol={accounting?.treasury?.primary?.currencySymbol || "₱"}
+          value={accounting?.treasury?.primary?.totalExpenses ?? 0}
+          tone="rose"
+          delay={160}
+          secondary={
+            accounting?.treasury?.secondary?.currencyCode
+              ? `${accounting.treasury.secondary.currencySymbol} ${(accounting.treasury.secondary.totalExpenses ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+              : undefined
+          }
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+              <path d="M22 7l-8.5 8.5-5-5L2 17" />
+              <path d="M16 7h6v6" />
+            </svg>
+          }
+        />
       </div>
 
       {/* Member Balance Board */}
@@ -90,10 +107,10 @@ export default function AccountingTab({
         {filteredMembers.length === 0 ? (
           <div className="py-16 text-center text-xs text-white/35 italic">No member balances found.</div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[560px] rounded-xl">
             <table className="w-full border-collapse text-left text-[12px]">
-              <thead>
-                <tr className="border-b border-white/[0.06] bg-white/[0.01] text-[10px] text-white/45 font-bold uppercase tracking-wider">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">
                   <th className="px-4 py-3">In-Game Name</th>
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Class</th>
@@ -110,8 +127,12 @@ export default function AccountingTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04] text-white/70">
-                {filteredMembers.map((m: any) => (
-                  <tr key={m.memberId} className="hover:bg-white/[0.01] transition-colors">
+                {filteredMembers.map((m: any, index: number) => (
+                  <tr
+                    key={m.memberId}
+                    className="market-row hover:bg-white/[0.02] transition-colors"
+                    style={{ animationDelay: `${Math.min(index, 16) * 30}ms` }}
+                  >
                     <td className="px-4 py-3 font-semibold text-white">{m.ign}</td>
                     <td className="px-4 py-3"><Badge role={m.role} /></td>
                     <td className="px-4 py-3 text-zinc-400">{m.class}</td>
@@ -160,10 +181,10 @@ export default function AccountingTab({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[520px] rounded-xl">
               <table className="w-full border-collapse text-left text-[11px]">
-                <thead>
-                  <tr className="border-b border-white/[0.06] bg-white/[0.01] text-[9px] text-white/45 font-bold uppercase tracking-wider">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[9px] text-white/45 font-bold uppercase tracking-wider">
                     <th className="px-3 py-2.5">Timestamp</th>
                     <th className="px-3 py-2.5">Account</th>
                     <th className="px-3 py-2.5">Type</th>
@@ -172,14 +193,18 @@ export default function AccountingTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04] text-white/70">
-                  {accounting.transactions.map((t: any) => {
+                  {accounting.transactions.map((t: any, index: number) => {
                     const isCredit = t.entryType === "CREDIT";
                     const symbol =
                       t.currency === "DIAMOND"
                         ? settings?.secondaryCurrencySymbol || "💎"
                         : settings?.currencySymbol || "₱";
                     return (
-                      <tr key={t.id} className="hover:bg-white/[0.01] transition-colors">
+                      <tr
+                        key={t.id}
+                        className="market-row hover:bg-white/[0.02] transition-colors"
+                        style={{ animationDelay: `${Math.min(index, 16) * 25}ms` }}
+                      >
                         <td className="px-3 py-2.5 font-mono text-[10px] text-zinc-400">
                           {new Date(t.createdAt).toLocaleString()}
                         </td>

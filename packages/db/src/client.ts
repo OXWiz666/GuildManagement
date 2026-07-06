@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Prisma, PrismaClient } from "./generated/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 // Singleton pattern — prevents multiple PrismaClient instances (and pg pools)
 // during Next.js hot-reload in development

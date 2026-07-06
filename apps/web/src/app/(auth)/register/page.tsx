@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { AuthStagger, MagneticPress } from "@/components/auth/AuthAnim";
+import { friendlyAuthError } from "@/lib/auth-errors";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -79,16 +80,19 @@ export default function RegisterPage() {
           router.push("/dashboard");
         }
       } else {
-        setError(result.error || "Registration failed");
+        setError(result.error || "We couldn't create your account. Please try again.");
       }
-    } catch {
-      setError("An unexpected error occurred");
+    } catch (err) {
+      setError(friendlyAuthError(err instanceof Error ? err.message : undefined).message);
     } finally {
       setIsLoading(false);
     }
   }
 
   const strength = getPasswordStrength(password);
+
+  // Derive a human-readable heading for the error box from the current message
+  const errorTitle = error ? friendlyAuthError(error).title : "";
 
   if (isVerificationSent) {
     return (
@@ -155,11 +159,7 @@ export default function RegisterPage() {
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <div className="flex flex-col gap-0.5">
-                <span className="font-semibold text-red-100">
-                  {error.toLowerCase().includes("taken") || error.toLowerCase().includes("exist") || error.toLowerCase().includes("weak") || error.toLowerCase().includes("match") || error.toLowerCase().includes("required")
-                    ? "Registration Error"
-                    : "An unexpected error occurred"}
-                </span>
+                <span className="font-semibold text-red-100">{errorTitle}</span>
                 <span className="text-red-300/80 leading-relaxed">{error}</span>
               </div>
             </div>

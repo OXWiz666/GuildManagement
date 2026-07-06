@@ -12,7 +12,7 @@ export interface ApplicationsTabProps {
   applications: JoinRequestData[];
   isLoadingApps: boolean;
   isReviewingId: string | null;
-  isGuildLeader: boolean;
+  isOfficer: boolean;
   loadApplications: () => void;
   handleReviewApplication: (requestId: string, action: "ACCEPT" | "DECLINE") => void;
 }
@@ -21,7 +21,7 @@ export default function ApplicationsTab({
   applications,
   isLoadingApps,
   isReviewingId,
-  isGuildLeader,
+  isOfficer,
   loadApplications,
   handleReviewApplication,
 }: ApplicationsTabProps) {
@@ -115,7 +115,7 @@ export default function ApplicationsTab({
                   variant="danger"
                   size="sm"
                   onClick={() => handleReviewApplication(app.id, "DECLINE")}
-                  disabled={isReviewingId !== null || !isGuildLeader}
+                  disabled={isReviewingId !== null || !isOfficer}
                   isLoading={isReviewingId === app.id}
                   className="grow md:grow-0"
                 >
@@ -125,7 +125,7 @@ export default function ApplicationsTab({
                   variant="primary"
                   size="sm"
                   onClick={() => handleReviewApplication(app.id, "ACCEPT")}
-                  disabled={isReviewingId !== null || !isGuildLeader}
+                  disabled={isReviewingId !== null || !isOfficer}
                   isLoading={isReviewingId === app.id}
                   className="grow md:grow-0"
                 >

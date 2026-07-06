@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { AuthStagger, MagneticPress } from "@/components/auth/AuthAnim";
 import { createClient } from "@/utils/supabase/client";
+import { friendlyAuthError } from "@/lib/auth-errors";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -47,14 +48,17 @@ export default function LoginPage() {
         addToast("success", "Welcome back!");
         router.push("/dashboard");
       } else {
-        setError(result.error || "Login failed");
+        setError(result.error || "Incorrect email or password. Please try again.");
       }
-    } catch {
-      setError("An unexpected error occurred");
+    } catch (err) {
+      setError(friendlyAuthError(err instanceof Error ? err.message : undefined).message);
     } finally {
       setIsLoading(false);
     }
   }
+
+  // Derive a human-readable heading for the error box from the current message
+  const errorTitle = error ? friendlyAuthError(error).title : "";
 
   return (
     <div className="w-full relative">
@@ -92,11 +96,7 @@ export default function LoginPage() {
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <div className="flex flex-col gap-0.5">
-                <span className="font-semibold text-red-100">
-                  {error.toLowerCase().includes("credential") || error.toLowerCase().includes("password") || error.toLowerCase().includes("email")
-                    ? "Authentication Error"
-                    : "An unexpected error occurred"}
-                </span>
+                <span className="font-semibold text-red-100">{errorTitle}</span>
                 <span className="text-red-300/80 leading-relaxed">{error}</span>
               </div>
             </div>

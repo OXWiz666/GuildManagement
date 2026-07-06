@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
 import { guildApi, type GuildMemberData, type JoinRequestData } from "@/lib/api";
+import { hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import { useToast } from "@/components/ui/Toast";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -47,8 +48,8 @@ export default function MembersPage() {
   const [isReviewingId, setIsReviewingId] = useState<string | null>(null);
 
   const activeGuild = user?.guilds[0];
-  const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
-  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader;
+  const isGuildLeader = !!activeGuild && hasMinimumRole(activeGuild.role as GuildRoleType, "GUILD_LEADER");
+  const isOfficer = !!activeGuild && hasMinimumRole(activeGuild.role as GuildRoleType, "OFFICER");
 
   // ─── Persistent Queries ────────────────────────────────
   
@@ -185,7 +186,7 @@ export default function MembersPage() {
   }
 
   async function handleReviewApplication(requestId: string, action: "ACCEPT" | "DECLINE") {
-    if (!activeGuild || !isGuildLeader) return;
+    if (!activeGuild || !isOfficer) return;
     setIsReviewingId(requestId);
     try {
       const result = await guildApi.reviewApplication(activeGuild.guildId, requestId, action);
@@ -403,7 +404,7 @@ export default function MembersPage() {
             applications={applications}
             isLoadingApps={isLoadingApps}
             isReviewingId={isReviewingId}
-            isGuildLeader={isGuildLeader}
+            isOfficer={isOfficer}
             loadApplications={refetchApplications}
             handleReviewApplication={handleReviewApplication}
           />

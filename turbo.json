@@ -1,5 +1,22 @@
 {
   "$schema": "https://turbo.build/schema.json",
+
+  "globalEnv": [
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "JWT_ACCESS_SECRET",
+    "JWT_REFRESH_SECRET",
+    "JWT_ACCESS_EXPIRY",
+    "JWT_REFRESH_EXPIRY",
+    "SUPABASE_URL",
+    "SUPABASE_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_API_URL",
+    "NODE_ENV",
+    "BCRYPT_ROUNDS"
+  ],
+
   "tasks": {
     "build": {
       "dependsOn": ["^build", "^db:generate"],

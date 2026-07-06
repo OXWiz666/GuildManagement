@@ -6,6 +6,7 @@ import {
   type EquipmentSlot,
 } from "@guild/shared";
 import { writeAuditLog } from "./audit.service";
+import { getGuildMemberByUser } from "./guild.service";
 import { broadcastToGuild } from "../lib/socket";
 import { cache } from "../lib/cache";
 import { publicUrl, uploadObject, signUrl } from "../lib/supabaseStorage";
@@ -154,12 +155,128 @@ export async function getCatalog(): Promise<{ slots: CatalogSlot[] }> {
   return { slots };
 }
 
+// ─── Boss drops catalog (equipment icons + consumables) ──────────────
+// The Taken-boss "drops" picker needs more than wearable gear: it also covers
+// Skill Books, Ability runes and Mounts, which live in the public `Consumable`
+// bucket with a different path shape → `Consumable/<Category>/<Rarity>/<Name>`.
+
+const CONSUMABLE_BUCKET = "Consumable";
+
+// Top-level drop "type" shown as the picker's category filter.
+const EQUIP_SLOT_DROP_TYPE: Record<string, string> = {
+  weapon: "Weapon",
+  helm: "Armor",
+  upperArmor: "Armor",
+  lowerArmor: "Armor",
+  gloves: "Armor",
+  boots: "Armor",
+  earrings: "Accessory",
+  necklace: "Accessory",
+  bracelet: "Accessory",
+  ring: "Accessory",
+  belt: "Accessory",
+  insignia: "Accessory",
+  cloak: "Cloak",
+  gadget: "Gadget",
+};
+
+export interface DropCatalogItem {
+  type: string; // Weapon | Armor | Accessory | Cloak | Gadget | Skill Book | Ability | Mount
+  slotType: string | null; // equipment slot (weapon, helm, boots, necklace…) or null for consumables
+  category: string | null; // variant: weapon type, armor class, cloak type, skillbook weapon…
+  rarity: string | null;
+  itemName: string;
+  bucket: string;
+  path: string;
+  iconUrl: string;
+}
+
+// "SwordAndShield" → "Sword And Shield", "BareHands" → "Bare Hands"
+function humanizeLeaf(name: string): string {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
+}
+
+/** Classify a `Consumable` storage object into a drop item, or null. */
+function classifyConsumable(path: string): Omit<DropCatalogItem, "iconUrl"> | null {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length < 3) return null;
+  const category = parts[0]!; // Ability | Skillbook | Mount
+  const rarity = parts[1] ?? null;
+  const leaf = stripExt(parts[parts.length - 1]!);
+
+  if (category === "Skillbook") {
+    return {
+      type: "Skill Book",
+      slotType: null,
+      category: humanizeLeaf(leaf),
+      rarity,
+      itemName: `${humanizeLeaf(leaf)} Skill Book`,
+      bucket: CONSUMABLE_BUCKET,
+      path,
+    };
+  }
+  if (category === "Ability") {
+    return { type: "Ability", slotType: null, category: null, rarity, itemName: "Ability Rune", bucket: CONSUMABLE_BUCKET, path };
+  }
+  if (category === "Mount") {
+    return { type: "Mount", slotType: null, category: null, rarity, itemName: "Mount", bucket: CONSUMABLE_BUCKET, path };
+  }
+  return null;
+}
+
+async function getRawConsumables(): Promise<Array<Omit<DropCatalogItem, "iconUrl">>> {
+  return cache.getOrSet("drops:consumables:raw", CATALOG_CACHE_TTL, async () => {
+    const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+      `select o.name
+         from storage.objects o
+         join storage.buckets b on b.id = o.bucket_id
+        where b.public = true
+          and o.bucket_id = $1
+          and o.name ~* '\\.(png|jpe?g|webp)$'`,
+      CONSUMABLE_BUCKET,
+    );
+    return rows
+      .map((r) => classifyConsumable(r.name))
+      .filter((c): c is Omit<DropCatalogItem, "iconUrl"> => c !== null);
+  });
+}
+
+/** Flat, public-URL drops catalog: wearable gear + consumables (skill books, etc.). */
+export async function getDropsCatalog(): Promise<{ items: DropCatalogItem[] }> {
+  const [gear, consumables] = await Promise.all([getRawCatalog(), getRawConsumables()]);
+
+  const gearItems: DropCatalogItem[] = gear.map((it) => ({
+    type: EQUIP_SLOT_DROP_TYPE[it.slotType] ?? "Other",
+    slotType: it.slotType,
+    category: it.variant,
+    rarity: it.rarity,
+    itemName: it.itemName,
+    bucket: it.bucket,
+    path: it.path,
+    iconUrl: publicUrl(it.bucket, it.path),
+  }));
+
+  const consumableItems: DropCatalogItem[] = consumables.map((it) => ({
+    ...it,
+    iconUrl: publicUrl(it.bucket, it.path),
+  }));
+
+  const items = [...gearItems, ...consumableItems].sort(
+    (a, b) => a.type.localeCompare(b.type) || a.itemName.localeCompare(b.itemName),
+  );
+  return { items };
+}
+
+/** Lookup map keyed by `${bucket}::${path}` for validating submitted drops. */
+export async function getDropCatalogMap(): Promise<Map<string, DropCatalogItem>> {
+  const { items } = await getDropsCatalog();
+  return new Map(items.map((it) => [`${it.bucket}::${it.path}`, it]));
+}
+
 // ─── Membership helper ───────────────────────────────────────────────
 
 async function requireActiveMember(guildId: string, userId: string) {
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId, guildId } },
-  });
+  const member = await getGuildMemberByUser(userId, guildId);
   if (!member || !member.isActive) {
     throw new ForbiddenError("You must be an active guild member");
   }

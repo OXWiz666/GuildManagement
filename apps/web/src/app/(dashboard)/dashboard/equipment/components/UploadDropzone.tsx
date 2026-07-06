@@ -49,13 +49,13 @@ export default function UploadDropzone({
         </svg>
       </div>
       <p className="text-sm font-semibold text-white">
-        Drop your in-game Equipment panel here
+        Drop a screenshot with your gear or Combat Power
       </p>
       <p className="mt-1 text-xs text-white/45">
         or <span className="text-[var(--forge-gold)]">browse files</span> · PNG, JPG or WebP · up to 10MB
       </p>
       <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-white/30">
-        Crop to the equipment panel (Weapon top-left, Gadget top-right) for the most accurate icon matches.
+        One scan reads both: the Equipment panel for gear icons and the &quot;Combat Power&quot; value for your CP.
       </p>
     </div>
   );

@@ -98,10 +98,10 @@ export default function SoldItemsTable({
           No sold items found. Log loot drops from an activity using the “Log sold items” action above.
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[600px] rounded-xl">
           <table className="w-full border-collapse text-left text-[12px]">
-            <thead>
-              <tr className="border-b border-white/[0.06] bg-white/[0.01] text-[10px] text-white/45 font-bold uppercase tracking-wider">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">
                 <th className="px-4 py-3">Loot</th>
                 <th className="px-4 py-3">Activity</th>
                 <th className="px-4 py-3">Category</th>
@@ -113,11 +113,15 @@ export default function SoldItemsTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04] text-white/70 align-top">
-              {groups.map((group) => {
+              {groups.map((group, index) => {
                 const symbol = group.currency === "DIAMOND" ? secondaryCurrencySymbol : currencySymbol;
                 const categoryLabel = CATEGORY_LABELS[group.category] ?? group.category;
                 return (
-                  <tr key={group.key} className="hover:bg-white/[0.01] transition-colors">
+                  <tr
+                    key={group.key}
+                    className="market-row hover:bg-white/[0.02] transition-colors"
+                    style={{ animationDelay: `${Math.min(index, 16) * 35}ms` }}
+                  >
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
                         {group.loots.map((loot) => (

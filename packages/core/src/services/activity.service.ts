@@ -1,4 +1,5 @@
 import { prisma } from "@guild/db";
+import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../utils/errors";
 
@@ -14,9 +15,7 @@ const OFFICER_ROLES = ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
 type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
 async function requireActiveMember(actorId: string, guildId: string) {
-  const membership = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId: actorId, guildId } },
-  });
+  const membership = await getGuildMemberByUser(actorId, guildId);
   if (!membership || !membership.isActive) {
     throw new ForbiddenError("You must be an active member of this guild");
   }

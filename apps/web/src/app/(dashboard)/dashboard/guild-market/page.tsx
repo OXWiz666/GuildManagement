@@ -19,6 +19,7 @@ import RequestItemPanel from "./components/RequestItemPanel";
 import LegendaryPriorityTab from "./components/LegendaryPriorityTab";
 import ItemDistributionTab from "./components/ItemDistributionTab";
 import DistributionHistoryTab from "./components/DistributionHistoryTab";
+import MarketNav, { type MarketTab } from "./components/MarketNav";
 import { useQuery, queryClient } from "@/lib/query";
 
 export default function GuildMarketPage() {
@@ -26,9 +27,7 @@ export default function GuildMarketPage() {
   const { addToast } = useToast();
   const { socket } = useSocket();
 
-  const [activeTab, setActiveTab] = useState<
-    "loot" | "accounting" | "rankings" | "legendary" | "distribution" | "history"
-  >("loot");
+  const [activeTab, setActiveTab] = useState<MarketTab>("loot");
 
   // Loot & Accounting inputs
   const [saleCurrency, setSaleCurrency] = useState("PHP");
@@ -361,6 +360,16 @@ export default function GuildMarketPage() {
     return sales.reduce((acc, curr) => acc + Number(curr.netProfit) / 100, 0);
   }, [sales]);
 
+  // Tab count badges (only the counts already loaded at page level)
+  const tabCounts = useMemo<Partial<Record<MarketTab, number>>>(() => {
+    const memberCount = accounting?.memberBalances?.length ?? 0;
+    return {
+      loot: sales.length,
+      accounting: memberCount,
+      rankings: memberCount,
+    };
+  }, [sales.length, accounting]);
+
   if (!user || !activeGuild) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -406,75 +415,11 @@ export default function GuildMarketPage() {
           }
         />
 
-        {/* Tab Headers */}
-        <div className="flex border-b border-white/[0.06] gap-4 mb-4 overflow-x-auto whitespace-nowrap [&>button]:shrink-0">
-          <button
-            onClick={() => setActiveTab("loot")}
-            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              activeTab === "loot" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Loot Sales & History
-            {activeTab === "loot" && (
-              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("accounting")}
-            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              activeTab === "accounting" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Accounting & Ledger
-            {activeTab === "accounting" && (
-              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("rankings")}
-            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              activeTab === "rankings" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Guild Points Ranking
-            {activeTab === "rankings" && (
-              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("legendary")}
-            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              activeTab === "legendary" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Legendary Priority
-            {activeTab === "legendary" && (
-              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("distribution")}
-            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              activeTab === "distribution" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Item Distribution
-            {activeTab === "distribution" && (
-              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`py-3 text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              activeTab === "history" ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Distribution History
-            {activeTab === "history" && (
-              <span className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-            )}
-          </button>
-        </div>
+        {/* Grouped, animated navigation */}
+        <MarketNav active={activeTab} onChange={setActiveTab} counts={tabCounts} />
+
+        {/* Animated tab content — re-runs the reveal on each tab switch */}
+        <div key={activeTab} className="market-tab-panel">
 
         {/* Tab Content 1: LOOT SALES & HISTORY */}
         {activeTab === "loot" && (
@@ -558,9 +503,12 @@ export default function GuildMarketPage() {
           <DistributionHistoryTab guildId={activeGuild.guildId} isOfficer={isOfficer} />
         )}
 
+        </div>
+
         {/* Modal: Record Drop Loot Sale */}
         {showSaleModal && (
           <RecordSaleModal
+            guildId={activeGuild.guildId}
             settings={settings}
             schedules={schedules}
             category={saleCategory}

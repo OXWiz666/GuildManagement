@@ -7,8 +7,8 @@
 // or scheme changes, mismatched rows are ignored and recomputed.
 
 import {
-  CLIP_EMBED_VERSION,
-  CLIP_MODEL_ID,
+  VISION_EMBED_VERSION,
+  VISION_MODEL_ID,
   embedIconUrl,
 } from "@/lib/clip-embed";
 
@@ -64,7 +64,7 @@ function readAll(db: IDBDatabase): Promise<Map<string, Float32Array>> {
     const req = store.getAll();
     req.onsuccess = () => {
       for (const row of (req.result as StoredEmbed[]) ?? []) {
-        if (row.model === CLIP_MODEL_ID && row.version === CLIP_EMBED_VERSION) {
+        if (row.model === VISION_MODEL_ID && row.version === VISION_EMBED_VERSION) {
           out.set(row.key, new Float32Array(row.vec));
         }
       }
@@ -115,8 +115,8 @@ export async function getCatalogEmbeddings(
       cached.set(r.key, r.vec);
       rows.push({
         key: r.key,
-        model: CLIP_MODEL_ID,
-        version: CLIP_EMBED_VERSION,
+        model: VISION_MODEL_ID,
+        version: VISION_EMBED_VERSION,
         vec: r.vec.buffer.slice(0) as ArrayBuffer,
       });
     }

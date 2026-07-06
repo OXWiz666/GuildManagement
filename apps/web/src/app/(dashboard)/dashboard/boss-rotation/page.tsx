@@ -6,6 +6,8 @@ import {
   dashboardApi,
   guildApi,
   type AuditLogEntry,
+  type BossDropDisplay,
+  type BossKilledHistoryEntry,
   type BossKilledHistoryResponse,
   type BossRotationItem,
   type BossRotationResponse,
@@ -21,6 +23,8 @@ import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
 import { getGuildColor } from "./utils/helpers";
 import MasterListTab from "./components/MasterListTab";
+import BossDropsPicker, { type SelectedDrop, rarityStyle } from "./components/BossDropsPicker";
+import BossKillSaleModal from "./components/BossKillSaleModal";
 import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, getBossCycleCategory, getRealtimeBossTimer } from "@guild/shared";
 
 type RotationTab = "LIVE" | "UPCOMING" | "MASTER" | "ACTIVITY" | "HISTORY";
@@ -67,6 +71,11 @@ export default function BossRotationPage() {
   const { socket } = useSocket();
   const { addToast } = useToast();
   const activeGuild = user?.guilds?.[0];
+  const isOfficer =
+    activeGuild?.role === "OFFICER" ||
+    activeGuild?.role === "GUILD_LEADER" ||
+    activeGuild?.role === "FACTION_LEADER" ||
+    activeGuild?.role === "ADMIN";
 
   const [activeTab, setActiveTab] = useState<RotationTab>("LIVE");
   const [activityPage, setActivityPage] = useState(1);
@@ -78,7 +87,10 @@ export default function BossRotationPage() {
   const [killTarget, setKillTarget] = useState<BossRotationItem | null>(null);
   const [killTime, setKillTime] = useState("");
   const [selectedTakenGuildId, setSelectedTakenGuildId] = useState("");
+  const [killDrops, setKillDrops] = useState<SelectedDrop[]>([]);
+  const [showDropsPicker, setShowDropsPicker] = useState(false);
   const [isKilling, setIsKilling] = useState(false);
+  const [saleModalKill, setSaleModalKill] = useState<BossKilledHistoryEntry | null>(null);
   const isKillingRef = useRef(false);
   const rotationQueryKey = activeGuild ? `boss_rotation_v2:${activeGuild.guildId}` : "boss_rotation_empty";
 
@@ -296,18 +308,21 @@ export default function BossRotationPage() {
     .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime())
     .slice(0, 24);
 
+  // Only guilds that actually hold a turn for this boss in the Master List
+  // rotation queue may take it. Guilds absent from the master list are NOT
+  // eligible and must not appear in the "Taking Guild" picker. If a boss has no
+  // configured participants at all, fall back to every faction guild so the
+  // modal stays usable rather than showing an empty list.
   const modalGuildQueue = useMemo(() => {
     if (!killTarget) return [];
-    const guildMap = new Map<string, FactionGuildData>();
-    for (const guild of killTarget.queue) {
-      guildMap.set(guild.id, guild);
-    }
-    for (const guild of takingGuilds) {
-      if (!guildMap.has(guild.id)) {
+    if (killTarget.queue.length > 0) {
+      const guildMap = new Map<string, FactionGuildData>();
+      for (const guild of killTarget.queue) {
         guildMap.set(guild.id, guild);
       }
+      return Array.from(guildMap.values());
     }
-    return Array.from(guildMap.values());
+    return takingGuilds;
   }, [killTarget, takingGuilds]);
 
   const selectedTakenGuild = modalGuildQueue.find((guild) => guild.id === selectedTakenGuildId) || null;
@@ -328,6 +343,7 @@ export default function BossRotationPage() {
     setKillTarget(rotation);
     setKillTime(toDateTimeInputValue(new Date()));
     setSelectedTakenGuildId(defaultGuildId);
+    setKillDrops([]);
   }
 
   async function confirmKill() {
@@ -338,6 +354,11 @@ export default function BossRotationPage() {
     const timeoutId = window.setTimeout(() => controller.abort(), CONFIRM_TAKEN_TIMEOUT_MS);
     try {
       const killedAt = new Date(killTime).toISOString();
+      const dropsPayload = killDrops.map((d) => ({
+        bucket: d.item.bucket,
+        path: d.item.path,
+        quantity: d.quantity,
+      }));
       const result = killTarget.activeSchedule
         ? await dashboardApi.markBossRotationKilled(
             activeGuild.guildId,
@@ -345,6 +366,7 @@ export default function BossRotationPage() {
             killedAt,
             selectedTakenGuild.id,
             controller.signal,
+            dropsPayload,
           )
         : await dashboardApi.markBossRotationKilledByName(
             activeGuild.guildId,
@@ -352,6 +374,7 @@ export default function BossRotationPage() {
             killedAt,
             selectedTakenGuild.id,
             controller.signal,
+            dropsPayload,
           );
       window.clearTimeout(timeoutId);
       if (result.success) {
@@ -629,19 +652,31 @@ export default function BossRotationPage() {
                     </div>
                     <div className="divide-y divide-white/[0.05]">
                       {day.kills.map((kill) => (
-                        <div key={kill.id} className="px-4 py-3 grid grid-cols-1 lg:grid-cols-[1fr_160px_180px_180px] gap-2 lg:gap-4 items-center">
-                          <div className="min-w-0 flex items-center gap-3">
-                            <BossAvatar src={kill.bossImageUrl} name={kill.bossName} />
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-white truncate">{kill.bossName}</p>
-                              <p className="text-[11px] text-white/40 mt-1">
-                                {kill.action.replaceAll("_", " ")}
-                              </p>
+                        <div key={kill.id} className="px-4 py-3 space-y-3">
+                          <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px_180px_180px] gap-2 lg:gap-4 items-center">
+                            <div className="min-w-0 flex items-center gap-3">
+                              <BossAvatar src={kill.bossImageUrl} name={kill.bossName} />
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-white truncate">{kill.bossName}</p>
+                                <p className="text-[11px] text-white/40 mt-1">
+                                  {kill.action.replaceAll("_", " ")}
+                                </p>
+                              </div>
                             </div>
+                            <HistoryMeta label="Killed" value={new Date(kill.killedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} />
+                            <HistoryMeta label="Recorded by" value={kill.recordedBy.displayName} />
+                            <HistoryMeta label="Next guild" value={kill.nextGuildName || "Unassigned"} tone="amber" />
                           </div>
-                          <HistoryMeta label="Killed" value={new Date(kill.killedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} />
-                          <HistoryMeta label="Recorded by" value={kill.recordedBy.displayName} />
-                          <HistoryMeta label="Next guild" value={kill.nextGuildName || "Unassigned"} tone="amber" />
+                          {kill.drops.length > 0 && <KillDrops drops={kill.drops} />}
+                          <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setSaleModalKill(kill)}
+                              className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
+                            >
+                              🛒 {isOfficer ? "Log / view sold items" : "View sold items"}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -710,6 +745,47 @@ export default function BossRotationPage() {
               />
             </label>
 
+            {/* Boss drops */}
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em]">
+                  Boss drops <span className="text-white/30 normal-case tracking-normal">(optional)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowDropsPicker(true)}
+                  disabled={isKilling}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--forge-gold)]/30 bg-[var(--forge-glow)] px-2.5 py-1 text-[11px] font-bold text-[var(--forge-gold-bright)] hover:border-[var(--forge-gold)]/50 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  {killDrops.length > 0 ? "Edit drops" : "Add drops"}
+                </button>
+              </div>
+              {killDrops.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDropsPicker(true)}
+                  disabled={isKilling}
+                  className="w-full rounded-lg border border-dashed border-white/[0.1] bg-white/[0.01] px-3 py-3 text-[11px] text-white/35 hover:text-white/60 hover:border-white/20 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  No drops recorded — click to add the items this boss dropped.
+                </button>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
+                  {killDrops.map(({ item, quantity }) => {
+                    const rs = rarityStyle(item.rarity);
+                    return (
+                      <span key={`${item.bucket}::${item.path}`} className={`inline-flex items-center gap-1.5 rounded-md border ${rs.border} ${rs.bg} pl-1 pr-1.5 py-0.5`}>
+                        <img src={item.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-4 w-4 rounded object-cover" />
+                        <span className="text-[10px] font-semibold text-white/85 max-w-[110px] truncate">{item.itemName}</span>
+                        {quantity > 1 && <span className="text-[9px] font-mono text-white/50">×{quantity}</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2 border-t border-white/[0.06] pt-4">
               <Button variant="ghost" size="sm" onClick={() => setKillTarget(null)} disabled={isKilling}>
                 Cancel
@@ -720,6 +796,27 @@ export default function BossRotationPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {killTarget && showDropsPicker && (
+        <BossDropsPicker
+          bossName={killTarget.bossName}
+          initial={killDrops}
+          onCancel={() => setShowDropsPicker(false)}
+          onApply={(selected) => {
+            setKillDrops(selected);
+            setShowDropsPicker(false);
+          }}
+        />
+      )}
+
+      {saleModalKill && activeGuild && (
+        <BossKillSaleModal
+          guildId={activeGuild.guildId}
+          kill={saleModalKill}
+          isOfficer={isOfficer}
+          onClose={() => setSaleModalKill(null)}
+        />
       )}
     </div>
   );
@@ -1098,6 +1195,36 @@ function PaginationControls({
         >
           <ChevronRightIcon />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function KillDrops({ drops }: { drops: BossDropDisplay[] }) {
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] px-3 py-2.5">
+      <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-2 flex items-center gap-1.5">
+        <svg className="h-3 w-3 text-[var(--forge-gold)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M20 12v10H4V12" /><path d="M2 7h20v5H2z" /><path d="M12 22V7" />
+          <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+        </svg>
+        Drops · {drops.length}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {drops.map((d, i) => {
+          const rs = rarityStyle(d.rarity);
+          return (
+            <span
+              key={`${d.itemName}-${i}`}
+              title={`${d.itemName}${d.rarity ? ` · ${d.rarity}` : ""}${d.quantity > 1 ? ` ×${d.quantity}` : ""}`}
+              className={`inline-flex items-center gap-1.5 rounded-md border ${rs.border} ${rs.bg} pl-1 pr-1.5 py-0.5`}
+            >
+              <img src={d.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-4 w-4 rounded object-cover" />
+              <span className="text-[10px] font-semibold text-white/85 max-w-[130px] truncate">{d.itemName}</span>
+              {d.quantity > 1 && <span className="text-[9px] font-mono text-white/50">×{d.quantity}</span>}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

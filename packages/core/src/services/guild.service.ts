@@ -1,8 +1,18 @@
 import { type GuildSettings, type GuildMember } from "@guild/db";
 import { AUDIT_ACTIONS, canManageRole, type GuildRoleType } from "@guild/shared";
 import { ForbiddenError, NotFoundError } from "../utils/errors";
+import { cache } from "../lib/cache";
 import { IGuildRepository, PrismaGuildRepository } from "../repositories/guild.repository";
 import { IAuditRepository, PrismaAuditRepository } from "../repositories/audit.repository";
+
+// Per-request RBAC resolves the caller's guild membership. Against a remote
+// (transaction-pooled) Postgres this single read costs several network round
+// trips, and it runs on the majority of guarded endpoints, so cache it briefly.
+// Role changes invalidate the affected keys explicitly (see updateMemberRole);
+// worst-case staleness is bounded by this TTL.
+const MEMBERSHIP_CACHE_TTL = 15; // seconds
+const membershipCacheKey = (guildId: string, userId: string) =>
+  `membership:${guildId}:${userId}`;
 
 // ─── Member Types ───────────────────────────────
 
@@ -36,13 +46,16 @@ export class GuildService {
    * Get members of a guild.
    */
   async getGuildMembers(guildId: string): Promise<GuildMemberWithUser[]> {
-    const guild = await this.guildRepo.getGuildById(guildId);
+    // The guild-existence check and the member fetch are independent — run them
+    // concurrently so the existence guard doesn't add a serial round trip.
+    const [guild, members] = await Promise.all([
+      this.guildRepo.getGuildById(guildId),
+      this.guildRepo.getMembers(guildId),
+    ]);
 
     if (!guild) {
       throw new NotFoundError("Guild not found");
     }
-
-    const members = await this.guildRepo.getMembers(guildId);
 
     return members.map((m) => ({
       id: m.id,
@@ -147,6 +160,13 @@ export class GuildService {
         userAgent,
       });
 
+      // Both the promoted target and the demoted actor changed role — drop their
+      // cached membership so RBAC reflects the new roles immediately.
+      await Promise.all([
+        cache.delete(membershipCacheKey(guildId, targetMember.userId)),
+        cache.delete(membershipCacheKey(guildId, actorId)),
+      ]);
+
       return {
         id: updatedTarget.id,
         userId: updatedTarget.userId,
@@ -206,6 +226,9 @@ export class GuildService {
       ipAddress,
       userAgent,
     });
+
+    // Invalidate the target's cached membership so the new role takes effect now.
+    await cache.delete(membershipCacheKey(guildId, targetMember.userId));
 
     return {
       id: updated.id,
@@ -300,7 +323,11 @@ export class GuildService {
    * Get member context helper (used in RBAC middleware to bypass direct DB imports).
    */
   async getGuildMemberByUser(userId: string, guildId: string): Promise<GuildMember | null> {
-    return this.guildRepo.getMemberByUser(userId, guildId);
+    return cache.getOrSet(
+      membershipCacheKey(guildId, userId),
+      MEMBERSHIP_CACHE_TTL,
+      () => this.guildRepo.getMemberByUser(userId, guildId),
+    );
   }
 
   /**

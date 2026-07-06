@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type CSSProperties } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
 import { dashboardApi, type BossScheduleData, type BossData, type AttendanceSessionData, type AttendanceRecordData } from "@/lib/api";
@@ -540,15 +540,46 @@ export default function BossAttendancePage() {
             </div>
           </div>
 
-          {/* Current streak */}
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 shadow-sm">
-            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Current Streak</p>
-            <div className="flex items-baseline gap-2 mt-2">
-              <h3 className="text-2xl font-bold tracking-tight text-amber-400">
+          {/* Current streak — flames up while the streak is alive */}
+          <div
+            className={`relative overflow-hidden rounded-xl border p-4 shadow-sm transition-colors duration-500 ${
+              (stats?.currentStreak ?? 0) > 0
+                ? "border-amber-500/30 bg-gradient-to-br from-amber-500/[0.10] via-orange-600/[0.05] to-transparent"
+                : "border-white/[0.06] bg-white/[0.02]"
+            }`}
+          >
+            {(stats?.currentStreak ?? 0) > 0 && (
+              <span
+                aria-hidden
+                className="streak-heat pointer-events-none absolute -right-5 -top-6 h-20 w-20 rounded-full bg-orange-500/25 blur-2xl"
+              />
+            )}
+            <p className="relative text-[10px] font-semibold text-white/40 uppercase tracking-wider">Current Streak</p>
+            <div className="relative flex items-baseline gap-2 mt-2">
+              <h3 className={`text-2xl font-bold tracking-tight ${(stats?.currentStreak ?? 0) > 0 ? "text-amber-300" : "text-amber-400"}`}>
                 {stats ? stats.currentStreak : "--"}
               </h3>
-              <span className="text-[10px] text-zinc-650">Attendance in a row</span>
+              {(stats?.currentStreak ?? 0) > 0 ? (
+                <span className="relative inline-flex h-5 w-5 items-center justify-center leading-none">
+                  <span className="streak-flame text-base">🔥</span>
+                  <span
+                    className="streak-ember absolute left-1/2 top-1 h-1 w-1 -translate-x-1/2 rounded-full bg-amber-300"
+                    style={{ animationDelay: "0.15s", "--ember-x": "-2px" } as CSSProperties}
+                  />
+                  <span
+                    className="streak-ember absolute left-1/2 top-1.5 h-0.5 w-0.5 -translate-x-1/2 rounded-full bg-orange-400"
+                    style={{ animationDelay: "0.75s", "--ember-x": "3px" } as CSSProperties}
+                  />
+                </span>
+              ) : (
+                <span className="text-[10px] text-zinc-650">Attendance in a row</span>
+              )}
             </div>
+            {(stats?.currentStreak ?? 0) > 0 && (
+              <p className="relative mt-1 text-[9px] font-semibold uppercase tracking-wide text-amber-400/80">
+                On fire · keep it going
+              </p>
+            )}
           </div>
 
           {/* Total Points */}

@@ -1,4 +1,5 @@
 import { prisma } from "@guild/db";
+import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { createNotifications } from "./notification.service";
 import { broadcastToGuild } from "../lib/socket";
@@ -102,9 +103,8 @@ export async function notifyGuildOfficers(
 // ─── Membership helpers ──────────────────────────────────────────────
 
 async function requireActiveMember(guildId: string, userId: string) {
-  const member = await prisma.guildMember.findUnique({
-    where: { userId_guildId: { userId, guildId } },
-  });
+  // Cached membership read (shared `membership:*` key with the RBAC guard).
+  const member = await getGuildMemberByUser(userId, guildId);
   if (!member || !member.isActive) {
     throw new ForbiddenError("You must be an active guild member");
   }

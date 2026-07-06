@@ -10,6 +10,7 @@ import Input from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { RankTierBadge, PrioritySeqBadge } from "./MarketBadges";
+import { useGearIcons, GearIcon } from "./useGearIcons";
 
 // Slots entered as a numeric quantity; everything else is a yes/no gear flag.
 const QUANTITY_SLOTS = new Set([
@@ -28,6 +29,7 @@ interface Props {
 
 export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
   const { addToast } = useToast();
+  const gearIcons = useGearIcons();
   const [search, setSearch] = useState("");
   const [target, setTarget] = useState<PriorityQueueEntry | null>(null);
 
@@ -95,10 +97,10 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/35 border border-dashed border-white/[0.06] rounded-2xl">No members to display.</div>
       ) : (
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-x-auto">
+        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-auto max-h-[600px]">
           <table className="w-full text-[12px] min-w-[640px]">
-            <thead className="border-b border-white/[0.06] bg-white/[0.01]">
-              <tr className="text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">
                 <th className="px-4 py-3">#</th>
                 <th className="px-4 py-3">Member</th>
                 <th className="px-4 py-3">Tier</th>
@@ -112,8 +114,12 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04] text-white/70">
-              {filtered.map((m) => (
-                <tr key={m.memberId} className="hover:bg-white/[0.02]">
+              {filtered.map((m, index) => (
+                <tr
+                  key={m.memberId}
+                  className="market-row hover:bg-white/[0.02]"
+                  style={{ animationDelay: `${Math.min(index, 16) * 35}ms` }}
+                >
                   <td className="px-4 py-3"><PrioritySeqBadge position={m.position} /></td>
                   <td className="px-4 py-3">
                     <span className="font-semibold text-white">{m.ign}</span>
@@ -124,7 +130,8 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
                     {isOfficer && (m.wishlist?.length ?? 0) > 0 && (
                       <span className="mt-1 flex flex-wrap gap-1">
                         {m.wishlist.slice(0, 4).map((w) => (
-                          <span key={w} className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-cyan-500/10 text-cyan-200/90 border border-cyan-500/20">
+                          <span key={w} className="inline-flex items-center gap-1 pl-0.5 pr-1.5 py-0.5 rounded text-[9px] bg-cyan-500/10 text-cyan-200/90 border border-cyan-500/20">
+                            <GearIcon src={gearIcons.iconForSlot(w)} size={14} />
                             {SLOT_LABELS[w] || w}
                           </span>
                         ))}
@@ -173,6 +180,7 @@ function DistributeModal({
   onDone: () => void;
 }) {
   const { addToast } = useToast();
+  const gearIcons = useGearIcons();
   const formType: "CORE" | "NON_CORE" = member.tier === "CORE" ? "CORE" : "NON_CORE";
   const slots = formType === "CORE" ? CORE_SLOTS : NON_CORE_SLOTS;
 
@@ -188,7 +196,6 @@ function DistributeModal({
   const [overrideReason, setOverrideReason] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const wishLabels = (member.wishlist || []).map((s) => SLOT_LABELS[s] || s);
 
   const setQty = (slot: string, v: string) => {
     const n = parseInt(v, 10);
@@ -245,12 +252,15 @@ function DistributeModal({
           </div>
 
           <div className="relative z-10 overflow-y-auto flex-1 pr-1">
-            {wishLabels.length > 0 && (
+            {(member.wishlist?.length ?? 0) > 0 && (
               <div className="mb-3 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] px-3 py-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80 mb-1">Member wants</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {wishLabels.map((l) => (
-                    <span key={l} className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] bg-cyan-500/10 text-cyan-200 border border-cyan-500/20">{l}</span>
+                  {(member.wishlist || []).map((s) => (
+                    <span key={s} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md text-[11px] bg-cyan-500/10 text-cyan-200 border border-cyan-500/20">
+                      <GearIcon src={gearIcons.iconForSlot(s)} size={16} />
+                      {SLOT_LABELS[s] || s}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -283,8 +293,11 @@ function DistributeModal({
                         : "border-white/[0.08] bg-white/[0.02] text-white/50 hover:text-white/80 hover:border-white/20"
                     }`}
                   >
-                    {label}
-                    <span className={`h-4 w-4 rounded flex items-center justify-center border ${checked ? "bg-cyan-400/80 border-cyan-300 text-black" : "border-white/20"}`}>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <GearIcon src={gearIcons.iconForSlot(slot)} size={22} />
+                      <span className="truncate">{label}</span>
+                    </span>
+                    <span className={`h-4 w-4 shrink-0 rounded flex items-center justify-center border ${checked ? "bg-cyan-400/80 border-cyan-300 text-black" : "border-white/20"}`}>
                       {checked && (
                         <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
                       )}
@@ -328,6 +341,7 @@ function DistributeModal({
 // ─── Member: choose the items you want ───────────────────────────────
 
 function MyWishlistCard({ guildId }: { guildId: string }) {
+  const gearIcons = useGearIcons();
   const [showModal, setShowModal] = useState(false);
   const key = `market_wishlist:${guildId}`;
   const { data, isLoading } = useQuery(
@@ -358,7 +372,8 @@ function MyWishlistCard({ guildId }: { guildId: string }) {
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {items.map((s) => (
-            <span key={s} className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] bg-cyan-500/10 text-cyan-200 border border-cyan-500/20">
+            <span key={s} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md text-[11px] bg-cyan-500/10 text-cyan-200 border border-cyan-500/20">
+              <GearIcon src={gearIcons.iconForSlot(s)} size={16} />
               {SLOT_LABELS[s] || s}
             </span>
           ))}
@@ -394,6 +409,7 @@ function WishlistModal({
   onSaved: () => void;
 }) {
   const { addToast } = useToast();
+  const gearIcons = useGearIcons();
   const [selected, setSelected] = useState<Set<string>>(new Set(initial));
   const [isSaving, setIsSaving] = useState(false);
 
@@ -448,8 +464,11 @@ function WishlistModal({
                       : "border-white/[0.08] bg-white/[0.02] text-white/50 hover:text-white/80 hover:border-white/20"
                   }`}
                 >
-                  {SLOT_LABELS[slot] || slot}
-                  <span className={`h-4 w-4 rounded flex items-center justify-center border ${checked ? "bg-cyan-400/80 border-cyan-300 text-black" : "border-white/20"}`}>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <GearIcon src={gearIcons.iconForSlot(slot)} size={22} />
+                    <span className="truncate">{SLOT_LABELS[slot] || slot}</span>
+                  </span>
+                  <span className={`h-4 w-4 shrink-0 rounded flex items-center justify-center border ${checked ? "bg-cyan-400/80 border-cyan-300 text-black" : "border-white/20"}`}>
                     {checked && <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
                   </span>
                 </button>

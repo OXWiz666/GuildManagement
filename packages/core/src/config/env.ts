@@ -4,15 +4,13 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
-  PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   JWT_ACCESS_SECRET: z.string().min(32, "JWT_ACCESS_SECRET must be at least 32 chars"),
   JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 chars"),
   JWT_ACCESS_EXPIRY: z.string().default("15m"),
   JWT_REFRESH_EXPIRY: z.string().default("7d"),
   BCRYPT_ROUNDS: z.coerce.number().min(10).max(15).default(12),
-  CORS_ORIGIN: z.string().default("http://localhost:3000"),
-  REDIS_URL: z.string().optional(),
+  SLOW_REQUEST_MS: z.coerce.number().default(750),
   SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
   SUPABASE_KEY: z.string().min(1, "SUPABASE_KEY is required"),
 });
@@ -21,11 +19,10 @@ function validateEnv() {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-
-    console.error("Invalid environment variables:");
-
-    console.error(result.error.format());
-    process.exit(1);
+    // Next.js has no process to exit — throw so the failing route/render
+    // clearly surfaces the misconfiguration instead of silently continuing.
+    const formatted = JSON.stringify(result.error.format(), null, 2);
+    throw new Error(`Invalid environment variables:\n${formatted}`);
   }
 
   return result.data;

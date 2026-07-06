@@ -1,5 +1,6 @@
 import { prisma } from "@guild/db";
 import { JoinRequestStatus, GuildRole } from "@guild/db";
+import { hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import { writeAuditLog } from "./audit.service";
 import { saveEquipmentRows, type EquipmentItemInput } from "./equipment.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
@@ -334,8 +335,12 @@ export async function handleApplicationAction(
     }),
   ]);
 
-  if (!actorMembership || !actorMembership.isActive || actorMembership.role !== GuildRole.GUILD_LEADER) {
-    throw new ForbiddenError("Only the Guild Leader can accept or decline applications");
+  if (
+    !actorMembership ||
+    !actorMembership.isActive ||
+    !hasMinimumRole(actorMembership.role as GuildRoleType, "OFFICER")
+  ) {
+    throw new ForbiddenError("Only Officers or the Guild Leader can accept or decline applications");
   }
 
   if (!request || request.guildId !== guildId) {

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { authApi, setAccessToken } from "./api";
 import { createClient } from "@/utils/supabase/client";
+import { friendlyAuthError } from "./auth-errors";
 
 interface User {
   id: string;
@@ -119,18 +120,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string,
       password: string,
     ): Promise<{ success: boolean; error?: string }> => {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (error) {
-        // Fallback to local database login if Supabase auth fails (e.g. for seed accounts)
-        try {
-          const localResult = await authApi.login(email, password);
-          if (localResult.success && localResult.data?.user) {
-            const basicUser = { ...localResult.data.user, guilds: [] };
+        if (error) {
+          // Fallback to local database login if Supabase auth fails (e.g. for seed accounts)
+          try {
+            const localResult = await authApi.login(email, password);
+            if (localResult.success && localResult.data?.user) {
+              const basicUser = { ...localResult.data.user, guilds: [] };
+              setUser(basicUser);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+              }
+              await refreshUser();
+              setIsSessionReady(true);
+              return { success: true };
+            }
+          } catch (localError) {
+            console.error("Local login fallback failed:", localError);
+          }
+
+          // Surface the real, human-readable reason (wrong password, unverified email, etc.)
+          return {
+            success: false,
+            error: friendlyAuthError(error.message).message,
+          };
+        }
+
+        if (data.session) {
+          const syncResult = await authApi.supabaseSync(data.session.access_token);
+          if (syncResult.success && syncResult.data?.user) {
+            const basicUser = { ...syncResult.data.user, guilds: [] };
             setUser(basicUser);
             if (typeof window !== "undefined") {
               localStorage.setItem("auth_profile", JSON.stringify(basicUser));
@@ -139,38 +164,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsSessionReady(true);
             return { success: true };
           }
-        } catch (localError) {
-          console.error("Local login fallback failed:", localError);
+          return {
+            success: false,
+            error: friendlyAuthError(syncResult.error?.message, "We couldn't finish signing you in. Please try again.").message,
+          };
         }
 
         return {
           success: false,
-          error: error.message === "Invalid login credentials" ? "Invalid email or password." : error.message,
+          error: "Your session could not be established. Please try again.",
         };
-      }
-
-      if (data.session) {
-        const syncResult = await authApi.supabaseSync(data.session.access_token);
-        if (syncResult.success && syncResult.data?.user) {
-          const basicUser = { ...syncResult.data.user, guilds: [] };
-          setUser(basicUser);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("auth_profile", JSON.stringify(basicUser));
-          }
-          await refreshUser();
-          setIsSessionReady(true);
-          return { success: true };
-        }
+      } catch (err) {
+        console.error("Login failed:", err);
         return {
           success: false,
-          error: syncResult.error?.message || "Sync failed",
+          error: friendlyAuthError(
+            err instanceof Error ? err.message : undefined,
+            "Couldn't reach the server. Check your connection and try again.",
+          ).message,
         };
       }
-
-      return {
-        success: false,
-        error: "Session could not be established.",
-      };
     },
     [refreshUser],
   );
@@ -183,53 +196,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: string,
     ): Promise<{ success: boolean; error?: string; requiresVerification?: boolean }> => {
       if (password !== confirmPassword) {
-        return { success: false, error: "Passwords do not match" };
+        return { success: false, error: "The passwords you entered don't match." };
       }
 
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            display_name: displayName,
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              display_name: displayName,
+            },
           },
-        },
-      });
+        });
 
-      if (error) {
-        return {
-          success: false,
-          error: error.message,
-        };
-      }
-
-      if (data.user && !data.session) {
-        return {
-          success: true,
-          requiresVerification: true,
-        };
-      }
-
-      if (data.session) {
-        const syncResult = await authApi.supabaseSync(data.session.access_token);
-        if (syncResult.success && syncResult.data?.user) {
-          const basicUser = { ...syncResult.data.user, guilds: [] };
-          setUser(basicUser);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("auth_profile", JSON.stringify(basicUser));
-          }
-          await refreshUser();
-          setIsSessionReady(true);
-          return { success: true };
+        if (error) {
+          return {
+            success: false,
+            error: friendlyAuthError(error.message).message,
+          };
         }
+
+        if (data.user && !data.session) {
+          return {
+            success: true,
+            requiresVerification: true,
+          };
+        }
+
+        if (data.session) {
+          const syncResult = await authApi.supabaseSync(data.session.access_token);
+          if (syncResult.success && syncResult.data?.user) {
+            const basicUser = { ...syncResult.data.user, guilds: [] };
+            setUser(basicUser);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+            }
+            await refreshUser();
+            setIsSessionReady(true);
+            return { success: true };
+          }
+          return {
+            success: false,
+            error: friendlyAuthError(syncResult.error?.message, "We couldn't finish creating your account. Please try again.").message,
+          };
+        }
+
+        return { success: true };
+      } catch (err) {
+        console.error("Registration failed:", err);
         return {
           success: false,
-          error: syncResult.error?.message || "Sync failed",
+          error: friendlyAuthError(
+            err instanceof Error ? err.message : undefined,
+            "Couldn't reach the server. Check your connection and try again.",
+          ).message,
         };
       }
-
-      return { success: true };
     },
     [refreshUser],
   );

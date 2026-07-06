@@ -9,9 +9,17 @@ const nextConfig: NextConfig = {
   // transpiled (their entry points are TypeScript source).
   transpilePackages: ["@guild/core", "@guild/shared", "@guild/db"],
   // pnpm monorepo: trace from the repo root so hoisted/symlinked workspace
-  // deps (incl. @prisma/client and its embedded WASM query compiler) get
-  // copied into the deployed serverless function bundle.
+  // deps get copied into the deployed serverless function bundle.
   outputFileTracingRoot: path.join(__dirname, "../../"),
+  // The engine-less Prisma client loads its WASM query compiler at runtime
+  // via a computed fs path that @vercel/nft can't statically follow, so it
+  // never lands in the serverless bundle on its own (ENOENT for
+  // query_compiler_bg.wasm at runtime). Explicitly trace the generated
+  // .prisma/client assets into every route's bundle. Glob (not a fixed
+  // path) because pnpm's virtual-store hash differs between machines/CI.
+  outputFileTracingIncludes: {
+    "/**/*": ["../../node_modules/.pnpm/@prisma+client@*/node_modules/.prisma/client/**"],
+  },
 };
 
 export default nextConfig;

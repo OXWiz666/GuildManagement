@@ -430,6 +430,15 @@ input:-webkit-autofill:focus {
   transition: background-color 5000s ease-in-out 0s;
 }
 
+/* ─── Compact custom scrollbar (Upcoming ticker) ── */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(212, 168, 83, 0.20);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(212, 168, 83, 0.35); }
+
 /* ─── Background Aurora (Obsidian gold-tinted) ────── */
 .aurora-mesh {
   position: absolute;

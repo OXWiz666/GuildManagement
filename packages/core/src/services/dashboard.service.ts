@@ -19,6 +19,9 @@ interface SpamRecord {
 const failedAttemptsMap = new Map<string, SpamRecord>();
 
 const ROTATION_MANAGER_ROLES = ["FACTION_LEADER", "GUILD_LEADER", "ADMIN"];
+// Timer resets (full + maintenance) are also permitted for Officers, not just the
+// faction/guild leaders who own the rotation queues.
+const ROTATION_RESET_ROLES = ["FACTION_LEADER", "GUILD_LEADER", "ADMIN", "OFFICER"];
 const BOSS_KILL_AUDIT_ACTIONS = ["BOSS_ROTATION_KILLED", "BOSS_KILLED_LOGGED", "BOSS_KILL_RECORDED"];
 const SCHEDULE_CREATOR_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN", "OFFICER"];
 
@@ -156,6 +159,14 @@ async function requireBossRotationManager(actorId: string, guildId: string) {
   const membership = await requireActiveGuildMember(actorId, guildId);
   if (!canManageBossRotation(membership.role)) {
     throw new ForbiddenError("Only Faction Leaders, Guild Leaders, and Admins can manage boss rotations");
+  }
+  return membership;
+}
+
+async function requireBossRotationResetManager(actorId: string, guildId: string) {
+  const membership = await requireActiveGuildMember(actorId, guildId);
+  if (!ROTATION_RESET_ROLES.includes(membership.role)) {
+    throw new ForbiddenError("Only Leaders and Officers can reset boss timers");
   }
   return membership;
 }
@@ -1495,6 +1506,114 @@ export async function markBossRotationKilledByName(
     nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
   };
+}
+
+// ─── Boss timer resets (Leaders + Officers) ─────────────────────
+// Recompute spawn timers in bulk. `resetAllBossTimers` restarts EVERY boss from
+// "now" (as if each were just killed at the reset moment). `maintenanceReset`
+// restarts only the cycle-based bosses relative to a maintenance-end time, so a
+// game maintenance can be reflected without touching fixed-schedule bosses.
+
+async function applyBossTimerReset(
+  guildId: string,
+  actorId: string,
+  bosses: BossRegistryItem[],
+  computeSpawn: (boss: BossRegistryItem) => Date,
+  auditAction: string,
+  auditDetail: Record<string, unknown>,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const affectedNames = bosses.map((b) => b.name);
+
+  // Recompute per-boss next spawn, then persist both the rotation pointer and any
+  // live (non-killed) schedule rows so the rotation cards + overview agree.
+  for (const boss of bosses) {
+    const nextSpawn = computeSpawn(boss);
+
+    await prisma.bossRotation.upsert({
+      where: { bossName: boss.name },
+      create: {
+        bossName: boss.name,
+        queueGuildIds: [],
+        currentIndex: 0,
+        nextSpawnTime: nextSpawn,
+        updatedById: actorId,
+      },
+      update: {
+        nextSpawnTime: nextSpawn,
+        updatedById: actorId,
+      },
+    });
+
+    await prisma.bossSchedule.updateMany({
+      where: { bossName: boss.name, status: { not: BossEventStatus.KILLED } },
+      data: { spawnTime: nextSpawn, status: BossEventStatus.UPCOMING },
+    });
+  }
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: auditAction,
+    target: "BossRotation",
+    targetId: guildId,
+    detail: { ...auditDetail, affectedCount: affectedNames.length, affectedBosses: affectedNames },
+    ipAddress,
+    userAgent,
+  });
+
+  return getBossRotation(guildId, actorId);
+}
+
+export async function resetAllBossTimers(
+  guildId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossRotationResetManager(actorId, guildId);
+  const bosses = await getBossRegistryForRotation();
+  const now = new Date();
+  return applyBossTimerReset(
+    guildId,
+    actorId,
+    bosses,
+    (boss) => getNextBossSpawnTime(boss.name, now),
+    "BOSS_TIMERS_RESET",
+    { resetAt: now.toISOString() },
+    ipAddress,
+    userAgent,
+  );
+}
+
+export async function maintenanceResetBossTimers(
+  guildId: string,
+  actorId: string,
+  maintenanceEndTime: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossRotationResetManager(actorId, guildId);
+  const endDate = new Date(maintenanceEndTime);
+  if (Number.isNaN(endDate.getTime())) {
+    throw new BadRequestError("Maintenance end time is invalid");
+  }
+  const bosses = (await getBossRegistryForRotation()).filter(
+    (boss) => boss.type !== "FIXED_SCHEDULE",
+  );
+  return applyBossTimerReset(
+    guildId,
+    actorId,
+    bosses,
+    // getNextBossSpawnTime advances a cycle boss by its cooldown from the given
+    // instant, so passing the maintenance-end time yields "end + cooldown".
+    (boss) => getNextBossSpawnTime(boss.name, endDate),
+    "BOSS_MAINTENANCE_RESET",
+    { maintenanceEndTime: endDate.toISOString() },
+    ipAddress,
+    userAgent,
+  );
 }
 
 // ─── Boss Master List (faction-leader owned) ───────────────────

@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [errorTitle, setErrorTitle] = useState("");
   const { login } = useAuth();
   const { addToast } = useToast();
   const router = useRouter();
@@ -40,25 +41,27 @@ export default function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setErrorTitle("");
     setIsLoading(true);
 
     try {
       const result = await login(email, password);
       if (result.success) {
         addToast("success", "Welcome back!");
-        router.push("/dashboard");
+        // Platform admins land on the Super Admin overview; everyone else on the guild dashboard.
+        router.push(result.platformRole ? "/admin" : "/dashboard");
       } else {
         setError(result.error || "Incorrect email or password. Please try again.");
+        setErrorTitle(result.errorTitle || "");
       }
     } catch (err) {
-      setError(friendlyAuthError(err instanceof Error ? err.message : undefined).message);
+      const friendly = friendlyAuthError(err instanceof Error ? err.message : undefined);
+      setError(friendly.message);
+      setErrorTitle(friendly.title);
     } finally {
       setIsLoading(false);
     }
   }
-
-  // Derive a human-readable heading for the error box from the current message
-  const errorTitle = error ? friendlyAuthError(error).title : "";
 
   return (
     <div className="w-full relative">
@@ -96,7 +99,7 @@ export default function LoginPage() {
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <div className="flex flex-col gap-0.5">
-                <span className="font-semibold text-red-100">{errorTitle}</span>
+                <span className="font-semibold text-red-100">{errorTitle || "Sign-in failed"}</span>
                 <span className="text-red-300/80 leading-relaxed">{error}</span>
               </div>
             </div>

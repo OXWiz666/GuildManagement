@@ -23,6 +23,7 @@ interface User {
   cp?: number | null;
   class?: string | null;
   weapon?: string | null;
+  platformRole?: string | null;
 }
 
 interface Guild {
@@ -40,15 +41,15 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isSessionReady: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; errorTitle?: string; platformRole?: string | null }>;
   register: (
     email: string,
     password: string,
     confirmPassword: string,
     displayName: string,
-  ) => Promise<{ success: boolean; error?: string; requiresVerification?: boolean }>;
+  ) => Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }>;
   logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(!getCachedProfile());
   const [isSessionReady, setIsSessionReady] = useState(false);
 
-  const refreshUser = useCallback(async () => {
+  const refreshUser = useCallback(async (): Promise<User | null> => {
     try {
       const result = await authApi.getMe();
       if (result.success && result.data?.user) {
@@ -80,12 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (typeof window !== "undefined") {
           localStorage.setItem("auth_profile", JSON.stringify(result.data.user));
         }
+        return result.data.user;
       } else {
         setUser(null);
         setAccessToken(null);
         if (typeof window !== "undefined") {
           localStorage.removeItem("auth_profile");
         }
+        return null;
       }
     } catch {
       setUser(null);
@@ -93,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth_profile");
       }
+      return null;
     }
   }, []);
 
@@ -119,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       email: string,
       password: string,
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<{ success: boolean; error?: string; errorTitle?: string; platformRole?: string | null }> => {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -137,19 +141,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (typeof window !== "undefined") {
                 localStorage.setItem("auth_profile", JSON.stringify(basicUser));
               }
-              await refreshUser();
+              const fullUser = await refreshUser();
               setIsSessionReady(true);
-              return { success: true };
+              return { success: true, platformRole: fullUser?.platformRole ?? null };
             }
           } catch (localError) {
             console.error("Local login fallback failed:", localError);
           }
 
-          // Surface the real, human-readable reason (wrong password, unverified email, etc.)
-          return {
-            success: false,
-            error: friendlyAuthError(error.message).message,
-          };
+          // Surface the real, human-readable reason (wrong password, unverified email, etc.).
+          // Map once here so the title always matches the message shown to the user.
+          const friendly = friendlyAuthError(error.message);
+          return { success: false, error: friendly.message, errorTitle: friendly.title };
         }
 
         if (data.session) {
@@ -160,29 +163,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (typeof window !== "undefined") {
               localStorage.setItem("auth_profile", JSON.stringify(basicUser));
             }
-            await refreshUser();
+            const fullUser = await refreshUser();
             setIsSessionReady(true);
-            return { success: true };
+            return { success: true, platformRole: fullUser?.platformRole ?? null };
           }
-          return {
-            success: false,
-            error: friendlyAuthError(syncResult.error?.message, "We couldn't finish signing you in. Please try again.").message,
-          };
+          const friendly = friendlyAuthError(
+            syncResult.error?.message,
+            "We couldn't finish signing you in. Please try again.",
+          );
+          return { success: false, error: friendly.message, errorTitle: friendly.title };
         }
 
         return {
           success: false,
           error: "Your session could not be established. Please try again.",
+          errorTitle: "Sign-in failed",
         };
       } catch (err) {
         console.error("Login failed:", err);
-        return {
-          success: false,
-          error: friendlyAuthError(
-            err instanceof Error ? err.message : undefined,
-            "Couldn't reach the server. Check your connection and try again.",
-          ).message,
-        };
+        const friendly = friendlyAuthError(
+          err instanceof Error ? err.message : undefined,
+          "Couldn't reach the server. Check your connection and try again.",
+        );
+        return { success: false, error: friendly.message, errorTitle: friendly.title };
       }
     },
     [refreshUser],
@@ -194,9 +197,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string,
       confirmPassword: string,
       displayName: string,
-    ): Promise<{ success: boolean; error?: string; requiresVerification?: boolean }> => {
+    ): Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }> => {
       if (password !== confirmPassword) {
-        return { success: false, error: "The passwords you entered don't match." };
+        const friendly = friendlyAuthError("Passwords don't match");
+        return { success: false, error: friendly.message, errorTitle: friendly.title };
       }
 
       try {
@@ -212,10 +216,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (error) {
-          return {
-            success: false,
-            error: friendlyAuthError(error.message).message,
-          };
+          const friendly = friendlyAuthError(error.message);
+          return { success: false, error: friendly.message, errorTitle: friendly.title };
+        }
+
+        // Supabase returns a look-alike success (a user object, no error) when the
+        // email already belongs to a confirmed account — its `identities` array is
+        // empty as an anti-enumeration measure, no email is sent, and the existing
+        // password is left untouched. Without this check we'd tell the user
+        // "verification sent" when nothing happened, and their next login with the
+        // "new" password would fail as if their credentials were wrong.
+        if (data.user && !data.session && data.user.identities?.length === 0) {
+          const friendly = friendlyAuthError("An account with this email already exists");
+          return { success: false, error: friendly.message, errorTitle: friendly.title };
         }
 
         if (data.user && !data.session) {
@@ -237,21 +250,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsSessionReady(true);
             return { success: true };
           }
-          return {
-            success: false,
-            error: friendlyAuthError(syncResult.error?.message, "We couldn't finish creating your account. Please try again.").message,
-          };
+          const friendly = friendlyAuthError(
+            syncResult.error?.message,
+            "We couldn't finish creating your account. Please try again.",
+          );
+          return { success: false, error: friendly.message, errorTitle: friendly.title };
         }
 
         return { success: true };
       } catch (err) {
         console.error("Registration failed:", err);
+        const friendly = friendlyAuthError(
+          err instanceof Error ? err.message : undefined,
+          "Couldn't reach the server. Check your connection and try again.",
+        );
         return {
           success: false,
-          error: friendlyAuthError(
-            err instanceof Error ? err.message : undefined,
-            "Couldn't reach the server. Check your connection and try again.",
-          ).message,
+          error: friendly.message,
+          errorTitle: friendly.title,
         };
       }
     },

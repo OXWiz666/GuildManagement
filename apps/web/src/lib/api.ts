@@ -880,6 +880,20 @@ export const dashboardApi = {
     );
   },
 
+  async resetBossTimers(guildId: string) {
+    return api.post<BossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}/reset`,
+      {},
+    );
+  },
+
+  async maintenanceResetBossTimers(guildId: string, maintenanceEndTime: string) {
+    return api.post<BossRotationResponse>(
+      `/dashboard/boss-rotation/${guildId}/maintenance-reset`,
+      { maintenanceEndTime },
+    );
+  },
+
   async getBosses() {
     return api.get<{ bosses: BossData[] }>(
       `/dashboard/bosses`,

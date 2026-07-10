@@ -17,19 +17,12 @@ import ProfileSection from "./components/ProfileSection";
 import CharacterSection from "./components/CharacterSection";
 import PasswordSection from "./components/PasswordSection";
 import SessionsSection, { type SessionData } from "./components/SessionsSection";
-import DistributionRulesSection from "./components/DistributionRulesSection";
 
 export default function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
   const { addToast } = useToast();
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
-
-  const activeGuild = user?.guilds?.[0];
-  const isGuildLeader =
-    activeGuild?.role === "GUILD_LEADER" ||
-    activeGuild?.role === "FACTION_LEADER" ||
-    activeGuild?.role === "ADMIN";
 
   // Profile states
   const [displayName, setDisplayName] = useState(user?.displayName || "");
@@ -256,13 +249,6 @@ export default function SettingsPage() {
             handleUpdatePassword={handleUpdatePassword}
           />
         </Reveal>
-
-        {/* Guild Market Distribution Rules (Guild Leaders only) */}
-        {isGuildLeader && activeGuild && (
-          <Reveal>
-            <DistributionRulesSection guildId={activeGuild.guildId} />
-          </Reveal>
-        )}
 
         {/* Active Sessions */}
         <Reveal>

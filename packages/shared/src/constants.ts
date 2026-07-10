@@ -23,6 +23,7 @@ export const AUDIT_ACTIONS = {
 
   // Guild Management
   GUILD_CREATED: "GUILD_CREATED",
+  FACTION_CREATED: "FACTION_CREATED",
   GUILD_UPDATED: "GUILD_UPDATED",
   GUILD_SETTINGS_UPDATED: "GUILD_SETTINGS_UPDATED",
   MEMBER_ADDED: "MEMBER_ADDED",
@@ -54,6 +55,12 @@ export const AUDIT_ACTIONS = {
   DISTRIBUTION_LIMIT_OVERRIDDEN: "DISTRIBUTION_LIMIT_OVERRIDDEN",
   PRIORITY_SEQUENCE_CHANGED: "PRIORITY_SEQUENCE_CHANGED",
   DISTRIBUTION_RULE_UPDATED: "DISTRIBUTION_RULE_UPDATED",
+
+  // Guild Market — Wishlist & mounts
+  WISHLIST_ITEM_DISTRIBUTED: "WISHLIST_ITEM_DISTRIBUTED",
+  WISHLIST_LOG_REQUESTED: "WISHLIST_LOG_REQUESTED",
+  MOUNT_CATALOG_UPDATED: "MOUNT_CATALOG_UPDATED",
+  MOUNT_DISTRIBUTED: "MOUNT_DISTRIBUTED",
 
   // Member Equipment — Item Screenshot Update
   MEMBER_EQUIPMENT_UPDATED: "MEMBER_EQUIPMENT_UPDATED",
@@ -237,6 +244,145 @@ export const SLOT_LABELS: Record<string, string> = {
   temporalPiece: "Temporal Piece",
   temporalPieces: "Temporal Pieces",
   materials: "Materials",
+};
+
+// ─── Member Wishlist taxonomy ───────────────────────────────────────
+// Members build a per-piece wishlist: weapons/armor/accessories carry a rarity,
+// while logs/temporal/materials carry a numeric quantity (capped by the tier limits below).
+
+export type WishlistRarity = "LEGEND" | "EPIC" | "MYTHIC";
+
+export type ArmorType = "CLOTH" | "LEATHER" | "PLATE";
+
+export type WishlistCategory =
+  | "WEAPON"
+  | "ARMOR"
+  | "ACCESSORY"
+  | "LOGS"
+  | "TEMPORAL"
+  | "MATERIALS"
+  | "MOUNT";
+
+export type WishlistStatus = "PENDING" | "DISTRIBUTED";
+
+export interface WishlistItem {
+  category: WishlistCategory;
+  key: string; // weapon/armor/accessory/material key; "logs" / "temporalPieces"; mount id for MOUNT
+  rarity?: WishlistRarity; // required for WEAPON/ARMOR/ACCESSORY
+  armorType?: ArmorType; // ARMOR only — the piece's material (Cloth/Leather/Plate)
+  quantity?: number; // required for LOGS/TEMPORAL/MATERIALS
+  label?: string; // MOUNT only — snapshot of the mount name for display
+  // Distribution status — auto-flipped to DISTRIBUTED when a matching item is handed out.
+  status?: WishlistStatus;
+  fulfilledAt?: string; // ISO timestamp when distributed
+  fulfilledById?: string; // actor (officer) who distributed
+}
+
+export const WISHLIST_STATUS_LABELS: Record<WishlistStatus, string> = {
+  PENDING: "Pending",
+  DISTRIBUTED: "Distributed",
+};
+
+export const WISHLIST_CATEGORY_LABELS: Record<WishlistCategory, string> = {
+  WEAPON: "Weapon",
+  ARMOR: "Armor",
+  ACCESSORY: "Accessory",
+  LOGS: "Logs",
+  TEMPORAL: "Temporal",
+  MATERIALS: "Materials",
+  MOUNT: "Mount",
+};
+
+// Common Philippine payment gateways — presets for the member's payment QR list.
+export const PAYMENT_METHOD_PRESETS: string[] = [
+  "GCash",
+  "Maya (PayMaya)",
+  "GoTyme",
+  "Union Bank",
+  "BPI",
+  "Other",
+];
+
+// Known mount saddles — quick-add presets for the leader's mount catalog
+// (GuildMount rows are still created per-guild; this just saves typing).
+export const MOUNT_PRESETS: string[] = [
+  "Rabeth Saddle",
+  "Undemic Saddle",
+  "Glasis Saddle",
+  "Delphon Saddle",
+  "Vulcanus Saddle",
+  "Labartonis Saddle",
+  "Rhodi Saddle",
+  "Lamphon Saddle",
+  "Petrolov Saddle",
+  "Dracas Saddle",
+  "Liberty Saddle",
+  "Somnium Saddle",
+  "Baphon Saddle",
+];
+
+export const WEAPON_TYPES: Record<string, string> = {
+  greatSword: "Great Sword",
+  staff: "Staff",
+  battleStaff: "Battle Staff",
+  bow: "Bow",
+  swordShield: "Sword & Shield",
+  crossbowBattleshield: "Crossbow & Battleshield",
+};
+
+export const ARMOR_PIECES: Record<string, string> = {
+  helmet: "Helmet",
+  upperArmor: "Upper Armor",
+  lowerArmor: "Lower Armor",
+  gloves: "Gloves",
+  shoes: "Shoes",
+  cloak: "Cloak",
+};
+
+export const ACCESSORY_PIECES: Record<string, string> = {
+  necklace: "Necklace",
+  belt: "Belt",
+  ring: "Ring",
+  earrings: "Earrings",
+  bracelet: "Bracelet",
+  saddle: "Saddle",
+};
+
+export const MATERIAL_TYPES: Record<string, string> = {
+  legendEpicEnhancementStone: "Legend/Epic Accessory Enhancement Stone",
+  lifeCore: "Life Core",
+  radiantLifeCore: "Radiant Life Core",
+  expertUpgradeScroll: "Expert Upgrade Scroll",
+  maestroUpgradeScroll: "Maestro Upgrade Scroll",
+  advancedUpgradeScroll: "Advanced Upgrade Scroll",
+};
+
+export const WEAPON_RARITIES: WishlistRarity[] = ["LEGEND", "EPIC"];
+export const GEAR_RARITIES: WishlistRarity[] = ["LEGEND", "EPIC", "MYTHIC"]; // armor + accessories
+
+export const WISHLIST_RARITY_LABELS: Record<WishlistRarity, string> = {
+  LEGEND: "Legend",
+  EPIC: "Epic",
+  MYTHIC: "Mythic",
+};
+
+// Armor material — a 2nd dimension on top of rarity, since a piece drops in one of three types.
+export const ARMOR_TYPES: ArmorType[] = ["CLOTH", "LEATHER", "PLATE"];
+
+export const ARMOR_TYPE_LABELS: Record<ArmorType, string> = {
+  CLOTH: "Cloth",
+  LEATHER: "Leather",
+  PLATE: "Plate",
+};
+
+// Human-readable label for any wishlist item key (weapon/armor/accessory/material/resource).
+export const WISHLIST_LABELS: Record<string, string> = {
+  ...WEAPON_TYPES,
+  ...ARMOR_PIECES,
+  ...ACCESSORY_PIECES,
+  ...MATERIAL_TYPES,
+  logs: "Logs",
+  temporalPieces: "Temporal Pieces",
 };
 
 // Default market rules — seeded from the product spec when a guild has none configured.

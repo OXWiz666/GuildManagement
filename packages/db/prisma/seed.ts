@@ -1,45 +1,48 @@
-import { PrismaClient } from "@prisma/client";
-
-
-const prisma = new PrismaClient();
+// Reuse the package's configured client (engine-less + `pg` driver adapter).
+// A bare `new PrismaClient()` fails with "Missing configured driver adapter".
+import { prisma } from "../src/client";
 
 async function main() {
 
-  // ─── Truncate all tables (order matters for FK constraints) ───
-  // Children first, then parents
-  await prisma.lootSale.deleteMany();
-  await prisma.auctionBid.deleteMany();
-  await prisma.auctionItem.deleteMany();
-  await prisma.itemRequest.deleteMany();
-  await prisma.guildPointsSnapshot.deleteMany();
-  await prisma.attendanceRecord.deleteMany();
-  await prisma.attendanceSession.deleteMany();
-  await prisma.bossSchedule.deleteMany();
-  await prisma.boss.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.ledgerEntry.deleteMany();
-  await prisma.guildJoinRequest.deleteMany();
-  await prisma.guildMember.deleteMany();
-  await prisma.guildSettings.deleteMany();
-  await prisma.guild.deleteMany();
-  await prisma.refreshToken.deleteMany();
-  await prisma.session.deleteMany();
-  await prisma.passwordResetToken.deleteMany();
-  await prisma.user.deleteMany();
+  // ─── Truncate every table in one shot ───
+  // TRUNCATE ... CASCADE resolves FK order automatically, so this stays correct
+  // as new models are added (no more hand-maintained delete ordering).
+  const tableRows = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+  `;
+  const tableList = tableRows.map((r) => `"public"."${r.tablename}"`).join(", ");
+  if (tableList) {
+    await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE`);
+  }
 
   // ─── Users ───────────────────────────────────────
   // Password: "Admin123!" for all (bcrypt hash, 12 rounds)
   const passwordHash =
     "$2a$12$.oif3hOd38kI/VLuLWyyyOcrX1b3TF2TVsoY2JJi7faKQyndAngpO";
 
-  const admin = await prisma.user.create({
+  // ── Leader Account (was the old Admin account) ──
+  const leader = await prisma.user.create({
     data: {
-      email: "admin@guildmaster.dev",
+      email: "leader@guildmaster.dev",
       passwordHash,
       displayName: "Mavis08",
       avatarUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=256&auto=format&fit=crop", // Gorgeous cute anime PFP
       ign: "Mavis08",
       cp: 120000,
+      class: "Destroyer",
+      weapon: "Staff",
+    },
+  });
+
+  // ── Super Admin Account (highest platform authority) ──
+  const superAdmin = await prisma.user.create({
+    data: {
+      email: "superadmin@guildmaster.dev",
+      passwordHash,
+      displayName: "SuperAdmin",
+      avatarUrl: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=256&auto=format&fit=crop",
+      ign: "SuperAdmin",
+      cp: 130000,
       class: "Destroyer",
       weapon: "Staff",
     },
@@ -60,7 +63,7 @@ async function main() {
 
   const player1 = await prisma.user.create({
     data: {
-      email: "Dragz69@guildmaster.dev",
+      email: "dragz69@guildmaster.dev",
       passwordHash,
       displayName: "Dragz69",
       avatarUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=256&auto=format&fit=crop",
@@ -73,7 +76,7 @@ async function main() {
 
   const player2 = await prisma.user.create({
     data: {
-      email: "Wiz@guildmaster.dev",
+      email: "wiz@guildmaster.dev",
       passwordHash,
       displayName: "Wiz",
       avatarUrl: "https://images.unsplash.com/photo-1566492031773-4f4e44671857?q=80&w=256&auto=format&fit=crop",
@@ -86,7 +89,7 @@ async function main() {
 
   const player3 = await prisma.user.create({
     data: {
-      email: "Daylili@guildmaster.dev",
+      email: "daylili@guildmaster.dev",
       passwordHash,
       displayName: "Daylili",
       avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
@@ -99,7 +102,7 @@ async function main() {
 
   const player4 = await prisma.user.create({
     data: {
-      email: "Hou13@guildmaster.dev",
+      email: "hou13@guildmaster.dev",
       passwordHash,
       displayName: "Hou13",
       avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
@@ -112,7 +115,7 @@ async function main() {
 
   const player5 = await prisma.user.create({
     data: {
-      email: "Lael@guildmaster.dev",
+      email: "lael@guildmaster.dev",
       passwordHash,
       displayName: "Lael",
       avatarUrl: "https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=256&auto=format&fit=crop",
@@ -181,19 +184,45 @@ async function main() {
   });
 
   // ─── Guild Members ────────────────────────────────
-  // Add admin (Mavis08) to Valhalla as ADMIN
+  // Add leader (Mavis08) to Valhalla as GUILD_LEADER (formerly the ADMIN account)
   await prisma.guildMember.create({
     data: {
-      userId: admin.id,
+      userId: leader.id,
       guildId: guild1.id,
-      role: "ADMIN",
-      rankName: "Admin",
+      role: "GUILD_LEADER",
+      rankName: "Guild Leader",
       ign: "Mavis08",
       cp: 120000,
       class: "Destroyer",
       weapon: "Staff",
       isActive: true,
       memberCode: "MEM-VAL-001",
+    },
+  });
+
+  // Add SuperAdmin to Valhalla as ADMIN (highest platform authority)
+  await prisma.guildMember.create({
+    data: {
+      userId: superAdmin.id,
+      guildId: guild1.id,
+      role: "ADMIN",
+      rankName: "Super Admin",
+      ign: "SuperAdmin",
+      cp: 130000,
+      class: "Destroyer",
+      weapon: "Staff",
+      isActive: true,
+      memberCode: "MEM-VAL-ADMIN-001",
+    },
+  });
+
+  // ─── Platform Admin (SaaS-level Super Admin) ──────
+  // Grants access to the platform-wide Super Admin area (separate from guild roles).
+  await prisma.platformAdmin.create({
+    data: {
+      userId: superAdmin.id,
+      role: "SUPER_ADMIN",
+      isActive: true,
     },
   });
 
@@ -317,7 +346,7 @@ async function main() {
       spawnTime: new Date(Date.now() - 2 * 3600 * 1000), // Spawned 2 hours ago
       status: "KILLED",
       killedAt: new Date(Date.now() - 1.5 * 3600 * 1000), // Killed 1.5 hours ago
-      creatorId: admin.id,
+      creatorId: leader.id,
       lootDrop: "Staff",
     },
   });
@@ -329,7 +358,7 @@ async function main() {
       location: "Corrupted Basin",
       spawnTime: new Date(Date.now() + 4 * 3600 * 1000), // Spawns in 4 hours
       status: "UPCOMING",
-      creatorId: admin.id,
+      creatorId: leader.id,
     },
   });
 
@@ -339,14 +368,14 @@ async function main() {
     data: {
       guildId: guild1.id,
       accountType: "MEMBER",
-      accountId: admin.id,
+      accountId: leader.id,
       currency: "PHP",
       amount: 150n, // 150 DKP points total
       entryType: "CREDIT",
       referenceType: "ATTENDANCE",
       referenceId: "attendance-session-1",
       idempotencyKey: "idem-att-admin-1",
-      actorId: admin.id,
+      actorId: leader.id,
       description: "Attendance Check-In: Viorent Raid",
     },
   });
@@ -362,25 +391,25 @@ async function main() {
       referenceType: "ATTENDANCE",
       referenceId: "attendance-session-1",
       idempotencyKey: "idem-att-wiz-1",
-      actorId: admin.id,
+      actorId: leader.id,
       description: "Attendance Check-In: Viorent Raid",
     },
   });
 
   // Boss Kill loot sale payout splits (BOSS_KILL referenceType)
-  // Let's credit the admin 3500.50 PHP balance
+  // Let's credit the leader 3500.50 PHP balance
   await prisma.ledgerEntry.create({
     data: {
       guildId: guild1.id,
       accountType: "MEMBER",
-      accountId: admin.id,
+      accountId: leader.id,
       currency: "PHP",
       amount: 350050n, // 3500.50 PHP
       entryType: "CREDIT",
       referenceType: "BOSS_KILL",
       referenceId: mockSchedule1.id,
       idempotencyKey: "idem-bk-admin-1",
-      actorId: admin.id,
+      actorId: leader.id,
       description: "Boss Defeated Payout Split: Viorent",
     },
   });
@@ -396,7 +425,7 @@ async function main() {
       referenceType: "BOSS_KILL",
       referenceId: mockSchedule1.id,
       idempotencyKey: "idem-bk-wiz-1",
-      actorId: admin.id,
+      actorId: leader.id,
       description: "Boss Defeated Payout Split: Viorent",
     },
   });
@@ -404,7 +433,7 @@ async function main() {
   // ─── Initial Audit Logs ────────────────────────────
   await prisma.auditLog.create({
     data: {
-      actorId: admin.id,
+      actorId: leader.id,
       guildId: guild1.id,
       action: "BOSS_KILLED_LOGGED",
       target: "BossSchedule",
@@ -419,7 +448,7 @@ async function main() {
 
   await prisma.auditLog.create({
     data: {
-      actorId: admin.id,
+      actorId: leader.id,
       guildId: guild1.id,
       action: "MEMBER_ADDED",
       target: "GuildMember",

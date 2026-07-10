@@ -75,6 +75,22 @@ function formatLogDetails(action: string, detail: any): string {
     case "BOSS_EVENT_DELETED":
       return `Deleted scheduled spawn for ${detail.bossName || "Boss"}`;
 
+    case "WISHLIST_ITEM_DISTRIBUTED": {
+      const items = Array.isArray(detail.items) ? detail.items.join(", ") : detail.items || "items";
+      return `Wishlist fulfilled for ${detail.ign || "Member"}: ${items}`;
+    }
+
+    case "MOUNT_DISTRIBUTED":
+      return `Mount "${detail.mountName || "Mount"}" distributed to ${detail.ign || "Member"}`;
+
+    case "MOUNT_CATALOG_UPDATED": {
+      if (detail.deleted) return `Removed mount "${detail.name || "Mount"}" from the catalog`;
+      return `${detail.created ? "Added" : "Updated"} mount "${detail.name || "Mount"}" (${detail.maxSlots ?? "?"} slots)`;
+    }
+
+    case "WISHLIST_LOG_REQUESTED":
+      return `Requested ${detail.count || 0} member(s) to submit a wishlist log for ${detail.itemLabel || "an item"}`;
+
     default:
       // Fallback formatting: Remove raw ID keys
       return Object.entries(detail)
@@ -92,6 +108,7 @@ export default function AuditLogPage() {
   const [activeTab, setActiveTab] = useState<AuditTab>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMemberId, setSelectedMemberId] = useState<string>("");
+  const [search, setSearch] = useState("");
 
   const activeGuild = user?.guilds?.[0];
   const itemsPerPage = 15;
@@ -114,6 +131,9 @@ export default function AuditLogPage() {
     socket.on("attendance_record_confirmed", handleAuditUpdate);
     socket.on("loot_sale_recorded", handleAuditUpdate);
     socket.on("treasury_adjusted", handleAuditUpdate);
+    socket.on("item_distributed", handleAuditUpdate);
+    socket.on("mount_distributed", handleAuditUpdate);
+    socket.on("mount_catalog_updated", handleAuditUpdate);
 
     return () => {
       socket.off("boss_rotation_updated", handleAuditUpdate);
@@ -125,6 +145,9 @@ export default function AuditLogPage() {
       socket.off("attendance_record_confirmed", handleAuditUpdate);
       socket.off("loot_sale_recorded", handleAuditUpdate);
       socket.off("treasury_adjusted", handleAuditUpdate);
+      socket.off("item_distributed", handleAuditUpdate);
+      socket.off("mount_distributed", handleAuditUpdate);
+      socket.off("mount_catalog_updated", handleAuditUpdate);
     };
   }, [socket, activeGuild]);
 
@@ -177,6 +200,17 @@ export default function AuditLogPage() {
   const totalLogs = auditData?.total || 0;
   const totalPages = auditData?.totalPages || 1;
 
+  // Client-side search over the currently loaded page (actor name, action, or logged detail text)
+  const filteredLogs = logs.filter((log) => {
+    if (!search.trim()) return true;
+    const s = search.toLowerCase();
+    return (
+      log.actor.displayName.toLowerCase().includes(s) ||
+      log.action.toLowerCase().includes(s) ||
+      formatLogDetails(log.action, log.detail).toLowerCase().includes(s)
+    );
+  });
+
   // Handle Tab Switch (reset page to 1)
   function handleTabChange(tab: AuditTab) {
     setActiveTab(tab);
@@ -228,28 +262,42 @@ export default function AuditLogPage() {
             />
           </div>
 
-          {/* Member selector visible ONLY on member-items tab */}
-          {activeTab === "member-items" && (
-            <div className="flex items-center gap-2 max-w-xs w-full">
-              <span className="text-[11px] text-zinc-400 font-mono shrink-0 uppercase tracking-wider">
-                Select Member:
-              </span>
-              <select
-                value={selectedMemberId}
-                onChange={(e) => {
-                  setSelectedMemberId(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-3 py-2 rounded-lg bg-zinc-950/80 border border-white/[0.08] text-[12px] text-white focus:outline-none focus:border-amber-500 transition-colors font-mono cursor-pointer"
-              >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.ign ? `${m.ign} (${m.user.displayName})` : m.user.displayName}
-                  </option>
-                ))}
-              </select>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Member selector visible ONLY on member-items tab */}
+            {activeTab === "member-items" && (
+              <div className="flex items-center gap-2 max-w-xs w-full">
+                <span className="text-[11px] text-zinc-400 font-mono shrink-0 uppercase tracking-wider">
+                  Select Member:
+                </span>
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => {
+                    setSelectedMemberId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950/80 border border-white/[0.08] text-[12px] text-white focus:outline-none focus:border-amber-500 transition-colors font-mono cursor-pointer"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.ign ? `${m.ign} (${m.user.displayName})` : m.user.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Search — filters the currently loaded page by actor, action, or details */}
+            <div className="relative max-w-xs w-full">
+              <input
+                type="text"
+                placeholder="Search actor, action, details..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 pl-8 rounded-lg bg-zinc-950/80 border border-white/[0.08] text-[12px] text-white placeholder:text-white/25 focus:outline-none focus:border-amber-500 transition-colors font-mono"
+              />
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs">🔍</span>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Dynamic Log Table view */}
@@ -264,7 +312,7 @@ export default function AuditLogPage() {
                 <Skeleton className="h-10 w-full rounded animate-pulse" />
                 <Skeleton className="h-10 w-full rounded animate-pulse" />
               </div>
-            ) : logs.length === 0 ? (
+            ) : filteredLogs.length === 0 ? (
               /* Empty State view */
               <div className="py-12 text-center">
                 <p className="text-[13px] text-zinc-500 italic font-mono">
@@ -314,7 +362,7 @@ export default function AuditLogPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.02] text-zinc-300">
-                  {logs.map((log) => {
+                  {filteredLogs.map((log) => {
                     const formattedDate = new Date(log.createdAt).toLocaleString(
                       "en-US",
                       {

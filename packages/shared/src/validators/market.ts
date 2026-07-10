@@ -61,12 +61,52 @@ export const createDistributionSchema = z.object({
 });
 export type CreateDistributionInput = z.infer<typeof createDistributionSchema>;
 
-// ─── Member item wishlist (Item Distribution) ──────────────────────
+// ─── Member item wishlist (per-piece: rarity + quantity) ────────────
+
+export const wishlistItemSchema = z.object({
+  category: z.enum(["WEAPON", "ARMOR", "ACCESSORY", "LOGS", "TEMPORAL", "MATERIALS", "MOUNT"]),
+  key: z.string().min(1).max(60),
+  rarity: z.enum(["LEGEND", "EPIC", "MYTHIC"]).optional(),
+  armorType: z.enum(["CLOTH", "LEATHER", "PLATE"]).optional(),
+  quantity: z.number().int().min(1).max(9999).optional(),
+  label: z.string().trim().max(120).optional(),
+  // Status is server-managed; accepted (and preserved) on input but never trusted for auth.
+  status: z.enum(["PENDING", "DISTRIBUTED"]).optional(),
+  fulfilledAt: z.string().optional(),
+  fulfilledById: z.string().optional(),
+});
+export type WishlistItemInput = z.infer<typeof wishlistItemSchema>;
 
 export const wishlistSchema = z.object({
-  items: z.array(z.string().max(40)).max(60),
+  items: z.array(wishlistItemSchema).max(80),
 });
 export type WishlistInput = z.infer<typeof wishlistSchema>;
+
+// ─── Mount catalog (Leader's Panel) ─────────────────────────────────
+
+export const mountCatalogSchema = z.object({
+  name: z.string().trim().min(1, "Mount name is required").max(120),
+  iconUrl: z.string().trim().max(500).optional().nullable(),
+  maxSlots: z.number().int().min(1, "At least 1 slot").max(999),
+  isActive: z.boolean().optional(),
+});
+export type MountCatalogInput = z.infer<typeof mountCatalogSchema>;
+
+export const distributeMountSchema = z.object({
+  memberId: z.string().min(1, "Target member is required"),
+  note: z.string().trim().max(500).optional(),
+});
+export type DistributeMountInput = z.infer<typeof distributeMountSchema>;
+
+// ─── Notify members to submit a request ─────────────────────────────
+
+export const notifyRequestSchema = z.object({
+  itemLabel: z.string().trim().min(1, "Pick an item to notify about").max(120),
+  itemRef: z.string().trim().max(120).optional(),
+  memberIds: z.array(z.string()).optional(),
+  message: z.string().trim().max(500).optional(),
+});
+export type NotifyRequestInput = z.infer<typeof notifyRequestSchema>;
 
 // ─── Market rules (Settings) ────────────────────────────────────────
 

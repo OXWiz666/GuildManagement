@@ -5,8 +5,8 @@ import {
   UnauthorizedError,
   ForbiddenError,
 } from "@guild/core";
-import { hasMinimumRole, type GuildRoleType, type JwtPayload } from "@guild/shared";
-import type { GuildMember } from "@guild/db";
+import { hasMinimumRole, type GuildRoleType, type JwtPayload, type PlatformRoleType } from "@guild/shared";
+import type { GuildMember, PlatformAdmin } from "@guild/db";
 import { ACCESS_COOKIE } from "./request";
 
 /** Extract a bearer token from the Authorization header or the access cookie. */
@@ -71,4 +71,18 @@ export async function requireGuildRole(
   }
 
   return { user, membership };
+}
+
+/**
+ * Require the caller to be an active platform admin with at least `minRole`.
+ * Authorization is platform-wide (SaaS-level), NOT per-guild — gates the
+ * Super Admin area and all `/api/admin/**` routes.
+ */
+export async function requirePlatformAdmin(
+  req: NextRequest,
+  minRole: PlatformRoleType = "SUPPORT",
+): Promise<{ user: JwtPayload; admin: PlatformAdmin }> {
+  const user = requireAuth(req);
+  const admin = await services.platform.requirePlatformAdmin(user.userId, minRole);
+  return { user, admin: admin as PlatformAdmin };
 }

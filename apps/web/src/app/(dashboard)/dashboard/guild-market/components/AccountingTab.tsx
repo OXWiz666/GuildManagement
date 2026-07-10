@@ -11,9 +11,20 @@ interface AccountingTabProps {
   filteredMembers: any[];
   memberSearch: string;
   onSearchChange: (value: string) => void;
+  memberRoleFilter: string;
+  onRoleFilterChange: (value: string) => void;
   ledgerPage: number;
   onPageChange: (page: number) => void;
 }
+
+const ROLE_OPTIONS = [
+  { value: "ALL", label: "All roles" },
+  { value: "GUILD_LEADER", label: "Guild Leader" },
+  { value: "OFFICER", label: "Officer" },
+  { value: "CORE_MEMBER", label: "Core Member" },
+  { value: "ELITE_MEMBER", label: "Elite Member" },
+  { value: "MEMBER", label: "Member" },
+];
 
 export default function AccountingTab({
   accounting,
@@ -21,6 +32,8 @@ export default function AccountingTab({
   filteredMembers,
   memberSearch,
   onSearchChange,
+  memberRoleFilter,
+  onRoleFilterChange,
   ledgerPage,
   onPageChange,
 }: AccountingTabProps) {
@@ -92,15 +105,26 @@ export default function AccountingTab({
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">Member Balance board</h3>
             <p className="text-[10px] text-white/40 mt-1">Guild Points and net ledger balances.</p>
           </div>
-          <div className="relative max-w-xs w-full">
-            <input
-              type="text"
-              placeholder="Search member by IGN..."
-              value={memberSearch}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
-            />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs"></span>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select
+              value={memberRoleFilter}
+              onChange={(e) => onRoleFilterChange(e.target.value)}
+              className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+            >
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            <div className="relative max-w-xs w-full">
+              <input
+                type="text"
+                placeholder="Search member by IGN..."
+                value={memberSearch}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+              />
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs"></span>
+            </div>
           </div>
         </div>
 

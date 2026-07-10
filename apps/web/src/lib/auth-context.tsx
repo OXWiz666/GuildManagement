@@ -8,6 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import type { LeaderOnboardingInput, PaymentMethodEntry } from "@guild/shared";
 import { authApi, setAccessToken } from "./api";
 import { createClient } from "@/utils/supabase/client";
 import { friendlyAuthError } from "./auth-errors";
@@ -24,6 +25,7 @@ interface User {
   class?: string | null;
   weapon?: string | null;
   platformRole?: string | null;
+  paymentMethods?: PaymentMethodEntry[];
 }
 
 interface Guild {
@@ -47,6 +49,7 @@ interface AuthContextType {
     password: string,
     confirmPassword: string,
     displayName: string,
+    onboarding?: LeaderOnboardingInput,
   ) => Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<User | null>;
@@ -79,7 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (result.success && result.data?.user) {
         setUser(result.data.user);
         if (typeof window !== "undefined") {
-          localStorage.setItem("auth_profile", JSON.stringify(result.data.user));
+          // Payment QR images are base64 and can be several MB each — keep them
+          // out of the localStorage cache so they can't blow the quota (which
+          // would throw here and, via the catch below, wipe the session).
+          const { paymentMethods: _omit, ...cacheable } = result.data.user;
+          localStorage.setItem("auth_profile", JSON.stringify(cacheable));
         }
         return result.data.user;
       } else {
@@ -197,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string,
       confirmPassword: string,
       displayName: string,
+      onboarding?: LeaderOnboardingInput,
     ): Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }> => {
       if (password !== confirmPassword) {
         const friendly = friendlyAuthError("Passwords don't match");
@@ -211,6 +219,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           options: {
             data: {
               display_name: displayName,
+              // Leader onboarding intent — read back server-side on first sync
+              // to self-serve create the guild/faction (see supabase-sync route).
+              ...(onboarding && onboarding.accountType !== "MEMBER"
+                ? {
+                    account_type: onboarding.accountType,
+                    guild_name: onboarding.guildName,
+                    ...(onboarding.factionName ? { faction_name: onboarding.factionName } : {}),
+                  }
+                : {}),
             },
           },
         });

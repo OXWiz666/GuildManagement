@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import Avatar from "../ui/Avatar";
-import { dashboardApi, notificationApi, type BossScheduleData, type NotificationData } from "@/lib/api";
+import { dashboardApi, notificationApi, type BossScheduleData, type BossRotationItem, type NotificationData } from "@/lib/api";
 import { useSocket } from "@/components/providers/socket-provider";
+import { getRealtimeBossTimer } from "@guild/shared";
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -22,7 +23,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const notificationMenuRef = useRef<HTMLDivElement>(null);
 
   // Dynamic Header State
-  const [nextBoss, setNextBoss] = useState<BossScheduleData | null>(null);
+  const [guildSchedules, setGuildSchedules] = useState<BossScheduleData[]>([]);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -117,17 +118,36 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     if (!guildId) return;
     async function loadNextBoss() {
       try {
-        const result = await dashboardApi.getBossSchedules(guildId as string);
-        if (result.success && result.data?.schedules) {
-          const upcoming = result.data.schedules
-            .filter((s) => s.status !== "KILLED")
-            .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
-          if (upcoming.length > 0) {
-            setNextBoss(upcoming[0]);
-          } else {
-            setNextBoss(null);
-          }
+        // Fetch schedules + rotation together so the header shows the next boss
+        // that actually belongs to THIS guild — the same ownership rule the
+        // dashboard "Next boss spawn · your guild" carousel uses — instead of the
+        // globally-earliest spawn (which can be a faction-wide or another guild's boss).
+        const [schedRes, rotRes] = await Promise.all([
+          dashboardApi.getBossSchedules(guildId as string),
+          dashboardApi.getBossRotation(guildId as string),
+        ]);
+        if (!schedRes.success || !schedRes.data?.schedules) return;
+
+        const rotByBoss = new Map<string, BossRotationItem>();
+        for (const rot of rotRes.success && rotRes.data ? rotRes.data.rotations : []) {
+          rotByBoss.set(rot.bossName.toLowerCase(), rot);
         }
+
+        const mine = schedRes.data.schedules
+          .filter((s) => s.status !== "KILLED")
+          .filter((s) => {
+            // A non-null `guildId` means this schedule row is a guild-specific
+            // spawn instance and belongs to that guild outright — check this
+            // FIRST, since the rotation's `currentGuild` is a cross-guild
+            // "whose turn in the shared queue" pointer and must not override it.
+            if (s.guildId) return s.guildId === guildId;
+            const rot = rotByBoss.get(s.bossName.toLowerCase());
+            const ownerId = s.guildTurnGuildId || rot?.currentGuild?.id || null;
+            return ownerId === guildId;
+          })
+          .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
+
+        setGuildSchedules(mine);
       } catch (e) {
         // fail silently
       }
@@ -171,29 +191,22 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const offsetSign = offsetMinutes >= 0 ? "+" : "-";
   const timezoneStr = `UTC ${offsetSign}${offsetHours}`;
 
-  // Countdown Helper
-  function getTickingCountdown(spawnTimeStr: string) {
-    const target = new Date(spawnTimeStr).getTime();
-    const diff = target - currentTime.getTime();
-    if (diff <= 0) return { expired: true, text: "LIVE", warning: false };
+  // Pick the guild's truly-soonest boss every tick. An overdue spawn rolls
+  // forward along its real respawn cycle (same shared helper the dashboard's
+  // "Next boss spawn · your guild" carousel uses) instead of freezing on
+  // "LIVE" forever, so the ordering can change as time passes.
+  const nextBossInfo = useMemo(() => {
+    if (guildSchedules.length === 0) return null;
+    let best: { boss: BossScheduleData; timer: ReturnType<typeof getRealtimeBossTimer> } | null = null;
+    for (const s of guildSchedules) {
+      const timer = getRealtimeBossTimer(s.bossName, s.spawnTime, currentTime.getTime(), { status: s.status });
+      if (!best || timer.nextSpawn < best.timer.nextSpawn) best = { boss: s, timer };
+    }
+    return best;
+  }, [guildSchedules, currentTime]);
 
-    const hrs = Math.floor(diff / (3600 * 1000));
-    const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
-    const secs = Math.floor((diff % (60 * 1000)) / 1000);
-
-    const hrsStr = hrs > 0 ? `${hrs}h ` : "";
-    const minsStr = `${String(mins).padStart(2, "0")}m `;
-    const secsStr = `${String(secs).padStart(2, "0")}s`;
-
-    return {
-      expired: false,
-      text: `${hrsStr}${minsStr}${secsStr}`,
-      warning: diff <= 60 * 60 * 1000 // less than 1 hour remains
-    };
-  }
-
-  // Get active countdown if next boss exists
-  const countdown = nextBoss ? getTickingCountdown(nextBoss.spawnTime) : null;
+  const nextBoss = nextBossInfo?.boss ?? null;
+  const countdown = nextBossInfo ? { text: nextBossInfo.timer.text, warning: nextBossInfo.timer.warning } : null;
 
   return (
     <header
@@ -345,27 +358,27 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           {isNotificationsOpen && (
             <div
               role="menu"
-              className="absolute top-full right-0 mt-2 w-[340px] max-w-[calc(100vw-2rem)] glass-strong rounded-xl border border-[var(--metal-border)] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.7)] animate-scale-in z-50 overflow-hidden"
+              className="absolute top-full right-0 mt-2 w-[300px] max-w-[calc(100vw-2rem)] glass-strong rounded-lg border border-[var(--metal-border)] shadow-[0_30px_60px_-20px_rgba(0,0,0,0.7)] animate-scale-in z-50 overflow-hidden"
             >
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-white/[0.06]">
                 <div>
-                  <p className="text-[12px] font-semibold text-white">Notifications</p>
-                  <p className="text-[10px] text-white/40">{unreadCount} unread</p>
+                  <p className="text-[11px] font-semibold text-white">Notifications</p>
+                  <p className="text-[9px] text-white/40">{unreadCount} unread</p>
                 </div>
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllNotificationsRead}
-                    className="text-[10px] uppercase tracking-[0.16em] text-[var(--forge-gold-dim)] hover:text-[var(--forge-gold)] cursor-pointer"
+                    className="text-[9px] uppercase tracking-[0.14em] text-[var(--forge-gold-dim)] hover:text-[var(--forge-gold)] cursor-pointer"
                   >
                     Mark all read
                   </button>
                 )}
               </div>
 
-              <div className="max-h-[360px] overflow-y-auto p-1.5">
+              <div className="max-h-[300px] overflow-y-auto p-1">
                 {notifications.length === 0 ? (
-                  <div className="px-4 py-8 text-center">
-                    <p className="text-[12px] text-white/45">No notifications yet</p>
+                  <div className="px-4 py-6 text-center">
+                    <p className="text-[11px] text-white/45">No notifications yet</p>
                   </div>
                 ) : (
                   notifications.map((notification) => {
@@ -375,22 +388,22 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                         key={notification.id}
                         role="menuitem"
                         onClick={() => unread && markNotificationRead(notification.id)}
-                        className={`w-full text-left px-3 py-3 rounded-lg border transition-colors cursor-pointer ${
+                        className={`w-full text-left px-2.5 py-2 rounded-md border transition-colors cursor-pointer ${
                           unread
                             ? "bg-[var(--forge-glow)] border-[var(--forge-gold)]/18"
                             : "bg-transparent border-transparent hover:bg-white/[0.03]"
                         }`}
                       >
-                        <div className="flex items-start gap-2.5">
-                          <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${unread ? "bg-[var(--forge-gold)]" : "bg-white/15"}`} />
+                        <div className="flex items-start gap-2">
+                          <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${unread ? "bg-[var(--forge-gold)]" : "bg-white/15"}`} />
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[12px] font-semibold text-white truncate">
+                            <span className="block text-[11px] font-semibold text-white truncate">
                               {notification.title}
                             </span>
-                            <span className="block text-[11px] text-white/50 leading-relaxed mt-1">
+                            <span className="block text-[10px] text-white/50 leading-snug mt-0.5 line-clamp-2">
                               {notification.body}
                             </span>
-                            <span className="block text-[10px] text-white/30 mt-2 font-mono">
+                            <span className="block text-[9px] text-white/30 mt-1 font-mono">
                               {new Date(notification.createdAt).toLocaleString("en-US", {
                                 month: "short",
                                 day: "numeric",

@@ -31,6 +31,7 @@ export default function MembersPage() {
   const { socket } = useSocket();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<"NAME" | "CP" | "JOINED">("NAME");
   const [confirmModal, setConfirmModal] = useState<{
     memberId: string;
     memberName: string;
@@ -137,15 +138,21 @@ export default function MembersPage() {
   }, [socket, activeGuild, isOfficer]);
 
   // Filter members
-  const filteredMembers = members.filter((m) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      m.user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.ign && m.ign.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (m.memberCode && m.memberCode.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesRole = roleFilter === "ALL" || m.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
+  const filteredMembers = members
+    .filter((m) => {
+      const matchesSearch =
+        searchQuery === "" ||
+        m.user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (m.ign && m.ign.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (m.memberCode && m.memberCode.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesRole = roleFilter === "ALL" || m.role === roleFilter;
+      return matchesSearch && matchesRole;
+    })
+    .sort((a, b) => {
+      if (sortBy === "CP") return (b.cp ?? 0) - (a.cp ?? 0);
+      if (sortBy === "JOINED") return new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime();
+      return a.user.displayName.localeCompare(b.user.displayName);
+    });
 
   async function handleRoleChange(
     memberId: string,
@@ -332,6 +339,23 @@ export default function MembersPage() {
                   <option value="CORE_MEMBER" className="bg-[#0f0f16] text-white">Core Member</option>
                   <option value="ELITE_MEMBER" className="bg-[#0f0f16] text-white">Elite Member</option>
                   <option value="MEMBER" className="bg-[#0f0f16] text-white">Member</option>
+                </select>
+
+                {/* Sort */}
+                <select
+                  id="member-sort"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "NAME" | "CP" | "JOINED")}
+                  className="px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-white/25 transition-colors cursor-pointer appearance-none min-w-[160px]"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 12px center",
+                  }}
+                >
+                  <option value="NAME" className="bg-[#0f0f16] text-white">Sort: Name</option>
+                  <option value="CP" className="bg-[#0f0f16] text-white">Sort: CP</option>
+                  <option value="JOINED" className="bg-[#0f0f16] text-white">Sort: Join date</option>
                 </select>
               </div>
             </Card>

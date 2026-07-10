@@ -19,7 +19,13 @@ import * as guild from "./services/guild.service";
 import * as ledger from "./services/ledger.service";
 import * as loot from "./services/loot.service";
 import * as market from "./services/market.service";
+import * as mounts from "./services/mounts.service";
 import * as notification from "./services/notification.service";
+import * as onboarding from "./services/onboarding.service";
+import * as platform from "./services/platform.service";
+import * as adminUsers from "./services/admin-users.service";
+import * as adminGuilds from "./services/admin-guilds.service";
+import * as billing from "./services/billing.service";
 import * as requests from "./services/requests.service";
 
 export const services = {
@@ -36,7 +42,13 @@ export const services = {
   ledger,
   loot,
   market,
+  mounts,
   notification,
+  onboarding,
+  platform,
+  adminUsers,
+  adminGuilds,
+  billing,
   requests,
 };
 

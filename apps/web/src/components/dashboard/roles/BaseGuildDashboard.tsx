@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { useQuery, queryClient } from "@/lib/query";
 import BossDropsPicker, { type SelectedDrop, rarityStyle } from "@/app/(dashboard)/dashboard/boss-rotation/components/BossDropsPicker";
+import WishlistPriorityCarousel from "@/components/dashboard/WishlistPriorityCarousel";
 import {
   Reveal,
   StaggerReveal,
@@ -139,13 +140,18 @@ export default function BaseGuildDashboard({
   // Upcoming list — a scrollable shortcut list (more than the old 3).
   const upcomingList = useMemo(() => sortedSchedules.slice(0, 12), [sortedSchedules]);
 
-  // The carousel is scoped to the CURRENT guild's own bosses, based on the boss
-  // rotation: a spawn belongs to us when its assigned turn — or, failing that,
-  // the rotation's current holder for that boss — is our active guild.
+  // The carousel is scoped to the CURRENT guild's own bosses. A schedule row
+  // with a non-null `guildId` is a guild-specific spawn instance and always
+  // belongs to that guild outright — checked FIRST, since the rotation's
+  // `currentGuild` is a cross-guild "whose turn in the shared queue" pointer
+  // and must never override a schedule's own owning guild. Only for
+  // faction-wide rows (guildId === null) do we fall back to the assigned turn,
+  // then the rotation's current holder, to decide if the spawn is ours.
   const myGuildSchedules = useMemo(() => {
     const gid = activeGuild?.guildId;
     if (!gid) return [];
     return sortedSchedules.filter((s) => {
+      if (s.guildId) return s.guildId === gid;
       const rot = rotationByBoss.get(s.bossName.toLowerCase());
       const ownerId = s.guildTurnGuildId || rot?.currentGuild?.id || null;
       return ownerId === gid;
@@ -813,6 +819,9 @@ export default function BaseGuildDashboard({
                 </section>
               </Reveal>
             )}
+
+            {/* Logs priority sequence — member wishlist ranking carousel */}
+            <WishlistPriorityCarousel guildId={activeGuild.guildId} />
 
             {/* Activity Feed */}
             <Reveal from="right">

@@ -7,6 +7,8 @@ interface SoldItemsTableProps {
   sales: any[];
   lootSearch: string;
   onSearchChange: (value: string) => void;
+  lootCategory: string;
+  onCategoryChange: (value: string) => void;
   currencySymbol: string;
   secondaryCurrencySymbol: string;
 }
@@ -35,6 +37,8 @@ export default function SoldItemsTable({
   sales,
   lootSearch,
   onSearchChange,
+  lootCategory,
+  onCategoryChange,
   currencySymbol,
   secondaryCurrencySymbol,
 }: SoldItemsTableProps) {
@@ -81,15 +85,27 @@ export default function SoldItemsTable({
           <h3 className="text-sm font-bold text-white uppercase tracking-wider">🛒 Sold items registry</h3>
           <p className="text-[10px] text-white/40 mt-1">Loot sales grouped per activity, with tax, net profit and attendees.</p>
         </div>
-        <div className="relative max-w-xs w-full">
-          <input
-            type="text"
-            placeholder="Search loot, activity or category..."
-            value={lootSearch}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
-          />
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs">🔍</span>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <select
+            value={lootCategory}
+            onChange={(e) => onCategoryChange(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+          >
+            <option value="ALL">All categories</option>
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <div className="relative max-w-xs w-full">
+            <input
+              type="text"
+              placeholder="Search loot, activity or category..."
+              value={lootSearch}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs">🔍</span>
+          </div>
         </div>
       </div>
 

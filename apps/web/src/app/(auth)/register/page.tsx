@@ -10,11 +10,26 @@ import Input from "@/components/ui/Input";
 import { AuthStagger, MagneticPress } from "@/components/auth/AuthAnim";
 import { friendlyAuthError } from "@/lib/auth-errors";
 
+type AccountTypeChoice = "MEMBER" | "GUILD_LEADER" | "FACTION_LEADER";
+
+const ACCOUNT_TYPE_OPTIONS: {
+  value: AccountTypeChoice;
+  label: string;
+  desc: string;
+}[] = [
+  { value: "MEMBER", label: "Member", desc: "Join an existing guild with an invite code." },
+  { value: "GUILD_LEADER", label: "Guild Leader", desc: "Create and lead your own guild." },
+  { value: "FACTION_LEADER", label: "Faction Leader", desc: "Run a faction spanning multiple guilds." },
+];
+
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountType, setAccountType] = useState<AccountTypeChoice>("MEMBER");
+  const [guildName, setGuildName] = useState("");
+  const [factionName, setFactionName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [errorTitle, setErrorTitle] = useState("");
@@ -54,11 +69,19 @@ export default function RegisterPage() {
     setFieldErrors({});
     setIsLoading(true);
 
+    const isLeader = accountType !== "MEMBER";
+    const trimmedGuild = guildName.trim();
+    const trimmedFaction = factionName.trim();
+
     const errors: Record<string, string> = {};
     if (displayName.length < 2) errors.displayName = "At least 2 characters";
     if (password.length < 8) errors.password = "At least 8 characters";
     if (password !== confirmPassword)
       errors.confirmPassword = "Passwords don't match";
+    if (isLeader && trimmedGuild.length < 2)
+      errors.guildName = "At least 2 characters";
+    if (accountType === "FACTION_LEADER" && trimmedFaction.length < 2)
+      errors.factionName = "At least 2 characters";
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -72,6 +95,15 @@ export default function RegisterPage() {
         password,
         confirmPassword,
         displayName,
+        isLeader
+          ? {
+              accountType,
+              guildName: trimmedGuild,
+              ...(accountType === "FACTION_LEADER"
+                ? { factionName: trimmedFaction }
+                : {}),
+            }
+          : undefined,
       );
       if (result.success) {
         if (result.requiresVerification) {
@@ -169,6 +201,89 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Account type — drives self-serve guild / faction creation */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-[0.12em] text-white/70 mb-2">
+              I&apos;m registering as
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {ACCOUNT_TYPE_OPTIONS.map((opt) => {
+                const active = accountType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAccountType(opt.value)}
+                    aria-pressed={active}
+                    className={`rounded-xl border px-2.5 py-2.5 text-center text-[11px] font-bold transition-all duration-200 ${
+                      active
+                        ? "border-[#F5B841]/60 bg-[#F5B841]/10 text-white shadow-[0_0_0_1px_rgba(245,184,65,0.15)]"
+                        : "border-white/[0.08] bg-white/[0.02] text-white/60 hover:border-white/20 hover:text-white/85"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-[#8B8F98]">
+              {ACCOUNT_TYPE_OPTIONS.find((o) => o.value === accountType)?.desc}
+            </p>
+          </div>
+
+          {accountType !== "MEMBER" && (
+            <div className="animate-slide-down">
+              <Input
+                label="Guild name"
+                type="text"
+                placeholder="e.g. KuraCORP"
+                value={guildName}
+                onChange={(e) => setGuildName(e.target.value)}
+                error={fieldErrors.guildName}
+                variant="auth"
+                required
+                icon={
+                  <svg
+                    className="h-4 w-4 text-white/40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                }
+              />
+            </div>
+          )}
+
+          {accountType === "FACTION_LEADER" && (
+            <div className="animate-slide-down">
+              <Input
+                label="Faction name"
+                type="text"
+                placeholder="e.g. Kurakortz"
+                value={factionName}
+                onChange={(e) => setFactionName(e.target.value)}
+                error={fieldErrors.factionName}
+                variant="auth"
+                required
+                icon={
+                  <svg
+                    className="h-4 w-4 text-white/40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                    <line x1="4" y1="22" x2="4" y2="15" />
+                  </svg>
+                }
+              />
+            </div>
+          )}
+
           <Input
             label="Display name"
             type="text"

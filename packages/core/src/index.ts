@@ -86,7 +86,7 @@ export * from "./utils/pagination";
 export { cache, getCacheStats } from "./lib/cache";
 
 // ─── Realtime broadcasting ──────────────────────
-export { broadcastToGuild, broadcastToUser } from "./lib/socket";
+export { broadcastToGuild, broadcastToUser, broadcastToFaction } from "./lib/socket";
 
 // ─── Storage ────────────────────────────────────
 export * from "./lib/supabaseStorage";

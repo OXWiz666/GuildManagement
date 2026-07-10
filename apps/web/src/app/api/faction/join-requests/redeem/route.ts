@@ -8,9 +8,9 @@ export const runtime = "nodejs";
 
 export const POST = withApi(async (req: NextRequest) => {
   const user = requireAuth(req);
-  const { guildId } = await readJson<{ guildId?: string }>(req);
-  if (!guildId) throw new BadRequestError("guildId is required");
+  const { code } = await readJson<{ code?: string }>(req);
+  if (!code) throw new BadRequestError("An invite code is required");
   const { ipAddress, userAgent } = getClientInfo(req);
-  const result = await services.faction.inviteGuildToFaction(user.userId, guildId, ipAddress, userAgent);
+  const result = await services.faction.redeemFactionInviteCode(user.userId, code, ipAddress, userAgent);
   return ok(result);
 });

@@ -203,9 +203,20 @@ async function requireFactionLeader(actorId: string, guildId: string) {
   return membership;
 }
 
-async function getActiveFactionGuilds() {
+// Resolves the faction a guild belongs to (null if unaffiliated). Boss
+// rotation/schedule data is scoped by this id so factions never see or
+// influence each other's rotations.
+async function getGuildFactionId(guildId: string): Promise<string | null> {
+  const guild = await prisma.guild.findUnique({ where: { id: guildId }, select: { factionId: true } });
+  return guild?.factionId ?? null;
+}
+
+// Every guild-list query that feeds a rotation queue MUST be scoped by
+// factionId — an unscoped `isActive: true` guild list leaks every other
+// faction's guilds into this faction's rotations/master list.
+async function getActiveFactionGuilds(factionId: string | null) {
   return prisma.guild.findMany({
-    where: { isActive: true },
+    where: { isActive: true, factionId },
     select: { id: true, name: true, slug: true, avatarUrl: true },
     orderBy: { name: "asc" },
   });
@@ -264,7 +275,7 @@ function predefinedBossToRegistryItem(boss: (typeof PREDEFINED_BOSSES)[number]):
   };
 }
 
-async function getBossRegistryForRotation() {
+export async function getBossRegistryForRotation() {
   try {
     const dbBosses = await prisma.boss.findMany({
       orderBy: [{ type: "asc" }, { level: "desc" }, { name: "asc" }],
@@ -360,7 +371,7 @@ async function getDefaultScheduleCreator(guildId: string): Promise<string | null
  * start "live" (now) until their first logged kill establishes the real cadence.
  * Idempotent — only creates rows for bosses that have no UPCOMING/SPAWNED entry.
  */
-async function ensureUpcomingSpawns(guildId: string) {
+async function ensureUpcomingSpawns(guildId: string, factionId: string | null) {
   const [existing, rotations] = await Promise.all([
     prisma.bossSchedule.findMany({
       where: {
@@ -369,9 +380,12 @@ async function ensureUpcomingSpawns(guildId: string) {
       },
       select: { id: true, bossName: true, spawnTime: true, status: true },
     }),
-    prisma.bossRotation.findMany({
-      select: { bossName: true, nextSpawnTime: true },
-    }),
+    factionId
+      ? prisma.bossRotation.findMany({
+          where: { factionId },
+          select: { bossName: true, nextSpawnTime: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const now = new Date();
@@ -457,6 +471,7 @@ async function ensureUpcomingSpawns(guildId: string) {
  */
 async function syncNextRotationSchedule(params: {
   bossName: string;
+  factionGuildIds: string[];
   fallbackGuildId: string | null;
   bossImageUrl: string | null;
   location: string;
@@ -469,15 +484,26 @@ async function syncNextRotationSchedule(params: {
     guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } },
   } as const;
 
+  // Scoped to this faction's own guilds — `bossName` is no longer globally
+  // unique across factions, so two factions' same-named boss must not stomp
+  // each other's schedule rows.
   const openSchedules = await prisma.bossSchedule.findMany({
-    where: { bossName: params.bossName, status: { not: BossEventStatus.KILLED } },
+    where: {
+      bossName: params.bossName,
+      guildId: { in: params.factionGuildIds },
+      status: { not: BossEventStatus.KILLED },
+    },
     orderBy: { spawnTime: "asc" },
     select: { id: true },
   });
 
   if (openSchedules.length > 0) {
     await prisma.bossSchedule.updateMany({
-      where: { bossName: params.bossName, status: { not: BossEventStatus.KILLED } },
+      where: {
+        bossName: params.bossName,
+        guildId: { in: params.factionGuildIds },
+        status: { not: BossEventStatus.KILLED },
+      },
       data: {
         spawnTime: params.spawnTime,
         status: BossEventStatus.UPCOMING,
@@ -913,14 +939,18 @@ export async function confirmAttendanceRecord(
 // ─── Boss schedules & Calendar systems ───────────
 
 export async function getBossSchedules(guildId: string, requestingUserId?: string) {
+  const factionId = await getGuildFactionId(guildId);
   // Make sure every boss has a live upcoming spawn so countdowns are never empty.
-  await ensureUpcomingSpawns(guildId);
+  await ensureUpcomingSpawns(guildId, factionId);
 
-  // Retrieve combining both guild-specific events AND unified faction-wide events (guildId: null)
+  // Faction-wide view: this guild's own schedules plus every other guild's
+  // in the SAME faction (never another faction's rotation state).
+  const factionGuilds = factionId ? await getActiveFactionGuilds(factionId) : [];
+  const visibleGuildIds = Array.from(new Set([guildId, ...factionGuilds.map((g) => g.id)]));
   const schedules = await prisma.bossSchedule.findMany({
     where: {
       OR: [
-        { guildId },
+        { guildId: { in: visibleGuildIds } },
         { guildId: null },
       ],
     },
@@ -982,11 +1012,12 @@ export async function getBossSchedules(guildId: string, requestingUserId?: strin
 }
 
 export async function getBossRotation(guildId: string, actorId: string) {
-  const [membership, guilds, bosses] = await Promise.all([
+  const [membership, factionId, bosses] = await Promise.all([
     requireActiveGuildMember(actorId, guildId),
-    getActiveFactionGuilds(),
+    getGuildFactionId(guildId),
     getBossRegistryForRotation(),
   ]);
+  const guilds = await getActiveFactionGuilds(factionId);
   // `canManage` only gates the "Taken" action in the UI (not queue reordering),
   // so it reflects the wider taken-permission set, which includes Officers.
   const canManage = canMarkBossTaken(membership.role);
@@ -995,15 +1026,18 @@ export async function getBossRotation(guildId: string, actorId: string) {
   const guildMap = new Map(guilds.map((g) => [g.id, g]));
 
   // Bulk-fetch all rotation, active schedule, and killed schedule data in 3 parallel queries
-  // instead of 3 sequential queries per boss (N+1 elimination)
+  // instead of 3 sequential queries per boss (N+1 elimination). Schedules are
+  // scoped to this faction's own guilds — `bossName` is not unique across
+  // factions, so an unscoped query would show another faction's schedule.
   const bossNames = bosses.map((b) => b.name);
   const [allRotations, allActiveSchedules, allKilledSchedules] = await Promise.all([
     prisma.bossRotation.findMany({
-      where: { bossName: { in: bossNames } },
+      where: { factionId: factionId ?? "__none__", bossName: { in: bossNames } },
     }),
     prisma.bossSchedule.findMany({
       where: {
         bossName: { in: bossNames },
+        guildId: { in: activeGuildIds },
         status: { not: BossEventStatus.KILLED },
       },
       include: { guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
@@ -1012,6 +1046,7 @@ export async function getBossRotation(guildId: string, actorId: string) {
     prisma.bossSchedule.findMany({
       where: {
         bossName: { in: bossNames },
+        guildId: { in: activeGuildIds },
         status: BossEventStatus.KILLED,
       },
       include: { guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
@@ -1085,6 +1120,7 @@ export async function getBossRotation(guildId: string, actorId: string) {
     serverTime: new Date().toISOString(),
     canManage,
     viewerRole: membership.role,
+    factionId,
     guilds,
     rotations,
   };
@@ -1099,7 +1135,11 @@ export async function updateBossRotationQueue(
   userAgent?: string,
 ) {
   await requireBossRotationManager(actorId, guildId);
-  const guilds = await getActiveFactionGuilds();
+  const factionId = await getGuildFactionId(guildId);
+  if (!factionId) {
+    throw new BadRequestError("This guild is not part of a faction yet");
+  }
+  const guilds = await getActiveFactionGuilds(factionId);
   const normalizedQueue = normalizeQueue(queueGuildIds, guilds.map((g) => g.id));
 
   if (normalizedQueue.length === 0) {
@@ -1107,8 +1147,9 @@ export async function updateBossRotationQueue(
   }
 
   const rotation = await prisma.bossRotation.upsert({
-    where: { bossName },
+    where: { factionId_bossName: { factionId, bossName } },
     create: {
+      factionId,
       bossName,
       queueGuildIds: normalizedQueue,
       currentIndex: 0,
@@ -1151,16 +1192,16 @@ export async function markBossRotationKilled(
     throw new BadRequestError("Killed timestamp is invalid");
   }
   const storedDrops = await normalizeBossDrops(drops);
+  const factionId = await getGuildFactionId(guildId);
+  if (!factionId) {
+    throw new BadRequestError("This guild is not part of a faction yet");
+  }
 
   const [schedule, guilds] = await Promise.all([
     prisma.bossSchedule.findUnique({
       where: { id: scheduleId },
     }),
-    prisma.guild.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, slug: true, avatarUrl: true },
-      orderBy: { name: "asc" },
-    }),
+    getActiveFactionGuilds(factionId),
   ]);
 
   if (!schedule) {
@@ -1179,7 +1220,7 @@ export async function markBossRotationKilled(
   }
 
   const existingRotation = await prisma.bossRotation.findUnique({
-    where: { bossName: schedule.bossName },
+    where: { factionId_bossName: { factionId, bossName: schedule.bossName } },
   });
   const queueGuildIds = resolveQueue(existingRotation, activeGuildIds);
   const takenIndex = queueGuildIds.indexOf(takenGuildId);
@@ -1208,8 +1249,9 @@ export async function markBossRotationKilled(
   );
 
   const rotation = await prisma.bossRotation.upsert({
-    where: { bossName: schedule.bossName },
+    where: { factionId_bossName: { factionId, bossName: schedule.bossName } },
     create: {
+      factionId,
       bossName: schedule.bossName,
       queueGuildIds,
       currentIndex: nextIndex,
@@ -1228,6 +1270,7 @@ export async function markBossRotationKilled(
   // guild's turn) so it no longer reads "LIVE" the instant it is taken.
   const nextSchedule = await syncNextRotationSchedule({
     bossName: schedule.bossName,
+    factionGuildIds: activeGuildIds,
     fallbackGuildId: schedule.guildId,
     bossImageUrl: schedule.bossImageUrl,
     location: schedule.location,
@@ -1329,6 +1372,7 @@ export async function markBossRotationKilled(
     schedule: serializeBossScheduleForApi(updatedEvent),
     nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
+    factionId,
   };
 }
 
@@ -1348,24 +1392,26 @@ export async function markBossRotationKilledByName(
     throw new BadRequestError("Killed timestamp is invalid");
   }
   const storedDrops = await normalizeBossDrops(drops);
+  const factionId = await getGuildFactionId(guildId);
+  if (!factionId) {
+    throw new BadRequestError("This guild is not part of a faction yet");
+  }
+  const guilds = await getActiveFactionGuilds(factionId);
+  const factionGuildIds = guilds.map((g) => g.id);
 
-  // Load registry, active schedule, guilds, and existing rotation in parallel
-  const [bosses, activeSchedule, guilds, existingRotation] = await Promise.all([
+  // Load registry, active schedule, and existing rotation in parallel
+  const [bosses, activeSchedule, existingRotation] = await Promise.all([
     getBossRegistryForRotation(),
     prisma.bossSchedule.findFirst({
       where: {
         bossName: bossName.trim(),
+        guildId: { in: factionGuildIds },
         status: { not: BossEventStatus.KILLED },
       },
       orderBy: { spawnTime: "asc" },
     }),
-    prisma.guild.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, slug: true, avatarUrl: true },
-      orderBy: { name: "asc" },
-    }),
     prisma.bossRotation.findUnique({
-      where: { bossName: bossName.trim() },
+      where: { factionId_bossName: { factionId, bossName: bossName.trim() } },
     }),
   ]);
 
@@ -1403,8 +1449,9 @@ export async function markBossRotationKilledByName(
   const nextSpawnTime = getNextBossSpawnTime(registryBoss.name, killedDate);
 
   const rotation = await prisma.bossRotation.upsert({
-    where: { bossName: registryBoss.name },
+    where: { factionId_bossName: { factionId, bossName: registryBoss.name } },
     create: {
+      factionId,
       bossName: registryBoss.name,
       queueGuildIds,
       currentIndex: nextIndex,
@@ -1423,6 +1470,7 @@ export async function markBossRotationKilledByName(
   // established cycle stops reading "LIVE" immediately after being taken.
   const nextSchedule = await syncNextRotationSchedule({
     bossName: registryBoss.name,
+    factionGuildIds,
     fallbackGuildId: guildId,
     bossImageUrl: getBossImageUrl(registryBoss.name),
     location: registryBoss.location,
@@ -1523,6 +1571,7 @@ export async function markBossRotationKilledByName(
     schedule: null,
     nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
+    factionId,
   };
 }
 
@@ -1543,6 +1592,11 @@ async function applyBossTimerReset(
   userAgent?: string,
 ) {
   const affectedNames = bosses.map((b) => b.name);
+  const factionId = await getGuildFactionId(guildId);
+  if (!factionId) {
+    throw new BadRequestError("This guild is not part of a faction yet");
+  }
+  const factionGuildIds = (await getActiveFactionGuilds(factionId)).map((g) => g.id);
 
   // Recompute per-boss next spawn, then persist both the rotation pointer and any
   // live (non-killed) schedule rows so the rotation cards + overview agree.
@@ -1550,8 +1604,9 @@ async function applyBossTimerReset(
     const nextSpawn = computeSpawn(boss);
 
     await prisma.bossRotation.upsert({
-      where: { bossName: boss.name },
+      where: { factionId_bossName: { factionId, bossName: boss.name } },
       create: {
+        factionId,
         bossName: boss.name,
         queueGuildIds: [],
         currentIndex: 0,
@@ -1565,7 +1620,7 @@ async function applyBossTimerReset(
     });
 
     await prisma.bossSchedule.updateMany({
-      where: { bossName: boss.name, status: { not: BossEventStatus.KILLED } },
+      where: { bossName: boss.name, guildId: { in: factionGuildIds }, status: { not: BossEventStatus.KILLED } },
       data: { spawnTime: nextSpawn, status: BossEventStatus.UPCOMING },
     });
   }
@@ -1640,11 +1695,14 @@ export async function maintenanceResetBossTimers(
 // the faction can read the list; only Faction Leaders / Admins can edit it.
 
 export async function getBossMasterList(guildId: string, actorId: string) {
-  const [membership, guilds, bosses, rotations] = await Promise.all([
+  const [membership, factionId, bosses] = await Promise.all([
     requireActiveGuildMember(actorId, guildId),
-    getActiveFactionGuilds(),
+    getGuildFactionId(guildId),
     getBossRegistryForRotation(),
-    prisma.bossRotation.findMany(),
+  ]);
+  const [guilds, rotations] = await Promise.all([
+    getActiveFactionGuilds(factionId),
+    factionId ? prisma.bossRotation.findMany({ where: { factionId } }) : Promise.resolve([]),
   ]);
 
   const activeGuildIds = guilds.map((g) => g.id);
@@ -1668,6 +1726,7 @@ export async function getBossMasterList(guildId: string, actorId: string) {
   return {
     canManage: isFactionLevelRole(membership.role),
     viewerRole: membership.role,
+    factionId,
     guilds,
     bosses: bossEntries,
   };
@@ -1681,13 +1740,17 @@ export async function updateBossMasterList(
   userAgent?: string,
 ) {
   await requireFactionLeader(actorId, guildId);
+  const factionId = await getGuildFactionId(guildId);
+  if (!factionId) {
+    throw new BadRequestError("This guild is not part of a faction yet");
+  }
 
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new BadRequestError("No master list changes provided");
   }
 
   const [guilds, bosses] = await Promise.all([
-    getActiveFactionGuilds(),
+    getActiveFactionGuilds(factionId),
     getBossRegistryForRotation(),
   ]);
   const activeGuildIds = new Set(guilds.map((g) => g.id));
@@ -1710,7 +1773,7 @@ export async function updateBossMasterList(
   });
 
   const existing = await prisma.bossRotation.findMany({
-    where: { bossName: { in: normalizedEntries.map((e) => e.bossName) } },
+    where: { factionId, bossName: { in: normalizedEntries.map((e) => e.bossName) } },
   });
   const existingMap = new Map(existing.map((r) => [r.bossName, r]));
 
@@ -1722,8 +1785,9 @@ export async function updateBossMasterList(
         ? Math.min(prev?.currentIndex ?? 0, entry.participantGuildIds.length - 1)
         : 0;
       return prisma.bossRotation.upsert({
-        where: { bossName: entry.bossName },
+        where: { factionId_bossName: { factionId, bossName: entry.bossName } },
         create: {
+          factionId,
           bossName: entry.bossName,
           queueGuildIds: entry.participantGuildIds,
           currentIndex: 0,
@@ -1764,7 +1828,6 @@ export async function updateBossMasterList(
 // "low" bosses that day. Supports a repeating WEEKLY pattern (weekday → guild)
 // and a MONTHLY calendar (date → guild).
 
-const LOW_ROTATION_ID = "singleton";
 const LOW_ROTATION_MODES = ["WEEKLY", "MONTHLY"] as const;
 
 function parseStringMap(value: unknown): Record<string, string> {
@@ -1781,11 +1844,14 @@ function parseStringArray(value: unknown): string[] {
 }
 
 export async function getLowBossRotation(guildId: string, actorId: string) {
-  const [membership, guilds, bosses, config] = await Promise.all([
+  const [membership, factionId, bosses] = await Promise.all([
     requireActiveGuildMember(actorId, guildId),
-    getActiveFactionGuilds(),
+    getGuildFactionId(guildId),
     getBossRegistryForRotation(),
-    prisma.bossLowRotation.findUnique({ where: { id: LOW_ROTATION_ID } }),
+  ]);
+  const [guilds, config] = await Promise.all([
+    getActiveFactionGuilds(factionId),
+    factionId ? prisma.bossLowRotation.findUnique({ where: { factionId } }) : Promise.resolve(null),
   ]);
 
   const activeIds = new Set(guilds.map((g) => g.id));
@@ -1806,6 +1872,7 @@ export async function getLowBossRotation(guildId: string, actorId: string) {
   return {
     canManage: isFactionLevelRole(membership.role),
     viewerRole: membership.role,
+    factionId,
     mode: config?.mode === "WEEKLY" ? "WEEKLY" : "MONTHLY",
     lowBossNames,
     weekly: cleanWeekly,
@@ -1828,11 +1895,15 @@ export async function updateLowBossRotation(
   userAgent?: string,
 ) {
   await requireFactionLeader(actorId, guildId);
+  const factionId = await getGuildFactionId(guildId);
+  if (!factionId) {
+    throw new BadRequestError("This guild is not part of a faction yet");
+  }
 
   const [guilds, bosses, existing] = await Promise.all([
-    getActiveFactionGuilds(),
+    getActiveFactionGuilds(factionId),
     getBossRegistryForRotation(),
-    prisma.bossLowRotation.findUnique({ where: { id: LOW_ROTATION_ID } }),
+    prisma.bossLowRotation.findUnique({ where: { factionId } }),
   ]);
   const activeIds = new Set(guilds.map((g) => g.id));
   const bossByLower = new Map(bosses.map((b) => [b.name.toLowerCase(), b.name]));
@@ -1884,8 +1955,8 @@ export async function updateLowBossRotation(
   }
 
   await prisma.bossLowRotation.upsert({
-    where: { id: LOW_ROTATION_ID },
-    create: { id: LOW_ROTATION_ID, mode, lowBossNames, weekly, days, updatedById: actorId },
+    where: { factionId },
+    create: { factionId, mode, lowBossNames, weekly, days, updatedById: actorId },
     update: { mode, lowBossNames, weekly, days, updatedById: actorId },
   });
 
@@ -1894,7 +1965,7 @@ export async function updateLowBossRotation(
     guildId,
     action: "BOSS_LOW_ROTATION_UPDATED",
     target: "BossLowRotation",
-    targetId: LOW_ROTATION_ID,
+    targetId: factionId,
     detail: { mode, lowBossCount: lowBossNames.length, dayCount: Object.keys(days).length },
     ipAddress,
     userAgent,

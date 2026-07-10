@@ -1,10 +1,53 @@
-import { prisma } from "@guild/db";
+import * as crypto from "crypto";
+import { prisma, FactionJoinDirection, FactionJoinStatus } from "@guild/db";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
 import { writeAuditLog } from "./audit.service";
 import { createNotifications } from "./notification.service";
+import { getBossRegistryForRotation } from "./dashboard.service";
 
 function isFactionManagerRole(role: string) {
   return role === "FACTION_LEADER" || role === "ADMIN";
+}
+
+const GUILD_LEADERSHIP_ROLES_LOCAL = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"] as const;
+
+function abbreviate(name: string): string {
+  const initials = name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .replace(/[^A-Za-z]/g, "")
+    .toUpperCase();
+  if (initials.length >= 2) return initials;
+  return name.substring(0, 3).replace(/[^A-Za-z]/g, "").toUpperCase() || "FAC";
+}
+
+// Resolves the faction a Faction Leader/Admin manages (their own guild's
+// faction), distinct from `requireFactionManagerMemberships` which only
+// checks role, not which faction that role applies to.
+async function requireManagedFaction(actorId: string) {
+  const memberships = await requireFactionManagerMemberships(actorId);
+  const managerMembership = memberships.find((m) => isFactionManagerRole(m.role));
+  const guild = await prisma.guild.findUnique({
+    where: { id: managerMembership!.guildId },
+    select: { factionId: true },
+  });
+  if (!guild?.factionId) {
+    throw new BadRequestError("Your guild is not part of a faction");
+  }
+  return { membership: managerMembership!, factionId: guild.factionId };
+}
+
+// A guild's own leadership (Guild Leader / Faction Leader / Admin) — used to
+// gate accepting a direct faction invite, distinct from faction-level roles.
+async function requireGuildLeadership(actorId: string, guildId: string) {
+  const membership = await prisma.guildMember.findUnique({
+    where: { userId_guildId: { userId: actorId, guildId } },
+  });
+  if (!membership || !membership.isActive || !GUILD_LEADERSHIP_ROLES_LOCAL.includes(membership.role as any)) {
+    throw new ForbiddenError("Only that guild's own leadership can respond to this invite");
+  }
+  return membership;
 }
 
 async function getActiveMemberships(userId: string) {
@@ -103,13 +146,9 @@ export async function getFactionMembers(actorId: string) {
 
 // ═══════════════════════════════════════════════════
 // FACTION GUILD INVITES
-// Faction Leaders can find guilds and invite them to the faction.
-// Migration-free: invites are delivered as notifications to the
-// target guild's leadership and recorded in the audit log.
+// Faction Leaders can search for unaffiliated guilds to invite (Multi-Guild
+// join requests are created in `inviteGuildToFaction` below).
 // ═══════════════════════════════════════════════════
-
-const INVITE_COOLDOWN_MS = 24 * 60 * 60 * 1000; // one invite per guild per day
-const GUILD_LEADERSHIP_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"] as const;
 
 export async function searchGuilds(actorId: string, query: string) {
   const memberships = await requireFactionManagerMemberships(actorId);
@@ -123,6 +162,9 @@ export async function searchGuilds(actorId: string, query: string) {
   const guilds = await prisma.guild.findMany({
     where: {
       isActive: true,
+      // Only guilds not already in a faction can be invited/join — a guild
+      // belongs to at most one faction at a time.
+      factionId: null,
       OR: [
         { name: { contains: term, mode: "insensitive" } },
         { slug: { contains: term, mode: "insensitive" } },
@@ -178,61 +220,171 @@ export async function searchGuilds(actorId: string, query: string) {
   }));
 }
 
-export async function inviteGuild(
+// ═══════════════════════════════════════════════════
+// MULTI-GUILD: FACTION JOIN REQUESTS
+// A guild joins a faction one of two ways, both two-sided/pending:
+//  - CODE_REDEEMED: a Guild Leader redeems the Faction's invite code; the
+//    Faction Leader approves.
+//  - DIRECT_INVITE: a Faction Leader invites a specific unaffiliated guild;
+//    that guild's OWN leadership approves.
+// Approval never auto-enrolls the new guild into any boss rotation — see
+// `lockRotationParticipantsExcluding` below.
+// ═══════════════════════════════════════════════════
+
+async function assertGuildJoinable(guildId: string) {
+  const guild = await prisma.guild.findUnique({
+    where: { id: guildId },
+    select: { id: true, name: true, isActive: true, factionId: true },
+  });
+  if (!guild || !guild.isActive) {
+    throw new NotFoundError("Guild not found or inactive");
+  }
+  if (guild.factionId) {
+    throw new BadRequestError("This guild already belongs to a faction");
+  }
+  const pending = await prisma.factionJoinRequest.findFirst({
+    where: { guildId, status: FactionJoinStatus.PENDING },
+  });
+  if (pending) {
+    throw new BadRequestError("This guild already has a pending faction join request");
+  }
+  return guild;
+}
+
+export async function getFactionInviteCode(actorId: string) {
+  const { factionId } = await requireManagedFaction(actorId);
+  const faction = await prisma.faction.findUnique({
+    where: { id: factionId },
+    select: { inviteCode: true },
+  });
+  return { inviteCode: faction!.inviteCode };
+}
+
+export async function regenerateFactionInviteCode(
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const { membership, factionId } = await requireManagedFaction(actorId);
+  const current = await prisma.faction.findUnique({ where: { id: factionId }, select: { name: true } });
+  const newCode = `${abbreviate(current!.name)}-FAC-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+  const faction = await prisma.faction.update({
+    where: { id: factionId },
+    data: { inviteCode: newCode },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId: membership.guildId,
+    action: "FACTION_INVITE_CODE_REGENERATED",
+    target: "Faction",
+    targetId: factionId,
+    ipAddress,
+    userAgent,
+  });
+
+  return { inviteCode: faction.inviteCode };
+}
+
+export async function redeemFactionInviteCode(
+  actorId: string,
+  code: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const trimmed = (code || "").trim();
+  if (!trimmed) {
+    throw new BadRequestError("An invite code is required");
+  }
+
+  // Actor must lead an unaffiliated guild.
+  const memberships = await prisma.guildMember.findMany({
+    where: { userId: actorId, isActive: true, role: { in: [...GUILD_LEADERSHIP_ROLES_LOCAL] } },
+    include: { guild: { select: { id: true, name: true, isActive: true, factionId: true } } },
+  });
+  const eligible = memberships.find((m) => m.guild.isActive && !m.guild.factionId);
+  if (!eligible) {
+    throw new ForbiddenError("You must lead a guild that is not already in a faction");
+  }
+
+  const faction = await prisma.faction.findFirst({
+    where: { inviteCode: { equals: trimmed, mode: "insensitive" } },
+    select: { id: true, name: true },
+  });
+  if (!faction) {
+    throw new NotFoundError("Invalid faction invite code");
+  }
+
+  await assertGuildJoinable(eligible.guildId);
+
+  const request = await prisma.factionJoinRequest.create({
+    data: {
+      factionId: faction.id,
+      guildId: eligible.guildId,
+      direction: FactionJoinDirection.CODE_REDEEMED,
+      status: FactionJoinStatus.PENDING,
+    },
+  });
+
+  const factionLeaders = await prisma.guildMember.findMany({
+    where: { guild: { factionId: faction.id }, isActive: true, role: { in: ["FACTION_LEADER", "ADMIN"] } },
+    select: { userId: true },
+  });
+  await createNotifications(
+    [...new Set(factionLeaders.map((l) => l.userId))].map((userId) => ({
+      userId,
+      type: "FACTION_JOIN_REQUESTED",
+      title: "Faction join request",
+      body: `${eligible.guild.name} redeemed your invite code and wants to join the faction.`,
+      metadata: { requestId: request.id, guildId: eligible.guildId, guildName: eligible.guild.name },
+    })),
+  );
+
+  await writeAuditLog({
+    actorId,
+    guildId: eligible.guildId,
+    action: "FACTION_JOIN_REQUESTED",
+    target: "FactionJoinRequest",
+    targetId: request.id,
+    detail: { factionId: faction.id, factionName: faction.name, direction: "CODE_REDEEMED" },
+    ipAddress,
+    userAgent,
+  });
+
+  return { requestId: request.id, factionName: faction.name };
+}
+
+export async function inviteGuildToFaction(
   actorId: string,
   guildId: string,
   ipAddress?: string,
   userAgent?: string,
 ) {
-  const memberships = await requireFactionManagerMemberships(actorId);
-  const ownGuildIds = new Set(memberships.map((m) => m.guildId));
+  const { membership, factionId } = await requireManagedFaction(actorId);
 
   if (!guildId?.trim()) {
     throw new BadRequestError("A target guild is required");
   }
 
-  const guild = await prisma.guild.findUnique({
-    where: { id: guildId },
-    select: { id: true, name: true, isActive: true },
-  });
-  if (!guild || !guild.isActive) {
-    throw new NotFoundError("Guild not found or inactive");
-  }
+  const guild = await assertGuildJoinable(guildId);
 
-  if (ownGuildIds.has(guild.id)) {
-    throw new BadRequestError("You cannot invite a guild you already belong to");
-  }
-
-  // Prevent duplicate invitations within the cooldown window
-  const since = new Date(Date.now() - INVITE_COOLDOWN_MS);
-  const recentInvite = await prisma.auditLog.findFirst({
-    where: {
-      action: "FACTION_GUILD_INVITED",
-      target: "Guild",
-      targetId: guild.id,
-      createdAt: { gte: since },
-    },
-  });
-  if (recentInvite) {
-    throw new BadRequestError("This guild was already invited within the last 24 hours");
-  }
-
-  const leaders = await prisma.guildMember.findMany({
-    where: {
+  const request = await prisma.factionJoinRequest.create({
+    data: {
+      factionId,
       guildId: guild.id,
-      isActive: true,
-      role: { in: [...GUILD_LEADERSHIP_ROLES] },
+      invitedByUserId: actorId,
+      direction: FactionJoinDirection.DIRECT_INVITE,
+      status: FactionJoinStatus.PENDING,
     },
-    select: { userId: true },
   });
 
-  const actor = await prisma.user.findUnique({
-    where: { id: actorId },
-    select: { displayName: true },
-  });
+  const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { displayName: true } });
   const actorName = actor?.displayName || "A Faction Leader";
 
-  // Notify the target guild's leadership (deduped by userId)
+  const leaders = await prisma.guildMember.findMany({
+    where: { guildId: guild.id, isActive: true, role: { in: [...GUILD_LEADERSHIP_ROLES_LOCAL] } },
+    select: { userId: true },
+  });
   const uniqueLeaderIds = [...new Set(leaders.map((l) => l.userId))];
   if (uniqueLeaderIds.length > 0) {
     await createNotifications(
@@ -241,28 +393,263 @@ export async function inviteGuild(
         type: "FACTION_GUILD_INVITE",
         title: "Faction invitation",
         body: `${actorName} invited ${guild.name} to join the faction.`,
-        metadata: { guildId: guild.id, guildName: guild.name, invitedBy: actorId },
+        metadata: { requestId: request.id, guildId: guild.id, guildName: guild.name, invitedBy: actorId },
       })),
     );
   }
 
   await writeAuditLog({
     actorId,
-    guildId: memberships[0]!.guildId,
+    guildId: membership.guildId,
     action: "FACTION_GUILD_INVITED",
-    target: "Guild",
-    targetId: guild.id,
-    detail: { guildName: guild.name, notifiedLeaders: uniqueLeaderIds.length },
+    target: "FactionJoinRequest",
+    targetId: request.id,
+    detail: { guildId: guild.id, guildName: guild.name, notifiedLeaders: uniqueLeaderIds.length },
     ipAddress,
     userAgent,
   });
 
+  return { requestId: request.id, guildId: guild.id, guildName: guild.name, notifiedLeaders: uniqueLeaderIds.length };
+}
+
+function serializeJoinRequest(r: any) {
   return {
-    success: true,
-    guildId: guild.id,
-    guildName: guild.name,
-    notifiedLeaders: uniqueLeaderIds.length,
+    id: r.id,
+    factionId: r.factionId,
+    guildId: r.guildId,
+    guildName: r.guild?.name ?? null,
+    guildAvatarUrl: r.guild?.avatarUrl ?? null,
+    invitedByUserId: r.invitedByUserId,
+    direction: r.direction,
+    status: r.status,
+    createdAt: r.createdAt.toISOString(),
   };
+}
+
+export async function listPendingForFaction(actorId: string) {
+  const { factionId } = await requireManagedFaction(actorId);
+  const requests = await prisma.factionJoinRequest.findMany({
+    where: { factionId, status: FactionJoinStatus.PENDING },
+    include: { guild: { select: { name: true, avatarUrl: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  return requests.map(serializeJoinRequest);
+}
+
+export async function listPendingForGuild(actorId: string, guildId: string) {
+  await requireGuildLeadership(actorId, guildId);
+  const requests = await prisma.factionJoinRequest.findMany({
+    where: { guildId, status: FactionJoinStatus.PENDING, direction: FactionJoinDirection.DIRECT_INVITE },
+    include: { guild: { select: { name: true, avatarUrl: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  return requests.map(serializeJoinRequest);
+}
+
+/**
+ * When a guild joins a faction, it must be excluded from EVERY boss rotation
+ * — including bosses no faction leader has ever customized — not just the
+ * ones already configured. A not-yet-configured boss defaults to "every
+ * active guild," which would silently include the newcomer. So we lock in
+ * an explicit participant list (the faction's pre-existing guilds, minus the
+ * one that just joined) for every catalog boss lacking one, leaving existing
+ * guilds' participation unchanged while the new guild starts opted out of
+ * everything until the faction leader explicitly adds it.
+ */
+async function lockRotationParticipantsExcluding(factionId: string, excludedGuildId: string) {
+  const [bosses, existingRotations, priorGuilds] = await Promise.all([
+    getBossRegistryForRotation(),
+    prisma.bossRotation.findMany({ where: { factionId } }),
+    prisma.guild.findMany({ where: { factionId, isActive: true, id: { not: excludedGuildId } }, select: { id: true } }),
+  ]);
+  const rotationByName = new Map(existingRotations.map((r) => [r.bossName, r]));
+  const priorGuildIds = priorGuilds.map((g) => g.id);
+
+  const toLock = bosses.filter((b) => !rotationByName.get(b.name)?.participantsConfigured);
+  if (toLock.length === 0) return;
+
+  await prisma.$transaction(
+    toLock.map((boss) => {
+      const prev = rotationByName.get(boss.name);
+      const clampedIndex = priorGuildIds.length
+        ? Math.min(prev?.currentIndex ?? 0, priorGuildIds.length - 1)
+        : 0;
+      return prisma.bossRotation.upsert({
+        where: { factionId_bossName: { factionId, bossName: boss.name } },
+        create: {
+          factionId,
+          bossName: boss.name,
+          queueGuildIds: priorGuildIds,
+          currentIndex: 0,
+          participantsConfigured: true,
+        },
+        update: {
+          queueGuildIds: priorGuildIds,
+          currentIndex: clampedIndex,
+          participantsConfigured: true,
+        },
+      });
+    }),
+  );
+}
+
+export async function approveFactionJoinRequest(
+  actorId: string,
+  requestId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const request = await prisma.factionJoinRequest.findUnique({
+    where: { id: requestId },
+    include: { guild: { select: { id: true, name: true, factionId: true } }, faction: { select: { id: true, name: true } } },
+  });
+  if (!request || request.status !== FactionJoinStatus.PENDING) {
+    throw new NotFoundError("Faction join request not found or already resolved");
+  }
+
+  if (request.direction === FactionJoinDirection.CODE_REDEEMED) {
+    const { factionId } = await requireManagedFaction(actorId);
+    if (factionId !== request.factionId) {
+      throw new ForbiddenError("Only that faction's own leader can approve this request");
+    }
+  } else {
+    await requireGuildLeadership(actorId, request.guildId);
+  }
+
+  if (request.guild.factionId) {
+    throw new BadRequestError("This guild has already joined a faction");
+  }
+
+  await prisma.$transaction([
+    prisma.guild.update({ where: { id: request.guildId }, data: { factionId: request.factionId } }),
+    prisma.factionJoinRequest.update({
+      where: { id: requestId },
+      data: { status: FactionJoinStatus.APPROVED, respondedByUserId: actorId },
+    }),
+  ]);
+
+  await lockRotationParticipantsExcluding(request.factionId, request.guildId);
+
+  await writeAuditLog({
+    actorId,
+    guildId: request.guildId,
+    action: "FACTION_JOIN_APPROVED",
+    target: "FactionJoinRequest",
+    targetId: requestId,
+    detail: { factionId: request.factionId, factionName: request.faction.name, direction: request.direction },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true, factionId: request.factionId, guildId: request.guildId };
+}
+
+export async function rejectFactionJoinRequest(
+  actorId: string,
+  requestId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const request = await prisma.factionJoinRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.status !== FactionJoinStatus.PENDING) {
+    throw new NotFoundError("Faction join request not found or already resolved");
+  }
+
+  if (request.direction === FactionJoinDirection.CODE_REDEEMED) {
+    const { factionId } = await requireManagedFaction(actorId);
+    if (factionId !== request.factionId) {
+      throw new ForbiddenError("Only that faction's own leader can reject this request");
+    }
+  } else {
+    await requireGuildLeadership(actorId, request.guildId);
+  }
+
+  await prisma.factionJoinRequest.update({
+    where: { id: requestId },
+    data: { status: FactionJoinStatus.REJECTED, respondedByUserId: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId: request.guildId,
+    action: "FACTION_JOIN_REJECTED",
+    target: "FactionJoinRequest",
+    targetId: requestId,
+    detail: { factionId: request.factionId, direction: request.direction },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true };
+}
+
+export async function removeGuildFromFaction(
+  actorId: string,
+  guildId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const guild = await prisma.guild.findUnique({ where: { id: guildId }, select: { id: true, name: true, factionId: true } });
+  if (!guild || !guild.factionId) {
+    throw new BadRequestError("This guild is not part of a faction");
+  }
+  const factionId = guild.factionId;
+
+  // Either the faction's own manager, or that guild's own leadership, may remove it.
+  let authorized = false;
+  try {
+    const { factionId: managedFactionId } = await requireManagedFaction(actorId);
+    authorized = managedFactionId === factionId;
+  } catch {
+    // not a faction manager — fall through to self-leave check
+  }
+  if (!authorized) {
+    await requireGuildLeadership(actorId, guildId);
+    authorized = true;
+  }
+
+  await prisma.guild.update({ where: { id: guildId }, data: { factionId: null } });
+
+  // Purge this guild from every rotation queue in its old faction.
+  const rotations = await prisma.bossRotation.findMany({ where: { factionId } });
+  await prisma.$transaction(
+    rotations
+      .filter((r) => Array.isArray(r.queueGuildIds) && (r.queueGuildIds as string[]).includes(guildId))
+      .map((r) => {
+        const remaining = (r.queueGuildIds as string[]).filter((id) => id !== guildId);
+        const clampedIndex = remaining.length ? Math.min(r.currentIndex, remaining.length - 1) : 0;
+        return prisma.bossRotation.update({
+          where: { id: r.id },
+          data: { queueGuildIds: remaining, currentIndex: clampedIndex },
+        });
+      }),
+  );
+
+  // Clear this guild's low-boss day assignments in its old faction.
+  const lowRotation = await prisma.bossLowRotation.findUnique({ where: { factionId } });
+  if (lowRotation) {
+    const weekly = (lowRotation.weekly && typeof lowRotation.weekly === "object" ? lowRotation.weekly : {}) as Record<string, string>;
+    const days = (lowRotation.days && typeof lowRotation.days === "object" ? lowRotation.days : {}) as Record<string, string>;
+    const cleanedWeekly = Object.fromEntries(Object.entries(weekly).filter(([, v]) => v !== guildId));
+    const cleanedDays = Object.fromEntries(Object.entries(days).filter(([, v]) => v !== guildId));
+    await prisma.bossLowRotation.update({
+      where: { factionId },
+      data: { weekly: cleanedWeekly, days: cleanedDays },
+    });
+  }
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "GUILD_LEFT_FACTION",
+    target: "Guild",
+    targetId: guildId,
+    detail: { factionId, guildName: guild.name },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true };
 }
 
 export async function listAnnouncements(actorId: string) {

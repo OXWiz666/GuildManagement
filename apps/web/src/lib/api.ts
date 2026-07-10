@@ -1229,6 +1229,18 @@ export interface FactionGuildInviteResult {
   notifiedLeaders: number;
 }
 
+export interface FactionJoinRequestData {
+  id: string;
+  factionId: string;
+  guildId: string;
+  guildName: string | null;
+  guildAvatarUrl: string | null;
+  invitedByUserId: string | null;
+  direction: "CODE_REDEEMED" | "DIRECT_INVITE";
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+}
+
 export const factionApi = {
   async getMembers() {
     return api.get<{ members: FactionMemberData[] }>(`/faction/members`);
@@ -1242,6 +1254,43 @@ export const factionApi = {
 
   async inviteGuild(guildId: string) {
     return api.post<FactionGuildInviteResult>(`/faction/guilds/invite`, { guildId });
+  },
+
+  // ─── Multi-Guild (faction join requests) ─────────
+
+  async getInviteCode() {
+    return api.get<{ inviteCode: string }>(`/faction/invite-code`);
+  },
+
+  async regenerateInviteCode() {
+    return api.post<{ inviteCode: string }>(`/faction/invite-code/regenerate`, {});
+  },
+
+  async redeemInviteCode(code: string) {
+    return api.post<{ requestId: string; factionName: string }>(`/faction/join-requests/redeem`, { code });
+  },
+
+  async getPendingJoinRequests() {
+    return api.get<{ requests: FactionJoinRequestData[] }>(`/faction/join-requests`);
+  },
+
+  async getPendingJoinRequestsForGuild(guildId: string) {
+    return api.get<{ requests: FactionJoinRequestData[] }>(`/guilds/${guildId}/join-requests/faction`);
+  },
+
+  async approveJoinRequest(requestId: string) {
+    return api.post<{ success: boolean; factionId: string; guildId: string }>(
+      `/faction/join-requests/${requestId}/approve`,
+      {},
+    );
+  },
+
+  async rejectJoinRequest(requestId: string) {
+    return api.post<{ success: boolean }>(`/faction/join-requests/${requestId}/reject`, {});
+  },
+
+  async removeGuildFromFaction(guildId: string) {
+    return api.post<{ success: boolean }>(`/faction/guilds/${guildId}/remove`, {});
   },
 
   async getAnnouncements() {

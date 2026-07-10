@@ -12,6 +12,7 @@ export type {
   UserWithGuilds,
   GuildMembership,
   SessionInfo,
+  PaymentMethodEntry,
 } from "./types/auth";
 
 // Role utilities
@@ -27,6 +28,14 @@ export {
 } from "./types/roles";
 export type { GuildRoleType } from "./types/roles";
 
+// Platform (SaaS-level) roles
+export {
+  PLATFORM_ROLES,
+  PLATFORM_ROLE_DISPLAY_NAMES,
+  hasMinimumPlatformRole,
+} from "./types/platform";
+export type { PlatformRoleType } from "./types/platform";
+
 // Validators
 export {
   emailSchema,
@@ -39,6 +48,11 @@ export {
   changePasswordSchema,
   updateUserSchema,
   combatPowerSchema,
+  addPaymentMethodSchema,
+  ACCOUNT_TYPES,
+  orgNameSchema,
+  leaderOnboardingSchema,
+  slugify,
 } from "./validators/auth";
 export type {
   LoginInput,
@@ -48,6 +62,9 @@ export type {
   ChangePasswordInput,
   UpdateUserInput,
   CombatPowerInput,
+  AddPaymentMethodInput,
+  AccountType,
+  LeaderOnboardingInput,
 } from "./validators/auth";
 
 // Constants
@@ -69,6 +86,20 @@ export {
   CORE_SLOTS,
   NON_CORE_SLOTS,
   SLOT_LABELS,
+  WEAPON_TYPES,
+  ARMOR_PIECES,
+  ACCESSORY_PIECES,
+  MATERIAL_TYPES,
+  WEAPON_RARITIES,
+  GEAR_RARITIES,
+  WISHLIST_RARITY_LABELS,
+  ARMOR_TYPES,
+  ARMOR_TYPE_LABELS,
+  WISHLIST_LABELS,
+  WISHLIST_STATUS_LABELS,
+  WISHLIST_CATEGORY_LABELS,
+  MOUNT_PRESETS,
+  PAYMENT_METHOD_PRESETS,
   DEFAULT_MARKET_RULES,
   EQUIPMENT_SLOTS,
   EQUIPMENT_SLOT_LABELS,
@@ -86,6 +117,11 @@ export type {
   NonCoreSlot,
   MarketRules,
   EquipmentSlot,
+  WishlistRarity,
+  ArmorType,
+  WishlistItem,
+  WishlistCategory,
+  WishlistStatus,
 } from "./constants";
 
 // Market validators
@@ -98,7 +134,11 @@ export {
   prioritySequenceSchema,
   createDistributionSchema,
   marketRulesSchema,
+  wishlistItemSchema,
   wishlistSchema,
+  mountCatalogSchema,
+  distributeMountSchema,
+  notifyRequestSchema,
 } from "./validators/market";
 export type {
   CreateItemRequestInput,
@@ -109,8 +149,36 @@ export type {
   PrioritySequenceInput,
   CreateDistributionInput,
   MarketRulesInput,
+  WishlistItemInput,
   WishlistInput,
+  MountCatalogInput,
+  DistributeMountInput,
+  NotifyRequestInput,
 } from "./validators/market";
+
+// Platform / Super Admin validators (Phases 2–4)
+export {
+  userModerationSchema,
+  guildModerationSchema,
+  transferOwnershipSchema,
+  planSchema,
+  planUpdateSchema,
+  subscriptionCreateSchema,
+  subscriptionActionSchema,
+  paymentSchema,
+  couponSchema,
+} from "./validators/platform";
+export type {
+  UserModerationInput,
+  GuildModerationInput,
+  TransferOwnershipInput,
+  PlanInput,
+  PlanUpdateInput,
+  SubscriptionCreateInput,
+  SubscriptionActionInput,
+  PaymentInput,
+  CouponInput,
+} from "./validators/platform";
 
 // Equipment validators (Item Screenshot Update)
 export {

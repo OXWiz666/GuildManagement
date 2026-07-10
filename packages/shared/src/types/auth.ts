@@ -44,6 +44,14 @@ export interface AuthResponse {
   tokens: TokenPair;
 }
 
+export interface PaymentMethodEntry {
+  id: string;
+  method: string;
+  label?: string | null;
+  qrUrl: string;
+  updatedAt: string;
+}
+
 export interface UserPublic {
   id: string;
   email: string;
@@ -54,10 +62,13 @@ export interface UserPublic {
   cp?: number | null;
   class?: string | null;
   weapon?: string | null;
+  paymentMethods?: PaymentMethodEntry[];
 }
 
 export interface UserWithGuilds extends UserPublic {
   guilds: GuildMembership[];
+  // Platform (SaaS-level) role, if the user is a platform admin. null otherwise.
+  platformRole?: string | null;
 }
 
 export interface GuildMembership {

@@ -195,7 +195,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
                   className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-white/20 transition-colors"
                 >
                   <option className="bg-[#0b0c10]" value="EQUAL">EQUAL split among attendees</option>
-                  <option className="bg-[#0b0c10]" value="PRO_RATA">PRO_RATA based on Guild Points</option>
+                  <option className="bg-[#0b0c10]" value="PRO_RATA">PRO RATA based on Guild Points</option>
                 </select>
               </div>
             </div>

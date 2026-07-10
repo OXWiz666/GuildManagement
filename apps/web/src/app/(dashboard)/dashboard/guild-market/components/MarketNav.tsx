@@ -95,7 +95,7 @@ const GROUPS: Group[] = [
     label: "Distribution",
     tabs: [
       { value: "legendary", label: "Legendary Priority", short: "Legendary", icon: ICONS.sparkle },
-      { value: "distribution", label: "Item Distribution", short: "Items", icon: ICONS.gift },
+      { value: "distribution", label: "Member Wishlist", short: "Wishlist", icon: ICONS.gift },
       { value: "history", label: "History", short: "History", icon: ICONS.scroll },
     ],
   },

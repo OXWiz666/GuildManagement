@@ -1,8 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
+
+const ROLE_OPTIONS = [
+  { value: "ALL", label: "All roles" },
+  { value: "GUILD_LEADER", label: "Guild Leader" },
+  { value: "OFFICER", label: "Officer" },
+  { value: "CORE_MEMBER", label: "Core Member" },
+  { value: "ELITE_MEMBER", label: "Elite Member" },
+  { value: "MEMBER", label: "Member" },
+];
 
 interface RankingsTabProps {
   accounting: any;
@@ -45,6 +54,8 @@ export default function RankingsTab({
   rankingSearch,
   onSearchChange,
 }: RankingsTabProps) {
+  const [roleFilter, setRoleFilter] = useState("ALL");
+
   // Full sorted ladder (unfiltered) — drives ranks, podium and bar scale
   const sortedAll = useMemo(() => {
     if (!accounting?.memberBalances) return [] as any[];
@@ -60,17 +71,18 @@ export default function RankingsTab({
   const maxDkp = sortedAll[0]?.dkp || 1;
 
   const filtered = useMemo(() => {
-    if (!rankingSearch.trim()) return sortedAll;
+    const byRole = roleFilter === "ALL" ? sortedAll : sortedAll.filter((m: any) => m.role === roleFilter);
+    if (!rankingSearch.trim()) return byRole;
     const s = rankingSearch.toLowerCase();
-    return sortedAll.filter(
+    return byRole.filter(
       (m: any) =>
         m.ign.toLowerCase().includes(s) ||
         m.class.toLowerCase().includes(s) ||
         m.role.toLowerCase().includes(s),
     );
-  }, [sortedAll, rankingSearch]);
+  }, [sortedAll, rankingSearch, roleFilter]);
 
-  const showPodium = !rankingSearch.trim() && sortedAll.length >= 3;
+  const showPodium = !rankingSearch.trim() && roleFilter === "ALL" && sortedAll.length >= 3;
   const podium = sortedAll.slice(0, 3);
 
   return (
@@ -138,15 +150,26 @@ export default function RankingsTab({
               Dynamic ranking of accumulated Guild Points from attendance and boss kills — the basis for bidding splits.
             </p>
           </div>
-          <div className="relative max-w-xs w-full">
-            <input
-              type="text"
-              placeholder="Search by IGN, class, or rank..."
-              value={rankingSearch}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
-            />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs">🔍</span>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+            >
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            <div className="relative max-w-xs w-full">
+              <input
+                type="text"
+                placeholder="Search by IGN, class, or rank..."
+                value={rankingSearch}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+              />
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs">🔍</span>
+            </div>
           </div>
         </div>
 

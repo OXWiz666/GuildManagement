@@ -22,6 +22,10 @@ const ROTATION_MANAGER_ROLES = ["FACTION_LEADER", "GUILD_LEADER", "ADMIN"];
 // Timer resets (full + maintenance) are also permitted for Officers, not just the
 // faction/guild leaders who own the rotation queues.
 const ROTATION_RESET_ROLES = ["FACTION_LEADER", "GUILD_LEADER", "ADMIN", "OFFICER"];
+// Marking a boss "Taken" (logging the kill + advancing the rotation) is also
+// permitted for Officers — reordering the rotation queue itself stays
+// restricted to ROTATION_MANAGER_ROLES.
+const BOSS_TAKEN_ROLES = ["FACTION_LEADER", "GUILD_LEADER", "ADMIN", "OFFICER"];
 const BOSS_KILL_AUDIT_ACTIONS = ["BOSS_ROTATION_KILLED", "BOSS_KILLED_LOGGED", "BOSS_KILL_RECORDED"];
 const SCHEDULE_CREATOR_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN", "OFFICER"];
 
@@ -107,6 +111,10 @@ function canManageBossRotation(role: string) {
   return ROTATION_MANAGER_ROLES.includes(role);
 }
 
+function canMarkBossTaken(role: string) {
+  return BOSS_TAKEN_ROLES.includes(role);
+}
+
 function normalizeQueue(rawQueue: unknown, activeGuildIds: string[]) {
   const queue = Array.isArray(rawQueue)
     ? rawQueue.filter((id): id is string => typeof id === "string")
@@ -159,6 +167,14 @@ async function requireBossRotationManager(actorId: string, guildId: string) {
   const membership = await requireActiveGuildMember(actorId, guildId);
   if (!canManageBossRotation(membership.role)) {
     throw new ForbiddenError("Only Faction Leaders, Guild Leaders, and Admins can manage boss rotations");
+  }
+  return membership;
+}
+
+async function requireBossTakenManager(actorId: string, guildId: string) {
+  const membership = await requireActiveGuildMember(actorId, guildId);
+  if (!canMarkBossTaken(membership.role)) {
+    throw new ForbiddenError("Only Officers, Guild Leaders, Faction Leaders, and Admins can mark a boss taken");
   }
   return membership;
 }
@@ -971,7 +987,9 @@ export async function getBossRotation(guildId: string, actorId: string) {
     getActiveFactionGuilds(),
     getBossRegistryForRotation(),
   ]);
-  const canManage = canManageBossRotation(membership.role);
+  // `canManage` only gates the "Taken" action in the UI (not queue reordering),
+  // so it reflects the wider taken-permission set, which includes Officers.
+  const canManage = canMarkBossTaken(membership.role);
 
   const activeGuildIds = guilds.map((g) => g.id);
   const guildMap = new Map(guilds.map((g) => [g.id, g]));
@@ -1127,7 +1145,7 @@ export async function markBossRotationKilled(
   userAgent?: string,
   drops?: BossDropInput[],
 ) {
-  await requireBossRotationManager(actorId, guildId);
+  await requireBossTakenManager(actorId, guildId);
   const killedDate = new Date(killedAt);
   if (Number.isNaN(killedDate.getTime())) {
     throw new BadRequestError("Killed timestamp is invalid");
@@ -1262,8 +1280,8 @@ export async function markBossRotationKilled(
       notifications.push({
         userId: leader.userId,
         type: "BOSS_ROTATION_NOW",
-        title: "It is your Rotation Now",
-        body: `${nextGuild?.name || "Your guild"} is now assigned to ${schedule.bossName}.`,
+        title: `${nextGuild?.name || "Your guild"}'s rotation turn`,
+        body: `${nextGuild?.name || "Your guild"} is now up for ${schedule.bossName}.`,
         metadata: {
           bossName: schedule.bossName,
           takenGuildId: takenGuild.id,
@@ -1324,7 +1342,7 @@ export async function markBossRotationKilledByName(
   userAgent?: string,
   drops?: BossDropInput[],
 ) {
-  await requireBossRotationManager(actorId, guildId);
+  await requireBossTakenManager(actorId, guildId);
   const killedDate = new Date(killedAt);
   if (Number.isNaN(killedDate.getTime())) {
     throw new BadRequestError("Killed timestamp is invalid");
@@ -1456,8 +1474,8 @@ export async function markBossRotationKilledByName(
       notifications.push({
         userId: leader.userId,
         type: "BOSS_ROTATION_NOW",
-        title: "It is your Rotation Now",
-        body: `${nextGuild?.name || "Your guild"} is now assigned to ${registryBoss.name}.`,
+        title: `${nextGuild?.name || "Your guild"}'s rotation turn`,
+        body: `${nextGuild?.name || "Your guild"} is now up for ${registryBoss.name}.`,
         metadata: {
           bossName: registryBoss.name,
           takenGuildId: takenGuild.id,

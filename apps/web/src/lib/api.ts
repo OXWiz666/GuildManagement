@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@guild/shared";
+import type { ApiResponse, PaymentMethodEntry } from "@guild/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 const JSON_CONTENT_TYPE = "application/json";
@@ -220,6 +220,7 @@ export const authApi = {
         displayName: string;
         avatarUrl: string | null;
         createdAt: string;
+        paymentMethods?: PaymentMethodEntry[];
         guilds: Array<{
           guildId: string;
           guildName: string;
@@ -250,6 +251,14 @@ export const authApi = {
   // guild memberships server-side.
   async updateCp(cp: number) {
     return api.put<{ cp: number | null }>("/auth/me/cp", { cp });
+  },
+
+  async addPaymentMethod(data: { method: string; label?: string; qrDataUrl: string }) {
+    return api.post<{ method: PaymentMethodEntry }>("/auth/me/payment-methods", data);
+  },
+
+  async removePaymentMethod(methodId: string) {
+    return api.delete(`/auth/me/payment-methods/${methodId}`);
   },
 
   async getSessions() {
@@ -1327,6 +1336,41 @@ export interface LegendaryRequestData {
   member?: MarketMemberRef;
 }
 
+export type WishlistRarity = "LEGEND" | "EPIC" | "MYTHIC";
+export type ArmorType = "CLOTH" | "LEATHER" | "PLATE";
+export type WishlistCategory =
+  | "WEAPON"
+  | "ARMOR"
+  | "ACCESSORY"
+  | "LOGS"
+  | "TEMPORAL"
+  | "MATERIALS"
+  | "MOUNT";
+export type WishlistStatus = "PENDING" | "DISTRIBUTED";
+
+export interface WishlistItem {
+  category: WishlistCategory;
+  key: string;
+  rarity?: WishlistRarity;
+  armorType?: ArmorType;
+  quantity?: number;
+  label?: string;
+  status?: WishlistStatus;
+  fulfilledAt?: string;
+  fulfilledById?: string;
+}
+
+export interface WishlistCaps {
+  logs: number;
+  temporalPieces: number;
+  materials: number;
+}
+
+export interface WishlistSummary {
+  total: number;
+  distributed: number;
+}
+
 export interface PriorityQueueEntry {
   memberId: string;
   userId: string;
@@ -1344,8 +1388,31 @@ export interface PriorityQueueEntry {
   priorityScore: number;
   manualSeq: number | null;
   manualReason: string | null;
-  wishlist: string[];
+  wishlist: WishlistItem[];
+  wishlistSummary: WishlistSummary;
   position: number;
+}
+
+export interface MountCatalogItem {
+  id: string;
+  name: string;
+  iconUrl: string | null;
+  maxSlots: number;
+  isActive: boolean;
+  distributed: number;
+  remaining: number;
+}
+
+export interface WishlistMasterRow {
+  memberId: string;
+  userId: string;
+  ign: string;
+  role: string;
+  tier: "CORE" | "ELITE" | "UPPER" | "LOWER";
+  item: WishlistItem;
+  label: string;
+  status: WishlistStatus;
+  fulfilledAt: string | null;
 }
 
 export interface ItemDistributionData {
@@ -1380,6 +1447,137 @@ interface Paginated {
   total: number;
   totalPages: number;
 }
+
+// ─── Platform / Super Admin (SaaS-level) ────────────────────────────
+
+export type PlatformRole = "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "ANALYST";
+
+export interface PlatformAdminProfile {
+  role: PlatformRole;
+  permissions: string[];
+  lastLoginAt: string | null;
+}
+
+export interface OverviewSeriesPoint {
+  date: string;
+  value: number;
+}
+
+export interface PlatformOverview {
+  cards: {
+    totalUsers: number;
+    activeUsersToday: number;
+    onlineUsers: number;
+    activeSessions: number;
+    totalGuilds: number;
+    activeGuilds: number;
+    auditEventsToday: number;
+    premiumGuilds: number | null;
+    freeGuilds: number | null;
+    activeSubscriptions: number | null;
+    totalRevenue: number | null;
+    monthlyRevenue: number | null;
+    pendingPayments: number | null;
+    failedPayments: number | null;
+  };
+  charts: {
+    userGrowth: OverviewSeriesPoint[];
+    guildGrowth: OverviewSeriesPoint[];
+    loginActivity: OverviewSeriesPoint[];
+  };
+  generatedAt: string;
+}
+
+function qs(params?: Record<string, string | number | undefined>) {
+  const s = new URLSearchParams();
+  if (params) for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") s.set(k, String(v));
+  const str = s.toString();
+  return str ? `?${str}` : "";
+}
+
+export const adminApi = {
+  async getMe() {
+    return api.get<{ platformAdmin: PlatformAdminProfile }>(`/admin/me`);
+  },
+  async getOverview() {
+    return api.get<PlatformOverview>(`/admin/overview`);
+  },
+
+  // ─ Users (Phase 2) ─
+  async listUsers(params?: { search?: string; status?: string; page?: number }) {
+    return api.get<any>(`/admin/users${qs(params)}`);
+  },
+  async getUser(id: string) {
+    return api.get<any>(`/admin/users/${id}`);
+  },
+  async moderateUser(id: string, body: { action: string; days?: number; reason?: string }) {
+    return api.post<any>(`/admin/users/${id}/moderate`, body);
+  },
+  async forceLogoutUser(id: string) {
+    return api.post<{ sessionsCleared: number }>(`/admin/users/${id}/force-logout`, {});
+  },
+  async resetUserPassword(id: string) {
+    return api.post<{ tempPassword: string }>(`/admin/users/${id}/reset-password`, {});
+  },
+
+  // ─ Guilds (Phase 3) ─
+  async listGuilds(params?: { search?: string; status?: string; page?: number }) {
+    return api.get<any>(`/admin/guilds${qs(params)}`);
+  },
+  async getGuild(id: string) {
+    return api.get<any>(`/admin/guilds/${id}`);
+  },
+  async moderateGuild(id: string, body: { action: string; reason?: string }) {
+    return api.post<any>(`/admin/guilds/${id}/moderate`, body);
+  },
+  async transferGuildOwnership(id: string, newMemberId: string) {
+    return api.post<any>(`/admin/guilds/${id}/transfer-ownership`, { newMemberId });
+  },
+
+  // ─ Billing (Phase 4) ─
+  async getBillingOverview() {
+    return api.get<any>(`/admin/billing/overview`);
+  },
+  async listPlans() {
+    return api.get<{ plans: any[] }>(`/admin/billing/plans`);
+  },
+  async createPlan(body: any) {
+    return api.post<any>(`/admin/billing/plans`, body);
+  },
+  async updatePlan(id: string, body: any) {
+    return api.patch<any>(`/admin/billing/plans/${id}`, body);
+  },
+  async deactivatePlan(id: string) {
+    return api.delete<any>(`/admin/billing/plans/${id}`);
+  },
+  async listSubscriptions(params?: { status?: string; guildId?: string; page?: number }) {
+    return api.get<any>(`/admin/billing/subscriptions${qs(params)}`);
+  },
+  async createSubscription(body: { guildId: string; planId: string; interval?: string; status?: string }) {
+    return api.post<any>(`/admin/billing/subscriptions`, body);
+  },
+  async subscriptionAction(id: string, action: "cancel" | "pause" | "resume") {
+    return api.post<any>(`/admin/billing/subscriptions/${id}/action`, { action });
+  },
+  async listPayments(params?: { status?: string; guildId?: string; page?: number }) {
+    return api.get<any>(`/admin/billing/payments${qs(params)}`);
+  },
+  async recordPayment(body: { guildId: string; subscriptionId?: string; amount: number; currency?: string; status?: string }) {
+    return api.post<any>(`/admin/billing/payments`, body);
+  },
+  async refundPayment(id: string) {
+    return api.post<any>(`/admin/billing/payments/${id}/refund`, {});
+  },
+  async listCoupons() {
+    return api.get<{ coupons: any[] }>(`/admin/billing/coupons`);
+  },
+  async createCoupon(body: any) {
+    return api.post<any>(`/admin/billing/coupons`, body);
+  },
+  async deactivateCoupon(id: string) {
+    return api.delete<any>(`/admin/billing/coupons/${id}`);
+  },
+};
 
 export const marketApi = {
   // ─ Item requests ─
@@ -1493,12 +1691,54 @@ export const marketApi = {
 
   // ─ Member wishlist ─
   async getMyWishlist(guildId: string) {
-    return api.get<{ items: string[]; tier: string; formType: "CORE" | "NON_CORE"; slots: string[] }>(
+    return api.get<{ items: WishlistItem[]; tier: string; formType: "CORE" | "NON_CORE"; caps: WishlistCaps }>(
       `/market/${guildId}/wishlist/mine`,
     );
   },
-  async setWishlist(guildId: string, items: string[]) {
-    return api.put<{ items: string[]; tier: string }>(`/market/${guildId}/wishlist`, { items });
+  async setWishlist(guildId: string, items: WishlistItem[]) {
+    return api.put<{ items: WishlistItem[]; tier: string; caps: WishlistCaps }>(
+      `/market/${guildId}/wishlist`,
+      { items },
+    );
+  },
+  async getWishlistMaster(
+    guildId: string,
+    params?: { status?: WishlistStatus; category?: string; memberId?: string; search?: string },
+  ) {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.category) q.set("category", params.category);
+    if (params?.memberId) q.set("memberId", params.memberId);
+    if (params?.search) q.set("search", params.search);
+    return api.get<{ rows: WishlistMasterRow[] }>(
+      `/market/${guildId}/wishlist/master?${q.toString()}`,
+    );
+  },
+  async notifyRequest(
+    guildId: string,
+    payload: { itemLabel: string; itemRef?: string; memberIds?: string[]; message?: string },
+  ) {
+    return api.post<{ notified: number }>(`/market/${guildId}/notify-request`, payload);
+  },
+
+  // ─ Mounts ─
+  async listMounts(guildId: string) {
+    return api.get<{ mounts: MountCatalogItem[] }>(`/market/${guildId}/mounts`);
+  },
+  async upsertMount(
+    guildId: string,
+    payload: { id?: string; name: string; iconUrl?: string | null; maxSlots: number; isActive?: boolean },
+  ) {
+    if (payload.id) {
+      return api.patch<{ mount: MountCatalogItem }>(`/market/${guildId}/mounts/${payload.id}`, payload);
+    }
+    return api.post<{ mount: MountCatalogItem }>(`/market/${guildId}/mounts`, payload);
+  },
+  async deleteMount(guildId: string, mountId: string) {
+    return api.delete<{ deleted: boolean }>(`/market/${guildId}/mounts/${mountId}`);
+  },
+  async distributeMount(guildId: string, mountId: string, payload: { memberId: string; note?: string }) {
+    return api.post<{ record: unknown }>(`/market/${guildId}/mounts/${mountId}/distribute`, payload);
   },
 
   // ─ Rules & audit ─

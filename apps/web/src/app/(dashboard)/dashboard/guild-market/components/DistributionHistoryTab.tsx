@@ -58,6 +58,7 @@ function summarizeDetail(detail: Record<string, unknown> | null): string {
 
 function AuditLogView({ guildId }: { guildId: string }) {
   const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState("ALL");
   const { data, isLoading } = useQuery(
     `market_audit:${guildId}`,
     async () => {
@@ -68,6 +69,7 @@ function AuditLogView({ guildId }: { guildId: string }) {
   );
   const logs = (data || []) as AuditLogEntry[];
   const filtered = logs.filter((l) => {
+    if (actionFilter !== "ALL" && l.action !== actionFilter) return false;
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return (
@@ -81,8 +83,20 @@ function AuditLogView({ guildId }: { guildId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="max-w-sm">
-        <Input placeholder="Search audit log…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={actionFilter}
+          onChange={(e) => setActionFilter(e.target.value)}
+          className="rounded-lg border border-white/[0.1] bg-black/30 px-2.5 py-1.5 text-[11px] text-white focus:border-cyan-500/50 focus:outline-none cursor-pointer"
+        >
+          <option value="ALL">All actions</option>
+          {Object.entries(ACTION_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        <div className="max-w-sm flex-1 min-w-[160px]">
+          <Input placeholder="Search audit log…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
       </div>
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/35 border border-dashed border-white/[0.06] rounded-2xl">

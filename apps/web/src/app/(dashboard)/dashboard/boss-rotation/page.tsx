@@ -84,6 +84,8 @@ export default function BossRotationPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTakingGuildId, setSelectedTakingGuildId] = useState("ALL");
   const [selectedCycle, setSelectedCycle] = useState<CycleFilter>("ALL");
+  const [activitySearch, setActivitySearch] = useState("");
+  const [historySearch, setHistorySearch] = useState("");
   const [now, setNow] = useState<number | null>(null);
   const [killTarget, setKillTarget] = useState<BossRotationItem | null>(null);
   const [killTime, setKillTime] = useState("");
@@ -193,6 +195,41 @@ export default function BossRotationPage() {
   const auditLogPage = auditLogsRaw || { logs: [], total: 0, page: activityPage, limit: 10, totalPages: 1 };
   const auditLogs = auditLogPage.logs;
   const killedHistory = killedHistoryRaw || { month: historyMonth, total: 0, days: [] };
+
+  // Client-side search over the currently loaded activity page (boss name, action, or guild names)
+  const filteredAuditLogs = useMemo(() => {
+    const needle = activitySearch.trim().toLowerCase();
+    if (!needle) return auditLogs;
+    return auditLogs.filter((log) => {
+      const bossName = typeof log.detail?.bossName === "string" ? log.detail.bossName : "";
+      const takenGuildName = typeof log.detail?.takenGuildName === "string" ? log.detail.takenGuildName : "";
+      const nextGuildName = typeof log.detail?.nextGuildName === "string" ? log.detail.nextGuildName : "";
+      return (
+        log.action.toLowerCase().includes(needle) ||
+        bossName.toLowerCase().includes(needle) ||
+        takenGuildName.toLowerCase().includes(needle) ||
+        nextGuildName.toLowerCase().includes(needle) ||
+        log.actor.displayName.toLowerCase().includes(needle)
+      );
+    });
+  }, [auditLogs, activitySearch]);
+
+  // Client-side search over the killed-history month (boss name or recorder), keeping day
+  // groupings but dropping days left with no matching kills.
+  const filteredHistoryDays = useMemo(() => {
+    const needle = historySearch.trim().toLowerCase();
+    if (!needle) return killedHistory.days;
+    return killedHistory.days
+      .map((day) => ({
+        ...day,
+        kills: day.kills.filter(
+          (kill) =>
+            kill.bossName.toLowerCase().includes(needle) ||
+            kill.recordedBy.displayName.toLowerCase().includes(needle),
+        ),
+      }))
+      .filter((day) => day.kills.length > 0);
+  }, [killedHistory.days, historySearch]);
 
   const fallbackGuilds = useMemo<FactionGuildData[]>(() => {
     const guildMap = new Map<string, FactionGuildData>();
@@ -307,6 +344,42 @@ export default function BossRotationPage() {
       return matchesSearch && matchesGuild && matchesCycle;
     });
   }, [rotations, searchQuery, selectedTakingGuildId, selectedCycle]);
+
+  // Generate upcoming entries for ALL bosses (including those without explicit schedules).
+  // Built from filteredRotations so the shared search/guild/cycle toolbar actually
+  // applies here too, not just on the LIVE tab.
+  const upcomingBosses = useMemo(() => {
+    const allUpcoming: BossScheduleData[] = [];
+    const currentTime = serverNow;
+
+    for (const rotation of filteredRotations) {
+      const spawnTimeMs = new Date(rotation.spawnTime).getTime();
+
+      // Include all bosses regardless of status to ensure we show the complete upcoming schedule
+      allUpcoming.push({
+        id: rotation.activeSchedule?.id || rotation.id,
+        guildId: activeGuild?.guildId || null,
+        bossName: rotation.bossName,
+        bossImageUrl: rotation.bossImageUrl,
+        spawnTime: rotation.spawnTime,
+        location: rotation.location,
+        guildTurn: rotation.currentGuild?.name || null,
+        guildTurnGuildId: rotation.currentGuild?.id || null,
+        guildTurnGuildName: rotation.currentGuild?.name || null,
+        status: rotation.status,
+        killedAt: rotation.latestKilled?.killedAt || null,
+        creatorId: rotation.activeSchedule?.creatorId || "",
+        creatorName: rotation.activeSchedule?.creatorName,
+        createdAt: rotation.activeSchedule?.createdAt || new Date().toISOString(),
+        attendanceSessions: rotation.activeSchedule?.attendanceSessions,
+      });
+    }
+
+    // Sort by spawn time and limit to 24
+    return allUpcoming
+      .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime())
+      .slice(0, 24);
+  }, [filteredRotations, activeGuild, serverNow]);
 
   const upcomingSchedules = schedules
     .filter((schedule) => schedule.status !== "KILLED")
@@ -472,8 +545,8 @@ export default function BossRotationPage() {
 
   const tabs: Array<{ id: RotationTab; label: string; count?: number; hidden?: boolean }> = [
     { id: "LIVE", label: "Boss Rotation", count: filteredRotations.length },
-    { id: "UPCOMING", label: "Upcoming", count: upcomingSchedules.length },
-    { id: "MASTER", label: "Master List" },
+    { id: "UPCOMING", label: "Upcoming", count: upcomingBosses.length },
+    { id: "MASTER", label: "Master List", hidden: !isOfficer },
     { id: "ACTIVITY", label: "Activity", count: auditLogPage.total },
     { id: "HISTORY", label: "Killed History", count: killedHistory.total },
   ];
@@ -550,8 +623,8 @@ export default function BossRotationPage() {
             ))}
           </div>
 
-          <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(170px,210px)_minmax(180px,240px)_minmax(200px,300px)] gap-2 w-full lg:w-auto ${activeTab === "MASTER" ? "hidden" : ""}`}>
-            {activeTab === "LIVE" && (
+          <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(170px,210px)_minmax(180px,240px)_minmax(200px,300px)] gap-2 w-full lg:w-auto ${activeTab === "LIVE" || activeTab === "UPCOMING" ? "" : "hidden"}`}>
+            {(activeTab === "LIVE" || activeTab === "UPCOMING") && (
               <label className="relative block">
                 <span className="sr-only">Filter boss cycle</span>
                 <select
@@ -603,20 +676,21 @@ export default function BossRotationPage() {
 
         {activeTab === "LIVE" && (
           isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-72 rounded-xl" />)}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+              {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-72 rounded-2xl" />)}
             </div>
           ) : filteredRotations.length === 0 ? (
             <EmptyState title="No rotations found" body="Try a different boss or guild search." />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              {filteredRotations.map((rotation) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+              {filteredRotations.map((rotation, index) => (
                 <RotationCard
                   key={rotation.id}
                   rotation={rotation}
                   serverNow={serverNow}
                   canManage={canManage}
                   onKilled={() => openKillModal(rotation)}
+                  index={index}
                 />
               ))}
             </div>
@@ -625,12 +699,17 @@ export default function BossRotationPage() {
 
         {activeTab === "UPCOMING" && (
           <div>
-            {upcomingSchedules.length === 0 ? (
-              <EmptyState title="No upcoming schedules" body="Killed bosses will automatically create their next spawn here." />
+            {upcomingBosses.length === 0 ? (
+              <EmptyState title="No upcoming bosses" body="All bosses that will spawn in the future appear here." />
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                {upcomingSchedules.map((schedule) => (
-                  <UpcomingCard key={schedule.id} schedule={schedule} serverNow={serverNow} />
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                {upcomingBosses.map((schedule, index) => (
+                  <UpcomingCard
+                    key={schedule.id}
+                    schedule={schedule}
+                    serverNow={serverNow}
+                    index={index}
+                  />
                 ))}
               </div>
             )}
@@ -640,16 +719,31 @@ export default function BossRotationPage() {
         {activeTab === "MASTER" && <MasterListTab guildId={activeGuild.guildId} />}
 
         {activeTab === "ACTIVITY" && (
-          isLoadingLogs ? (
+          <div className="space-y-3">
+            <label className="relative block w-full sm:w-64">
+              <span className="sr-only">Search activity</span>
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                value={activitySearch}
+                onChange={(event) => setActivitySearch(event.target.value)}
+                placeholder="Search boss, guild, or action..."
+                className="w-full h-[38px] pl-10 pr-4 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-[13px] text-white/90 placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors"
+              />
+            </label>
+
+          {isLoadingLogs ? (
             <div className="space-y-2">
               {[1, 2, 3].map((item) => <Skeleton key={item} className="h-16 rounded-xl" />)}
             </div>
-          ) : auditLogs.length === 0 ? (
+          ) : filteredAuditLogs.length === 0 ? (
             <EmptyState title="No rotation activity" body="Kill confirmations and queue edits will appear here." />
           ) : (
             <div className="space-y-3">
               <div className="space-y-2">
-                {auditLogs.map((log) => {
+                {filteredAuditLogs.map((log) => {
                   const takenGuildName = typeof log.detail?.takenGuildName === "string" ? log.detail.takenGuildName : null;
                   const nextGuildName = typeof log.detail?.nextGuildName === "string" ? log.detail.nextGuildName : null;
                   const takenColor = getGuildColor(takenGuildName || "");
@@ -696,7 +790,8 @@ export default function BossRotationPage() {
                 onNext={() => setActivityPage((page) => Math.min(Math.max(1, auditLogPage.totalPages), page + 1))}
               />
             </div>
-          )
+          )}
+          </div>
         )}
 
         {activeTab === "HISTORY" && (
@@ -706,26 +801,37 @@ export default function BossRotationPage() {
                 <p className="text-sm font-semibold text-white">Boss Killed History</p>
                 <p className="text-xs text-white/45 mt-1">Daily kill record by month, including the user who recorded each kill.</p>
               </div>
-              <label className="w-full md:w-[180px]">
-                <span className="sr-only">History month</span>
-                <input
-                  type="month"
-                  value={historyMonth || killedHistory.month}
-                  onChange={(event) => setHistoryMonth(event.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40"
-                />
-              </label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                <label className="w-full sm:w-48">
+                  <span className="sr-only">Search boss history</span>
+                  <input
+                    value={historySearch}
+                    onChange={(event) => setHistorySearch(event.target.value)}
+                    placeholder="Search boss or recorder..."
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/40"
+                  />
+                </label>
+                <label className="w-full sm:w-[180px]">
+                  <span className="sr-only">History month</span>
+                  <input
+                    type="month"
+                    value={historyMonth || killedHistory.month}
+                    onChange={(event) => setHistoryMonth(event.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40"
+                  />
+                </label>
+              </div>
             </div>
 
             {isLoadingHistory ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((item) => <Skeleton key={item} className="h-24 rounded-xl" />)}
               </div>
-            ) : killedHistory.days.length === 0 ? (
+            ) : filteredHistoryDays.length === 0 ? (
               <EmptyState title="No kills recorded for this month" body="Confirmed boss kills will be grouped here by day." />
             ) : (
               <div className="space-y-3">
-                {killedHistory.days.map((day) => (
+                {filteredHistoryDays.map((day) => (
                   <section key={day.date} className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
                     <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] px-4 py-3">
                       <h3 className="text-sm font-semibold text-white">
@@ -963,11 +1069,13 @@ function RotationCard({
   serverNow,
   canManage,
   onKilled,
+  index = 0,
 }: {
   rotation: BossRotationItem;
   serverNow: number;
   canManage: boolean;
   onKilled: () => void;
+  index?: number;
 }) {
   const tick = getCountdown(rotation.spawnTime, serverNow);
   const currentColor = getGuildColor(rotation.currentGuild?.name || "");
@@ -977,41 +1085,48 @@ function RotationCard({
 
   return (
     <article
-      className={`relative min-h-[300px] rounded-2xl transition-all duration-300 bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] ${
+      className={`group relative min-h-[300px] rounded-[1.75rem] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] hover:-translate-y-1 hover:scale-[1.02] animate-[fadeInUp_0.8s_ease-out_forwards] ${
       tick.expired
-        ? "hover:border-emerald-500/35 hover:shadow-[0_0_25px_rgba(16,185,129,0.08)]"
+        ? "hover:border-emerald-500/45 hover:shadow-[0_0_40px_rgba(16,185,129,0.15),0_20px_40px_rgba(0,0,0,0.5)]"
         : tick.warning
-          ? "hover:border-[var(--forge-gold)]/40 hover:shadow-[0_0_25px_rgba(212,168,83,0.12)]"
-          : "hover:border-white/15 hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)]"
+          ? "hover:border-[var(--forge-gold)]/50 hover:shadow-[0_0_40px_rgba(212,168,83,0.18),0_20px_40px_rgba(0,0,0,0.5)]"
+          : "hover:border-white/20 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
     }`}
-      // Minimal outside accent synced to the current holder guild's color, so each
-      // card reads at a glance which guild is up for that boss.
-      style={
-        rotation.currentGuild
-          ? { outline: `1px solid ${currentColor.dot}66`, outlineOffset: "2px" }
-          : undefined
-      }
+      style={{
+        animationDelay: `${index * 75}ms`,
+      }}
     >
-      {/* Top indicator bar matching state */}
-      <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${
-        tick.expired 
-          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50" 
-          : tick.warning 
-            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50" 
+      {/* Top indicator bar matching state with animated gradient */}
+      <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-[1.75rem] bg-gradient-to-r transition-all duration-700 ${
+        tick.expired
+          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50 animate-[shimmer_2s_ease-in-out_infinite]"
+          : tick.warning
+            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50 animate-[shimmer_2.5s_ease-in-out_infinite]"
             : "from-white/5 via-white/15 to-white/5"
       }`} />
 
+      {/* Ambient glow behind card for live/warning states */}
+      {(tick.expired || tick.warning) && (
+        <div className={`absolute -inset-0.5 -z-10 rounded-[1.85rem] opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl ${
+          tick.expired ? "bg-emerald-500/20" : "bg-[var(--forge-gold)]/15"
+        }`} />
+      )}
+
       <div className="p-4 space-y-3.5">
-        {/* Boss info & badge */}
+        {/* Boss info & badge with double-bezel */}
         <div className="flex items-start gap-3">
-          <div className={`relative p-0.5 rounded-xl border transition-all duration-300 ${
-            tick.expired 
-              ? "border-emerald-500/30 glow-gold-active" 
-              : tick.warning 
-                ? "border-[var(--forge-gold)]/30 shadow-[0_0_12px_rgba(212,168,83,0.2)]" 
-                : "border-white/10"
+          {/* Double-bezel outer shell */}
+          <div className={`relative p-1 rounded-2xl border transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-105 ${
+            tick.expired
+              ? "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+              : tick.warning
+                ? "border-[var(--forge-gold)]/40 bg-[var(--forge-gold)]/5 shadow-[0_0_20px_rgba(212,168,83,0.2)]"
+                : "border-white/10 bg-white/[0.02]"
           }`}>
-            <BossAvatar src={rotation.bossImageUrl || getBossImageUrl(rotation.bossName)} name={rotation.bossName} />
+            {/* Inner core */}
+            <div className="rounded-[calc(1rem-0.25rem)] overflow-hidden">
+              <BossAvatar src={rotation.bossImageUrl || getBossImageUrl(rotation.bossName)} name={rotation.bossName} />
+            </div>
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-center gap-2">
@@ -1028,113 +1143,135 @@ function RotationCard({
               <span className="text-[11px] truncate">{rotation.location}</span>
             </div>
           </div>
-          <StatusDot expired={tick.expired} warning={tick.warning} />
+          <StatusDot expired={tick.expired} warning={tick.warning} guildColor={currentColor.dot} />
         </div>
 
-        {/* Timer Box */}
-        <div className={`relative overflow-hidden rounded-xl border p-3 ${
-          tick.expired 
-            ? "border-emerald-500/25 bg-emerald-950/15 shadow-[inset_0_0_12px_rgba(16,185,129,0.08)]" 
-            : tick.warning 
-              ? "border-[var(--forge-gold)]/20 bg-[var(--forge-glow)]/40 shadow-[inset_0_0_12px_rgba(212,168,83,0.05)]" 
-              : "border-white/[0.05] bg-white/[0.01]"
+        {/* Timer Box with enhanced double-bezel and fluid animations */}
+        <div className={`relative overflow-hidden rounded-2xl border p-1 transition-all duration-700 ${
+          tick.expired
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : tick.warning
+              ? "border-[var(--forge-gold)]/25 bg-[var(--forge-gold)]/5"
+              : "border-white/[0.06] bg-white/[0.02]"
         }`}>
-          {(tick.expired || tick.warning) && (
-            <div className={`absolute inset-0 opacity-10 bg-gradient-to-r ${
-              tick.expired ? "from-emerald-500 via-transparent to-emerald-500 animate-pulse-soft" : "from-[var(--forge-gold)] via-transparent to-[var(--forge-gold)] animate-pulse-soft"
-            }`} />
-          )}
-
-          <div className="relative z-10 flex items-center justify-between">
-            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30">Rotation Timer</span>
-            <span className={`text-[9px] font-bold uppercase tracking-[0.12em] inline-flex items-center gap-1 ${
-              tick.expired ? "text-emerald-400" : tick.warning ? "text-[var(--forge-gold)]" : "text-white/45"
-            }`}>
-              {tick.expired ? (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  Live
-                </>
-              ) : tick.warning ? (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--forge-gold)]" />
-                  Soon
-                </>
-              ) : (
-                "Next Spawn"
-              )}
-            </span>
-          </div>
-          <p className={`relative z-10 mt-1.5 font-mono text-lg font-bold leading-none tracking-wider ${
-            tick.expired ? "text-emerald-400 text-gold-gradient" : tick.warning ? "text-[var(--forge-gold-bright)] text-gold-gradient-light" : "text-white"
+          {/* Inner timer container */}
+          <div className={`relative overflow-hidden rounded-[calc(1rem-0.25rem)] p-3 transition-all duration-700 ${
+            tick.expired
+              ? "bg-emerald-950/20 shadow-[inset_0_0_20px_rgba(16,185,129,0.12)]"
+              : tick.warning
+                ? "bg-[var(--forge-glow)]/50 shadow-[inset_0_0_20px_rgba(212,168,83,0.08)]"
+                : "bg-white/[0.015]"
           }`}>
-            {tick.text}
-          </p>
-          <div className="relative z-10 mt-2 flex items-center gap-1 text-[10px] text-white/35 border-t border-white/[0.04] pt-2">
-            <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <span>Est. Spawn: {spawnLabel}</span>
+            {/* Animated background gradient for active states */}
+            {(tick.expired || tick.warning) && (
+              <>
+                <div className={`absolute inset-0 opacity-10 bg-gradient-to-r animate-[pulse_3s_ease-in-out_infinite] ${
+                  tick.expired ? "from-emerald-500 via-transparent to-emerald-500" : "from-[var(--forge-gold)] via-transparent to-[var(--forge-gold)]"
+                }`} />
+                <div className={`absolute inset-0 opacity-5 bg-gradient-to-br ${
+                  tick.expired ? "from-emerald-400/50 to-transparent" : "from-[var(--forge-gold)]/50 to-transparent"
+                } animate-[spin_20s_linear_infinite]`} style={{ backgroundSize: "200% 200%" }} />
+              </>
+            )}
+
+            <div className="relative z-10 flex items-center justify-between">
+              <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30 transition-all duration-500">Rotation Timer</span>
+              <span className={`text-[9px] font-bold uppercase tracking-[0.14em] inline-flex items-center gap-1.5 transition-all duration-500 ${
+                tick.expired ? "text-emerald-400" : tick.warning ? "text-[var(--forge-gold)]" : "text-white/45"
+              }`}>
+                {tick.expired ? (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                    </span>
+                    Live
+                  </>
+                ) : tick.warning ? (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-[var(--forge-gold)] animate-pulse shadow-[0_0_8px_var(--forge-gold)]" />
+                    Soon
+                  </>
+                ) : (
+                  "Next Spawn"
+                )}
+              </span>
+            </div>
+            <p className={`relative z-10 mt-2 font-mono text-xl font-bold leading-none tracking-wider transition-all duration-500 ${
+              tick.expired
+                ? "text-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.5)]"
+                : tick.warning
+                  ? "text-[var(--forge-gold-bright)] drop-shadow-[0_0_12px_rgba(212,168,83,0.5)]"
+                  : "text-white"
+            }`}>
+              {tick.text}
+            </p>
+            <div className="relative z-10 mt-3 flex items-center gap-1.5 text-[10px] text-white/35 border-t border-white/[0.06] pt-2.5 transition-colors duration-500">
+              <svg className="h-3.5 w-3.5 shrink-0 transition-transform duration-500 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span className="transition-colors duration-500 group-hover:text-white/50">Est. Spawn: {spawnLabel}</span>
+            </div>
           </div>
         </div>
 
-        {/* Current & Next progress */}
-        <div className="relative flex items-center justify-between gap-2 rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/30 p-2">
+        {/* Current & Next progress with fluid transition */}
+        <div className="relative flex items-center justify-between gap-2 rounded-2xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/30 p-2.5 transition-all duration-700 group-hover:border-[var(--metal-border)]/60">
           <div className="min-w-0 flex-1">
-            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1">Current Holder</span>
+            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1.5 transition-colors duration-500">Current Holder</span>
             <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: currentColor.dot }} />
-              <p className={`text-[12px] font-bold truncate ${currentColor.text}`}>{rotation.currentGuild?.name || "Unassigned"}</p>
+              <span className="h-2.5 w-2.5 rounded-full shrink-0 transition-transform duration-500 group-hover:scale-125 shadow-[0_0_6px_currentColor]" style={{ backgroundColor: currentColor.dot, color: currentColor.dot }} />
+              <p className={`text-[12px] font-bold truncate transition-all duration-500 ${currentColor.text}`}>{rotation.currentGuild?.name || "Unassigned"}</p>
             </div>
           </div>
           <div className="shrink-0 flex items-center justify-center px-1">
-            <svg className="h-4 w-4 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg className="h-4 w-4 text-white/20 transition-all duration-700 group-hover:translate-x-1 group-hover:text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </div>
           <div className="min-w-0 flex-1 text-right">
-            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1">Up Next</span>
+            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1.5 transition-colors duration-500">Up Next</span>
             <div className="flex items-center gap-1.5 justify-end">
-              <p className={`text-[12px] font-bold truncate ${nextColor.text}`}>{rotation.nextGuild?.name || "Unassigned"}</p>
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: nextColor.dot }} />
+              <p className={`text-[12px] font-bold truncate transition-all duration-500 ${nextColor.text}`}>{rotation.nextGuild?.name || "Unassigned"}</p>
+              <span className="h-2.5 w-2.5 rounded-full shrink-0 transition-transform duration-500 group-hover:scale-125 shadow-[0_0_6px_currentColor]" style={{ backgroundColor: nextColor.dot, color: nextColor.dot }} />
             </div>
           </div>
         </div>
 
-        {/* Queue Flow */}
-        <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/20 p-3 min-h-[66px]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30">Queue Flow</span>
-            <span className="text-[9px] text-white/35 font-mono">{rotation.queue.length} Guilds</span>
+        {/* Queue Flow with staggered entry animations */}
+        <div className="rounded-2xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/20 p-3 min-h-[66px] transition-all duration-700 group-hover:bg-[var(--obsidian-elevated)]/30">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30 transition-colors duration-500 group-hover:text-white/40">Queue Flow</span>
+            <span className="text-[9px] text-white/35 font-mono px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-500 group-hover:bg-white/[0.05]">{rotation.queue.length} Guilds</span>
           </div>
           {rotation.queue.length === 0 ? (
             <div className="flex items-center justify-center py-2">
               <p className="text-[10px] text-white/30 italic">No guilds in queue</p>
             </div>
           ) : (
-            <div className="flex items-center flex-wrap gap-1">
+            <div className="flex items-center flex-wrap gap-1.5">
               {rotation.queue.map((guild, index) => {
                 const color = getGuildColor(guild.name);
                 const isCurrent = rotation.currentGuild?.id === guild.id;
-                
+
                 return (
-                  <div key={guild.id} className="flex items-center gap-1">
+                  <div key={guild.id} className="flex items-center gap-1.5" style={{ animationDelay: `${index * 50}ms` }}>
                     <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-all ${
-                        isCurrent 
-                          ? "border-[var(--forge-gold)]/45 bg-[var(--forge-glow)] text-[var(--forge-gold-bright)] shadow-[0_0_8px_rgba(212,168,83,0.15)]" 
-                          : `${color.border} ${color.bg} ${color.text} hover:opacity-90`
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[10px] font-semibold transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:scale-105 ${
+                        isCurrent
+                          ? "border-[var(--forge-gold)]/50 bg-[var(--forge-glow)] text-[var(--forge-gold-bright)] shadow-[0_0_12px_rgba(212,168,83,0.2)]"
+                          : `${color.border} ${color.bg} ${color.text} hover:brightness-110`
                       }`}
                     >
-                      <span className={`h-1.5 w-1.5 rounded-full ${isCurrent ? "animate-pulse" : ""}`} style={{ backgroundColor: isCurrent ? "var(--forge-gold)" : color.dot }} />
+                      <span className={`h-1.5 w-1.5 rounded-full transition-all duration-500 ${isCurrent ? "animate-pulse shadow-[0_0_6px_var(--forge-gold)]" : ""}`} style={{ backgroundColor: isCurrent ? "var(--forge-gold)" : color.dot }} />
                       <span className="font-mono text-[9px] opacity-65">{index + 1}.</span>
                       <span className="truncate max-w-[80px]">{guild.name}</span>
                     </span>
                     {index < rotation.queue.length - 1 && (
-                      <span className="text-white/15 text-[8px] font-bold shrink-0 mx-0.5">
+                      <span className="text-white/15 text-[8px] font-bold shrink-0 transition-all duration-500 group-hover:text-white/25">
                         •
                       </span>
                     )}
@@ -1170,13 +1307,19 @@ function RotationCard({
               disabled={!canKill}
               aria-label={`Mark ${rotation.bossName} taken`}
               title={rotation.activeSchedule ? "Taken" : "Import killed time"}
-              className="h-9 px-4 inline-flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed transition-all duration-300 cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.05)] hover:shadow-[0_0_16px_rgba(16,185,129,0.15)] focus-ring"
+              className="group/btn relative h-9 px-5 inline-flex items-center justify-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer shadow-[0_0_16px_rgba(16,185,129,0.08)] hover:shadow-[0_0_24px_rgba(16,185,129,0.2)] active:scale-95 overflow-hidden focus-ring"
             >
-              <svg className="h-3.5 w-3.5 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                <path d="M22 4L12 14.01l-3-3" />
-              </svg>
-              Taken
+              {/* Animated gradient background on hover */}
+              <span className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/20 to-emerald-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000 ease-out" />
+
+              {/* Icon with nested button-in-button pattern */}
+              <span className="relative flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 transition-all duration-700 group-hover/btn:bg-emerald-500/20 group-hover/btn:scale-110 group-hover/btn:rotate-12">
+                <svg className="h-3 w-3 shrink-0 transition-transform duration-700 group-hover/btn:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                  <path d="M22 4L12 14.01l-3-3" />
+                </svg>
+              </span>
+              <span className="relative">Taken</span>
             </button>
           )}
         </div>
@@ -1185,7 +1328,7 @@ function RotationCard({
   );
 }
 
-function UpcomingCard({ schedule, serverNow }: { schedule: BossScheduleData; serverNow: number }) {
+function UpcomingCard({ schedule, serverNow, index = 0 }: { schedule: BossScheduleData; serverNow: number; index?: number }) {
   // Real-time countdown that projects forward along the boss's actual respawn
   // cycle, so a passed spawn shows a live future countdown instead of "LIVE".
   const timer = getRealtimeBossTimer(schedule.bossName, schedule.spawnTime, serverNow, { status: schedule.status });
@@ -1195,32 +1338,47 @@ function UpcomingCard({ schedule, serverNow }: { schedule: BossScheduleData; ser
   const isLive = timer.live;
 
   return (
-    <article className={`relative min-h-[220px] rounded-2xl transition-all duration-300 bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] ${
-      isLive 
-        ? "hover:border-emerald-500/35 hover:shadow-[0_0_25px_rgba(16,185,129,0.08)]" 
-        : tick.warning 
-          ? "hover:border-[var(--forge-gold)]/40 hover:shadow-[0_0_25px_rgba(212,168,83,0.12)]" 
-          : "hover:border-white/15 hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)]"
-    }`}>
-      {/* Top indicator bar */}
-      <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${
-        isLive 
-          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50" 
-          : tick.warning 
-            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50" 
+    <article
+      className={`group relative min-h-[220px] rounded-[1.75rem] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] hover:-translate-y-1 hover:scale-[1.02] animate-[fadeInUp_0.8s_ease-out_forwards] ${
+      isLive
+        ? "hover:border-emerald-500/45 hover:shadow-[0_0_40px_rgba(16,185,129,0.15),0_20px_40px_rgba(0,0,0,0.5)]"
+        : tick.warning
+          ? "hover:border-[var(--forge-gold)]/50 hover:shadow-[0_0_40px_rgba(212,168,83,0.18),0_20px_40px_rgba(0,0,0,0.5)]"
+          : "hover:border-white/20 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+    }`}
+      style={{
+        animationDelay: `${index * 75}ms`,
+      }}
+    >
+      {/* Top indicator bar with animated gradient */}
+      <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-[1.75rem] bg-gradient-to-r transition-all duration-700 ${
+        isLive
+          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50 animate-[shimmer_2s_ease-in-out_infinite]"
+          : tick.warning
+            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50 animate-[shimmer_2.5s_ease-in-out_infinite]"
             : "from-white/5 via-white/15 to-white/5"
       }`} />
 
+      {/* Ambient glow for live/warning states */}
+      {(isLive || tick.warning) && (
+        <div className={`absolute -inset-0.5 -z-10 rounded-[1.85rem] opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl ${
+          isLive ? "bg-emerald-500/20" : "bg-[var(--forge-gold)]/15"
+        }`} />
+      )}
+
       <div className="p-4 space-y-3.5">
         <div className="flex items-start gap-3">
-          <div className={`relative p-0.5 rounded-xl border transition-all duration-300 ${
-            isLive 
-              ? "border-emerald-500/30 glow-gold-active" 
-              : tick.warning 
-                ? "border-[var(--forge-gold)]/30 shadow-[0_0_12px_rgba(212,168,83,0.2)]" 
-                : "border-white/10"
+          {/* Double-bezel avatar */}
+          <div className={`relative p-1 rounded-2xl border transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-105 ${
+            isLive
+              ? "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+              : tick.warning
+                ? "border-[var(--forge-gold)]/40 bg-[var(--forge-gold)]/5 shadow-[0_0_20px_rgba(212,168,83,0.2)]"
+                : "border-white/10 bg-white/[0.02]"
           }`}>
-            <BossAvatar src={schedule.bossImageUrl || getBossImageUrl(schedule.bossName)} name={schedule.bossName} />
+            <div className="rounded-[calc(1rem-0.25rem)] overflow-hidden">
+              <BossAvatar src={schedule.bossImageUrl || getBossImageUrl(schedule.bossName)} name={schedule.bossName} />
+            </div>
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <h3 className="text-sm font-bold text-white truncate">{schedule.bossName}</h3>
@@ -1232,11 +1390,11 @@ function UpcomingCard({ schedule, serverNow }: { schedule: BossScheduleData; ser
               <span className="text-[11px] truncate">{schedule.location}</span>
             </div>
           </div>
-          <StatusDot expired={isLive} warning={tick.warning} />
+          <StatusDot expired={isLive} warning={tick.warning} guildColor={color.dot} />
         </div>
 
         <div className={`relative overflow-hidden rounded-xl border p-3 ${
-          isLive 
+          isLive
             ? "border-emerald-500/25 bg-emerald-950/15 shadow-[inset_0_0_12px_rgba(16,185,129,0.08)]" 
             : tick.warning 
               ? "border-[var(--forge-gold)]/20 bg-[var(--forge-glow)]/40 shadow-[inset_0_0_12px_rgba(212,168,83,0.05)]" 
@@ -1287,18 +1445,70 @@ function UpcomingCard({ schedule, serverNow }: { schedule: BossScheduleData; ser
   );
 }
 
-function StatusDot({ expired, warning }: { expired: boolean; warning: boolean }) {
+function StatusDot({ expired, warning, guildColor }: { expired: boolean; warning: boolean; guildColor?: string }) {
+  // Determine the dot color - use guild color primarily, with state overlays
+  const dotColor = guildColor || 'rgba(255, 255, 255, 0.3)';
+  const isActive = expired || warning;
+
   return (
-    <span
-      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-        expired
-          ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]"
-          : warning
-            ? "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.75)]"
-            : "bg-white/25"
-      }`}
-      aria-hidden="true"
-    />
+    <span className="relative mt-1 shrink-0 flex items-center justify-center w-10 h-10" aria-hidden="true">
+      {/* Smooth pulsing outer aura - always visible with guild color */}
+      <span
+        className="absolute inline-flex h-10 w-10 rounded-full transition-all duration-1000 ease-out animate-[pulse_4s_ease-in-out_infinite]"
+        style={{
+          backgroundColor: dotColor,
+          opacity: isActive ? 0.15 : 0.08,
+          boxShadow: `0 0 30px ${dotColor}60, 0 0 50px ${dotColor}30`,
+        }}
+      />
+
+      {/* Middle glow ring */}
+      <span
+        className="absolute inline-flex h-6 w-6 rounded-full transition-all duration-700 ease-out"
+        style={{
+          backgroundColor: dotColor,
+          opacity: isActive ? 0.25 : 0.15,
+          boxShadow: `0 0 16px ${dotColor}80, 0 0 24px ${dotColor}40`,
+          transform: isActive ? 'scale(1)' : 'scale(0.9)',
+        }}
+      />
+
+      {/* Animated ping for active states */}
+      {isActive && (
+        <span
+          className="absolute inline-flex h-4 w-4 rounded-full animate-ping"
+          style={{
+            backgroundColor: expired ? '#10b981' : '#f59e0b',
+            opacity: 0.6,
+          }}
+        />
+      )}
+
+      {/* Core status dot - uses guild color with state indication overlay */}
+      <span
+        className="relative inline-flex h-4 w-4 rounded-full transition-all duration-700 ease-out"
+        style={{
+          backgroundColor: dotColor,
+          boxShadow: isActive
+            ? `0 0 12px ${dotColor}ff, 0 0 20px ${dotColor}80, 0 0 30px ${dotColor}40, inset 0 1px 2px rgba(255,255,255,0.3)`
+            : `0 0 8px ${dotColor}cc, 0 0 12px ${dotColor}60, inset 0 1px 2px rgba(255,255,255,0.2)`,
+          transform: isActive ? 'scale(1)' : 'scale(0.85)',
+        }}
+      >
+        {/* State indicator overlay - subtle rim light */}
+        {isActive && (
+          <span
+            className="absolute inset-0 rounded-full animate-pulse"
+            style={{
+              background: expired
+                ? 'radial-gradient(circle at 30% 30%, rgba(16, 185, 129, 0.4), transparent 60%)'
+                : 'radial-gradient(circle at 30% 30%, rgba(245, 158, 11, 0.4), transparent 60%)',
+              mixBlendMode: 'overlay',
+            }}
+          />
+        )}
+      </span>
+    </span>
   );
 }
 

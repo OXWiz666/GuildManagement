@@ -12,8 +12,19 @@ import {
   NON_CORE_SLOTS,
   LEGENDARY_CATEGORIES,
   AUDIT_ACTIONS,
+  WEAPON_TYPES,
+  ARMOR_PIECES,
+  ACCESSORY_PIECES,
+  MATERIAL_TYPES,
+  WEAPON_RARITIES,
+  GEAR_RARITIES,
+  ARMOR_TYPES,
+  WISHLIST_LABELS,
   type MarketRules,
   type DistributionTier,
+  type WishlistItem,
+  type WishlistRarity,
+  type ArmorType,
 } from "@guild/shared";
 
 const OFFICER_ROLES = ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
@@ -34,7 +45,68 @@ const MARKET_AUDIT_ACTIONS = [
   AUDIT_ACTIONS.DISTRIBUTION_LIMIT_OVERRIDDEN,
   AUDIT_ACTIONS.PRIORITY_SEQUENCE_CHANGED,
   AUDIT_ACTIONS.DISTRIBUTION_RULE_UPDATED,
+  AUDIT_ACTIONS.WISHLIST_ITEM_DISTRIBUTED,
+  AUDIT_ACTIONS.WISHLIST_LOG_REQUESTED,
+  AUDIT_ACTIONS.MOUNT_CATALOG_UPDATED,
+  AUDIT_ACTIONS.MOUNT_DISTRIBUTED,
 ];
+
+/** True when a query failed only because the mount tables haven't been migrated yet. */
+export function isMissingMountTable(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2021";
+}
+
+/** Active mount catalog ids for a guild — used to keep MOUNT wishlist entries valid. */
+async function activeMountIds(guildId: string): Promise<Set<string>> {
+  // Mounts are optional until the 0005 migration + client regen land. A stale
+  // running client won't have the model at all (prisma.guildMount === undefined).
+  if (!prisma.guildMount) return new Set();
+  try {
+    const mounts = await prisma.guildMount.findMany({
+      where: { guildId, isActive: true },
+      select: { id: true },
+    });
+    return new Set(mounts.map((m) => m.id));
+  } catch (err) {
+    // Degrade gracefully until the 0005 mount migration is applied.
+    if (isMissingMountTable(err)) return new Set();
+    throw err;
+  }
+}
+
+// Wished ARMOR/ACCESSORY keys can differ from the officer distribution slot keys.
+const WISH_SLOT_ALIASES: Record<string, string> = { helmet: "headpiece", shoes: "boots" };
+
+/** Candidate officer-form slot keys a wishlist item maps to (for auto-marking as distributed). */
+function wishCandidateSlots(item: WishlistItem): string[] {
+  switch (item.category) {
+    case "WEAPON":
+      return ["weapon"];
+    case "ARMOR":
+    case "ACCESSORY": {
+      const alias = WISH_SLOT_ALIASES[item.key];
+      return alias ? [item.key, alias] : [item.key];
+    }
+    case "LOGS":
+      return ["logs", "itemLog"];
+    case "TEMPORAL":
+      return ["temporalPieces", "temporalPiece"];
+    case "MATERIALS":
+      return ["materials"];
+    default:
+      return []; // MOUNT is distributed via the mount flow, not the item form
+  }
+}
+
+/** True if a distribution's item map actually handed out something matching this wish. */
+function distributionCoversWish(item: WishlistItem, dist: Record<string, unknown>): boolean {
+  return wishCandidateSlots(item).some((slot) => {
+    const v = dist[slot];
+    if (typeof v === "number") return v > 0;
+    if (typeof v === "string") return v.trim() !== "";
+    return v === true;
+  });
+}
 
 // ─── Rules helpers ───────────────────────────────────────────────────
 
@@ -389,8 +461,54 @@ export async function createDistribution(
     });
   }
 
+  // Auto-match: flip any of the member's wished items that this distribution covers
+  // to DISTRIBUTED so the wishlist master list reflects reality.
+  await markWishlistFulfilled(guildId, target, items, actorId);
+
   void broadcastToGuild(guildId, "item_distributed", { id: distribution.id, memberId: target.id });
   return distribution;
+}
+
+/**
+ * Flip a member's pending wishlist entries to DISTRIBUTED when a distribution
+ * (item map) covers them. Writes an audit entry listing the fulfilled items.
+ */
+async function markWishlistFulfilled(
+  guildId: string,
+  target: { id: string; marketWishlist: unknown; role: string; cp: number | null; ign?: string | null },
+  distItems: Record<string, number | boolean | string>,
+  actorId: string,
+) {
+  const rules = await getEffectiveMarketRules(guildId);
+  const tier = resolveDistributionTier(target, rules);
+  const mountIds = await activeMountIds(guildId);
+  const wishlist = normalizeWishlist(target.marketWishlist, rules, tier, mountIds);
+  if (wishlist.length === 0) return;
+
+  const now = new Date().toISOString();
+  const fulfilled: string[] = [];
+  const next = wishlist.map((item) => {
+    if (item.status !== "DISTRIBUTED" && distributionCoversWish(item, distItems)) {
+      fulfilled.push(WISHLIST_LABELS[item.key] || item.label || item.key);
+      return { ...item, status: "DISTRIBUTED" as const, fulfilledAt: now, fulfilledById: actorId };
+    }
+    return item;
+  });
+  if (fulfilled.length === 0) return;
+
+  await prisma.guildMember.update({
+    where: { id: target.id },
+    data: { marketWishlist: next as object },
+  });
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: AUDIT_ACTIONS.WISHLIST_ITEM_DISTRIBUTED,
+    target: "GuildMember",
+    targetId: target.id,
+    detail: { ign: target.ign, items: fulfilled },
+  });
+  void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: target.id });
 }
 
 export async function getDistributions(
@@ -435,32 +553,147 @@ export async function getDistributions(
 
 // ─── Member item wishlist ("choose what you want") ───────────────────
 
-/** Member views their own wishlist + the slots available for their tier. */
+/** Per-tier caps for the quantity-based resources (logs / temporal / materials). */
+function wishlistCaps(rules: MarketRules, tier: DistributionTier) {
+  const limit = rules.limits[tier];
+  return { logs: limit.logs, temporalPieces: limit.temporalPieces, materials: limit.materials };
+}
+
+/**
+ * Validate a raw wishlist blob into clean `WishlistItem[]`, dropping anything that
+ * doesn't fit the taxonomy. Quantities are clamped to the member's tier caps.
+ * Legacy plain-string entries (old wishlist format) are silently dropped.
+ */
+export function normalizeWishlist(
+  raw: unknown,
+  rules: MarketRules,
+  tier: DistributionTier,
+  allowedMountIds?: Set<string>,
+): WishlistItem[] {
+  if (!Array.isArray(raw)) return [];
+  const caps = wishlistCaps(rules, tier);
+  const gearRarities = new Set<WishlistRarity>(GEAR_RARITIES);
+  const weaponRarities = new Set<WishlistRarity>(WEAPON_RARITIES);
+  const armorTypes = new Set<ArmorType>(ARMOR_TYPES);
+  const out: WishlistItem[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue; // drop legacy strings
+    const e = entry as Partial<WishlistItem>;
+    const category = e.category;
+    const key = typeof e.key === "string" ? e.key : "";
+    if (!key) continue;
+
+    let item: WishlistItem | null = null;
+    switch (category) {
+      case "WEAPON":
+        if (WEAPON_TYPES[key] && e.rarity && weaponRarities.has(e.rarity)) {
+          item = { category, key, rarity: e.rarity };
+        }
+        break;
+      case "ARMOR":
+        if (ARMOR_PIECES[key] && e.rarity && gearRarities.has(e.rarity)) {
+          const armorType = e.armorType && armorTypes.has(e.armorType) ? e.armorType : undefined;
+          item = { category, key, rarity: e.rarity, ...(armorType ? { armorType } : {}) };
+        }
+        break;
+      case "ACCESSORY":
+        if (ACCESSORY_PIECES[key] && e.rarity && gearRarities.has(e.rarity)) {
+          item = { category, key, rarity: e.rarity };
+        }
+        break;
+      case "LOGS":
+      case "TEMPORAL": {
+        const expectedKey = category === "LOGS" ? "logs" : "temporalPieces";
+        const cap = category === "LOGS" ? caps.logs : caps.temporalPieces;
+        const qty = Math.floor(Number(e.quantity));
+        if (key === expectedKey && qty > 0) {
+          item = { category, key: expectedKey, quantity: Math.min(qty, Math.max(cap, 1)) };
+        }
+        break;
+      }
+      case "MATERIALS": {
+        const qty = Math.floor(Number(e.quantity));
+        if (MATERIAL_TYPES[key] && qty > 0) {
+          item = { category, key, quantity: Math.min(qty, Math.max(caps.materials, 1)) };
+        }
+        break;
+      }
+      case "MOUNT": {
+        // Keep the mount if it's still in the guild's active catalog. When the
+        // catalog isn't available (allowedMountIds undefined) keep it as-is.
+        if (!allowedMountIds || allowedMountIds.has(key)) {
+          const label = typeof e.label === "string" ? e.label : undefined;
+          item = { category, key, ...(label ? { label } : {}) };
+        }
+        break;
+      }
+    }
+
+    if (!item) continue;
+    // Carry over server-managed distribution status.
+    item.status = e.status === "DISTRIBUTED" ? "DISTRIBUTED" : "PENDING";
+    if (item.status === "DISTRIBUTED") {
+      if (typeof e.fulfilledAt === "string") item.fulfilledAt = e.fulfilledAt;
+      if (typeof e.fulfilledById === "string") item.fulfilledById = e.fulfilledById;
+    }
+    // De-dupe on category+key (keep first / highest-priority pick)
+    const dedupe = `${item.category}:${item.key}`;
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    out.push(item);
+  }
+
+  return out;
+}
+
+/** Summary counts for a member's wishlist, used by the table Status column + carousel. */
+export function wishlistSummary(items: WishlistItem[]): { total: number; distributed: number } {
+  return {
+    total: items.length,
+    distributed: items.filter((i) => i.status === "DISTRIBUTED").length,
+  };
+}
+
+/** Member views their own wishlist + the taxonomy caps for their tier. */
 export async function getMyWishlist(guildId: string, actorId: string) {
   const member = await requireActiveMember(guildId, actorId);
   const rules = await getEffectiveMarketRules(guildId);
   const tier = resolveDistributionTier(member, rules);
   const formType: "CORE" | "NON_CORE" = tier === "CORE" ? "CORE" : "NON_CORE";
-  const slots = formType === "CORE" ? CORE_SLOTS : NON_CORE_SLOTS;
-  const items = Array.isArray(member.marketWishlist) ? (member.marketWishlist as string[]) : [];
-  return { items, tier, formType, slots };
+  const mountIds = await activeMountIds(guildId);
+  const items = normalizeWishlist(member.marketWishlist, rules, tier, mountIds);
+  return { items, tier, formType, caps: wishlistCaps(rules, tier) };
 }
 
-/** Member sets their own wishlist. Items are filtered to valid slots for their tier. */
-export async function setWishlist(guildId: string, actorId: string, items: string[]) {
+/** Member sets their own wishlist. Items are normalized + clamped to their tier. */
+export async function setWishlist(guildId: string, actorId: string, items: WishlistItem[]) {
   const member = await requireActiveMember(guildId, actorId);
   const rules = await getEffectiveMarketRules(guildId);
   const tier = resolveDistributionTier(member, rules);
-  const allowed = new Set<string>(tier === "CORE" ? CORE_SLOTS : NON_CORE_SLOTS);
-  const cleaned = Array.from(new Set(items.filter((i) => allowed.has(i))));
+  const mountIds = await activeMountIds(guildId);
+
+  // Preserve prior distribution status so a member re-saving can't reset a
+  // fulfilled item back to pending.
+  const prior = new Map(
+    normalizeWishlist(member.marketWishlist, rules, tier, mountIds).map((i) => [`${i.category}:${i.key}`, i]),
+  );
+  const cleaned = normalizeWishlist(items, rules, tier, mountIds).map((i) => {
+    const was = prior.get(`${i.category}:${i.key}`);
+    if (was?.status === "DISTRIBUTED") {
+      return { ...i, status: "DISTRIBUTED" as const, fulfilledAt: was.fulfilledAt, fulfilledById: was.fulfilledById };
+    }
+    return i;
+  });
 
   await prisma.guildMember.update({
     where: { id: member.id },
-    data: { marketWishlist: cleaned },
+    data: { marketWishlist: cleaned as object },
   });
 
   void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: member.id });
-  return { items: cleaned, tier };
+  return { items: cleaned, tier, caps: wishlistCaps(rules, tier) };
 }
 
 // ─── Priority Queue (enhanced scoring) ───────────────────────────────
@@ -469,6 +702,7 @@ export async function getPriorityQueue(guildId: string, actorId: string) {
   await requireActiveMember(guildId, actorId);
   const rules = await getEffectiveMarketRules(guildId);
   const w = rules.weights;
+  const mountIds = await activeMountIds(guildId);
 
   const members = await prisma.guildMember.findMany({
     where: { guildId, isActive: true },
@@ -537,6 +771,8 @@ export async function getPriorityQueue(guildId: string, actorId: string) {
       const lastReq = lastReqMap.get(m.id) || 0;
       const recency = lastReq ? Math.max(0, 1 - (now - lastReq) / RECENCY_WINDOW) : 0;
       const rankNorm = GUILD_ROLES.indexOf(m.role as never) / maxRoleIdx;
+      const memberTier = resolveDistributionTier(m, rules);
+      const wishlist = normalizeWishlist(m.marketWishlist, rules, memberTier, mountIds);
 
       const raw =
         w.rank * rankNorm +
@@ -556,7 +792,7 @@ export async function getPriorityQueue(guildId: string, actorId: string) {
         avatarUrl: m.user.avatarUrl,
         role: m.role,
         rankName: m.rankName,
-        tier: resolveDistributionTier(m, rules),
+        tier: memberTier,
         cp,
         dkp,
         attendance,
@@ -565,7 +801,8 @@ export async function getPriorityQueue(guildId: string, actorId: string) {
         priorityScore,
         manualSeq: m.marketPrioritySeq,
         manualReason: m.marketPriorityReason,
-        wishlist: Array.isArray(m.marketWishlist) ? (m.marketWishlist as string[]) : [],
+        wishlist,
+        wishlistSummary: wishlistSummary(wishlist),
       };
     })
     .sort((a, b) => {
@@ -607,6 +844,125 @@ export async function overridePrioritySeq(
 
   void broadcastToGuild(guildId, "priority_sequence_changed", { memberId, prioritySeq });
   return updated;
+}
+
+// ─── Wishlist master list (officer view of every requested item) ─────
+
+export interface WishlistMasterRow {
+  memberId: string;
+  userId: string;
+  ign: string;
+  role: string;
+  tier: DistributionTier;
+  item: WishlistItem;
+  label: string;
+  status: "PENDING" | "DISTRIBUTED";
+  fulfilledAt: string | null;
+}
+
+export async function getWishlistMasterList(
+  guildId: string,
+  actorId: string,
+  filters: { status?: "PENDING" | "DISTRIBUTED"; category?: string; memberId?: string; search?: string } = {},
+): Promise<WishlistMasterRow[]> {
+  await requireOfficer(guildId, actorId);
+  const rules = await getEffectiveMarketRules(guildId);
+  const mountIds = await activeMountIds(guildId);
+  const mounts = prisma.guildMount
+    ? await prisma.guildMount
+        .findMany({ where: { guildId }, select: { id: true, name: true } })
+        .catch((err) => {
+          if (isMissingMountTable(err)) return [] as { id: string; name: string }[];
+          throw err;
+        })
+    : [];
+  const mountNames = new Map(mounts.map((m) => [m.id, m.name]));
+
+  const members = await prisma.guildMember.findMany({
+    where: { guildId, isActive: true },
+    include: { user: { select: { displayName: true } } },
+  });
+
+  const rows: WishlistMasterRow[] = [];
+  for (const m of members) {
+    const tier = resolveDistributionTier(m, rules);
+    const items = normalizeWishlist(m.marketWishlist, rules, tier, mountIds);
+    for (const item of items) {
+      const label =
+        item.category === "MOUNT"
+          ? mountNames.get(item.key) || item.label || "Mount"
+          : WISHLIST_LABELS[item.key] || item.key;
+      rows.push({
+        memberId: m.id,
+        userId: m.userId,
+        ign: m.ign || m.user.displayName,
+        role: m.role,
+        tier,
+        item,
+        label,
+        status: item.status === "DISTRIBUTED" ? "DISTRIBUTED" : "PENDING",
+        fulfilledAt: item.fulfilledAt || null,
+      });
+    }
+  }
+
+  let out = rows;
+  if (filters.status) out = out.filter((r) => r.status === filters.status);
+  if (filters.category) out = out.filter((r) => r.item.category === filters.category);
+  if (filters.memberId) out = out.filter((r) => r.memberId === filters.memberId);
+  if (filters.search?.trim()) {
+    const s = filters.search.toLowerCase();
+    out = out.filter((r) => r.ign.toLowerCase().includes(s) || r.label.toLowerCase().includes(s));
+  }
+
+  // Pending first, then by member IGN, then item label.
+  return out.sort((a, b) => {
+    if (a.status !== b.status) return a.status === "PENDING" ? -1 : 1;
+    return a.ign.localeCompare(b.ign) || a.label.localeCompare(b.label);
+  });
+}
+
+// ─── Notify members to submit a request ──────────────────────────────
+
+export async function notifyMembersToRequest(
+  guildId: string,
+  actorId: string,
+  payload: { itemLabel: string; itemRef?: string; memberIds?: string[]; message?: string },
+) {
+  const officer = await requireOfficer(guildId, actorId);
+
+  const where: { guildId: string; isActive: boolean; id?: { in: string[] } } = { guildId, isActive: true };
+  if (payload.memberIds && payload.memberIds.length > 0) {
+    where.id = { in: payload.memberIds };
+  }
+  const recipients = await prisma.guildMember.findMany({ where, select: { userId: true } });
+  // Don't notify the officer themselves unless explicitly targeted.
+  const targets = recipients.filter((r) => payload.memberIds?.length || r.userId !== officer.userId);
+  if (targets.length === 0) throw new BadRequestError("No members to notify");
+
+  const body =
+    payload.message?.trim() ||
+    `Please submit your wishlist request for ${payload.itemLabel}.`;
+  await createNotifications(
+    targets.map((t) => ({
+      userId: t.userId,
+      type: "wishlist_request",
+      title: `Request log: ${payload.itemLabel}`,
+      body,
+      metadata: { guildId, itemLabel: payload.itemLabel, itemRef: payload.itemRef },
+    })),
+  );
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: AUDIT_ACTIONS.WISHLIST_LOG_REQUESTED,
+    target: "Guild",
+    targetId: guildId,
+    detail: { itemLabel: payload.itemLabel, itemRef: payload.itemRef, count: targets.length },
+  });
+
+  return { notified: targets.length };
 }
 
 // ─── Market Rules (Settings) ─────────────────────────────────────────

@@ -35,7 +35,9 @@ export default function GuildMarketPage() {
 
   // Search & Filter state
   const [lootSearch, setLootSearch] = useState("");
+  const [lootCategory, setLootCategory] = useState("ALL");
   const [memberSearch, setMemberSearch] = useState("");
+  const [memberRoleFilter, setMemberRoleFilter] = useState("ALL");
   const [rankingSearch, setRankingSearch] = useState("");
 
   // Pagination page state for ledger transaction history
@@ -324,28 +326,33 @@ export default function GuildMarketPage() {
 
   // Filter sold items list
   const filteredSales = useMemo(() => {
-    if (!lootSearch.trim()) return sales;
+    const byCategory = lootCategory === "ALL" ? sales : sales.filter((item) => item.category === lootCategory);
+    if (!lootSearch.trim()) return byCategory;
     const s = lootSearch.toLowerCase();
-    return sales.filter(
+    return byCategory.filter(
       (item) =>
         item.itemName.toLowerCase().includes(s) ||
         item.category.toLowerCase().includes(s) ||
         item.bossSchedule?.bossName?.toLowerCase().includes(s)
     );
-  }, [sales, lootSearch]);
+  }, [sales, lootSearch, lootCategory]);
 
   // Filter Member Balance board list
   const filteredMembers = useMemo(() => {
     if (!accounting?.memberBalances) return [];
-    if (!memberSearch.trim()) return accounting.memberBalances;
+    const byRole =
+      memberRoleFilter === "ALL"
+        ? accounting.memberBalances
+        : accounting.memberBalances.filter((m: any) => m.role === memberRoleFilter);
+    if (!memberSearch.trim()) return byRole;
     const s = memberSearch.toLowerCase();
-    return accounting.memberBalances.filter(
+    return byRole.filter(
       (m: any) =>
         m.ign.toLowerCase().includes(s) ||
         m.class.toLowerCase().includes(s) ||
         m.role.toLowerCase().includes(s)
     );
-  }, [accounting, memberSearch]);
+  }, [accounting, memberSearch, memberRoleFilter]);
 
   // Summary Metrics calculations
   const totalLootSoldVal = useMemo(() => {
@@ -443,6 +450,8 @@ export default function GuildMarketPage() {
                   sales={filteredSales}
                   lootSearch={lootSearch}
                   onSearchChange={setLootSearch}
+                  lootCategory={lootCategory}
+                  onCategoryChange={setLootCategory}
                   currencySymbol={settings?.currencySymbol || "₱"}
                   secondaryCurrencySymbol={settings?.secondaryCurrencySymbol || "💎"}
                 />
@@ -466,6 +475,8 @@ export default function GuildMarketPage() {
                 filteredMembers={filteredMembers}
                 memberSearch={memberSearch}
                 onSearchChange={setMemberSearch}
+                memberRoleFilter={memberRoleFilter}
+                onRoleFilterChange={setMemberRoleFilter}
                 ledgerPage={ledgerPage}
                 onPageChange={setLedgerPage}
               />

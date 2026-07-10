@@ -41,7 +41,16 @@ export async function getItemDistributionAuditLogs(
   const skip = (page - 1) * limit;
   const windowTake = skip + limit;
 
-  const [itemRequests, auctions, itemRequestCount, auctionCount] = await Promise.all([
+  const [
+    itemRequests,
+    auctions,
+    distributions,
+    mountDistributions,
+    itemRequestCount,
+    auctionCount,
+    distributionCount,
+    mountDistributionCount,
+  ] = await Promise.all([
     prisma.itemRequest.findMany({
       where: {
         guildId,
@@ -85,6 +94,25 @@ export async function getItemDistributionAuditLogs(
       orderBy: { endsAt: "desc" },
       take: windowTake,
     }),
+    prisma.itemDistribution.findMany({
+      where: { guildId, ...(memberId ? { memberId } : {}) },
+      include: {
+        member: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } },
+      },
+      orderBy: { distributedAt: "desc" },
+      take: windowTake,
+    }),
+    prisma.mountDistribution
+      ? prisma.mountDistribution.findMany({
+          where: { guildId, ...(memberId ? { memberId } : {}) },
+          include: {
+            member: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } },
+            mount: { select: { name: true } },
+          },
+          orderBy: { distributedAt: "desc" },
+          take: windowTake,
+        })
+      : Promise.resolve([]),
     prisma.itemRequest.count({
       where: {
         guildId,
@@ -100,6 +128,10 @@ export async function getItemDistributionAuditLogs(
         winnerId: memberId ? memberId : { not: null },
       },
     }),
+    prisma.itemDistribution.count({ where: { guildId, ...(memberId ? { memberId } : {}) } }),
+    prisma.mountDistribution
+      ? prisma.mountDistribution.count({ where: { guildId, ...(memberId ? { memberId } : {}) } })
+      : Promise.resolve(0),
   ]);
 
   const logs: AuditLogEntry[] = [
@@ -146,13 +178,57 @@ export async function getItemDistributionAuditLogs(
         },
       };
     }),
+    ...distributions.map((dist) => {
+      const items = (dist.items && typeof dist.items === "object" ? dist.items : {}) as Record<string, unknown>;
+      const itemName = Object.entries(items)
+        .filter(([, v]) => (typeof v === "number" ? v > 0 : v !== false && v !== "" && v != null))
+        .map(([k, v]) => (typeof v === "number" && v > 1 ? `${k} ×${v}` : k))
+        .join(", ");
+      return {
+        id: dist.id,
+        action: "ITEM_DISTRIBUTED",
+        target: "ItemDistribution",
+        targetId: dist.id,
+        detail: {
+          itemName: itemName || "Items",
+          quantity: Object.keys(items).length,
+          category: dist.rankTier,
+          recipientName: dist.ignSnapshot || dist.member.ign || dist.member.user.displayName,
+          recipientId: dist.member.userId,
+          note: dist.note,
+        },
+        createdAt: dist.distributedAt.toISOString(),
+        actor: { id: dist.distributedById, displayName: "Guild Officer", avatarUrl: null },
+      };
+    }),
+    ...mountDistributions.map((md) => ({
+      id: md.id,
+      action: "MOUNT_DISTRIBUTED",
+      target: "MountDistribution",
+      targetId: md.id,
+      detail: {
+        itemName: md.mountNameSnapshot || md.mount.name,
+        quantity: 1,
+        category: "MOUNT",
+        recipientName: md.ignSnapshot || md.member.ign || md.member.user.displayName,
+        recipientId: md.member.userId,
+        note: md.note,
+      },
+      createdAt: md.distributedAt.toISOString(),
+      actor: { id: md.distributedById, displayName: "Guild Officer", avatarUrl: null },
+    })),
   ];
 
   const paginated = logs
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(skip, skip + limit);
 
-  return pageResult(paginated, itemRequestCount + auctionCount, page, limit);
+  return pageResult(
+    paginated,
+    itemRequestCount + auctionCount + distributionCount + mountDistributionCount,
+    page,
+    limit,
+  );
 }
 
 export async function getCurrencyDistributionAuditLogs(

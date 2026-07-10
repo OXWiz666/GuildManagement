@@ -9,7 +9,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "node --env-file=.env --import tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "clean": "rimraf node_modules .turbo"
   },
@@ -25,6 +25,6 @@
     "typescript": "^5.7.0"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "node --env-file=.env --import tsx prisma/seed.ts"
   }
 }

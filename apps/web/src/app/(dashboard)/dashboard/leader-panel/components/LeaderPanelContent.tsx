@@ -1,6 +1,7 @@
 "use client";
 
 import GuildSettingsSection from "../../settings/components/GuildSettingsSection";
+import DistributionRulesSection from "../../settings/components/DistributionRulesSection";
 import GuildPointsResetSection from "./GuildPointsResetSection";
 import { Reveal } from "@/components/dashboard/DashboardHelpers";
 
@@ -13,6 +14,9 @@ export default function LeaderPanelContent({ guildId }: LeaderPanelContentProps)
     <div className="space-y-6">
       <Reveal>
         <GuildSettingsSection guildId={guildId} />
+      </Reveal>
+      <Reveal>
+        <DistributionRulesSection guildId={guildId} />
       </Reveal>
       <Reveal>
         <GuildPointsResetSection guildId={guildId} />

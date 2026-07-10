@@ -68,7 +68,7 @@ export const PATCH = withApi(
         killedAt: null,
         createdAt: nextSchedule.createdAt.toISOString(),
       };
-      broadcastToGuild(null, "boss_rotation_updated", serializedNextSchedule);
+      broadcastToGuild(nextSchedule.guildId || guildId, "boss_rotation_updated", serializedNextSchedule);
     }
 
     return ok({ schedule: socketPayload, nextSchedule: serializedNextSchedule });

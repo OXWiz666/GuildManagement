@@ -83,11 +83,13 @@ export async function createOrgForUser(
         input.factionName,
         async (s) => !!(await tx.faction.findUnique({ where: { slug: s }, select: { id: true } })),
       );
+      const factionInviteCode = `${abbreviate(input.factionName)}-FAC-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
       const faction = await tx.faction.create({
         data: {
           name: input.factionName,
           slug: factionSlug,
           leaderUserId: user.id,
+          inviteCode: factionInviteCode,
         },
       });
       factionId = faction.id;

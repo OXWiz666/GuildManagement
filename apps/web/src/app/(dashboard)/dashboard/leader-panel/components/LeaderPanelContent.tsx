@@ -3,6 +3,7 @@
 import GuildSettingsSection from "../../settings/components/GuildSettingsSection";
 import DistributionRulesSection from "../../settings/components/DistributionRulesSection";
 import GuildPointsResetSection from "./GuildPointsResetSection";
+import MountWishlistSection from "./MountWishlistSection";
 import { Reveal } from "@/components/dashboard/DashboardHelpers";
 
 interface LeaderPanelContentProps {
@@ -20,6 +21,9 @@ export default function LeaderPanelContent({ guildId }: LeaderPanelContentProps)
       </Reveal>
       <Reveal>
         <GuildPointsResetSection guildId={guildId} />
+      </Reveal>
+      <Reveal>
+        <MountWishlistSection guildId={guildId} />
       </Reveal>
     </div>
   );

@@ -1,8 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { dashboardApi, type BossScheduleData } from "@/lib/api";
+import {
+  dashboardApi,
+  type BossScheduleData,
+  type BossRotationResponse,
+  type BossRotationItem,
+  type FactionGuildData,
+} from "@/lib/api";
 import { getRealtimeBossTimer } from "@guild/shared";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useToast } from "@/components/ui/Toast";
@@ -11,6 +17,8 @@ import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { useQuery, queryClient } from "@/lib/query";
+import BossDropsPicker, { type SelectedDrop, rarityStyle } from "@/app/(dashboard)/dashboard/boss-rotation/components/BossDropsPicker";
+import WishlistPriorityCarousel from "@/components/dashboard/WishlistPriorityCarousel";
 import {
   Reveal,
   StaggerReveal,
@@ -22,6 +30,13 @@ import {
   useCountUp,
   useReveal,
 } from "@/components/dashboard/DashboardHelpers";
+
+// Local-time value for <input type="datetime-local">.
+function toDateTimeInputValue(date: Date) {
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 16);
+}
 
 interface BaseGuildDashboardProps {
   role: string;
@@ -44,9 +59,29 @@ export default function BaseGuildDashboard({
 
   // ─── Ticker State ────────────────
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [showKillModal, setShowKillModal] = useState<BossScheduleData | null>(null);
-  const [killTimeInput, setKillTimeInput] = useState("");
-  const [isLoggingKill, setIsLoggingKill] = useState(false);
+
+  // ─── "Taken" shortcut modal state (mirrors Boss Rotation's confirm-taken flow) ───
+  const [takenTarget, setTakenTarget] = useState<BossScheduleData | null>(null);
+  const [takenGuildId, setTakenGuildId] = useState("");
+  const [takenTime, setTakenTime] = useState("");
+  const [isConfirmingTaken, setIsConfirmingTaken] = useState(false);
+  const [takenDrops, setTakenDrops] = useState<SelectedDrop[]>([]);
+  const [showTakenDropsPicker, setShowTakenDropsPicker] = useState(false);
+
+  // ─── Next-spawn carousel state ───
+  const [slideIndex, setSlideIndex] = useState(0);
+  const slideDirRef = useRef<1 | -1>(1);
+  const [carouselPaused, setCarouselPaused] = useState(false);
+  // Card-swipe drag state (pointer/touch).
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const trackWrapRef = useRef<HTMLDivElement>(null);
+
+  // ─── Upcoming list auto-scroll ───
+  const upcomingScrollRef = useRef<HTMLDivElement>(null);
+  const [upcomingPaused, setUpcomingPaused] = useState(false);
 
   // Real-time ticker
   useEffect(() => {
@@ -70,13 +105,64 @@ export default function BaseGuildDashboard({
     { persist: true, staleTime: 15000, enabled: !!activeGuild }
   );
 
-  const bossSchedules = (bossSchedulesRaw || [])
-    .filter((s) => s.status !== "KILLED")
-    .sort(
-      (a, b) =>
-        new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime(),
-    )
-    .slice(0, 3);
+  // Rotation data (shared cache key with the Boss Rotation page) — powers the
+  // taking-guild picker in the "Taken" shortcut modal.
+  const { data: rotationData } = useQuery<BossRotationResponse | null>(
+    activeGuild ? `boss_rotation_v2:${activeGuild.guildId}` : "boss_rotation_empty",
+    async () => {
+      if (!activeGuild) return null;
+      const result = await dashboardApi.getBossRotation(activeGuild.guildId);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 15000, enabled: !!activeGuild },
+  );
+
+  const rotationByBoss = useMemo(() => {
+    const map = new Map<string, BossRotationItem>();
+    for (const rot of rotationData?.rotations || []) {
+      map.set(rot.bossName.toLowerCase(), rot);
+    }
+    return map;
+  }, [rotationData]);
+
+  // All live (non-killed) spawns, earliest first.
+  const sortedSchedules = useMemo(
+    () =>
+      (bossSchedulesRaw || [])
+        .filter((s) => s.status !== "KILLED")
+        .sort(
+          (a, b) =>
+            new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime(),
+        ),
+    [bossSchedulesRaw],
+  );
+
+  // Upcoming list — a scrollable shortcut list (more than the old 3).
+  const upcomingList = useMemo(() => sortedSchedules.slice(0, 12), [sortedSchedules]);
+
+  // The carousel is scoped to the CURRENT guild's own bosses. A schedule row
+  // with a non-null `guildId` is a guild-specific spawn instance and always
+  // belongs to that guild outright — checked FIRST, since the rotation's
+  // `currentGuild` is a cross-guild "whose turn in the shared queue" pointer
+  // and must never override a schedule's own owning guild. Only for
+  // faction-wide rows (guildId === null) do we fall back to the assigned turn,
+  // then the rotation's current holder, to decide if the spawn is ours.
+  const myGuildSchedules = useMemo(() => {
+    const gid = activeGuild?.guildId;
+    if (!gid) return [];
+    return sortedSchedules.filter((s) => {
+      if (s.guildId) return s.guildId === gid;
+      const rot = rotationByBoss.get(s.bossName.toLowerCase());
+      const ownerId = s.guildTurnGuildId || rot?.currentGuild?.id || null;
+      return ownerId === gid;
+    });
+  }, [sortedSchedules, rotationByBoss, activeGuild?.guildId]);
+
+  // Carousel slides — every upcoming spawn for OUR guild, soonest first. Each
+  // boss only ever has one live schedule row, so this is already one slide per
+  // boss; we don't dedup by date here since the guild-scoped set is small and
+  // two of our own bosses landing on the same day should both stay visible.
+  const dateSlides = useMemo(() => myGuildSchedules.slice(0, 7), [myGuildSchedules]);
 
   // 2. Dashboard Stats Query
   const {
@@ -110,6 +196,7 @@ export default function BaseGuildDashboard({
     const handleRealTimeRefresh = () => {
       console.log("[Socket Real-time]: Invalidating dashboard query cache...");
       queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+      queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
       queryClient.invalidateQueries(`dashboard_stats:${activeGuild.guildId}`);
     };
 
@@ -122,32 +209,67 @@ export default function BaseGuildDashboard({
     };
   }, [socket, activeGuild]);
 
-  // Log boss kill
-  async function handleLogKill(e: React.FormEvent) {
-    e.preventDefault();
-    if (!activeGuild || !showKillModal || !killTimeInput) return;
+  // Guilds eligible to take a given boss (rotation queue first, then all faction
+  // guilds as a fallback so the picker is never empty).
+  function guildOptionsFor(bossName: string): FactionGuildData[] {
+    const rot = rotationByBoss.get(bossName.toLowerCase());
+    if (rot && rot.queue.length > 0) return rot.queue;
+    return rotationData?.guilds || [];
+  }
 
-    setIsLoggingKill(true);
+  // Open the "Taken" shortcut modal, pre-selecting the boss's turn guild + now.
+  function openTakenModal(boss: BossScheduleData) {
+    const rot = rotationByBoss.get(boss.bossName.toLowerCase());
+    const defaultGuildId =
+      boss.guildTurnGuildId ||
+      rot?.currentGuild?.id ||
+      guildOptionsFor(boss.bossName)[0]?.id ||
+      "";
+    setTakenTarget(boss);
+    setTakenGuildId(defaultGuildId);
+    setTakenTime(toDateTimeInputValue(new Date()));
+    setTakenDrops([]);
+  }
+
+  // Mark a boss taken by a guild (advances the rotation), from the overview.
+  // Same call as the Boss Rotation page's confirm-taken flow, including drops.
+  async function confirmTaken(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeGuild || !takenTarget || !takenGuildId || !takenTime || isConfirmingTaken) return;
+
+    setIsConfirmingTaken(true);
     try {
-      const formattedTime = new Date(
-        `${new Date().toISOString().split("T")[0]}T${killTimeInput}:00`,
-      );
-      const result = await dashboardApi.logBossKill(
+      const killedAt = new Date(takenTime).toISOString();
+      const dropsPayload = takenDrops.map((d) => ({
+        bucket: d.item.bucket,
+        path: d.item.path,
+        quantity: d.quantity,
+      }));
+      const result = await dashboardApi.markBossRotationKilled(
         activeGuild.guildId,
-        showKillModal.id,
-        formattedTime.toISOString(),
+        takenTarget.id,
+        killedAt,
+        takenGuildId,
+        undefined,
+        dropsPayload,
       );
       if (result.success) {
-        addToast("success", `Recorded death for ${showKillModal.bossName}`);
-        setShowKillModal(null);
-        setKillTimeInput("");
+        const guildName =
+          guildOptionsFor(takenTarget.bossName).find((g) => g.id === takenGuildId)?.name ||
+          "selected guild";
+        addToast("success", `${takenTarget.bossName} taken by ${guildName}.`);
+        setTakenTarget(null);
+        setTakenDrops([]);
         queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
         queryClient.invalidateQueries(`dashboard_stats:${activeGuild.guildId}`);
+      } else {
+        addToast("error", result.error?.message || "Failed to mark boss taken");
       }
     } catch (err: any) {
-      addToast("error", err?.message || "Failed to log boss kill");
+      addToast("error", err?.message || "Failed to mark boss taken");
     } finally {
-      setIsLoggingKill(false);
+      setIsConfirmingTaken(false);
     }
   }
 
@@ -158,10 +280,85 @@ export default function BaseGuildDashboard({
     return { expired: t.live, live: t.live, warning: t.warning, text: t.text, liveText: t.liveElapsedText };
   }
 
+  // Keep the carousel index valid whenever the slide set changes.
+  useEffect(() => {
+    setSlideIndex((prev) => (prev > dateSlides.length - 1 ? 0 : prev));
+  }, [dateSlides.length]);
+
+  // Auto-advance the carousel with a back-and-forth (ping-pong) motion.
+  useEffect(() => {
+    if (carouselPaused || dateSlides.length <= 1) return;
+    const id = setInterval(() => {
+      setSlideIndex((prev) => {
+        let dir = slideDirRef.current;
+        let next = prev + dir;
+        if (next > dateSlides.length - 1) {
+          next = dateSlides.length - 2;
+          dir = -1;
+        } else if (next < 0) {
+          next = 1;
+          dir = 1;
+        }
+        slideDirRef.current = dir;
+        return next;
+      });
+    }, 4200);
+    return () => clearInterval(id);
+  }, [carouselPaused, dateSlides.length]);
+
+  // Gentle auto-scroll of the Upcoming list, reversing at each end; pauses on hover.
+  useEffect(() => {
+    const el = upcomingScrollRef.current;
+    if (!el || upcomingPaused) return;
+    let dir = 1;
+    const id = setInterval(() => {
+      const max = el.scrollHeight - el.clientHeight;
+      if (max <= 1) return;
+      if (el.scrollTop >= max - 0.5) dir = -1;
+      else if (el.scrollTop <= 0.5) dir = 1;
+      el.scrollTop += dir * 0.5;
+    }, 30);
+    return () => clearInterval(id);
+  }, [upcomingPaused, upcomingList.length]);
+
+  function goToSlide(target: number, dir: 1 | -1) {
+    if (dateSlides.length === 0) return;
+    const clamped = Math.max(0, Math.min(dateSlides.length - 1, target));
+    slideDirRef.current = dir;
+    setSlideIndex(clamped);
+  }
+
+  // ─── Card-swipe pointer handlers ───
+  function onCarouselPointerDown(e: React.PointerEvent) {
+    if (dateSlides.length <= 1) return;
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    setCarouselPaused(true);
+    dragStartXRef.current = e.clientX;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function onCarouselPointerMove(e: React.PointerEvent) {
+    if (!isDraggingRef.current) return;
+    setDragOffset(e.clientX - dragStartXRef.current);
+  }
+  function onCarouselPointerUp() {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    const width = trackWrapRef.current?.clientWidth || 1;
+    const threshold = Math.min(80, width * 0.22);
+    const off = dragOffset;
+    setDragOffset(0);
+    if (off <= -threshold) goToSlide(slideIndex + 1, 1);
+    else if (off >= threshold) goToSlide(slideIndex - 1, -1);
+    setCarouselPaused(false);
+  }
+
   if (!user || !activeGuild) return null;
 
-  // Get next boss for the dedicated widget
-  const nextBoss = bossSchedules[0] || null;
+  // Carousel: only the next spawn per date; fall back to the earliest spawn.
+  const slideBoss = dateSlides[slideIndex] || dateSlides[0] || null;
+  const nextBoss = slideBoss;
   const nextBossCountdown = nextBoss ? getTickingCountdown(nextBoss) : null;
   const canManageBossRotations =
     activeGuild.role === "GUILD_LEADER" ||
@@ -298,7 +495,7 @@ export default function BaseGuildDashboard({
                 <SectionHeader
                   eyebrow="Upcoming bosses"
                   title="Next spawns"
-                  meta={`${bossSchedules.length} active`}
+                  meta={`${upcomingList.length} active`}
                 />
 
                 {isLoadingBosses ? (
@@ -307,7 +504,7 @@ export default function BaseGuildDashboard({
                       <Skeleton key={i} className="h-20 rounded-xl" />
                     ))}
                   </div>
-                ) : bossSchedules.length === 0 ? (
+                ) : upcomingList.length === 0 ? (
                   <div className="py-10 text-center">
                     <div className="inline-flex h-12 w-12 rounded-full border border-[var(--metal-border)] bg-[var(--forge-glow)] items-center justify-center mb-3">
                       <svg
@@ -329,28 +526,35 @@ export default function BaseGuildDashboard({
                     </p>
                   </div>
                 ) : (
-                  <StaggerReveal
-                    baseDelay={60}
-                    stagger={90}
-                    className="space-y-3"
+                  <div
+                    className="relative"
+                    onMouseEnter={() => setUpcomingPaused(true)}
+                    onMouseLeave={() => setUpcomingPaused(false)}
                   >
-                    {bossSchedules.map((boss) => (
-                      <BossRow
-                        key={boss.id}
-                        boss={boss}
-                        tick={getTickingCountdown(boss)}
-                        canLogKill={canManageBossRotations}
-                        onLogKill={() => {
-                          setShowKillModal(boss);
-                          setKillTimeInput(
-                            new Date()
-                              .toLocaleTimeString("en-US", { hour12: false })
-                              .substring(0, 5),
-                          );
-                        }}
-                      />
-                    ))}
-                  </StaggerReveal>
+                    {/* Fade masks so the auto-scroll reads as a continuous ticker */}
+                    <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-6 z-10 bg-gradient-to-b from-[var(--obsidian-elevated)] to-transparent" />
+                    <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-6 z-10 bg-gradient-to-t from-[var(--obsidian-elevated)] to-transparent" />
+                    <div
+                      ref={upcomingScrollRef}
+                      className="max-h-[320px] overflow-y-auto pr-1 custom-scrollbar scroll-smooth"
+                    >
+                      <StaggerReveal
+                        baseDelay={60}
+                        stagger={90}
+                        className="space-y-3 py-1"
+                      >
+                        {upcomingList.map((boss) => (
+                          <BossRow
+                            key={boss.id}
+                            boss={boss}
+                            tick={getTickingCountdown(boss)}
+                            canLogKill={canManageBossRotations}
+                            onTaken={() => openTakenModal(boss)}
+                          />
+                        ))}
+                      </StaggerReveal>
+                    </div>
+                  </div>
                 )}
               </section>
             </Reveal>
@@ -417,11 +621,11 @@ export default function BaseGuildDashboard({
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Next Boss Spawn Widget */}
+            {/* Next Boss Spawn — auto-cycling carousel (one boss per date) */}
             {nextBoss && nextBossCountdown && (
               <Reveal from="right">
                 <section
-                  className={`relative card-obsidian rounded-2xl p-5 transition-all duration-500 ${
+                  className={`relative card-obsidian rounded-2xl p-5 overflow-hidden transition-all duration-500 ${
                     nextBossCountdown.warning || nextBossCountdown.expired
                       ? "border-[var(--forge-gold)]/25"
                       : ""
@@ -431,103 +635,193 @@ export default function BaseGuildDashboard({
                       ? { animation: "glow-pulse 3s ease-in-out infinite" }
                       : undefined
                   }
+                  onMouseEnter={() => setCarouselPaused(true)}
+                  onMouseLeave={() => setCarouselPaused(false)}
                 >
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
                     <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.22em] font-medium">
                       Next boss spawn
                     </span>
+                    <span className="text-[9px] text-white/25 uppercase tracking-[0.14em]">· your guild</span>
                     <span className="h-px flex-1 bg-gradient-to-r from-[var(--forge-gold)]/20 to-transparent" />
+                    {dateSlides.length > 1 && (
+                      <span className="text-[10px] font-mono text-white/35 tabular-nums">
+                        {slideIndex + 1}/{dateSlides.length}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="h-14 w-14 rounded-xl bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_12px_rgba(212,168,83,0.08)]">
-                      {nextBoss.bossImageUrl ? (
-                        <img
-                          src={nextBoss.bossImageUrl}
-                          alt={nextBoss.bossName}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <svg className="h-7 w-7 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                          <path d="M2 17l10 5 10-5" />
-                          <path d="M2 12l10 5 10-5" />
-                        </svg>
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-semibold text-white truncate">
-                        {nextBoss.bossName}
-                      </p>
-                      <p className="text-[11px] text-white/40 truncate mt-0.5">
-                        {nextBoss.location}
-                      </p>
-                      {nextBoss.guildTurn && (
-                        <p className="text-[10px] text-[var(--forge-gold-dim)] mt-1">
-                          Turn: {nextBoss.guildTurn}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Countdown */}
-                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                    <p
-                      className={`text-center text-[28px] font-mono font-bold tracking-tight tabular-nums ${
-                        nextBossCountdown.live
-                          ? "text-red-400"
-                          : nextBossCountdown.warning
-                            ? "text-[var(--forge-gold-bright)]"
-                            : "text-[var(--forge-gold)]"
-                      }`}
+                  {/* Swipeable card track — each slide translates in/out like a card swipe */}
+                  <div
+                    ref={trackWrapRef}
+                    className="overflow-hidden touch-pan-y select-none"
+                    style={{ cursor: dateSlides.length > 1 ? (isDragging ? "grabbing" : "grab") : "default" }}
+                    onPointerDown={onCarouselPointerDown}
+                    onPointerMove={onCarouselPointerMove}
+                    onPointerUp={onCarouselPointerUp}
+                    onPointerCancel={onCarouselPointerUp}
+                  >
+                    <div
+                      className="flex items-stretch"
+                      style={{
+                        transform: `translateX(calc(${-slideIndex * 100}% + ${dragOffset}px))`,
+                        transition: isDragging ? "none" : "transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)",
+                      }}
                     >
-                      {nextBossCountdown.live ? nextBossCountdown.liveText : nextBossCountdown.text}
-                    </p>
-                    <p className="text-center text-[10px] text-white/30 uppercase tracking-[0.2em] mt-1">
-                      {nextBossCountdown.live ? "Live · up time" : "Until spawn"}
-                    </p>
+                      {dateSlides.map((slide) => {
+                        const cd = getTickingCountdown(slide);
+                        return (
+                          <div key={slide.id} className="w-full shrink-0 min-h-[196px]">
+                            {/* Date badge */}
+                            <div className="mb-3">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--forge-glow)] border border-[var(--metal-border)] text-[10px] font-semibold text-[var(--forge-gold-bright)] uppercase tracking-[0.14em]">
+                                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                  <line x1="16" y1="2" x2="16" y2="6" />
+                                  <line x1="8" y1="2" x2="8" y2="6" />
+                                  <line x1="3" y1="10" x2="21" y2="10" />
+                                </svg>
+                                {new Date(slide.spawnTime).toLocaleDateString("en-US", {
+                                  weekday: "short",
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              <div className="h-16 w-16 rounded-xl bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_12px_rgba(212,168,83,0.08)]">
+                                {slide.bossImageUrl ? (
+                                  <img
+                                    src={slide.bossImageUrl}
+                                    alt={slide.bossName}
+                                    draggable={false}
+                                    className="h-full w-full object-cover pointer-events-none"
+                                  />
+                                ) : (
+                                  <svg className="h-7 w-7 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                  </svg>
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-semibold text-white truncate">
+                                  {slide.bossName}
+                                </p>
+                                <p className="text-[11px] text-white/40 truncate mt-0.5">
+                                  {slide.location}
+                                </p>
+                                {(slide.guildTurnGuildName || slide.guildTurn) && (
+                                  <p className="text-[10px] text-[var(--forge-gold-dim)] mt-1 truncate">
+                                    Turn: {slide.guildTurnGuildName || slide.guildTurn}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Countdown */}
+                            <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                              <p
+                                className={`text-center text-[28px] font-mono font-bold tracking-tight tabular-nums ${
+                                  cd.live
+                                    ? "text-red-400"
+                                    : cd.warning
+                                      ? "text-[var(--forge-gold-bright)]"
+                                      : "text-[var(--forge-gold)]"
+                                }`}
+                              >
+                                {cd.live ? cd.liveText : cd.text}
+                              </p>
+                              <p className="text-center text-[10px] text-white/30 uppercase tracking-[0.2em] mt-1">
+                                {cd.live ? "Live · up time" : "Until spawn"}
+                              </p>
+                            </div>
+
+                            {/* Status badge */}
+                            <div className="mt-3 flex justify-center">
+                              <BossStatusBadge
+                                expired={cd.live}
+                                warning={cd.warning}
+                                status={slide.status}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  {/* Status badge */}
-                  <div className="mt-3 flex justify-center">
-                    <BossStatusBadge
-                      expired={nextBossCountdown.live}
-                      warning={nextBossCountdown.warning}
-                      status={nextBoss.status}
-                    />
-                  </div>
-
-                  {/* Log kill — officers can record the death straight from the widget */}
+                  {/* Taken — mark the boss taken by a guild straight from the widget */}
                   {canManageBossRotations && (
                     <div className="mt-4 pt-4 border-t border-white/[0.06]">
                       <Magnetic strength={4}>
                         <Button
-                          variant="danger"
+                          variant="accent"
                           size="sm"
                           className="w-full"
-                          onClick={() => {
-                            setShowKillModal(nextBoss);
-                            setKillTimeInput(
-                              new Date().toLocaleTimeString("en-US", { hour12: false }).substring(0, 5),
-                            );
-                          }}
+                          onClick={() => openTakenModal(nextBoss)}
                         >
                           <span className="inline-flex items-center gap-1.5">
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                              <line x1="12" y1="9" x2="12" y2="13" />
-                              <line x1="12" y1="17" x2="12.01" y2="17" />
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                              <path d="M22 4L12 14.01l-3-3" />
                             </svg>
-                            Log kill
+                            Taken
                           </span>
                         </Button>
                       </Magnetic>
                     </div>
                   )}
+
+                  {/* Carousel controls */}
+                  {dateSlides.length > 1 && (
+                    <div className="mt-4 flex items-center justify-between">
+                      <button
+                        type="button"
+                        aria-label="Previous spawn"
+                        onClick={() => goToSlide(slideIndex - 1, -1)}
+                        className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
+                        disabled={slideIndex <= 0}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        {dateSlides.map((slide, i) => (
+                          <button
+                            key={slide.id}
+                            type="button"
+                            aria-label={`Go to spawn ${i + 1}`}
+                            onClick={() => goToSlide(i, i > slideIndex ? 1 : -1)}
+                            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                              i === slideIndex
+                                ? "w-5 bg-[var(--forge-gold)]"
+                                : "w-1.5 bg-white/20 hover:bg-white/40"
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        aria-label="Next spawn"
+                        onClick={() => goToSlide(slideIndex + 1, 1)}
+                        className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
+                        disabled={slideIndex >= dateSlides.length - 1}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
+                      </button>
+                    </div>
+                  )}
                 </section>
               </Reveal>
             )}
+
+            {/* Logs priority sequence — member wishlist ranking carousel */}
+            <WishlistPriorityCarousel guildId={activeGuild.guildId} />
 
             {/* Activity Feed */}
             <Reveal from="right">
@@ -601,12 +895,12 @@ export default function BaseGuildDashboard({
         </div>
       </div>
 
-      {/* LOG BOSS KILL MODAL */}
-      {showKillModal && (
+      {/* TAKEN MODAL — mark a boss taken by a guild + advance the rotation */}
+      {takenTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-md animate-fade-in"
-            onClick={() => !isLoggingKill && setShowKillModal(null)}
+            onClick={() => !isConfirmingTaken && setTakenTarget(null)}
           />
           <div
             className="relative glass-strong border border-[var(--metal-border)] rounded-2xl p-6 max-w-sm w-full shadow-[0_40px_90px_-25px_rgba(0,0,0,0.8)] z-50 animate-scale-in"
@@ -621,49 +915,106 @@ export default function BaseGuildDashboard({
               }}
             />
             <div className="flex items-center gap-3 mb-4">
-              <div className="relative h-10 w-10 rounded-xl bg-red-500/[0.10] border border-red-500/20 flex items-center justify-center">
+              <div className="relative h-10 w-10 rounded-xl bg-emerald-500/[0.10] border border-emerald-500/20 flex items-center justify-center">
                 <svg
-                  className="h-4 w-4 text-red-400"
+                  className="h-4 w-4 text-emerald-400"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2"
+                  strokeWidth="2.5"
                 >
-                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                  <path d="M22 4L12 14.01l-3-3" />
                 </svg>
-                <span className="absolute -inset-0.5 rounded-xl border border-red-500/15 animate-ping" />
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-[0.22em] text-red-400/80">
-                  Record death
+                <div className="text-[10px] uppercase tracking-[0.22em] text-emerald-400/80">
+                  Confirm taken
                 </div>
                 <h3 className="text-[15px] font-semibold text-white">
-                  Log boss kill
+                  {takenTarget.bossName}
                 </h3>
               </div>
             </div>
             <p className="text-[12px] text-white/50 mb-5 leading-relaxed">
-              Record the time of death for{" "}
-              <span className="text-white font-medium">
-                {showKillModal.bossName}
-              </span>
-              .
+              Mark <span className="text-white font-medium">{takenTarget.bossName}</span> taken and advance
+              the rotation to the next guild.
             </p>
 
-            <form onSubmit={handleLogKill} className="space-y-4">
+            <form onSubmit={confirmTaken} className="space-y-4">
               <div>
                 <label className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em] mb-2">
-                  Time of death
+                  Taking guild
+                </label>
+                <select
+                  value={takenGuildId}
+                  onChange={(e) => setTakenGuildId(e.target.value)}
+                  required
+                  disabled={isConfirmingTaken}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40 disabled:opacity-50 cursor-pointer"
+                >
+                  <option className="bg-[#0c0d12]" value="">Select taking guild</option>
+                  {guildOptionsFor(takenTarget.bossName).map((guild) => (
+                    <option className="bg-[#0c0d12]" key={guild.id} value={guild.id}>
+                      {guild.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em] mb-2">
+                  Taken time
                 </label>
                 <input
-                  type="time"
-                  value={killTimeInput}
-                  onChange={(e) => setKillTimeInput(e.target.value)}
+                  type="datetime-local"
+                  value={takenTime}
+                  onChange={(e) => setTakenTime(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40 font-mono text-center tracking-[0.18em]"
+                  disabled={isConfirmingTaken}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40 [color-scheme:dark]"
                 />
+              </div>
+
+              {/* Boss drops */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em]">
+                    Boss drops <span className="text-white/30 normal-case tracking-normal">(optional)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowTakenDropsPicker(true)}
+                    disabled={isConfirmingTaken}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--forge-gold)]/30 bg-[var(--forge-glow)] px-2.5 py-1 text-[11px] font-bold text-[var(--forge-gold-bright)] hover:border-[var(--forge-gold)]/50 transition-colors cursor-pointer disabled:opacity-40"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                    {takenDrops.length > 0 ? "Edit drops" : "Add drops"}
+                  </button>
+                </div>
+                {takenDrops.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowTakenDropsPicker(true)}
+                    disabled={isConfirmingTaken}
+                    className="w-full rounded-lg border border-dashed border-white/[0.1] bg-white/[0.01] px-3 py-3 text-[11px] text-white/35 hover:text-white/60 hover:border-white/20 transition-colors cursor-pointer disabled:opacity-40"
+                  >
+                    No drops recorded — click to add the items this boss dropped.
+                  </button>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
+                    {takenDrops.map(({ item, quantity }) => {
+                      const rs = rarityStyle(item.rarity);
+                      return (
+                        <span key={`${item.bucket}::${item.path}`} className={`inline-flex items-center gap-1.5 rounded-md border ${rs.border} ${rs.bg} pl-1 pr-1.5 py-0.5`}>
+                          <img src={item.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-4 w-4 rounded object-cover" />
+                          <span className="text-[10px] font-semibold text-white/85 max-w-[110px] truncate">{item.itemName}</span>
+                          {quantity > 1 && <span className="text-[9px] font-mono text-white/50">×{quantity}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 justify-end pt-2 border-t border-white/[0.06]">
@@ -671,24 +1022,38 @@ export default function BaseGuildDashboard({
                   variant="ghost"
                   size="sm"
                   type="button"
-                  onClick={() => setShowKillModal(null)}
+                  onClick={() => setTakenTarget(null)}
+                  disabled={isConfirmingTaken}
                 >
                   Cancel
                 </Button>
                 <Magnetic strength={4}>
                   <Button
-                    variant="danger"
+                    variant="accent"
                     size="sm"
                     type="submit"
-                    isLoading={isLoggingKill}
+                    isLoading={isConfirmingTaken}
+                    disabled={!takenGuildId || !takenTime}
                   >
-                    Record death
+                    Confirm taken
                   </Button>
                 </Magnetic>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {takenTarget && showTakenDropsPicker && (
+        <BossDropsPicker
+          bossName={takenTarget.bossName}
+          initial={takenDrops}
+          onCancel={() => setShowTakenDropsPicker(false)}
+          onApply={(selected) => {
+            setTakenDrops(selected);
+            setShowTakenDropsPicker(false);
+          }}
+        />
       )}
     </div>
   );
@@ -820,12 +1185,12 @@ function BossRow({
   boss,
   tick,
   canLogKill,
-  onLogKill,
+  onTaken,
 }: {
   boss: BossScheduleData;
   tick: { expired: boolean; live: boolean; text: string; warning: boolean; liveText: string };
   canLogKill: boolean;
-  onLogKill: () => void;
+  onTaken: () => void;
 }) {
   const borderTone = tick.expired
     ? "border-red-500/20 bg-red-500/[0.04]"
@@ -900,10 +1265,16 @@ function BossRow({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onLogKill}
-              className="text-red-400/80 hover:text-red-300 border border-red-500/[0.15] hover:border-red-500/30 hover:bg-red-500/[0.04]"
+              onClick={onTaken}
+              className="text-emerald-400/90 hover:text-emerald-300 border border-emerald-500/[0.18] hover:border-emerald-500/35 hover:bg-emerald-500/[0.06]"
             >
-              Log kill
+              <span className="inline-flex items-center gap-1.5">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                  <path d="M22 4L12 14.01l-3-3" />
+                </svg>
+                Taken
+              </span>
             </Button>
           </Magnetic>
         )}

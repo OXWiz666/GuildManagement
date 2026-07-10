@@ -59,6 +59,7 @@ export default function GuildActivitiesPage() {
 
   const [now, setNow] = useState(Date.now());
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
+  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<GuildActivityData | null>(null);
   const [saving, setSaving] = useState(false);
@@ -93,10 +94,17 @@ export default function GuildActivitiesPage() {
   const canManage = data?.canManage ?? false;
   const activities = useMemo(() => data?.activities ?? [], [data]);
 
-  const filtered = useMemo(
-    () => (typeFilter === "ALL" ? activities : activities.filter((a) => a.type === typeFilter)),
-    [activities, typeFilter],
-  );
+  const filtered = useMemo(() => {
+    const byType = typeFilter === "ALL" ? activities : activities.filter((a) => a.type === typeFilter);
+    const needle = search.trim().toLowerCase();
+    if (!needle) return byType;
+    return byType.filter(
+      (a) =>
+        a.title.toLowerCase().includes(needle) ||
+        (a.opponent || "").toLowerCase().includes(needle) ||
+        (a.location || "").toLowerCase().includes(needle),
+    );
+  }, [activities, typeFilter, search]);
 
   const upcoming = useMemo(
     () =>
@@ -225,25 +233,41 @@ export default function GuildActivitiesPage() {
           }
         />
 
-        {/* Type filter */}
-        <div className="inline-flex flex-wrap items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-xl p-1 gap-1">
-          {FILTERS.map((f) => {
-            const count = f.id === "ALL" ? activities.length : activities.filter((a) => a.type === f.id).length;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setTypeFilter(f.id)}
-                className={`relative px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
-                  typeFilter === f.id
-                    ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)]"
-                    : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
-                }`}
-              >
-                {f.label}
-                <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${typeFilter === f.id ? "bg-[var(--forge-gold)]/15 text-[var(--forge-gold)]" : "bg-white/5 text-white/45"}`}>{count}</span>
-              </button>
-            );
-          })}
+        {/* Type filter + search */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="inline-flex flex-wrap items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-xl p-1 gap-1">
+            {FILTERS.map((f) => {
+              const count = f.id === "ALL" ? activities.length : activities.filter((a) => a.type === f.id).length;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setTypeFilter(f.id)}
+                  className={`relative px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
+                    typeFilter === f.id
+                      ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)]"
+                      : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
+                  }`}
+                >
+                  {f.label}
+                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${typeFilter === f.id ? "bg-[var(--forge-gold)]/15 text-[var(--forge-gold)]" : "bg-white/5 text-white/45"}`}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="relative block w-full lg:w-64">
+            <span className="sr-only">Search activities</span>
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search title, opponent, location..."
+              className="w-full h-[42px] pl-10 pr-4 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-sm text-white/90 placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors"
+            />
+          </label>
         </div>
 
         {isLoading ? (

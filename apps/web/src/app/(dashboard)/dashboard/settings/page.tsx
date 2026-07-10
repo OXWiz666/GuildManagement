@@ -14,6 +14,7 @@ import {
 
 // Imports from co-located components
 import ProfileSection from "./components/ProfileSection";
+import PaymentMethodsSection from "./components/PaymentMethodsSection";
 import CharacterSection from "./components/CharacterSection";
 import PasswordSection from "./components/PasswordSection";
 import SessionsSection, { type SessionData } from "./components/SessionsSection";
@@ -220,6 +221,11 @@ export default function SettingsPage() {
             isSavingProfile={isSavingProfile}
             handleUpdateProfile={handleUpdateProfile}
           />
+        </Reveal>
+
+        {/* Payment Methods (QR codes) */}
+        <Reveal>
+          <PaymentMethodsSection />
         </Reveal>
 
         {/* Character Profile Section */}

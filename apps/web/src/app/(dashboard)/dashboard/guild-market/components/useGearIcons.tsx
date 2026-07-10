@@ -26,6 +26,13 @@ function pickRep(items: IconItem[] | undefined, preferRarity?: string): string |
 const SLOT_TO_EQUIP: Record<string, string> = {
   weapon: "weapon",
   secondWeapon: "weapon",
+  // Wishlist weapon types all resolve to the generic weapon gear icon.
+  greatSword: "weapon",
+  staff: "weapon",
+  battleStaff: "weapon",
+  bow: "weapon",
+  swordShield: "weapon",
+  crossbowBattleshield: "weapon",
   headpiece: "helm",
   helmet: "helm",
   helm: "helm",

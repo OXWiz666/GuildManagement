@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { LEGENDARY_CATEGORIES, LEGENDARY_CATEGORY_LABELS } from "@guild/shared";
+import { createPortal } from "react-dom";
+import { LEGENDARY_CATEGORIES, LEGENDARY_CATEGORY_LABELS, LEGENDARY_STATUSES } from "@guild/shared";
+
+const LEGENDARY_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  COMPLETED: "Completed",
+};
 import { marketApi, type LegendaryRequestData } from "@/lib/api";
 import { useQuery, queryClient } from "@/lib/query";
 import { useToast } from "@/components/ui/Toast";
@@ -22,6 +30,8 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   const key = `market_legendary:${guildId}`;
   const { data, isLoading } = useQuery(
@@ -38,6 +48,8 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
   const refresh = () => queryClient.invalidateQueries(key);
 
   const filtered = requests.filter((r) => {
+    if (categoryFilter !== "ALL" && r.category !== categoryFilter) return false;
+    if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return (
@@ -87,8 +99,30 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Input placeholder="Search by IGN or category…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[200px]">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="rounded-lg border border-white/[0.1] bg-black/30 px-2.5 py-1.5 text-[11px] text-white focus:border-cyan-500/50 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All categories</option>
+            {LEGENDARY_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{LEGENDARY_CATEGORY_LABELS[c]}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border border-white/[0.1] bg-black/30 px-2.5 py-1.5 text-[11px] text-white focus:border-cyan-500/50 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All statuses</option>
+            {LEGENDARY_STATUSES.map((s) => (
+              <option key={s} value={s}>{LEGENDARY_STATUS_LABELS[s] || s}</option>
+            ))}
+          </select>
+          <div className="relative flex-1 min-w-[160px] max-w-sm">
+            <Input placeholder="Search by IGN or category…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
         </div>
         <Magnetic strength={4}>
           <Button variant="primary" size="sm" onClick={() => setShowModal(true)}>
@@ -197,7 +231,7 @@ function LegendaryRequestModal({ guildId, onClose, onSubmitted }: { guildId: str
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => !isSubmitting && onClose()} />
       <div className="relative glass-strong w-full max-w-lg rounded-3xl p-6 border border-white/[0.08] animate-scale-in z-50 overflow-hidden">
@@ -241,6 +275,7 @@ function LegendaryRequestModal({ guildId, onClose, onSubmitted }: { guildId: str
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -13,9 +13,11 @@ import {
   UnauthorizedError,
   ConflictError,
   NotFoundError,
+  BadRequestError,
 } from "../utils/errors";
 import { writeAuditLog } from "./audit.service";
-import { AUDIT_ACTIONS } from "@guild/shared";
+import { createOrgForUser } from "./onboarding.service";
+import { AUDIT_ACTIONS, type LeaderOnboardingInput } from "@guild/shared";
 import { env } from "../config/env";
 import type {
   AuthResponse,
@@ -23,6 +25,7 @@ import type {
   UserWithGuilds,
   SessionInfo,
   TokenPair,
+  PaymentMethodEntry,
 } from "@guild/shared";
 
 // ─── Registration ───────────────────────────────
@@ -149,7 +152,14 @@ export async function login(
 // ─── Supabase Session Syncing ───────────────────
 
 export async function supabaseSync(
-  supabaseUser: { id: string; email: string; displayName: string },
+  supabaseUser: {
+    id: string;
+    email: string;
+    displayName: string;
+    // Set on the very first sign-up sync when the user chose a leader account
+    // type. Ignored on every subsequent sync (the user already exists).
+    onboarding?: LeaderOnboardingInput | null;
+  },
   ipAddress?: string,
   userAgent?: string,
 ): Promise<AuthResponse> {
@@ -179,6 +189,21 @@ export async function supabaseSync(
       ipAddress,
       userAgent,
     });
+
+    // Self-serve leader onboarding: create the guild/faction they chose at
+    // signup. Runs only here (user was just created), so it happens exactly
+    // once. Best-effort — never block account creation on org setup failure.
+    if (supabaseUser.onboarding && supabaseUser.onboarding.accountType !== "MEMBER") {
+      try {
+        await createOrgForUser(
+          { id: user.id, displayName: user.displayName },
+          supabaseUser.onboarding,
+          { ipAddress, userAgent },
+        );
+      } catch (err) {
+        console.error("[onboarding] failed to create org for new leader:", err);
+      }
+    }
   } else {
     // Optionally update display name if it changed
     if (user.displayName !== supabaseUser.displayName) {
@@ -506,6 +531,7 @@ export async function getCurrentUser(
           },
         },
       },
+      platformAdmin: { select: { role: true, isActive: true } },
     },
   });
 
@@ -524,6 +550,7 @@ export async function getCurrentUser(
       rankName: m.rankName,
       joinedAt: m.joinedAt.toISOString(),
     })),
+    platformRole: user.platformAdmin?.isActive ? user.platformAdmin.role : null,
   };
 }
 
@@ -679,5 +706,46 @@ function toUserPublic(user: any): UserPublic {
     cp: user.cp,
     class: user.class,
     weapon: user.weapon,
+    paymentMethods: Array.isArray(user.paymentMethods) ? user.paymentMethods : [],
   };
+}
+
+// ─── Payment methods (member profile QR codes) ──────────────────────
+
+const MAX_PAYMENT_METHODS = 6;
+
+export async function addPaymentMethod(
+  userId: string,
+  data: { method: string; label?: string; qrDataUrl: string },
+): Promise<PaymentMethodEntry> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { paymentMethods: true } });
+  if (!user) throw new NotFoundError("User not found");
+
+  const current = Array.isArray(user.paymentMethods) ? (user.paymentMethods as unknown as PaymentMethodEntry[]) : [];
+  if (current.length >= MAX_PAYMENT_METHODS) {
+    throw new BadRequestError(`You can only save up to ${MAX_PAYMENT_METHODS} payment methods`);
+  }
+
+  const entry: PaymentMethodEntry = {
+    id: crypto.randomUUID(),
+    method: data.method,
+    label: data.label?.trim() || null,
+    qrUrl: data.qrDataUrl,
+    updatedAt: new Date().toISOString(),
+  };
+  const next = [...current, entry];
+  await prisma.user.update({ where: { id: userId }, data: { paymentMethods: next as object } });
+  return entry;
+}
+
+export async function removePaymentMethod(userId: string, methodId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { paymentMethods: true } });
+  if (!user) throw new NotFoundError("User not found");
+
+  const current = Array.isArray(user.paymentMethods) ? (user.paymentMethods as unknown as PaymentMethodEntry[]) : [];
+  const next = current.filter((m) => m.id !== methodId);
+  if (next.length === current.length) throw new NotFoundError("Payment method not found");
+
+  await prisma.user.update({ where: { id: userId }, data: { paymentMethods: next as object } });
+  return { deleted: true };
 }

@@ -45,6 +45,50 @@ export const registerSchema = z
     path: ["confirmPassword"],
   });
 
+// ─── Leader Onboarding (self-serve guild / faction creation) ─────────
+// Chosen at signup. MEMBER = plain account (joins via invite code).
+// GUILD_LEADER = creates a guild and leads it.
+// FACTION_LEADER = creates a faction (a group of guilds) + its first guild.
+export const ACCOUNT_TYPES = ["MEMBER", "GUILD_LEADER", "FACTION_LEADER"] as const;
+export type AccountType = (typeof ACCOUNT_TYPES)[number];
+
+export const orgNameSchema = z
+  .string()
+  .trim()
+  .min(2, "Name must be at least 2 characters")
+  .max(48, "Name must be at most 48 characters")
+  .regex(
+    /^[a-zA-Z0-9 '\-_.]+$/,
+    "Use letters, numbers, spaces, and - _ . ' only",
+  );
+
+// Validated payload the client passes (via Supabase user_metadata) and the
+// server re-validates before creating the org on first authenticated sync.
+export const leaderOnboardingSchema = z
+  .object({
+    accountType: z.enum(ACCOUNT_TYPES),
+    guildName: orgNameSchema,
+    factionName: orgNameSchema.optional(),
+  })
+  .refine(
+    (d) => d.accountType !== "FACTION_LEADER" || !!d.factionName,
+    { message: "Faction name is required", path: ["factionName"] },
+  );
+export type LeaderOnboardingInput = z.infer<typeof leaderOnboardingSchema>;
+
+/**
+ * Turn a display name into a URL-safe slug. Not guaranteed unique — the caller
+ * appends a suffix on collision.
+ */
+export function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
 export const forgotPasswordSchema = z.object({
   email: emailSchema,
 });
@@ -87,6 +131,20 @@ export const updateUserSchema = z.object({
 export const combatPowerSchema = z.object({
   cp: z.number().int().nonnegative().max(100_000_000),
 });
+
+// ─── Payment methods (member profile QR codes) ──────────────────────
+// The browser sends a base64 data URL, stored inline like avatarUrl — these
+// are meant to be shown to whoever pays the member, not kept private.
+export const addPaymentMethodSchema = z.object({
+  method: z.string().trim().min(1, "Select a payment method").max(40),
+  label: z.string().trim().max(60).optional(),
+  qrDataUrl: z
+    .string()
+    .min(1, "QR code image is required")
+    .max(2_800_000, "Image is too large")
+    .regex(/^data:image\/(png|jpe?g|webp);base64,/, "Must be a PNG, JPEG, or WebP data URL"),
+});
+export type AddPaymentMethodInput = z.infer<typeof addPaymentMethodSchema>;
 
 // Infer types from schemas
 export type LoginInput = z.infer<typeof loginSchema>;

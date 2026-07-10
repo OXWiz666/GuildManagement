@@ -1,8 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { CORE_SLOTS, NON_CORE_SLOTS, SLOT_LABELS } from "@guild/shared";
-import { marketApi, type PriorityQueueEntry } from "@/lib/api";
+import { createPortal } from "react-dom";
+import {
+  CORE_SLOTS,
+  NON_CORE_SLOTS,
+  SLOT_LABELS,
+  WEAPON_TYPES,
+  ARMOR_PIECES,
+  ACCESSORY_PIECES,
+  MATERIAL_TYPES,
+  WEAPON_RARITIES,
+  GEAR_RARITIES,
+  WISHLIST_RARITY_LABELS,
+  ARMOR_TYPES,
+  ARMOR_TYPE_LABELS,
+  WISHLIST_LABELS,
+  WISHLIST_STATUS_LABELS,
+  WISHLIST_CATEGORY_LABELS,
+  DISTRIBUTION_TIERS,
+  DISTRIBUTION_TIER_LABELS,
+  type WishlistItem,
+  type WishlistRarity,
+  type WishlistStatus,
+  type WishlistCategory,
+  type ArmorType,
+  type DistributionTier,
+} from "@guild/shared";
+import {
+  marketApi,
+  type PriorityQueueEntry,
+  type WishlistCaps,
+  type WishlistSummary,
+  type MountCatalogItem,
+} from "@/lib/api";
 import { useQuery, queryClient } from "@/lib/query";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
@@ -10,9 +41,9 @@ import Input from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { RankTierBadge, PrioritySeqBadge } from "./MarketBadges";
-import { useGearIcons, GearIcon } from "./useGearIcons";
+import { useGearIcons, GearIcon, type GearIconResolver } from "./useGearIcons";
 
-// Slots entered as a numeric quantity; everything else is a yes/no gear flag.
+// Slots entered as a numeric quantity; everything else is a yes/no gear flag (officer Distribute form).
 const QUANTITY_SLOTS = new Set([
   "logs",
   "temporalPieces",
@@ -22,16 +53,175 @@ const QUANTITY_SLOTS = new Set([
   "upgradeScrolls",
 ]);
 
+const RARITY_BADGE: Record<WishlistRarity, string> = {
+  LEGEND: "bg-amber-500/15 text-amber-200 border-amber-500/30",
+  EPIC: "bg-fuchsia-500/15 text-fuchsia-200 border-fuchsia-500/30",
+  MYTHIC: "bg-rose-500/15 text-rose-200 border-rose-500/30",
+};
+
+const ARMOR_TYPE_BADGE = "bg-sky-500/15 text-sky-200 border-sky-500/30";
+
+const keyOf = (item: Pick<WishlistItem, "category" | "key">) => `${item.category}:${item.key}`;
+const wishLabel = (item: WishlistItem) => WISHLIST_LABELS[item.key] || SLOT_LABELS[item.key] || item.key;
+
+// Gear first, then mount, then consumables — matches how members think about their picks.
+const WISHLIST_GROUP_ORDER: WishlistCategory[] = [
+  "WEAPON",
+  "ARMOR",
+  "ACCESSORY",
+  "MOUNT",
+  "LOGS",
+  "TEMPORAL",
+  "MATERIALS",
+];
+
+// ─── Reusable presentational chip for a single wish ───────────────────
+function WishChip({
+  item,
+  iconSrc,
+  size = 16,
+  distributed = false,
+}: {
+  item: WishlistItem;
+  iconSrc: string | null;
+  size?: number;
+  distributed?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md text-[11px] border ${
+        distributed
+          ? "bg-emerald-500/[0.06] text-emerald-200/60 border-emerald-500/20"
+          : "bg-cyan-500/10 text-cyan-200 border-cyan-500/20"
+      }`}
+    >
+      <GearIcon src={iconSrc} size={size} />
+      <span className={`truncate max-w-[140px] ${distributed ? "line-through decoration-emerald-400/40" : ""}`}>
+        {wishLabel(item)}
+      </span>
+      {item.armorType && (
+        <span className={`px-1 rounded text-[9px] font-bold border ${ARMOR_TYPE_BADGE}`}>
+          {ARMOR_TYPE_LABELS[item.armorType]}
+        </span>
+      )}
+      {item.rarity && (
+        <span className={`px-1 rounded text-[9px] font-bold border ${RARITY_BADGE[item.rarity]}`}>
+          {WISHLIST_RARITY_LABELS[item.rarity]}
+        </span>
+      )}
+      {typeof item.quantity === "number" && (
+        <span className="text-[10px] font-mono text-white/60">×{item.quantity}</span>
+      )}
+      {distributed && <span aria-hidden className="text-emerald-400">✓</span>}
+    </span>
+  );
+}
+
+// ─── Wishlist distribution status badge ───────────────────────────────
+function WishlistStatusBadge({ summary }: { summary?: WishlistSummary }) {
+  const total = summary?.total ?? 0;
+  const distributed = summary?.distributed ?? 0;
+  if (total === 0) {
+    return <span className="text-[10px] text-white/30">No wishes</span>;
+  }
+  if (distributed === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">
+        Pending
+      </span>
+    );
+  }
+  if (distributed >= total) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-200">
+        All distributed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-200">
+      {distributed}/{total} distributed
+    </span>
+  );
+}
+
+// Small pill for a single item's status (used in master list + detail modal).
+function ItemStatusPill({ status }: { status: WishlistStatus }) {
+  const distributed = status === "DISTRIBUTED";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
+        distributed
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+      }`}
+    >
+      {WISHLIST_STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+// ─── Shared member sort/filter — drives both Priority Queue and Master List ──
+
+type SortField = "SEQUENCE" | "TIER" | "CP" | "POINTS" | "STATUS";
+const SORT_FIELD_LABELS: Record<SortField, string> = {
+  SEQUENCE: "Sequence",
+  TIER: "Tier",
+  CP: "CP",
+  POINTS: "Points",
+  STATUS: "Status",
+};
+const SORT_FIELDS: SortField[] = ["SEQUENCE", "TIER", "CP", "POINTS", "STATUS"];
+
+const TIER_RANK: Record<string, number> = { CORE: 0, ELITE: 1, UPPER: 2, LOWER: 3 };
+
+// Members with pending wishes surface first (most actionable), then members with
+// no wishes at all, then fully-distributed members last.
+function statusRank(summary: WishlistSummary): number {
+  if (summary.total === 0) return 1;
+  if (summary.distributed >= summary.total) return 2;
+  return 0;
+}
+
+function sortQueue(list: PriorityQueueEntry[], field: SortField): PriorityQueueEntry[] {
+  const arr = [...list];
+  switch (field) {
+    case "TIER":
+      arr.sort((a, b) => (TIER_RANK[a.tier] ?? 9) - (TIER_RANK[b.tier] ?? 9) || a.position - b.position);
+      break;
+    case "CP":
+      arr.sort((a, b) => b.cp - a.cp || a.position - b.position);
+      break;
+    case "POINTS":
+      arr.sort((a, b) => b.dkp - a.dkp || a.position - b.position);
+      break;
+    case "STATUS":
+      arr.sort((a, b) => statusRank(a.wishlistSummary) - statusRank(b.wishlistSummary) || a.position - b.position);
+      break;
+    case "SEQUENCE":
+    default:
+      arr.sort((a, b) => a.position - b.position);
+  }
+  return arr;
+}
+
 interface Props {
   guildId: string;
   isOfficer: boolean;
 }
 
+type WishlistView = "queue" | "master";
+
 export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
   const { addToast } = useToast();
-  const gearIcons = useGearIcons();
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<WishlistView>("queue");
+  const [sortBy, setSortBy] = useState<SortField>("SEQUENCE");
+  const [tierFilter, setTierFilter] = useState<DistributionTier | "ALL">("ALL");
   const [target, setTarget] = useState<PriorityQueueEntry | null>(null);
+  const [detailMember, setDetailMember] = useState<PriorityQueueEntry | null>(null);
+  const [showNotify, setShowNotify] = useState(false);
+  const [notifyMember, setNotifyMember] = useState<PriorityQueueEntry | null>(null);
 
   const key = `market_priority:${guildId}`;
   const { data, isLoading } = useQuery(
@@ -46,59 +236,82 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
   const refresh = () => {
     queryClient.invalidateQueries(key);
     queryClient.invalidateQueries(`market_distributions:${guildId}`);
+    queryClient.invalidateQueries(`wishlist_master:${guildId}`);
+    queryClient.invalidateQueries(`market_wishlist:${guildId}`);
   };
 
-  const filtered = queue.filter((m) => {
+  const searched = queue.filter((m) => {
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return m.ign.toLowerCase().includes(s) || m.role.toLowerCase().includes(s) || m.tier.toLowerCase().includes(s);
   });
-
-  async function overrideSeq(m: PriorityQueueEntry) {
-    const input = window.prompt(`Manual priority position for ${m.ign} (blank to clear):`, m.manualSeq ? String(m.manualSeq) : "");
-    if (input == null) return;
-    const seq = input.trim() === "" ? null : parseInt(input, 10);
-    if (seq !== null && (isNaN(seq) || seq < 1)) {
-      addToast("error", "Enter a valid position number");
-      return;
-    }
-    const reason = seq === null ? "Cleared override" : window.prompt("Reason for manual override (required):", "") || "";
-    if (seq !== null && !reason.trim()) {
-      addToast("error", "A reason is required for manual overrides");
-      return;
-    }
-    try {
-      const res = await marketApi.overridePriority(guildId, m.memberId, seq, reason);
-      if (res.success) {
-        addToast("success", "Priority sequence updated.");
-        refresh();
-      } else addToast("error", res.error?.message || "Failed");
-    } catch (err: any) {
-      addToast("error", err?.message || "An error occurred");
-    }
-  }
+  const tierFiltered = tierFilter === "ALL" ? searched : searched.filter((m) => m.tier === tierFilter);
+  const visibleQueue = sortQueue(tierFiltered, sortBy);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="max-w-sm flex-1 min-w-[200px]">
-          <Input placeholder="Search members…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {/* View toggle */}
+        <div className="inline-flex items-center gap-1 rounded-xl border border-white/[0.08] bg-[#0c0d12]/60 p-1">
+          {(["queue", "master"] as WishlistView[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all cursor-pointer ${
+                view === v ? "bg-white/[0.08] text-white" : "text-white/45 hover:text-white/80"
+              }`}
+            >
+              {v === "queue" ? "Priority Queue" : "Master List"}
+            </button>
+          ))}
         </div>
-        <p className="text-[11px] text-white/40">
-          Priority blends rank, points, CP, attendance, boss participation & item history.
-        </p>
+        <div className="flex flex-1 flex-wrap items-center justify-end gap-2 min-w-[200px]">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortField)}
+            className="rounded-lg border border-white/[0.1] bg-black/30 px-2.5 py-1.5 text-[11px] text-white focus:border-cyan-500/50 focus:outline-none cursor-pointer"
+          >
+            {SORT_FIELDS.map((f) => (
+              <option key={f} value={f}>
+                Sort: {SORT_FIELD_LABELS[f]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={tierFilter}
+            onChange={(e) => setTierFilter(e.target.value as DistributionTier | "ALL")}
+            className="rounded-lg border border-white/[0.1] bg-black/30 px-2.5 py-1.5 text-[11px] text-white focus:border-cyan-500/50 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All tiers</option>
+            {DISTRIBUTION_TIERS.map((t) => (
+              <option key={t} value={t}>
+                {DISTRIBUTION_TIER_LABELS[t]}
+              </option>
+            ))}
+          </select>
+          <div className="max-w-xs flex-1 min-w-[160px]">
+            <Input placeholder="Search members…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          {isOfficer && (
+            <Button variant="secondary" size="sm" onClick={() => setShowNotify(true)}>
+              Notify
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Members choose the items they want */}
-      {!isOfficer && <MyWishlistCard guildId={guildId} />}
+      {/* Every guild member — including officers & leaders — builds their own wishlist */}
+      <MyWishlistCard guildId={guildId} />
 
-      {isLoading && queue.length === 0 ? (
+      {view === "master" ? (
+        <MasterListView guildId={guildId} isOfficer={isOfficer} queue={visibleQueue} onDone={refresh} />
+      ) : isLoading && queue.length === 0 ? (
         <Skeleton className="h-64 w-full rounded-2xl animate-pulse" />
-      ) : filtered.length === 0 ? (
+      ) : visibleQueue.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/35 border border-dashed border-white/[0.06] rounded-2xl">No members to display.</div>
       ) : (
         <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-auto max-h-[600px]">
-          <table className="w-full text-[12px] min-w-[640px]">
+          <table className="w-full text-[12px] min-w-[560px]">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">
                 <th className="px-4 py-3">#</th>
@@ -106,15 +319,12 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
                 <th className="px-4 py-3">Tier</th>
                 <th className="px-4 py-3 text-right">CP</th>
                 <th className="px-4 py-3 text-right">Points</th>
-                <th className="px-4 py-3 text-right hidden sm:table-cell">Attend.</th>
-                <th className="px-4 py-3 text-right hidden sm:table-cell">Boss</th>
-                <th className="px-4 py-3 text-right hidden md:table-cell">Recv'd</th>
-                <th className="px-4 py-3 text-right">Score</th>
+                <th className="px-4 py-3">Status</th>
                 {isOfficer && <th className="px-4 py-3 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04] text-white/70">
-              {filtered.map((m, index) => (
+              {visibleQueue.map((m, index) => (
                 <tr
                   key={m.memberId}
                   className="market-row hover:bg-white/[0.02]"
@@ -127,29 +337,16 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
                       {m.rankName}
                       {m.manualSeq != null && <span className="text-amber-300/70"> · pinned</span>}
                     </span>
-                    {isOfficer && (m.wishlist?.length ?? 0) > 0 && (
-                      <span className="mt-1 flex flex-wrap gap-1">
-                        {m.wishlist.slice(0, 4).map((w) => (
-                          <span key={w} className="inline-flex items-center gap-1 pl-0.5 pr-1.5 py-0.5 rounded text-[9px] bg-cyan-500/10 text-cyan-200/90 border border-cyan-500/20">
-                            <GearIcon src={gearIcons.iconForSlot(w)} size={14} />
-                            {SLOT_LABELS[w] || w}
-                          </span>
-                        ))}
-                        {m.wishlist.length > 4 && <span className="text-[9px] text-white/40">+{m.wishlist.length - 4}</span>}
-                      </span>
-                    )}
                   </td>
                   <td className="px-4 py-3"><RankTierBadge tier={m.tier} /></td>
                   <td className="px-4 py-3 text-right font-mono">{m.cp.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right font-mono">{m.dkp.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right font-mono hidden sm:table-cell">{m.attendance}</td>
-                  <td className="px-4 py-3 text-right font-mono hidden sm:table-cell">{m.bossParticipation}</td>
-                  <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{m.previousReceived}</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-[var(--forge-gold-bright)]">{m.priorityScore}</td>
+                  <td className="px-4 py-3"><WishlistStatusBadge summary={m.wishlistSummary} /></td>
                   {isOfficer && (
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 justify-end">
-                        <Button variant="ghost" size="xs" onClick={() => overrideSeq(m)} className="text-white/50">Pin</Button>
+                        <Button variant="ghost" size="xs" onClick={() => setDetailMember(m)} className="text-white/60">Wishlist</Button>
+                        <Button variant="ghost" size="xs" onClick={() => setNotifyMember(m)} className="text-white/50">Notify</Button>
                         <Button variant="primary" size="xs" onClick={() => setTarget(m)}>Distribute</Button>
                       </div>
                     </td>
@@ -164,8 +361,58 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
       {target && (
         <DistributeModal guildId={guildId} member={target} onClose={() => setTarget(null)} onDone={refresh} />
       )}
+      {detailMember && (
+        <WishlistDetailModal
+          guildId={guildId}
+          member={detailMember}
+          isOfficer={isOfficer}
+          onClose={() => setDetailMember(null)}
+          onDone={refresh}
+        />
+      )}
+      {(showNotify || notifyMember) && (
+        <NotifyModal
+          guildId={guildId}
+          member={notifyMember}
+          onClose={() => {
+            setShowNotify(false);
+            setNotifyMember(null);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+// ─── Officer: record a distribution against a member ──────────────────
+
+// Map a member's structured wish to a slot key on the officer Distribute form (best-effort).
+const GEAR_SLOT_ALIASES: Record<string, string> = { helmet: "headpiece", shoes: "boots" };
+
+function wishToFormSlot(item: WishlistItem, formSlots: readonly string[]): { slot: string; qty?: number } | null {
+  const has = (k: string) => formSlots.includes(k);
+  switch (item.category) {
+    case "WEAPON":
+      return has("weapon") ? { slot: "weapon" } : null;
+    case "ARMOR":
+    case "ACCESSORY": {
+      if (has(item.key)) return { slot: item.key };
+      const alias = GEAR_SLOT_ALIASES[item.key];
+      return alias && has(alias) ? { slot: alias } : null;
+    }
+    case "LOGS":
+      if (has("logs")) return { slot: "logs", qty: item.quantity };
+      if (has("itemLog")) return { slot: "itemLog", qty: item.quantity };
+      return null;
+    case "TEMPORAL":
+      if (has("temporalPieces")) return { slot: "temporalPieces", qty: item.quantity };
+      if (has("temporalPiece")) return { slot: "temporalPiece", qty: item.quantity };
+      return null;
+    case "MATERIALS":
+      return has("materials") ? { slot: "materials", qty: item.quantity } : null;
+    default:
+      return null;
+  }
 }
 
 function DistributeModal({
@@ -184,11 +431,17 @@ function DistributeModal({
   const formType: "CORE" | "NON_CORE" = member.tier === "CORE" ? "CORE" : "NON_CORE";
   const slots = formType === "CORE" ? CORE_SLOTS : NON_CORE_SLOTS;
 
-  // Pre-check the gear slots this member said they want
+  // Pre-fill the form from the member's structured wishlist
   const [items, setItems] = useState<Record<string, number | boolean>>(() => {
     const init: Record<string, number | boolean> = {};
-    for (const slot of member.wishlist || []) {
-      if (!QUANTITY_SLOTS.has(slot)) init[slot] = true;
+    for (const w of member.wishlist || []) {
+      const mapped = wishToFormSlot(w, slots);
+      if (!mapped) continue;
+      if (QUANTITY_SLOTS.has(mapped.slot)) {
+        init[mapped.slot] = ((init[mapped.slot] as number) || 0) + (mapped.qty || 0);
+      } else {
+        init[mapped.slot] = true;
+      }
     }
     return init;
   });
@@ -235,7 +488,7 @@ function DistributeModal({
     }
   }
 
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => !isSubmitting && onClose()} />
@@ -256,11 +509,8 @@ function DistributeModal({
               <div className="mb-3 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] px-3 py-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300/80 mb-1">Member wants</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {(member.wishlist || []).map((s) => (
-                    <span key={s} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md text-[11px] bg-cyan-500/10 text-cyan-200 border border-cyan-500/20">
-                      <GearIcon src={gearIcons.iconForSlot(s)} size={16} />
-                      {SLOT_LABELS[s] || s}
-                    </span>
+                  {(member.wishlist || []).map((w) => (
+                    <WishChip key={keyOf(w)} item={w} iconSrc={gearIcons.iconForSlot(w.key)} />
                   ))}
                 </div>
               </div>
@@ -334,11 +584,12 @@ function DistributeModal({
         onConfirm={submit}
         onCancel={() => setConfirming(false)}
       />
-    </>
+    </>,
+    document.body,
   );
 }
 
-// ─── Member: choose the items you want ───────────────────────────────
+// ─── Member: build the detailed wishlist ──────────────────────────────
 
 function MyWishlistCard({ guildId }: { guildId: string }) {
   const gearIcons = useGearIcons();
@@ -348,43 +599,61 @@ function MyWishlistCard({ guildId }: { guildId: string }) {
     key,
     async () => {
       const res = await marketApi.getMyWishlist(guildId);
-      return res.success && res.data ? res.data : { items: [], tier: "LOWER", formType: "NON_CORE" as const, slots: [] as string[] };
+      return res.success && res.data
+        ? res.data
+        : {
+            items: [] as WishlistItem[],
+            tier: "LOWER",
+            formType: "NON_CORE" as const,
+            caps: { logs: 5, temporalPieces: 3, materials: 5 } as WishlistCaps,
+          };
     },
     { staleTime: 15000 },
   );
   const refresh = () => queryClient.invalidateQueries(key);
 
-  const items = data?.items || [];
+  const items = (data?.items || []) as WishlistItem[];
 
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
-          <h3 className="text-sm font-bold text-white flex items-center gap-2"><span aria-hidden>🎯</span> Items you want</h3>
-          <p className="text-[11px] text-white/45 mt-0.5">Choose the items you&apos;d like. Officers see your picks when distributing.</p>
+          <h3 className="text-sm font-bold text-white flex items-center gap-2"><span aria-hidden>🎯</span> My wishlist</h3>
+          <p className="text-[11px] text-white/45 mt-0.5">Wish the exact gear, logs, temporal pieces &amp; materials you want. Officers see your picks when distributing.</p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => setShowModal(true)}>Choose items</Button>
+        <Button variant="primary" size="sm" onClick={() => setShowModal(true)}>Edit wishlist</Button>
       </div>
       {isLoading && items.length === 0 ? (
         <p className="text-xs text-white/40 py-2">Loading…</p>
       ) : items.length === 0 ? (
-        <p className="text-xs text-white/35 py-2 border border-dashed border-white/[0.06] rounded-xl text-center">You haven&apos;t chosen any items yet.</p>
+        <p className="text-xs text-white/35 py-2 border border-dashed border-white/[0.06] rounded-xl text-center">You haven&apos;t wished for anything yet.</p>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {items.map((s) => (
-            <span key={s} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md text-[11px] bg-cyan-500/10 text-cyan-200 border border-cyan-500/20">
-              <GearIcon src={gearIcons.iconForSlot(s)} size={16} />
-              {SLOT_LABELS[s] || s}
-            </span>
-          ))}
+        <div className="space-y-3">
+          {WISHLIST_GROUP_ORDER.map((cat) => {
+            const group = items.filter((w) => w.category === cat);
+            if (group.length === 0) return null;
+            return (
+              <div key={cat}>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35 mb-1.5">
+                  {WISHLIST_CATEGORY_LABELS[cat]}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.map((w) => (
+                    <WishChip key={keyOf(w)} item={w} iconSrc={gearIcons.iconForSlot(w.key)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
       {showModal && data && (
         <WishlistModal
           guildId={guildId}
-          slots={data.slots}
           initial={items}
           tier={data.tier}
+          caps={data.caps}
+          gearIcons={gearIcons}
           onClose={() => setShowModal(false)}
           onSaved={refresh}
         />
@@ -395,38 +664,107 @@ function MyWishlistCard({ guildId }: { guildId: string }) {
 
 function WishlistModal({
   guildId,
-  slots,
   initial,
   tier,
+  caps,
+  gearIcons,
   onClose,
   onSaved,
 }: {
   guildId: string;
-  slots: string[];
-  initial: string[];
+  initial: WishlistItem[];
   tier: string;
+  caps: WishlistCaps;
+  gearIcons: GearIconResolver;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { addToast } = useToast();
-  const gearIcons = useGearIcons();
-  const [selected, setSelected] = useState<Set<string>>(new Set(initial));
+  // Selected wishes keyed by `${category}:${key}`
+  const [selected, setSelected] = useState<Record<string, WishlistItem>>(() => {
+    const m: Record<string, WishlistItem> = {};
+    for (const w of initial) m[keyOf(w)] = w;
+    return m;
+  });
   const [isSaving, setIsSaving] = useState(false);
 
-  const toggle = (slot: string) =>
+  // Leader-defined mount catalog the member can wish from.
+  const { data: mountData } = useQuery(
+    `market_mounts:${guildId}`,
+    async () => {
+      const res = await marketApi.listMounts(guildId);
+      return res.success && res.data ? res.data.mounts : [];
+    },
+    { staleTime: 30000 },
+  );
+  const mounts = ((mountData || []) as MountCatalogItem[]).filter((m) => m.isActive);
+
+  const toggleMount = (mount: MountCatalogItem) => {
+    const id = `MOUNT:${mount.id}`;
     setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(slot)) next.delete(slot);
-      else next.add(slot);
+      const next = { ...prev };
+      if (next[id]) delete next[id];
+      else next[id] = { category: "MOUNT", key: mount.id, label: mount.name };
       return next;
     });
+  };
+
+  const setGear = (
+    category: WishlistItem["category"],
+    key: string,
+    rarity: WishlistRarity | null,
+  ) => {
+    const id = `${category}:${key}`;
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (rarity == null) delete next[id];
+      else next[id] = { ...next[id], category, key, rarity };
+      return next;
+    });
+  };
+
+  // Armor's 2nd dimension: which material the piece is (Cloth/Leather/Plate), on top of rarity.
+  const setArmorType = (key: string, armorType: ArmorType | null) => {
+    const id = `ARMOR:${key}`;
+    setSelected((prev) => {
+      const next = { ...prev };
+      const existing = next[id];
+      if (armorType == null) {
+        if (existing) {
+          const { armorType: _drop, ...rest } = existing;
+          next[id] = rest as WishlistItem;
+        }
+      } else {
+        next[id] = { ...existing, category: "ARMOR", key, armorType };
+      }
+      return next;
+    });
+  };
+
+  const setQty = (category: WishlistItem["category"], key: string, cap: number, value: string) => {
+    const id = `${category}:${key}`;
+    const raw = parseInt(value, 10);
+    const qty = isNaN(raw) ? 0 : Math.max(0, Math.min(raw, cap));
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (qty <= 0) delete next[id];
+      else next[id] = { category, key, quantity: qty };
+      return next;
+    });
+  };
 
   async function save() {
+    const incomplete = Object.values(selected).filter((i) => i.category === "ARMOR" && !i.rarity);
+    if (incomplete.length > 0) {
+      const names = incomplete.map((i) => WISHLIST_LABELS[i.key] || i.key).join(", ");
+      addToast("error", `Pick a rarity for ${names} to save ${incomplete.length > 1 ? "them" : "it"}.`);
+      return;
+    }
     setIsSaving(true);
     try {
-      const res = await marketApi.setWishlist(guildId, Array.from(selected));
+      const res = await marketApi.setWishlist(guildId, Object.values(selected));
       if (res.success) {
-        addToast("success", "Your item choices were saved.");
+        addToast("success", "Your wishlist was saved.");
         onSaved();
         onClose();
       } else addToast("error", res.error?.message || "Failed to save");
@@ -437,50 +775,738 @@ function WishlistModal({
     }
   }
 
-  return (
+  const selectedCount = Object.keys(selected).length;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => !isSaving && onClose()} />
-      <div className="relative glass-strong w-full max-w-lg rounded-3xl border border-white/[0.08] animate-scale-in z-50 overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="relative glass-strong w-full max-w-2xl rounded-3xl border border-white/[0.08] animate-scale-in z-50 overflow-hidden max-h-[90vh] flex flex-col">
         <div aria-hidden className="absolute top-0 inset-x-0 h-24 pointer-events-none bg-gradient-to-b from-cyan-500/[0.06] to-transparent" />
         <div className="relative z-10 p-6 pb-4 shrink-0">
-          <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">Item Distribution</p>
+          <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">Member Wishlist</p>
           <h3 className="text-lg font-extrabold text-white tracking-tight mt-1 flex items-center gap-2">
-            Choose items you want <RankTierBadge tier={tier} />
+            Build your wishlist <RankTierBadge tier={tier} />
           </h3>
-          <p className="text-xs text-white/50 mt-1">Tap the items you&apos;d like to receive. Your tier determines the list.</p>
+          <p className="text-xs text-white/50 mt-1">Pick a rarity for each gear piece, and a quantity for logs / temporal pieces / materials.</p>
         </div>
-        <div className="relative z-10 overflow-y-auto px-6 flex-1">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {slots.map((slot) => {
-              const checked = selected.has(slot);
+
+        <div className="relative z-10 overflow-y-auto px-6 flex-1 space-y-5 pb-4">
+          {/* Weapons */}
+          <WishSection title="Weapon" hint="Legend / Epic">
+            {Object.entries(WEAPON_TYPES).map(([key, label]) => (
+              <GearRow
+                key={key}
+                label={label}
+                iconSrc={gearIcons.iconForSlot(key)}
+                rarities={WEAPON_RARITIES}
+                active={selected[`WEAPON:${key}`]?.rarity ?? null}
+                onSet={(r) => setGear("WEAPON", key, r)}
+              />
+            ))}
+          </WishSection>
+
+          {/* Armor */}
+          <WishSection title="Armor" hint="Legend / Epic / Mythic · Cloth / Leather / Plate">
+            {Object.entries(ARMOR_PIECES).map(([key, label]) => (
+              <GearRow
+                key={key}
+                label={label}
+                iconSrc={gearIcons.iconForSlot(key)}
+                rarities={GEAR_RARITIES}
+                active={selected[`ARMOR:${key}`]?.rarity ?? null}
+                onSet={(r) => setGear("ARMOR", key, r)}
+                armorTypeActive={selected[`ARMOR:${key}`]?.armorType ?? null}
+                onSetArmorType={(t) => setArmorType(key, t)}
+              />
+            ))}
+          </WishSection>
+
+          {/* Accessories */}
+          <WishSection title="Accessories" hint="Legend / Epic / Mythic">
+            {Object.entries(ACCESSORY_PIECES).map(([key, label]) => (
+              <GearRow
+                key={key}
+                label={label}
+                iconSrc={gearIcons.iconForSlot(key)}
+                rarities={GEAR_RARITIES}
+                active={selected[`ACCESSORY:${key}`]?.rarity ?? null}
+                onSet={(r) => setGear("ACCESSORY", key, r)}
+              />
+            ))}
+          </WishSection>
+
+          {/* Resources */}
+          <WishSection title="Logs & Temporal Pieces" hint="Quantity">
+            <QtyRow
+              label="Logs"
+              iconSrc={gearIcons.iconForSlot("logs")}
+              cap={caps.logs}
+              value={(selected["LOGS:logs"]?.quantity as number) ?? 0}
+              onChange={(v) => setQty("LOGS", "logs", caps.logs, v)}
+            />
+            <QtyRow
+              label="Temporal Pieces"
+              iconSrc={gearIcons.iconForSlot("temporalPieces")}
+              cap={caps.temporalPieces}
+              value={(selected["TEMPORAL:temporalPieces"]?.quantity as number) ?? 0}
+              onChange={(v) => setQty("TEMPORAL", "temporalPieces", caps.temporalPieces, v)}
+            />
+          </WishSection>
+
+          {/* Materials */}
+          <WishSection title="Materials" hint={`Quantity · max ${caps.materials} each`}>
+            {Object.entries(MATERIAL_TYPES).map(([key, label]) => (
+              <QtyRow
+                key={key}
+                label={label}
+                iconSrc={gearIcons.iconForSlot(key)}
+                cap={caps.materials}
+                value={(selected[`MATERIALS:${key}`]?.quantity as number) ?? 0}
+                onChange={(v) => setQty("MATERIALS", key, caps.materials, v)}
+              />
+            ))}
+          </WishSection>
+
+          {/* Mounts — leader-defined catalog */}
+          {mounts.length > 0 && (
+            <WishSection title="Mounts" hint="Set by your guild leader">
+              {mounts.map((mount) => {
+                const on = !!selected[`MOUNT:${mount.id}`];
+                const soldOut = mount.remaining <= 0;
+                return (
+                  <button
+                    type="button"
+                    key={mount.id}
+                    onClick={() => (!soldOut || on) && toggleMount(mount)}
+                    disabled={soldOut && !on}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+                      on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <GearIcon src={mount.iconUrl} size={22} />
+                      <span className={`truncate text-xs font-medium ${on ? "text-white" : "text-white/60"}`}>{mount.name}</span>
+                    </span>
+                    <span className="text-[10px] text-white/40 shrink-0">
+                      {mount.remaining}/{mount.maxSlots} slots
+                    </span>
+                  </button>
+                );
+              })}
+            </WishSection>
+          )}
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between gap-3 border-t border-white/[0.06] px-6 py-4 shrink-0">
+          <span className="text-[11px] text-white/40">{selectedCount} item{selectedCount === 1 ? "" : "s"} wished</span>
+          <div className="flex gap-3">
+            <Button variant="ghost" size="sm" onClick={onClose} disabled={isSaving} className="text-xs uppercase font-bold text-white/60">Cancel</Button>
+            <Button variant="primary" size="sm" onClick={save} isLoading={isSaving} className="text-xs uppercase font-bold min-w-[120px]">Save wishlist</Button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─── Wishlist builder building blocks ─────────────────────────────────
+
+function WishSection({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/55">{title}</h4>
+        {hint && <span className="text-[10px] text-white/30">{hint}</span>}
+      </div>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function GearRow({
+  label,
+  iconSrc,
+  rarities,
+  active,
+  onSet,
+  armorTypeActive,
+  onSetArmorType,
+}: {
+  label: string;
+  iconSrc: string | null;
+  rarities: WishlistRarity[];
+  active: WishlistRarity | null;
+  onSet: (rarity: WishlistRarity | null) => void;
+  armorTypeActive?: ArmorType | null;
+  onSetArmorType?: (armorType: ArmorType | null) => void;
+}) {
+  const isSelected = active != null;
+  return (
+    <div
+      className={`flex flex-col gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+        isSelected ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 min-w-0">
+          <GearIcon src={iconSrc} size={22} />
+          <span className={`truncate text-xs font-medium ${isSelected ? "text-white" : "text-white/60"}`}>{label}</span>
+        </span>
+        <span className="flex gap-1 shrink-0">
+          {rarities.map((r) => {
+            const on = active === r;
+            return (
+              <button
+                type="button"
+                key={r}
+                onClick={() => onSet(on ? null : r)}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border transition-all cursor-pointer ${
+                  on ? RARITY_BADGE[r] : "border-white/[0.08] text-white/40 hover:text-white/80 hover:border-white/20"
+                }`}
+              >
+                {WISHLIST_RARITY_LABELS[r]}
+              </button>
+            );
+          })}
+        </span>
+      </div>
+      {onSetArmorType && (
+        <div className="flex items-center gap-1.5 pl-[30px]">
+          <span className="text-[9px] uppercase tracking-wide text-white/30 shrink-0">Type</span>
+          <span className="flex gap-1">
+            {ARMOR_TYPES.map((t) => {
+              const on = armorTypeActive === t;
               return (
                 <button
                   type="button"
-                  key={slot}
-                  onClick={() => toggle(slot)}
-                  className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                    checked
-                      ? "border-cyan-500/50 bg-cyan-500/10 text-white"
-                      : "border-white/[0.08] bg-white/[0.02] text-white/50 hover:text-white/80 hover:border-white/20"
+                  key={t}
+                  onClick={() => onSetArmorType(on ? null : t)}
+                  className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide border transition-all cursor-pointer ${
+                    on ? ARMOR_TYPE_BADGE : "border-white/[0.08] text-white/35 hover:text-white/70 hover:border-white/20"
                   }`}
                 >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <GearIcon src={gearIcons.iconForSlot(slot)} size={22} />
-                    <span className="truncate">{SLOT_LABELS[slot] || slot}</span>
-                  </span>
-                  <span className={`h-4 w-4 shrink-0 rounded flex items-center justify-center border ${checked ? "bg-cyan-400/80 border-cyan-300 text-black" : "border-white/20"}`}>
-                    {checked && <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
-                  </span>
+                  {ARMOR_TYPE_LABELS[t]}
                 </button>
               );
             })}
-          </div>
+          </span>
         </div>
-        <div className="relative z-10 flex gap-3 justify-end border-t border-white/[0.06] px-6 py-4 shrink-0">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSaving} className="text-xs uppercase font-bold text-white/60">Cancel</Button>
-          <Button variant="primary" size="sm" onClick={save} isLoading={isSaving} className="text-xs uppercase font-bold min-w-[120px]">Save choices</Button>
+      )}
+    </div>
+  );
+}
+
+function QtyRow({
+  label,
+  iconSrc,
+  cap,
+  value,
+  onChange,
+}: {
+  label: string;
+  iconSrc: string | null;
+  cap: number;
+  value: number;
+  onChange: (value: string) => void;
+}) {
+  const on = value > 0;
+  return (
+    <div
+      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all ${
+        on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02]"
+      }`}
+    >
+      <span className="flex items-center gap-2 min-w-0">
+        <GearIcon src={iconSrc} size={22} />
+        <span className={`truncate text-xs font-medium ${on ? "text-white" : "text-white/60"}`}>{label}</span>
+        <span className="text-[10px] text-white/30 shrink-0">max {cap}</span>
+      </span>
+      <input
+        type="number"
+        min={0}
+        max={cap}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0"
+        className="w-16 shrink-0 rounded-lg border border-white/[0.1] bg-black/30 px-2 py-1 text-right text-xs text-white focus:border-cyan-500/50 focus:outline-none"
+      />
+    </div>
+  );
+}
+
+// ─── Master list: every wished item across the guild + per-item status ─
+
+const CATEGORY_FILTERS: (WishlistCategory | "ALL")[] = [
+  "ALL",
+  "WEAPON",
+  "ARMOR",
+  "ACCESSORY",
+  "LOGS",
+  "TEMPORAL",
+  "MATERIALS",
+  "MOUNT",
+];
+
+function MasterListView({
+  guildId,
+  isOfficer,
+  queue,
+  onDone,
+}: {
+  guildId: string;
+  isOfficer: boolean;
+  queue: PriorityQueueEntry[];
+  onDone: () => void;
+}) {
+  const { addToast } = useToast();
+  const gearIcons = useGearIcons();
+  const [status, setStatus] = useState<WishlistStatus | "ALL">("ALL");
+  const [category, setCategory] = useState<WishlistCategory | "ALL">("ALL");
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  async function giveMount(member: PriorityQueueEntry, item: WishlistItem) {
+    setBusyKey(`${member.memberId}:${item.key}`);
+    try {
+      const res = await marketApi.distributeMount(guildId, item.key, { memberId: member.memberId });
+      if (res.success) {
+        addToast("success", `${item.label || "Mount"} given to ${member.ign}.`);
+        onDone();
+      } else addToast("error", res.error?.message || "Failed to distribute");
+    } catch (err: any) {
+      addToast("error", err?.message || "An error occurred");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Item-level filter bar — member sort/tier filtering lives in the toolbar above */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-white/[0.08] bg-[#0c0d12]/60 p-1">
+          {(["ALL", "PENDING", "DISTRIBUTED"] as (WishlistStatus | "ALL")[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer ${
+                status === s ? "bg-white/[0.1] text-white" : "text-white/40 hover:text-white/75"
+              }`}
+            >
+              {s === "ALL" ? "All items" : WISHLIST_STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as WishlistCategory | "ALL")}
+          className="rounded-lg border border-white/[0.1] bg-black/30 px-2.5 py-1.5 text-[11px] text-white focus:border-cyan-500/50 focus:outline-none cursor-pointer"
+        >
+          {CATEGORY_FILTERS.map((c) => (
+            <option key={c} value={c}>
+              {c === "ALL" ? "All categories" : WISHLIST_CATEGORY_LABELS[c]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {queue.length === 0 ? (
+        <div className="text-center py-16 text-sm text-white/35 border border-dashed border-white/[0.06] rounded-2xl">
+          No members to display.
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-[680px] overflow-y-auto pr-1">
+          {queue.map((member, index) => {
+            const items = (member.wishlist || []).filter((w) => {
+              if (category !== "ALL" && w.category !== category) return false;
+              if (status !== "ALL") {
+                const s: WishlistStatus = w.status === "DISTRIBUTED" ? "DISTRIBUTED" : "PENDING";
+                if (s !== status) return false;
+              }
+              return true;
+            });
+            return (
+              <div
+                key={member.memberId}
+                className="market-row rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur p-4"
+                style={{ animationDelay: `${Math.min(index, 16) * 25}ms` }}
+              >
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-3 pb-3 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-2.5">
+                    <PrioritySeqBadge position={member.position} />
+                    <div>
+                      <p className="text-sm font-bold text-white flex items-center gap-2">
+                        {member.ign} <RankTierBadge tier={member.tier} />
+                      </p>
+                      <p className="text-[10px] text-white/40">{member.rankName}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-[9px] uppercase tracking-wider text-white/30">CP</p>
+                      <p className="text-xs font-mono font-semibold text-white/80">{member.cp.toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] uppercase tracking-wider text-white/30">Points</p>
+                      <p className="text-xs font-mono font-semibold text-white/80">{member.dkp.toLocaleString()}</p>
+                    </div>
+                    <WishlistStatusBadge summary={member.wishlistSummary} />
+                  </div>
+                </div>
+
+                {items.length === 0 ? (
+                  <p className="text-xs text-white/30 text-center py-3">
+                    {(member.wishlist?.length ?? 0) > 0 ? "No items match these filters." : "No wishes yet."}
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {WISHLIST_GROUP_ORDER.map((cat) => {
+                      const group = items.filter((w) => w.category === cat);
+                      if (group.length === 0) return null;
+                      return (
+                        <div key={cat}>
+                          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/30 mb-1">
+                            {WISHLIST_CATEGORY_LABELS[cat]}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.map((w) => {
+                              const s: WishlistStatus = w.status === "DISTRIBUTED" ? "DISTRIBUTED" : "PENDING";
+                              return (
+                                <span key={keyOf(w)} className="inline-flex items-center gap-1.5">
+                                  <WishChip item={w} iconSrc={gearIcons.iconForSlot(w.key)} distributed={s === "DISTRIBUTED"} />
+                                  {isOfficer && w.category === "MOUNT" && s === "PENDING" && (
+                                    <Button
+                                      variant="primary"
+                                      size="xs"
+                                      isLoading={busyKey === `${member.memberId}:${w.key}`}
+                                      onClick={() => giveMount(member, w)}
+                                    >
+                                      Give
+                                    </Button>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Officer: view a member's full wishlist + distribute their mounts ──
+
+function WishlistDetailModal({
+  guildId,
+  member,
+  isOfficer,
+  onClose,
+  onDone,
+}: {
+  guildId: string;
+  member: PriorityQueueEntry;
+  isOfficer: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { addToast } = useToast();
+  const gearIcons = useGearIcons();
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const items = member.wishlist || [];
+
+  async function giveMount(item: WishlistItem) {
+    setBusyKey(item.key);
+    try {
+      const res = await marketApi.distributeMount(guildId, item.key, { memberId: member.memberId });
+      if (res.success) {
+        addToast("success", `${item.label || "Mount"} given to ${member.ign}.`);
+        onDone();
+        onClose();
+      } else addToast("error", res.error?.message || "Failed to distribute");
+    } catch (err: any) {
+      addToast("error", err?.message || "An error occurred");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={onClose} />
+      <div className="relative glass-strong w-full max-w-lg rounded-3xl border border-white/[0.08] animate-scale-in z-50 overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="relative z-10 p-6 pb-4 shrink-0 border-b border-white/[0.06]">
+          <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">Member Wishlist</p>
+          <h3 className="text-lg font-extrabold text-white tracking-tight mt-1 flex items-center gap-2">
+            {member.ign} <RankTierBadge tier={member.tier} />
+          </h3>
+        </div>
+        <div className="relative z-10 overflow-y-auto px-6 py-4 flex-1 space-y-4">
+          {items.length === 0 ? (
+            <p className="text-xs text-white/40 py-6 text-center">This member hasn&apos;t wished for anything yet.</p>
+          ) : (
+            WISHLIST_GROUP_ORDER.map((cat) => {
+              const group = items.filter((w) => w.category === cat);
+              if (group.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35 mb-1.5">
+                    {WISHLIST_CATEGORY_LABELS[cat]}
+                  </p>
+                  <div className="space-y-2">
+                    {group.map((w) => {
+                      const status: WishlistStatus = w.status === "DISTRIBUTED" ? "DISTRIBUTED" : "PENDING";
+                      return (
+                        <div
+                          key={keyOf(w)}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                        >
+                          <WishChip item={w} iconSrc={gearIcons.iconForSlot(w.key)} />
+                          <span className="flex items-center gap-2 shrink-0">
+                            <ItemStatusPill status={status} />
+                            {isOfficer && w.category === "MOUNT" && status === "PENDING" && (
+                              <Button variant="primary" size="xs" isLoading={busyKey === w.key} onClick={() => giveMount(w)}>
+                                Give
+                              </Button>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="relative z-10 flex justify-end border-t border-white/[0.06] px-6 py-4 shrink-0">
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-xs uppercase font-bold text-white/60">Close</Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─── Officer: notify a member (or everyone) to submit a wishlist request ──
+
+type NotifyCategory = WishlistCategory;
+const NOTIFY_CATEGORIES: NotifyCategory[] = ["WEAPON", "ARMOR", "ACCESSORY", "LOGS", "TEMPORAL", "MATERIALS", "MOUNT"];
+
+function NotifyModal({
+  guildId,
+  member,
+  onClose,
+}: {
+  guildId: string;
+  member?: PriorityQueueEntry | null;
+  onClose: () => void;
+}) {
+  const { addToast } = useToast();
+  const gearIcons = useGearIcons();
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Leader-defined mount catalog — needed both to label MOUNT wishes and to
+  // offer mounts as a notifiable category.
+  const { data: mountData } = useQuery(
+    `market_mounts:${guildId}`,
+    async () => {
+      const res = await marketApi.listMounts(guildId);
+      return res.success && res.data ? res.data.mounts : [];
+    },
+    { staleTime: 30000 },
+  );
+  const mounts = ((mountData || []) as MountCatalogItem[]).filter((m) => m.isActive);
+  const mountName = (id: string) => mounts.find((m) => m.id === id)?.name;
+
+  const CATALOG: Record<NotifyCategory, { key: string; label: string }[]> = {
+    WEAPON: Object.entries(WEAPON_TYPES).map(([key, label]) => ({ key, label })),
+    ARMOR: Object.entries(ARMOR_PIECES).map(([key, label]) => ({ key, label })),
+    ACCESSORY: Object.entries(ACCESSORY_PIECES).map(([key, label]) => ({ key, label })),
+    LOGS: [{ key: "logs", label: "Logs" }],
+    TEMPORAL: [{ key: "temporalPieces", label: "Temporal Pieces" }],
+    MATERIALS: Object.entries(MATERIAL_TYPES).map(([key, label]) => ({ key, label })),
+    MOUNT: mounts.map((m) => ({ key: m.id, label: m.name })),
+  };
+  const itemLabelFor = (w: WishlistItem) =>
+    w.category === "MOUNT" ? mountName(w.key) || w.label || "Mount" : WISHLIST_LABELS[w.key] || w.key;
+
+  // Targeting a specific member: default to picking straight from their own
+  // pending wishes, since that's almost always what the officer means to nudge.
+  const pendingWishes = (member?.wishlist || []).filter((w) => w.status !== "DISTRIBUTED");
+  const [pickFromCatalog, setPickFromCatalog] = useState(!member || pendingWishes.length === 0);
+  const [wishKey, setWishKey] = useState<string | null>(pendingWishes[0] ? keyOf(pendingWishes[0]) : null);
+
+  const [category, setCategory] = useState<NotifyCategory>("WEAPON");
+  const [itemKey, setItemKey] = useState("");
+  const catalogOptions = CATALOG[category];
+
+  const selectedWish = pendingWishes.find((w) => keyOf(w) === wishKey) || null;
+  const selectedCatalogItem = catalogOptions.find((i) => i.key === itemKey) || null;
+
+  const usingWishlist = !!member && !pickFromCatalog;
+  const resolvedLabel = usingWishlist ? (selectedWish ? itemLabelFor(selectedWish) : "") : selectedCatalogItem?.label || "";
+  const resolvedRef = usingWishlist
+    ? selectedWish
+      ? `${selectedWish.category}:${selectedWish.key}`
+      : undefined
+    : selectedCatalogItem
+      ? `${category}:${selectedCatalogItem.key}`
+      : undefined;
+
+  async function submit() {
+    if (!resolvedLabel) {
+      addToast("error", "Pick an item to notify about");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await marketApi.notifyRequest(guildId, {
+        itemLabel: resolvedLabel,
+        itemRef: resolvedRef,
+        memberIds: member ? [member.memberId] : undefined,
+        message: message.trim() || undefined,
+      });
+      if (res.success) {
+        addToast("success", member ? `Notified ${member.ign}.` : `Notified ${res.data?.notified ?? 0} member(s).`);
+        onClose();
+      } else {
+        addToast("error", res.error?.message || "Failed to notify");
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => !isSubmitting && onClose()} />
+      <div className="relative glass-strong w-full max-w-md rounded-3xl border border-white/[0.08] animate-scale-in z-50 p-6 max-h-[85vh] overflow-y-auto">
+        <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">
+          {member ? `Notify ${member.ign}` : "Notify Members"}
+        </p>
+        <h3 className="text-lg font-extrabold text-white tracking-tight mt-1">Request a wishlist log</h3>
+        <p className="text-xs text-white/50 mt-1">
+          {member
+            ? `Nudge ${member.ign} to submit a request for a specific item.`
+            : "Pick the item members should submit a request for. Every active member is notified."}
+        </p>
+
+        {member && pendingWishes.length > 0 && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
+                {member.ign}&apos;s pending wishes
+              </label>
+              <button
+                type="button"
+                onClick={() => setPickFromCatalog((v) => !v)}
+                className="text-[10px] font-semibold text-cyan-300/80 hover:text-cyan-200 cursor-pointer"
+              >
+                {pickFromCatalog ? "Use their wishlist" : "Pick a different item"}
+              </button>
+            </div>
+            {!pickFromCatalog && (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {pendingWishes.map((w) => {
+                  const on = wishKey === keyOf(w);
+                  return (
+                    <button
+                      type="button"
+                      key={keyOf(w)}
+                      onClick={() => setWishKey(keyOf(w))}
+                      className={`flex w-full items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer ${
+                        on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/20"
+                      }`}
+                    >
+                      <GearIcon src={gearIcons.iconForSlot(w.key)} size={18} />
+                      <span className="text-xs text-white/80 truncate flex-1">{itemLabelFor(w)}</span>
+                      {w.rarity && (
+                        <span className={`px-1 rounded text-[9px] font-bold border shrink-0 ${RARITY_BADGE[w.rarity]}`}>
+                          {WISHLIST_RARITY_LABELS[w.rarity]}
+                        </span>
+                      )}
+                      {typeof w.quantity === "number" && (
+                        <span className="text-[10px] font-mono text-white/50 shrink-0">×{w.quantity}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {(pickFromCatalog || !member || pendingWishes.length === 0) && (
+          <div className="mt-4 grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">Category</label>
+              <select
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value as NotifyCategory);
+                  setItemKey("");
+                }}
+                className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-sm text-white focus:border-cyan-500/50 focus:outline-none"
+              >
+                {NOTIFY_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{WISHLIST_CATEGORY_LABELS[c]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">Item</label>
+              <select
+                value={itemKey}
+                onChange={(e) => setItemKey(e.target.value)}
+                className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-sm text-white focus:border-cyan-500/50 focus:outline-none disabled:opacity-40"
+                disabled={catalogOptions.length === 0}
+              >
+                <option value="">{catalogOptions.length === 0 ? "No mounts configured" : "Select…"}</option>
+                {catalogOptions.map((i) => (
+                  <option key={i.key} value={i.key}>{i.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4">
+          <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">Message (optional)</label>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={3}
+            placeholder="Add context for the request…"
+            className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-sm text-white focus:border-cyan-500/50 focus:outline-none resize-none"
+          />
+        </div>
+
+        <div className="mt-5 flex justify-end gap-3">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting} className="text-xs uppercase font-bold text-white/60">Cancel</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={submit}
+            isLoading={isSubmitting}
+            disabled={!resolvedLabel}
+            className="text-xs uppercase font-bold min-w-[120px]"
+          >
+            Send Notification
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

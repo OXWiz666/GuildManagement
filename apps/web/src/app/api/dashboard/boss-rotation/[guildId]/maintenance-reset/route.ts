@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { services, cache, broadcastToGuild, BadRequestError } from "@guild/core";
+import { services, cache, broadcastToGuild, broadcastToFaction, BadRequestError } from "@guild/core";
 import { withApi, ok } from "@/server/respond";
 import { requireAuth } from "@/server/guards";
 import { getClientInfo, readJson } from "@/server/request";
@@ -34,7 +34,7 @@ export const POST = withApi(
       cache.invalidatePattern(`stats:${guildId}:*`),
     ]);
 
-    broadcastToGuild(null, "boss_rotation_updated", data);
+    broadcastToFaction(data.factionId, "boss_rotation_updated", data);
     broadcastToGuild(guildId, "boss_rotation_updated", data);
 
     return ok(data);

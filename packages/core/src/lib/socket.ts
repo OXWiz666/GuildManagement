@@ -1,4 +1,5 @@
 import { env } from "../config/env";
+import { prisma } from "@guild/db";
 
 /**
  * Re-implemented broadcastToGuild using Supabase Realtime REST API
@@ -55,6 +56,27 @@ export async function broadcastToGuild<T = unknown>(
   } catch (err) {
     console.error("[Realtime Broadcast Exception]:", err);
   }
+}
+
+/**
+ * Fan a broadcast out to every guild in a faction, reusing the per-guild
+ * `guild-{id}` topic clients already subscribe to (no new client-side
+ * channel needed). Replaces the old `broadcastToGuild(null, ...)` pattern,
+ * which pushed to a single "guild-global" topic every connected client in
+ * every faction was subscribed to — i.e. every faction saw every other
+ * faction's boss-rotation updates.
+ */
+export async function broadcastToFaction<T = unknown>(
+  factionId: string | null | undefined,
+  event: string,
+  payload: T
+): Promise<void> {
+  if (!factionId) return;
+  const guilds = await prisma.guild.findMany({
+    where: { factionId, isActive: true },
+    select: { id: true },
+  });
+  await Promise.all(guilds.map((g) => broadcastToGuild(g.id, event, payload)));
 }
 
 export async function broadcastToUser<T = unknown>(

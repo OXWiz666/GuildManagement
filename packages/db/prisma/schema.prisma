@@ -56,6 +56,7 @@ model User {
   platformAdmin        PlatformAdmin?
   loginEvents          LoginEvent[]
   foundedFactions      Faction[]             @relation("FactionLeader")
+  factionInvitesSent   FactionJoinRequest[]  @relation("FactionJoinRequestInviter")
 
   @@map("users")
 }
@@ -178,13 +179,50 @@ model Faction {
   leaderUserId String   @map("leader_user_id")
   leader       User     @relation("FactionLeader", fields: [leaderUserId], references: [id], onDelete: Cascade)
   isActive     Boolean  @default(true) @map("is_active")
+  // Redeemable code a Guild Leader uses to request joining this faction (Multi-Guild).
+  inviteCode   String   @unique @map("invite_code")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  guilds Guild[]
+  guilds             Guild[]
+  bossRotations      BossRotation[]
+  bossLowRotation    BossLowRotation?
+  joinRequests       FactionJoinRequest[]
 
   @@index([leaderUserId])
   @@map("factions")
+}
+
+enum FactionJoinDirection {
+  CODE_REDEEMED
+  DIRECT_INVITE
+}
+
+enum FactionJoinStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A guild joining a faction is two-sided: a code redemption is approved by the
+// Faction Leader; a direct invite is approved by the target guild's own leader.
+model FactionJoinRequest {
+  id                String               @id @default(cuid())
+  factionId         String               @map("faction_id")
+  faction           Faction              @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  guildId           String               @map("guild_id")
+  guild             Guild                @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  invitedByUserId   String?              @map("invited_by_user_id")
+  invitedBy         User?                @relation("FactionJoinRequestInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  direction         FactionJoinDirection
+  status            FactionJoinStatus    @default(PENDING)
+  respondedByUserId String?              @map("responded_by_user_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@index([guildId])
+  @@index([factionId, status])
+  @@map("faction_join_requests")
 }
 
 // ═══════════════════════════════════════════════════
@@ -229,6 +267,7 @@ model Guild {
   subscriptions      Subscription[]
   mounts             GuildMount[]
   mountDistributions MountDistribution[]
+  factionJoinRequests FactionJoinRequest[]
 
   @@index([factionId])
   @@map("guilds")
@@ -862,7 +901,9 @@ model BossSchedule {
 
 model BossRotation {
   id            String    @id @default(cuid())
-  bossName      String    @unique @map("boss_name")
+  factionId     String    @map("faction_id")
+  faction       Faction   @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  bossName      String    @map("boss_name")
   queueGuildIds Json      @map("queue_guild_ids")
   currentIndex  Int       @default(0) @map("current_index")
   nextSpawnTime DateTime? @map("next_spawn_time")
@@ -875,7 +916,8 @@ model BossRotation {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  @@index([bossName])
+  @@unique([factionId, bossName])
+  @@index([factionId])
   @@map("boss_rotations")
 }
 
@@ -888,7 +930,8 @@ model BossRotation {
  *  - days:         { "YYYY-MM-DD" → guildId } (JSON)
  */
 model BossLowRotation {
-  id           String   @id @default("singleton")
+  factionId    String   @id @map("faction_id")
+  faction      Faction  @relation(fields: [factionId], references: [id], onDelete: Cascade)
   mode         String   @default("MONTHLY")
   lowBossNames Json     @default("[]") @map("low_boss_names")
   weekly       Json     @default("{}")

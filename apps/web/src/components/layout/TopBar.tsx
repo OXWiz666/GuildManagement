@@ -244,13 +244,13 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         </svg>
       </button>
 
-      {/* Alliance Context (Left Area) */}
+      {/* Faction Context (Left Area) */}
       <div className="hidden sm:flex flex-col text-left">
         <span className="text-[10px] text-[var(--forge-gold)] font-bold uppercase tracking-[0.2em] font-fantasy">
-           MegaCorp Alliance
+          {activeGuild?.factionName || "Unaffiliated"}
         </span>
         <span className="text-[12px] text-white/50 font-medium tracking-wide">
-           Guild of {activeGuild ? activeGuild.guildName : "Valhalla"}
+           Guild of {activeGuild ? activeGuild.guildName : "—"}
         </span>
       </div>
 

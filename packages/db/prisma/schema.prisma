@@ -19,6 +19,10 @@ datasource db {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
+  // Login identifier alternative to email. Lowercase, unique, immutable-ish
+  // (no settings UI to change it yet) — set at registration or auto-generated
+  // for OAuth/legacy accounts that never chose one.
+  username     String   @unique
   passwordHash String   @map("password_hash")
   displayName  String   @map("display_name")
   avatarUrl    String?  @map("avatar_url")

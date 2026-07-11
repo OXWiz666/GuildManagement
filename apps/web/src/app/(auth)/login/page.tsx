@@ -10,13 +10,35 @@ import Input from "@/components/ui/Input";
 import { AuthStagger, MagneticPress } from "@/components/auth/AuthAnim";
 import { createClient } from "@/utils/supabase/client";
 import { friendlyAuthError } from "@/lib/auth-errors";
+import { authApi } from "@/lib/api";
+
+// Maps a failed login()'s errorTitle to the specific field it's about, so
+// the message shows inline under that input (mirrors the Register page).
+function fieldForErrorTitle(title: string): "identifier" | "password" | null {
+  switch (title) {
+    case "Incorrect email or password":
+      // Ambiguous by design (Supabase doesn't say which one is wrong, to
+      // avoid leaking which emails are registered) — stays a top banner
+      // rather than falsely pointing at one specific field.
+      return null;
+    case "Invalid email":
+      return "identifier";
+    case "Email not verified":
+      return "identifier";
+    default:
+      return null;
+  }
+}
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  // Username or email — resolved to a real email before hitting Supabase,
+  // which (like the legacy local login) only understands email.
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [errorTitle, setErrorTitle] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { login } = useAuth();
   const { addToast } = useToast();
   const router = useRouter();
@@ -42,17 +64,60 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setErrorTitle("");
+    setFieldErrors({});
     setIsLoading(true);
 
+    const trimmedIdentifier = identifier.trim();
+    const errors: Record<string, string> = {};
+    if (!trimmedIdentifier) errors.identifier = "Username or email is required";
+    if (!password) errors.password = "Password is required";
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setIsLoading(false);
+      return;
+    }
+
+    // Supabase (and the legacy local login) only understand an email, so a
+    // username identifier must be resolved first. An identifier containing
+    // "@" is passed straight through — no point in a lookup for that case.
+    let resolvedEmail = trimmedIdentifier;
+    if (!trimmedIdentifier.includes("@")) {
+      try {
+        const resolution = await authApi.resolveIdentifier(trimmedIdentifier);
+        if (!resolution.success || !resolution.data?.email) {
+          // Never reveal *why* — same generic message a wrong password gets,
+          // so a username-guessing attacker learns nothing from the response.
+          setError("The username/email or password you entered is incorrect. Please try again.");
+          setErrorTitle("Incorrect username/email or password");
+          setIsLoading(false);
+          return;
+        }
+        resolvedEmail = resolution.data.email;
+      } catch {
+        setError("Couldn't reach the server. Check your connection and try again.");
+        setErrorTitle("Connection problem");
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
-      const result = await login(email, password);
+      const result = await login(resolvedEmail, password);
       if (result.success) {
         addToast("success", "Welcome back!");
         // Platform admins land on the Super Admin overview; everyone else on the guild dashboard.
         router.push(result.platformRole ? "/admin" : "/dashboard");
       } else {
-        setError(result.error || "Incorrect email or password. Please try again.");
-        setErrorTitle(result.errorTitle || "");
+        const title = result.errorTitle || "";
+        const message = result.error || "Incorrect email or password. Please try again.";
+        const field = fieldForErrorTitle(title);
+        if (field) {
+          setFieldErrors({ [field]: message });
+        } else {
+          setError(message);
+          setErrorTitle(title);
+        }
       }
     } catch (err) {
       const friendly = friendlyAuthError(err instanceof Error ? err.message : undefined);
@@ -110,14 +175,15 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="auth-field">
             <Input
-              label="Email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              label="Username or Email"
+              type="text"
+              placeholder="username or you@example.com"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              error={fieldErrors.identifier}
               variant="auth"
               required
-              autoComplete="email"
+              autoComplete="username"
               icon={
                 <svg
                   className="h-4 w-4 text-white/40"
@@ -126,8 +192,8 @@ export default function LoginPage() {
                   stroke="currentColor"
                   strokeWidth="1.8"
                 >
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                  <path d="M22 6l-10 7L2 6" />
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
                 </svg>
               }
             />
@@ -140,6 +206,7 @@ export default function LoginPage() {
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              error={fieldErrors.password}
               variant="auth"
               required
               autoComplete="current-password"

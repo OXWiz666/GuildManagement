@@ -28,6 +28,68 @@ import type {
   PaymentMethodEntry,
 } from "@guild/shared";
 
+// ─── Username ────────────────────────────────────
+
+const USERNAME_PATTERN = /^[a-z][a-z0-9_]{2,19}$/;
+
+function sanitizeUsernameBase(input: string): string {
+  let base = input.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 16);
+  if (!/^[a-z]/.test(base)) base = `u${base}`;
+  return base.length >= 3 ? base : `${base}user`.slice(0, 16);
+}
+
+/**
+ * Generate a unique, valid username from a starting point (usually the
+ * display name) — used whenever a caller didn't supply one (OAuth sign-in,
+ * legacy register route) or the one they chose collided.
+ */
+async function generateUniqueUsername(base: string): Promise<string> {
+  const cleanBase = sanitizeUsernameBase(base);
+  let candidate = cleanBase;
+  let suffix = 0;
+  // Bounded loop — collisions this deep are astronomically unlikely; bail to
+  // a random suffix rather than looping forever.
+  while (suffix < 50) {
+    const existing = await prisma.user.findUnique({ where: { username: candidate }, select: { id: true } });
+    if (!existing) return candidate;
+    suffix += 1;
+    candidate = `${cleanBase}${suffix}`.slice(0, 20);
+  }
+  return `${cleanBase}${crypto.randomBytes(3).toString("hex")}`.slice(0, 20);
+}
+
+/**
+ * Check whether a username is available (valid format + not taken). Used by
+ * the register form before signup so the user finds out immediately rather
+ * than after their Supabase account is already created.
+ */
+export async function checkUsernameAvailable(rawUsername: string): Promise<{ available: boolean; reason?: string }> {
+  const username = rawUsername.trim().toLowerCase();
+  if (!USERNAME_PATTERN.test(username)) {
+    return { available: false, reason: "Username must start with a letter and be 3-20 lowercase letters, numbers, or underscores" };
+  }
+  const existing = await prisma.user.findUnique({ where: { username }, select: { id: true } });
+  return { available: !existing, reason: existing ? "That username is already taken" : undefined };
+}
+
+/**
+ * Resolve a login identifier (username or email) to the real email address
+ * Supabase/the legacy login need. Anything containing "@" is treated as an
+ * email as-is (no lookup — avoids a pointless query and false negatives for
+ * an email that isn't a username-lookup hit). Returns null if a username
+ * identifier doesn't match any account (caller shows a generic error —
+ * never reveals whether the username specifically exists).
+ */
+export async function resolveLoginIdentifier(identifier: string): Promise<string | null> {
+  const trimmed = identifier.trim();
+  if (trimmed.includes("@")) return trimmed.toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { username: trimmed.toLowerCase() },
+    select: { email: true },
+  });
+  return user?.email ?? null;
+}
+
 // ─── Registration ───────────────────────────────
 
 export async function register(
@@ -48,11 +110,13 @@ export async function register(
 
   // Hash password with bcrypt
   const passwordHash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
+  const username = await generateUniqueUsername(displayName);
 
   // Create user
   const user = await prisma.user.create({
     data: {
       email: email.toLowerCase(),
+      username,
       passwordHash,
       displayName,
     },
@@ -116,6 +180,12 @@ export async function login(
     throw new UnauthorizedError("Invalid email or password");
   }
 
+  // Checked only after a correct password (never before) so a wrong-password
+  // guess can't be used to probe whether an account is verified.
+  if (!user.emailVerifiedAt) {
+    throw new UnauthorizedError("Please verify your email before logging in");
+  }
+
   // Generate token pair
   const tokens = await createTokenPair(
     user.id,
@@ -156,6 +226,10 @@ export async function supabaseSync(
     id: string;
     email: string;
     displayName: string;
+    // Chosen at signup (Register form). Optional because OAuth sign-ins
+    // (Discord) never go through that form — those get an auto-generated
+    // username instead.
+    username?: string | null;
     // Set on the very first sign-up sync when the user chose a leader account
     // type. Ignored on every subsequent sync (the user already exists).
     onboarding?: LeaderOnboardingInput | null;
@@ -169,13 +243,29 @@ export async function supabaseSync(
   });
 
   if (!user) {
+    // Prefer the username chosen at registration; fall back to a generated
+    // one if absent (OAuth) or it lost the race to someone else since the
+    // client-side availability check.
+    let username: string;
+    const requested = supabaseUser.username?.trim().toLowerCase();
+    if (requested && USERNAME_PATTERN.test(requested) && !(await prisma.user.findUnique({ where: { username: requested }, select: { id: true } }))) {
+      username = requested;
+    } else {
+      username = await generateUniqueUsername(supabaseUser.displayName);
+    }
+
     // Create new user using the Supabase ID to keep them aligned
     user = await prisma.user.create({
       data: {
         id: supabaseUser.id,
         email: supabaseUser.email.toLowerCase(),
+        username,
         passwordHash: "", // Empty hash for Supabase users
         displayName: supabaseUser.displayName,
+        // Supabase already gates this account behind its own confirmation
+        // (email/OAuth) before a session can ever reach here, so it's
+        // considered verified for our purposes too.
+        emailVerifiedAt: new Date(),
       },
     });
 
@@ -527,6 +617,7 @@ export async function getCurrentUser(
               name: true,
               slug: true,
               avatarUrl: true,
+              faction: { select: { id: true, name: true } },
             },
           },
         },
@@ -546,6 +637,8 @@ export async function getCurrentUser(
       guildName: m.guild.name,
       guildSlug: m.guild.slug,
       guildAvatarUrl: m.guild.avatarUrl,
+      factionId: m.guild.faction?.id ?? null,
+      factionName: m.guild.faction?.name ?? null,
       role: m.role,
       rankName: m.rankName,
       joinedAt: m.joinedAt.toISOString(),
@@ -699,6 +792,7 @@ function toUserPublic(user: any): UserPublic {
   return {
     id: user.id,
     email: user.email,
+    username: user.username,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
     createdAt: user.createdAt.toISOString(),

@@ -24,6 +24,7 @@ async function main() {
   const leader = await prisma.user.create({
     data: {
       email: "leader@guildmaster.dev",
+      username: "mavis08",
       passwordHash,
       displayName: "Mavis08",
       avatarUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=256&auto=format&fit=crop", // Gorgeous cute anime PFP
@@ -31,6 +32,7 @@ async function main() {
       cp: 120000,
       class: "Destroyer",
       weapon: "Staff",
+      emailVerifiedAt: new Date(),
     },
   });
 
@@ -38,6 +40,7 @@ async function main() {
   const superAdmin = await prisma.user.create({
     data: {
       email: "superadmin@guildmaster.dev",
+      username: "superadmin",
       passwordHash,
       displayName: "SuperAdmin",
       avatarUrl: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=256&auto=format&fit=crop",
@@ -45,12 +48,14 @@ async function main() {
       cp: 130000,
       class: "Destroyer",
       weapon: "Staff",
+      emailVerifiedAt: new Date(),
     },
   });
 
   const factionLeader = await prisma.user.create({
     data: {
       email: "faction.leader@guildmaster.dev",
+      username: "factionlead",
       passwordHash,
       displayName: "FactionLead",
       avatarUrl: "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=256&auto=format&fit=crop",
@@ -58,12 +63,14 @@ async function main() {
       cp: 115000,
       class: "Destroyer",
       weapon: "Greatsword",
+      emailVerifiedAt: new Date(),
     },
   });
 
   const player1 = await prisma.user.create({
     data: {
       email: "dragz69@guildmaster.dev",
+      username: "dragz69",
       passwordHash,
       displayName: "Dragz69",
       avatarUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=256&auto=format&fit=crop",
@@ -71,12 +78,14 @@ async function main() {
       cp: 98000,
       class: "Hunter",
       weapon: "Sword and Shield",
+      emailVerifiedAt: new Date(),
     },
   });
 
   const player2 = await prisma.user.create({
     data: {
       email: "wiz@guildmaster.dev",
+      username: "wiz",
       passwordHash,
       displayName: "Wiz",
       avatarUrl: "https://images.unsplash.com/photo-1566492031773-4f4e44671857?q=80&w=256&auto=format&fit=crop",
@@ -84,12 +93,14 @@ async function main() {
       cp: 95000,
       class: "Immortal Knight",
       weapon: "Dual Dagger",
+      emailVerifiedAt: new Date(),
     },
   });
 
   const player3 = await prisma.user.create({
     data: {
       email: "daylili@guildmaster.dev",
+      username: "daylili",
       passwordHash,
       displayName: "Daylili",
       avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
@@ -97,12 +108,14 @@ async function main() {
       cp: 75000,
       class: "Striker",
       weapon: "Greatsword",
+      emailVerifiedAt: new Date(),
     },
   });
 
   const player4 = await prisma.user.create({
     data: {
       email: "hou13@guildmaster.dev",
+      username: "hou13",
       passwordHash,
       displayName: "Hou13",
       avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
@@ -110,12 +123,14 @@ async function main() {
       cp: 88000,
       class: "Destroyer",
       weapon: "XBow",
+      emailVerifiedAt: new Date(),
     },
   });
 
   const player5 = await prisma.user.create({
     data: {
       email: "lael@guildmaster.dev",
+      username: "lael",
       passwordHash,
       displayName: "Lael",
       avatarUrl: "https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=256&auto=format&fit=crop",
@@ -123,6 +138,7 @@ async function main() {
       cp: 85000,
       class: "Blitzblade",
       weapon: "Dual Dagger",
+      emailVerifiedAt: new Date(),
     },
   });
 

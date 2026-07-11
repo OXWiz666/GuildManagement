@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -9,6 +9,10 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { AuthStagger, MagneticPress } from "@/components/auth/AuthAnim";
 import { friendlyAuthError } from "@/lib/auth-errors";
+import { authApi } from "@/lib/api";
+
+const USERNAME_PATTERN = /^[a-z][a-z0-9_]{2,19}$/;
+const USERNAME_CHECK_DEBOUNCE_MS = 450;
 
 type AccountTypeChoice = "MEMBER" | "GUILD_LEADER" | "FACTION_LEADER";
 
@@ -24,6 +28,8 @@ const ACCOUNT_TYPE_OPTIONS: {
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -35,9 +41,36 @@ export default function RegisterPage() {
   const [errorTitle, setErrorTitle] = useState("");
   const [isVerificationSent, setIsVerificationSent] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const { register } = useAuth();
+  const [verificationCode, setVerificationCode] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [isResending, setIsResending] = useState(false);
+  const { register, verifyRegistrationCode, resendVerificationCode } = useAuth();
   const { addToast } = useToast();
   const router = useRouter();
+  const usernameCheckRef = useRef(0);
+
+  // Debounced live availability check as the user types — catches a taken
+  // username before they submit, rather than only after the whole form fails.
+  useEffect(() => {
+    const candidate = username.trim().toLowerCase();
+    if (!USERNAME_PATTERN.test(candidate)) {
+      setUsernameStatus("idle");
+      return;
+    }
+    const requestId = ++usernameCheckRef.current;
+    setUsernameStatus("checking");
+    const handle = setTimeout(async () => {
+      try {
+        const result = await authApi.checkUsernameAvailable(candidate);
+        if (requestId !== usernameCheckRef.current) return; // stale response
+        setUsernameStatus(result.success && result.data?.available ? "available" : "taken");
+      } catch {
+        if (requestId === usernameCheckRef.current) setUsernameStatus("idle");
+      }
+    }, USERNAME_CHECK_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [username]);
 
   function getPasswordStrength(pwd: string): {
     score: number;
@@ -62,6 +95,25 @@ export default function RegisterPage() {
     return { score, ...level };
   }
 
+  const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Maps a failed register()'s errorTitle to the specific field it's about,
+  // so the message shows inline under that input (not just a detached
+  // top-of-form banner) — mirrors how client-side validation already renders.
+  function fieldForErrorTitle(title: string): string | null {
+    switch (title) {
+      case "Account already exists":
+      case "Invalid email":
+        return "email";
+      case "Username taken":
+        return "username";
+      case "Password too weak":
+        return "password";
+      default:
+        return null;
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -70,10 +122,19 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     const isLeader = accountType !== "MEMBER";
+    const trimmedEmail = email.trim();
+    const trimmedUsername = username.trim().toLowerCase();
     const trimmedGuild = guildName.trim();
     const trimmedFaction = factionName.trim();
 
     const errors: Record<string, string> = {};
+    if (!trimmedEmail) errors.email = "Email is required";
+    else if (!EMAIL_PATTERN.test(trimmedEmail)) errors.email = "Enter a valid email address";
+    if (!USERNAME_PATTERN.test(trimmedUsername)) {
+      errors.username = "3-20 chars, start with a letter, lowercase letters/numbers/underscores only";
+    } else if (usernameStatus === "taken") {
+      errors.username = "That username is already taken";
+    }
     if (displayName.length < 2) errors.displayName = "At least 2 characters";
     if (password.length < 8) errors.password = "At least 8 characters";
     if (password !== confirmPassword)
@@ -89,12 +150,29 @@ export default function RegisterPage() {
       return;
     }
 
+    // Final authoritative check right before creating the Supabase account —
+    // the debounced live check can be stale if the user submits quickly, and
+    // once signUp() succeeds there's no clean way to undo it.
+    try {
+      const availability = await authApi.checkUsernameAvailable(trimmedUsername);
+      if (!availability.success || !availability.data?.available) {
+        setFieldErrors({ username: availability.data?.reason || "That username is already taken" });
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      setFieldErrors({ username: "Couldn't verify username availability. Please try again." });
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const result = await register(
-        email,
+        trimmedEmail,
         password,
         confirmPassword,
         displayName,
+        trimmedUsername,
         isLeader
           ? {
               accountType,
@@ -114,8 +192,18 @@ export default function RegisterPage() {
           router.push("/dashboard");
         }
       } else {
-        setError(result.error || "We couldn't create your account. Please try again.");
-        setErrorTitle(result.errorTitle || "");
+        const title = result.errorTitle || "";
+        const message = result.error || "We couldn't create your account. Please try again.";
+        const field = fieldForErrorTitle(title);
+        if (field) {
+          // Show it right under the relevant input instead of (or in addition
+          // to) a detached banner, so it reads like the rest of the form's
+          // validation rather than a generic failure.
+          setFieldErrors({ [field]: message });
+        } else {
+          setError(message);
+          setErrorTitle(title);
+        }
       }
     } catch (err) {
       const friendly = friendlyAuthError(err instanceof Error ? err.message : undefined);
@@ -123,6 +211,42 @@ export default function RegisterPage() {
       setErrorTitle(friendly.title);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleVerifyCode(e: FormEvent) {
+    e.preventDefault();
+    setVerifyError("");
+    if (verificationCode.trim().length < 6) {
+      setVerifyError("Enter the 6-digit code from your email.");
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      const result = await verifyRegistrationCode(email, verificationCode.trim());
+      if (result.success) {
+        addToast("success", "Account verified! Welcome to ForgeKeep.");
+        router.push(result.platformRole ? "/admin" : "/dashboard");
+      } else {
+        setVerifyError(result.error || "That code is invalid or has expired.");
+      }
+    } finally {
+      setIsVerifying(false);
+    }
+  }
+
+  async function handleResendCode() {
+    setVerifyError("");
+    setIsResending(true);
+    try {
+      const result = await resendVerificationCode(email);
+      if (result.success) {
+        addToast("success", "New code sent!");
+      } else {
+        setVerifyError(result.error || "Couldn't resend the code. Please try again.");
+      }
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -144,9 +268,42 @@ export default function RegisterPage() {
             <span className="text-[#F5B841]">.</span>
           </h1>
           <p className="text-sm text-[#8B8F98] mt-3 max-w-sm mx-auto leading-relaxed">
-            We have sent a verification link to <strong className="text-white">{email}</strong>. Please check your inbox and verify your email to access your account.
+            We sent a 6-digit code to <strong className="text-white">{email}</strong>. Enter it below to activate your account.
           </p>
-          <div className="mt-8">
+
+          {verifyError && (
+            <div className="mt-5 px-4 py-3 rounded-xl bg-[#3A1A1E]/80 border border-[#D94A4A]/40 text-xs text-red-200 text-left animate-slide-down max-w-xs mx-auto">
+              {verifyError}
+            </div>
+          )}
+
+          <form onSubmit={handleVerifyCode} className="mt-6 max-w-xs mx-auto">
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="••••••"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+              className="w-full text-center text-2xl tracking-[0.5em] font-mono px-4 py-3 rounded-xl bg-[#11141A] border border-white/[0.08] focus:border-[#F5B841]/50 text-white outline-none transition-colors"
+            />
+            <MagneticPress strength={5} className="block mt-4">
+              <Button type="submit" fullWidth isLoading={isVerifying} size="lg" variant="auth">
+                Verify &amp; continue
+              </Button>
+            </MagneticPress>
+          </form>
+
+          <div className="mt-5 flex flex-col items-center gap-3">
+            <button
+              type="button"
+              onClick={handleResendCode}
+              disabled={isResending}
+              className="text-xs text-[#8B8F98] hover:text-[#F5B841] font-medium transition-colors disabled:opacity-50"
+            >
+              {isResending ? "Sending…" : "Didn't get a code? Resend"}
+            </button>
             <Link
               href="/login"
               className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl border border-white/[0.08] hover:border-[#F5B841]/30 bg-[#11141A] hover:bg-[#0B0D10] text-xs font-bold uppercase tracking-wider text-white transition-all duration-300"
@@ -293,7 +450,7 @@ export default function RegisterPage() {
             error={fieldErrors.displayName}
             variant="auth"
             required
-            autoComplete="username"
+            autoComplete="nickname"
             icon={
               <svg
                 className="h-4 w-4 text-white/40"
@@ -308,12 +465,52 @@ export default function RegisterPage() {
             }
           />
 
+          <div>
+            <Input
+              label="Username"
+              type="text"
+              placeholder="e.g. guildleader08"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              error={fieldErrors.username}
+              variant="auth"
+              required
+              autoComplete="username"
+              icon={
+                <svg
+                  className="h-4 w-4 text-white/40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 00-3-3.87" />
+                  <path d="M16 3.13a4 4 0 010 7.75" />
+                </svg>
+              }
+            />
+            {!fieldErrors.username && username.trim().length > 0 && (
+              <p className={`mt-1.5 text-xs animate-slide-down ${
+                usernameStatus === "available" ? "text-emerald-400" : usernameStatus === "taken" ? "text-red-400" : "text-[#8B8F98]"
+              }`}>
+                {usernameStatus === "checking" && "Checking availability…"}
+                {usernameStatus === "available" && "Username is available"}
+                {usernameStatus === "taken" && "That username is already taken"}
+                {usernameStatus === "idle" && !USERNAME_PATTERN.test(username.trim().toLowerCase()) &&
+                  "3-20 chars, start with a letter, lowercase letters/numbers/underscores only"}
+              </p>
+            )}
+          </div>
+
           <Input
             label="Email"
             type="email"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            error={fieldErrors.email}
             variant="auth"
             required
             autoComplete="email"

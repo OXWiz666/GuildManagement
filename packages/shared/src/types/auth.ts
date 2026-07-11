@@ -55,6 +55,7 @@ export interface PaymentMethodEntry {
 export interface UserPublic {
   id: string;
   email: string;
+  username: string;
   displayName: string;
   avatarUrl: string | null;
   createdAt: string;
@@ -76,6 +77,8 @@ export interface GuildMembership {
   guildName: string;
   guildSlug: string;
   guildAvatarUrl: string | null;
+  factionId: string | null;
+  factionName: string | null;
   role: string;
   rankName: string;
   joinedAt: string;

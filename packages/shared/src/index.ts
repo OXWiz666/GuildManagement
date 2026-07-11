@@ -41,6 +41,9 @@ export {
   emailSchema,
   passwordSchema,
   displayNameSchema,
+  usernameSchema,
+  loginIdentifierSchema,
+  resolveIdentifierSchema,
   loginSchema,
   registerSchema,
   forgotPasswordSchema,
@@ -56,6 +59,7 @@ export {
 } from "./validators/auth";
 export type {
   LoginInput,
+  ResolveIdentifierInput,
   RegisterInput,
   ForgotPasswordInput,
   ResetPasswordInput,

@@ -16,6 +16,7 @@ import { friendlyAuthError } from "./auth-errors";
 interface User {
   id: string;
   email: string;
+  username: string;
   displayName: string;
   avatarUrl: string | null;
   createdAt: string;
@@ -33,6 +34,8 @@ interface Guild {
   guildName: string;
   guildSlug: string;
   guildAvatarUrl: string | null;
+  factionId: string | null;
+  factionName: string | null;
   role: string;
   rankName: string;
   joinedAt: string;
@@ -49,8 +52,14 @@ interface AuthContextType {
     password: string,
     confirmPassword: string,
     displayName: string,
+    username: string,
     onboarding?: LeaderOnboardingInput,
   ) => Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }>;
+  verifyRegistrationCode: (
+    email: string,
+    code: string,
+  ) => Promise<{ success: boolean; error?: string; errorTitle?: string; platformRole?: string | null }>;
+  resendVerificationCode: (email: string) => Promise<{ success: boolean; error?: string; errorTitle?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<User | null>;
 }
@@ -204,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string,
       confirmPassword: string,
       displayName: string,
+      username: string,
       onboarding?: LeaderOnboardingInput,
     ): Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }> => {
       if (password !== confirmPassword) {
@@ -219,6 +229,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           options: {
             data: {
               display_name: displayName,
+              // Chosen username, read back on first sync (see supabase-sync
+              // route) — Supabase itself has no concept of a username.
+              username,
               // Leader onboarding intent — read back server-side on first sync
               // to self-serve create the guild/faction (see supabase-sync route).
               ...(onboarding && onboarding.accountType !== "MEMBER"
@@ -249,6 +262,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data.user && !data.session) {
+          // Supabase's known quirk: re-signing-up an email that's still
+          // *unconfirmed* (e.g. the user retried after not seeing the first
+          // email) resends the confirmation link but silently keeps the
+          // ORIGINAL password, not this one. The user then confirms, believes
+          // this password is active, and gets "Invalid login credentials"
+          // forever after. Stash it so /auth/callback can reconcile it once
+          // confirmation hands us a real, self-authenticated session.
+          if (typeof window !== "undefined") {
+            try {
+              sessionStorage.setItem("pending_confirm_pw", JSON.stringify({ email, password }));
+            } catch {
+              // sessionStorage unavailable (e.g. private browsing) — non-fatal
+            }
+          }
           return {
             success: true,
             requiresVerification: true,
@@ -289,6 +316,103 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     [refreshUser],
+  );
+
+  // Confirms the 6-digit code emailed at signUp (Supabase's `{{ .Token }}`
+  // OTP, not the magic link) and finishes onboarding in-app — no email tab
+  // switch, no /auth/callback round trip.
+  const verifyRegistrationCode = useCallback(
+    async (
+      email: string,
+      code: string,
+    ): Promise<{ success: boolean; error?: string; errorTitle?: string; platformRole?: string | null }> => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.auth.verifyOtp({
+          email,
+          token: code,
+          type: "signup",
+        });
+
+        if (error || !data.session) {
+          const friendly = friendlyAuthError(
+            error?.message,
+            "That code is invalid or has expired. Please request a new one.",
+          );
+          return { success: false, error: friendly.message, errorTitle: friendly.title };
+        }
+
+        // Same repeat-signup password reconciliation the magic-link callback
+        // does (see /auth/callback) — a retried, still-unconfirmed
+        // registration keeps the original password unless we push through
+        // the one most recently typed.
+        if (typeof window !== "undefined") {
+          try {
+            const raw = sessionStorage.getItem("pending_confirm_pw");
+            if (raw) {
+              sessionStorage.removeItem("pending_confirm_pw");
+              const pending = JSON.parse(raw) as { email?: string; password?: string };
+              if (
+                pending.email &&
+                pending.password &&
+                data.session.user.email?.toLowerCase() === pending.email.toLowerCase()
+              ) {
+                await supabase.auth.updateUser({ password: pending.password });
+              }
+            }
+          } catch {
+            // Best-effort only — recoverable via "Forgot password".
+          }
+        }
+
+        const syncResult = await authApi.supabaseSync(data.session.access_token);
+        if (syncResult.success && syncResult.data?.user) {
+          const basicUser = { ...syncResult.data.user, guilds: [] };
+          setUser(basicUser);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("auth_profile", JSON.stringify(basicUser));
+          }
+          const fullUser = await refreshUser();
+          setIsSessionReady(true);
+          return { success: true, platformRole: fullUser?.platformRole ?? null };
+        }
+
+        const friendly = friendlyAuthError(
+          syncResult.error?.message,
+          "We couldn't finish creating your account. Please try again.",
+        );
+        return { success: false, error: friendly.message, errorTitle: friendly.title };
+      } catch (err) {
+        console.error("Code verification failed:", err);
+        const friendly = friendlyAuthError(
+          err instanceof Error ? err.message : undefined,
+          "Couldn't reach the server. Check your connection and try again.",
+        );
+        return { success: false, error: friendly.message, errorTitle: friendly.title };
+      }
+    },
+    [refreshUser],
+  );
+
+  const resendVerificationCode = useCallback(
+    async (email: string): Promise<{ success: boolean; error?: string; errorTitle?: string }> => {
+      try {
+        const supabase = createClient();
+        const { error } = await supabase.auth.resend({ type: "signup", email });
+        if (error) {
+          const friendly = friendlyAuthError(error.message);
+          return { success: false, error: friendly.message, errorTitle: friendly.title };
+        }
+        return { success: true };
+      } catch (err) {
+        const friendly = friendlyAuthError(
+          err instanceof Error ? err.message : undefined,
+          "Couldn't reach the server. Check your connection and try again.",
+        );
+        return { success: false, error: friendly.message, errorTitle: friendly.title };
+      }
+    },
+    [],
   );
 
   const logout = useCallback(async () => {
@@ -361,6 +485,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSessionReady,
         login,
         register,
+        verifyRegistrationCode,
+        resendVerificationCode,
         logout,
         refreshUser,
       }}

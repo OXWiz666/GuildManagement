@@ -29,6 +29,7 @@ export const POST = withApi(async (req: NextRequest) => {
     user_metadata?: {
       display_name?: string;
       full_name?: string;
+      username?: string;
       account_type?: string;
       guild_name?: string;
       faction_name?: string;
@@ -58,6 +59,7 @@ export const POST = withApi(async (req: NextRequest) => {
       id: supabaseUser.id,
       email,
       displayName,
+      username: meta.username ?? null,
       onboarding: onboarding.success ? onboarding.data : null,
     },
     ipAddress,

@@ -167,7 +167,7 @@ export const api = {
 export const authApi = {
   async login(email: string, password: string) {
     const result = await api.post<{
-      user: { id: string; email: string; displayName: string; avatarUrl: string | null; createdAt: string };
+      user: { id: string; email: string; username: string; displayName: string; avatarUrl: string | null; createdAt: string };
       accessToken: string;
     }>("/auth/login", { email, password }, { skipAuth: true });
 
@@ -185,7 +185,7 @@ export const authApi = {
     displayName: string,
   ) {
     const result = await api.post<{
-      user: { id: string; email: string; displayName: string; avatarUrl: string | null; createdAt: string };
+      user: { id: string; email: string; username: string; displayName: string; avatarUrl: string | null; createdAt: string };
       accessToken: string;
     }>(
       "/auth/register",
@@ -212,11 +212,27 @@ export const authApi = {
     return result;
   },
 
+  async checkUsernameAvailable(username: string) {
+    return api.get<{ available: boolean; reason?: string }>(
+      `/auth/username-available?username=${encodeURIComponent(username)}`,
+      { skipAuth: true },
+    );
+  },
+
+  async resolveIdentifier(identifier: string) {
+    return api.post<{ email: string | null }>(
+      "/auth/resolve-identifier",
+      { identifier },
+      { skipAuth: true },
+    );
+  },
+
   async getMe() {
     return api.get<{
       user: {
         id: string;
         email: string;
+        username: string;
         displayName: string;
         avatarUrl: string | null;
         createdAt: string;
@@ -226,6 +242,8 @@ export const authApi = {
           guildName: string;
           guildSlug: string;
           guildAvatarUrl: string | null;
+          factionId: string | null;
+          factionName: string | null;
           role: string;
           rankName: string;
           joinedAt: string;
@@ -296,7 +314,7 @@ export const authApi = {
 
   async supabaseSync(token: string) {
     const result = await api.post<{
-      user: { id: string; email: string; displayName: string; avatarUrl: string | null; createdAt: string };
+      user: { id: string; email: string; username: string; displayName: string; avatarUrl: string | null; createdAt: string };
       accessToken: string;
     }>("/auth/supabase-sync", { token }, { skipAuth: true });
 
@@ -536,8 +554,12 @@ export interface BossRotationItem {
   queue: FactionGuildData[];
   currentGuild: FactionGuildData | null;
   nextGuild: FactionGuildData | null;
-  spawnTime: string;
-  status: "UPCOMING" | "SPAWNED" | "KILLED";
+  // False for a cycle boss that has never been taken — it has no real spawn
+  // time yet (spawnTime is null, status is "NOT_STARTED"). Always true for
+  // FIXED_SCHEDULE bosses, which spawn on a real clock regardless of history.
+  everTaken: boolean;
+  spawnTime: string | null;
+  status: "UPCOMING" | "SPAWNED" | "KILLED" | "NOT_STARTED";
   activeSchedule: BossScheduleData | null;
   latestKilled: BossScheduleData | null;
 }
@@ -546,6 +568,7 @@ export interface BossRotationResponse {
   serverTime: string;
   canManage: boolean;
   viewerRole: string;
+  factionId: string | null;
   guilds: FactionGuildData[];
   rotations: BossRotationItem[];
 }

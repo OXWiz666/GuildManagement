@@ -114,12 +114,12 @@ export default function BossRotationPage() {
     rotationQueryKey,
     async () => {
       if (!activeGuild) {
-        return { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", guilds: [], rotations: [] };
+        return { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", factionId: null, guilds: [], rotations: [] };
       }
       const result = await dashboardApi.getBossRotation(activeGuild.guildId);
       return result.success && result.data
         ? result.data
-        : { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", guilds: [], rotations: [] };
+        : { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", factionId: null, guilds: [], rotations: [] };
     },
     { persist: true, staleTime: 10000, enabled: !!activeGuild },
   );
@@ -277,6 +277,7 @@ export default function BossRotationPage() {
         null;
       const currentIndex = currentGuild ? Math.max(0, queue.findIndex((guild) => guild.id === currentGuild.id)) : 0;
       const nextGuild = queue.length ? queue[(currentIndex + 1) % queue.length] || currentGuild : null;
+      const everTaken = boss.type === "FIXED_SCHEDULE" || Boolean(activeSchedule || latestKilled);
 
       return {
         id: `fallback:${boss.name}`,
@@ -290,11 +291,12 @@ export default function BossRotationPage() {
         queue,
         currentGuild,
         nextGuild,
+        everTaken,
         spawnTime: activeSchedule?.spawnTime ||
           (boss.type === "FIXED_SCHEDULE"
             ? getNextBossSpawnTime(boss.name, latestKilled?.killedAt ? new Date(latestKilled.killedAt) : new Date()).toISOString()
-            : (latestKilled?.spawnTime || new Date().toISOString())),
-        status: activeSchedule?.status || latestKilled?.status || "UPCOMING",
+            : (latestKilled?.spawnTime || null)),
+        status: activeSchedule?.status || latestKilled?.status || (everTaken ? "UPCOMING" : "NOT_STARTED"),
         activeSchedule,
         latestKilled,
       };
@@ -350,12 +352,13 @@ export default function BossRotationPage() {
   // applies here too, not just on the LIVE tab.
   const upcomingBosses = useMemo(() => {
     const allUpcoming: BossScheduleData[] = [];
-    const currentTime = serverNow;
 
     for (const rotation of filteredRotations) {
-      const spawnTimeMs = new Date(rotation.spawnTime).getTime();
+      // A never-taken cycle boss has no real spawn time yet — it belongs in
+      // the LIVE tab (so its first kill can be logged), not the upcoming
+      // schedule, which has nothing meaningful to count down to.
+      if (!rotation.spawnTime) continue;
 
-      // Include all bosses regardless of status to ensure we show the complete upcoming schedule
       allUpcoming.push({
         id: rotation.activeSchedule?.id || rotation.id,
         guildId: activeGuild?.guildId || null,
@@ -366,7 +369,7 @@ export default function BossRotationPage() {
         guildTurn: rotation.currentGuild?.name || null,
         guildTurnGuildId: rotation.currentGuild?.id || null,
         guildTurnGuildName: rotation.currentGuild?.name || null,
-        status: rotation.status,
+        status: rotation.status === "NOT_STARTED" ? "UPCOMING" : rotation.status,
         killedAt: rotation.latestKilled?.killedAt || null,
         creatorId: rotation.activeSchedule?.creatorId || "",
         creatorName: rotation.activeSchedule?.creatorName,
@@ -379,7 +382,7 @@ export default function BossRotationPage() {
     return allUpcoming
       .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime())
       .slice(0, 24);
-  }, [filteredRotations, activeGuild, serverNow]);
+  }, [filteredRotations, activeGuild]);
 
   const upcomingSchedules = schedules
     .filter((schedule) => schedule.status !== "KILLED")
@@ -1077,11 +1080,17 @@ function RotationCard({
   onKilled: () => void;
   index?: number;
 }) {
-  const tick = getCountdown(rotation.spawnTime, serverNow);
+  // A cycle boss with no spawnTime has never been taken — there's no real
+  // countdown to show yet; the "Taken" action below logs its first kill.
+  const tick = rotation.spawnTime
+    ? getCountdown(rotation.spawnTime, serverNow)
+    : { text: "Not Taken Yet", warning: false, expired: false };
   const currentColor = getGuildColor(rotation.currentGuild?.name || "");
   const nextColor = getGuildColor(rotation.nextGuild?.name || "");
   const canKill = canManage;
-  const spawnLabel = new Date(rotation.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const spawnLabel = rotation.spawnTime
+    ? new Date(rotation.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "—";
 
   return (
     <article

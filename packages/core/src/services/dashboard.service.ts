@@ -367,8 +367,10 @@ async function getDefaultScheduleCreator(guildId: string): Promise<string | null
 /**
  * Ensure every registry boss has a live upcoming spawn for this guild so the
  * Boss Schedule / Rotation / Attendance pages always have something to count
- * down. Fixed-schedule bosses get their next Singapore-time spawn; cycle bosses
- * start "live" (now) until their first logged kill establishes the real cadence.
+ * down. Fixed-schedule bosses get their next Singapore-time spawn regardless of
+ * kill history. Cycle bosses only get a schedule row once their first kill has
+ * established a real `nextSpawnTime` on `BossRotation` — an untaken cycle boss
+ * is intentionally left with NO schedule row (nothing to fake-countdown to).
  * Idempotent — only creates rows for bosses that have no UPCOMING/SPAWNED entry.
  */
 async function ensureUpcomingSpawns(guildId: string, factionId: string | null) {
@@ -431,7 +433,16 @@ async function ensureUpcomingSpawns(guildId: string, factionId: string | null) {
   }
 
   const have = new Set(existing.map((s) => s.bossName.toLowerCase()));
-  const missing = PREDEFINED_BOSSES.filter((boss) => !have.has(boss.name.toLowerCase()));
+  // A cycle boss with no established rotation cadence has never been taken —
+  // don't seed a fake "live now" schedule for it. It only gets a real
+  // schedule row once the first kill sets `BossRotation.nextSpawnTime`.
+  // Fixed-schedule bosses always get seeded since their spawn is a real,
+  // deterministic clock time independent of any kill history.
+  const missing = PREDEFINED_BOSSES.filter((boss) => {
+    if (have.has(boss.name.toLowerCase())) return false;
+    if (boss.type !== "FIXED_SCHEDULE" && !rotationNextSpawn.has(boss.name.toLowerCase())) return false;
+    return true;
+  });
 
   if (missing.length === 0) {
     return;
@@ -444,11 +455,9 @@ async function ensureUpcomingSpawns(guildId: string, factionId: string | null) {
 
   await prisma.bossSchedule.createMany({
     data: missing.map((boss) => {
-      // Fixed bosses use their deterministic next spawn; cycle bosses use the
-      // rotation's established next spawn if any, otherwise start live (now).
       const spawnTime = boss.type === "FIXED_SCHEDULE"
         ? getNextBossSpawnTime(boss.name, now)
-        : rotationNextSpawn.get(boss.name.toLowerCase()) ?? now;
+        : rotationNextSpawn.get(boss.name.toLowerCase())!;
       return {
         guildId,
         bossName: boss.name,
@@ -1087,11 +1096,18 @@ export async function getBossRotation(guildId: string, actorId: string) {
       : null;
     const currentGuild = currentGuildId ? guildMap.get(currentGuildId) || null : null;
     const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
+    // A cycle boss with no active schedule, no established rotation cadence,
+    // and no prior kill has simply never been taken — it has no real spawn
+    // time to show, so it must not be reported as "live now". Fixed-schedule
+    // bosses always have a real deterministic spawn regardless of history.
+    const everTaken = boss.type === "FIXED_SCHEDULE"
+      ? true
+      : Boolean(activeSchedule || existing?.nextSpawnTime || latestKilled);
     const spawnTime = boss.type === "FIXED_SCHEDULE"
       ? (activeSchedule?.spawnTime || existing?.nextSpawnTime || getNextBossSpawnTime(boss.name, new Date()))
       : (activeSchedule?.spawnTime ||
          existing?.nextSpawnTime ||
-         (latestKilled?.killedAt ? getNextBossSpawnTime(boss.name, latestKilled.killedAt) : new Date()));
+         (latestKilled?.killedAt ? getNextBossSpawnTime(boss.name, latestKilled.killedAt) : null));
 
     rotations.push({
       id: existing?.id || `predefined:${boss.name}`,
@@ -1105,12 +1121,15 @@ export async function getBossRotation(guildId: string, actorId: string) {
       queue: queueGuildIds.map((id) => guildMap.get(id)).filter(Boolean),
       currentGuild,
       nextGuild,
-      spawnTime: spawnTime.toISOString(),
+      everTaken,
+      spawnTime: spawnTime ? spawnTime.toISOString() : null,
       status: activeSchedule
         ? activeSchedule.status
         : latestKilled
           ? BossEventStatus.KILLED
-          : BossEventStatus.UPCOMING,
+          : everTaken
+            ? BossEventStatus.UPCOMING
+            : "NOT_STARTED" as const,
       activeSchedule: activeSchedule ? serializeBossScheduleForApi(activeSchedule) : null,
       latestKilled: latestKilled ? serializeBossScheduleForApi(latestKilled) : null,
     });

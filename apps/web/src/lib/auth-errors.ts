@@ -78,11 +78,25 @@ export function friendlyAuthError(
     };
   }
 
-  // ── Rate limiting ──
-  if (lower.includes("rate limit") || lower.includes("too many requests")) {
+  // ── Rate limiting (Supabase's actual wording is "For security purposes,
+  // you can only request this after N seconds", not the words "rate limit") ──
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("too many requests") ||
+    lower.includes("security purposes") ||
+    lower.includes("only request this after")
+  ) {
     return {
       title: "Too many attempts",
-      message: "Too many attempts. Please wait a moment and try again.",
+      message: msg && lower.includes("after") ? msg : "Too many attempts. Please wait a moment and try again.",
+    };
+  }
+
+  // ── Signups disabled for this project ──
+  if (lower.includes("signups not allowed") || lower.includes("signup is disabled") || lower.includes("signups are disabled")) {
+    return {
+      title: "Registration unavailable",
+      message: "New account registration is temporarily unavailable. Please try again later.",
     };
   }
 

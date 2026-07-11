@@ -28,6 +28,32 @@ export const displayNameSchema = z
     "Display name can only contain letters, numbers, underscores, hyphens, dots, and spaces",
   );
 
+// The login/account identifier used instead of (or alongside) email. Lowercase
+// only, must start with a letter, 3-20 chars — deliberately stricter than
+// display name since it's a unique lookup key, not just a shown label.
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, "Username must be at least 3 characters")
+  .max(20, "Username must be at most 20 characters")
+  .regex(/^[a-z][a-z0-9_]*$/, "Username must start with a letter and contain only lowercase letters, numbers, and underscores");
+
+// Anything containing "@" is treated as an email login attempt; otherwise
+// it's a username lookup. Deliberately lenient (no format validation beyond
+// "non-empty") — the actual resolution/lookup will reject anything invalid.
+export const loginIdentifierSchema = z
+  .string()
+  .trim()
+  .min(1, "Username or email is required");
+
+// Resolves a login identifier (username or email) to the account's real
+// email before the client calls Supabase/the legacy login, both of which
+// only understand email.
+export const resolveIdentifierSchema = z.object({
+  identifier: loginIdentifierSchema,
+});
+
 export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, "Password is required"),
@@ -36,6 +62,7 @@ export const loginSchema = z.object({
 export const registerSchema = z
   .object({
     email: emailSchema,
+    username: usernameSchema,
     password: passwordSchema,
     confirmPassword: z.string().min(1, "Confirm your password"),
     displayName: displayNameSchema,
@@ -148,6 +175,7 @@ export type AddPaymentMethodInput = z.infer<typeof addPaymentMethodSchema>;
 
 // Infer types from schemas
 export type LoginInput = z.infer<typeof loginSchema>;
+export type ResolveIdentifierInput = z.infer<typeof resolveIdentifierSchema>;
 export type CombatPowerInput = z.infer<typeof combatPowerSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;

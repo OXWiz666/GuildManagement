@@ -35,6 +35,29 @@ export default function AuthCallbackPage() {
           return;
         }
 
+        // Reconcile a password stashed at registration time (see auth-context
+        // register()) — closes Supabase's repeat-signup gap where a retried,
+        // still-unconfirmed registration keeps the original password instead
+        // of the one the user most recently typed.
+        if (typeof window !== "undefined") {
+          try {
+            const raw = sessionStorage.getItem("pending_confirm_pw");
+            if (raw) {
+              sessionStorage.removeItem("pending_confirm_pw");
+              const pending = JSON.parse(raw) as { email?: string; password?: string };
+              if (
+                pending.email &&
+                pending.password &&
+                session.user.email?.toLowerCase() === pending.email.toLowerCase()
+              ) {
+                await supabase.auth.updateUser({ password: pending.password });
+              }
+            }
+          } catch {
+            // Best-effort only — if this fails the user can still recover via "Forgot password".
+          }
+        }
+
         // Send Supabase JWT to backend for syncing
         const result = await authApi.supabaseSync(session.access_token);
 

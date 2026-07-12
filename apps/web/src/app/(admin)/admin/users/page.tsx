@@ -68,12 +68,7 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[var(--forge-gold-bright)]">Platform</p>
-        <h1 className="mt-1 text-2xl font-black tracking-tight text-white">User Management</h1>
-      </div>
-
+    <div className="animate-fade-in space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <div className="max-w-xs flex-1 min-w-[200px]">
           <Input

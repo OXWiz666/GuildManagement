@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { DISTRIBUTION_TIERS, DISTRIBUTION_TIER_LABELS, DEFAULT_MARKET_RULES } from "@guild/shared";
 import { marketApi, type MarketRulesData } from "@/lib/api";
+import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -14,6 +15,7 @@ interface Props {
 
 export default function DistributionRulesSection({ guildId }: Props) {
   const { addToast } = useToast();
+  const { resolveRoleName } = useRoleDisplayNames();
   const [rules, setRules] = useState<MarketRulesData>(DEFAULT_MARKET_RULES as MarketRulesData);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -78,7 +80,7 @@ export default function DistributionRulesSection({ guildId }: Props) {
               <Input label="Elite min CP" type="number" min={0} value={rules.cpTiers.eliteMinCp} onChange={(e) => setCp("eliteMinCp", e.target.value)} />
               <Input label="Upper min CP" type="number" min={0} value={rules.cpTiers.upperMinCp} onChange={(e) => setCp("upperMinCp", e.target.value)} />
             </div>
-            <p className="text-[10px] text-white/35 mt-1.5">Members at/above Elite CP → Elite; at/above Upper CP → Upper; otherwise Lower. Core is the CORE_MEMBER role.</p>
+            <p className="text-[10px] text-white/35 mt-1.5">Members at/above Elite CP → Elite; at/above Upper CP → Upper; otherwise Lower. Core is the {resolveRoleName("CORE_MEMBER")} role (and higher).</p>
           </div>
 
           {/* Per-tier limits */}

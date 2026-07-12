@@ -352,7 +352,7 @@ export interface GuildMemberData {
   memberCode: string | null;
   joinedAt: string;
   isActive: boolean;
-  category: MemberCategoryData | null;
+  customRole: CustomRoleData | null;
   user: {
     id: string;
     displayName: string;
@@ -361,12 +361,13 @@ export interface GuildMemberData {
   };
 }
 
-export interface MemberCategoryData {
+export interface CustomRoleData {
   id: string;
+  guildId?: string;
   name: string;
   color: string;
-  description: string | null;
-  sortOrder: number;
+  band: string;
+  sortOrder?: number;
 }
 
 export interface JoinRequestGearItem {
@@ -406,51 +407,41 @@ export const guildApi = {
     );
   },
 
-  async updateMemberRole(guildId: string, memberId: string, role: string) {
+  async updateMemberRole(guildId: string, memberId: string, input: { role?: string; customRoleId?: string | null }) {
     return api.patch<{ member: GuildMemberData }>(
       `/guilds/${guildId}/members/${memberId}/role`,
-      { role },
+      input,
     );
   },
 
-  // ─── Member categories (customizable roster tags) ─────────
-  async getMemberCategories(guildId: string) {
-    return api.get<{ categories: MemberCategoryData[] }>(
-      `/guilds/${guildId}/categories`,
+  // ─── Custom roles (guild-defined ranks, inherit a band's permissions) ─────
+  async listCustomRoles(guildId: string) {
+    return api.get<{ roles: CustomRoleData[] }>(
+      `/guilds/${guildId}/custom-roles`,
     );
   },
 
-  async createMemberCategory(
-    guildId: string,
-    payload: { name: string; color?: string; description?: string },
-  ) {
-    return api.post<{ category: MemberCategoryData }>(
-      `/guilds/${guildId}/categories`,
+  async createCustomRole(guildId: string, payload: { name: string; color?: string; band: string }) {
+    return api.post<{ role: CustomRoleData }>(
+      `/guilds/${guildId}/custom-roles`,
       payload,
     );
   },
 
-  async updateMemberCategory(
+  async updateCustomRole(
     guildId: string,
-    categoryId: string,
-    payload: Partial<{ name: string; color: string; description: string; sortOrder: number }>,
+    roleId: string,
+    payload: Partial<{ name: string; color: string; sortOrder: number }>,
   ) {
-    return api.patch<{ category: MemberCategoryData }>(
-      `/guilds/${guildId}/categories/${categoryId}`,
+    return api.patch<{ role: CustomRoleData }>(
+      `/guilds/${guildId}/custom-roles/${roleId}`,
       payload,
     );
   },
 
-  async deleteMemberCategory(guildId: string, categoryId: string) {
+  async deleteCustomRole(guildId: string, roleId: string) {
     return api.delete<{ success: boolean }>(
-      `/guilds/${guildId}/categories/${categoryId}`,
-    );
-  },
-
-  async assignMemberCategory(guildId: string, memberId: string, categoryId: string | null) {
-    return api.patch<{ member: GuildMemberData }>(
-      `/guilds/${guildId}/members/${memberId}/category`,
-      { categoryId },
+      `/guilds/${guildId}/custom-roles/${roleId}`,
     );
   },
 

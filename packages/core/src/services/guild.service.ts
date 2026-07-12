@@ -1,6 +1,12 @@
 import { type GuildSettings, type GuildMember } from "@guild/db";
-import { AUDIT_ACTIONS, canManageRole, type GuildRoleType } from "@guild/shared";
-import { ForbiddenError, NotFoundError } from "../utils/errors";
+import {
+  AUDIT_ACTIONS,
+  canManageRole,
+  resolveRoleDisplayName,
+  CUSTOMIZABLE_ROLES,
+  type GuildRoleType,
+} from "@guild/shared";
+import { BadRequestError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
 import { cache } from "../lib/cache";
 import { IGuildRepository, PrismaGuildRepository } from "../repositories/guild.repository";
 import { IAuditRepository, PrismaAuditRepository } from "../repositories/audit.repository";
@@ -28,13 +34,7 @@ export interface GuildMemberWithUser {
   memberCode: string | null;
   joinedAt: string;
   isActive: boolean;
-  category: {
-    id: string;
-    name: string;
-    color: string;
-    description: string | null;
-    sortOrder: number;
-  } | null;
+  customRole: { id: string; name: string; color: string; band: string } | null;
   user: {
     id: string;
     displayName: string;
@@ -76,14 +76,8 @@ export class GuildService {
       memberCode: m.memberCode,
       joinedAt: m.joinedAt.toISOString(),
       isActive: m.isActive,
-      category: m.category
-        ? {
-            id: m.category.id,
-            name: m.category.name,
-            color: m.category.color,
-            description: m.category.description,
-            sortOrder: m.category.sortOrder,
-          }
+      customRole: m.customRole
+        ? { id: m.customRole.id, name: m.customRole.name, color: m.customRole.color, band: m.customRole.band }
         : null,
       user: {
         id: m.user.id,
@@ -95,12 +89,15 @@ export class GuildService {
   }
 
   /**
-   * Update a member's role (promotion or demotion).
+   * Update a member's role (promotion or demotion), or assign/clear a
+   * guild-defined custom role (which always carries a fixed permission
+   * "band" — see GuildRoleDefinition). Exactly one of `role`/`customRoleId`
+   * drives the change; the other is derived.
    */
   async updateMemberRole(
     guildId: string,
     memberId: string,
-    newRole: GuildRoleType,
+    input: { role?: GuildRoleType; customRoleId?: string | null },
     actorId: string,
     ipAddress?: string,
     userAgent?: string,
@@ -117,14 +114,46 @@ export class GuildService {
       throw new ForbiddenError("Only Guild Leaders can manage roles");
     }
 
-    // Get the target member
-    const targetMember = await this.guildRepo.getMemberById(memberId);
+    // Get the target member and the guild's role-label overrides
+    const [targetMember, settings] = await Promise.all([
+      this.guildRepo.getMemberById(memberId),
+      this.guildRepo.getSettings(guildId),
+    ]);
+    const roleDisplayNames = (settings?.roleDisplayNames || null) as Partial<
+      Record<GuildRoleType, string>
+    > | null;
 
     if (!targetMember || targetMember.guildId !== guildId) {
       throw new NotFoundError("Member not found in this guild");
     }
 
+    // Resolve the effective (band) role, display name, and custom-role FK
+    // from the caller's input. A custom role always wins over a literal
+    // `role` if both are somehow present.
+    let newRole: GuildRoleType;
+    let newRankName: string;
+    let newCustomRoleId: string | null;
+    let newCustomRoleName: string | null = null;
+
+    if (input.customRoleId) {
+      const definition = await this.guildRepo.getRoleDefinition(guildId, input.customRoleId);
+      if (!definition) {
+        throw new NotFoundError("Custom role not found in this guild");
+      }
+      newRole = definition.band as GuildRoleType;
+      newRankName = definition.name;
+      newCustomRoleId = definition.id;
+      newCustomRoleName = definition.name;
+    } else if (input.role) {
+      newRole = input.role;
+      newRankName = resolveRoleDisplayName(newRole, roleDisplayNames);
+      newCustomRoleId = null;
+    } else {
+      throw new BadRequestError("Either role or customRoleId must be provided");
+    }
+
     const oldRole = targetMember.role;
+    const oldRankName: string = targetMember.customRole?.name ?? resolveRoleDisplayName(oldRole, roleDisplayNames);
 
     // Handle GUILD_LEADER transfer: promoting someone to GL means the actor demotes themselves
     if (newRole === "GUILD_LEADER") {
@@ -138,9 +167,9 @@ export class GuildService {
         memberId,
         actorMembership.id,
         "GUILD_LEADER",
-        "Guild Leader",
+        resolveRoleDisplayName("GUILD_LEADER", roleDisplayNames),
         "OFFICER",
-        "Officer",
+        resolveRoleDisplayName("OFFICER", roleDisplayNames),
       );
 
       // Audit: record both the promotion and self-demotion
@@ -195,15 +224,7 @@ export class GuildService {
         memberCode: updatedTarget.memberCode,
         joinedAt: updatedTarget.joinedAt.toISOString(),
         isActive: updatedTarget.isActive,
-        category: updatedTarget.category
-          ? {
-              id: updatedTarget.category.id,
-              name: updatedTarget.category.name,
-              color: updatedTarget.category.color,
-              description: updatedTarget.category.description,
-              sortOrder: updatedTarget.category.sortOrder,
-            }
-          : null,
+        customRole: null,
         user: updatedTarget.user,
       };
     }
@@ -215,37 +236,31 @@ export class GuildService {
       );
     }
 
-    // Determine rank name based on role
-    const rankNameMap: Record<string, string> = {
-      ADMIN: "Admin",
-      FACTION_LEADER: "Faction Leader",
-      GUILD_LEADER: "Guild Leader",
-      OFFICER: "Officer",
-      CORE_MEMBER: "Core",
-      ELITE_MEMBER: "Higher Rank",
-      MEMBER: "Lower Rank",
-    };
+    const updated = await this.guildRepo.updateMemberRole(memberId, newRole, newRankName, newCustomRoleId);
 
-    const updated = await this.guildRepo.updateMemberRole(
-      memberId,
-      newRole,
-      rankNameMap[newRole] || "Lower Rank",
-    );
-
-    // Determine if promotion or demotion
+    // A band change (oldRole !== newRole) is a real promotion/demotion. When
+    // the band is unchanged — e.g. assigning/clearing a custom role that
+    // shares the member's current band — log a neutral action instead of
+    // misreporting it as a demotion (index compare is equal, not ">").
+    const bandChanged = oldRole !== newRole;
     const isPromotion =
+      bandChanged &&
       ["MEMBER", "ELITE_MEMBER", "CORE_MEMBER", "OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].indexOf(newRole) >
       ["MEMBER", "ELITE_MEMBER", "CORE_MEMBER", "OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"].indexOf(oldRole);
 
     await this.auditRepo.create({
       actorId,
       guildId,
-      action: isPromotion ? AUDIT_ACTIONS.MEMBER_PROMOTED : AUDIT_ACTIONS.MEMBER_DEMOTED,
+      action: bandChanged
+        ? (isPromotion ? AUDIT_ACTIONS.MEMBER_PROMOTED : AUDIT_ACTIONS.MEMBER_DEMOTED)
+        : AUDIT_ACTIONS.MEMBER_ROLE_CUSTOMIZED,
       target: "GuildMember",
       targetId: targetMember.userId,
       detail: {
         oldRole,
         newRole,
+        oldRoleName: oldRankName,
+        newRoleName: newCustomRoleName ?? newRankName,
         displayName: targetMember.user.displayName,
       },
       ipAddress,
@@ -267,14 +282,8 @@ export class GuildService {
       memberCode: updated.memberCode,
       joinedAt: updated.joinedAt.toISOString(),
       isActive: updated.isActive,
-      category: updated.category
-        ? {
-            id: updated.category.id,
-            name: updated.category.name,
-            color: updated.category.color,
-            description: updated.category.description,
-            sortOrder: updated.category.sortOrder,
-          }
+      customRole: updated.customRole
+        ? { id: updated.customRole.id, name: updated.customRole.name, color: updated.customRole.color, band: updated.customRole.band }
         : null,
       user: updated.user,
     };
@@ -307,6 +316,7 @@ export class GuildService {
       secondaryCurrencyCode?: string | null;
       secondaryCurrencySymbol?: string | null;
       pointsResetCycle?: string;
+      roleDisplayNames?: Partial<Record<GuildRoleType, string>>;
     },
     actorId: string,
     ipAddress?: string,
@@ -326,6 +336,21 @@ export class GuildService {
       throw new ForbiddenError("Only Guild Leaders and Officers can update settings");
     }
 
+    let roleDisplayNames: Partial<Record<GuildRoleType, string>> | undefined;
+    if (payload.roleDisplayNames) {
+      roleDisplayNames = {};
+      for (const role of CUSTOMIZABLE_ROLES) {
+        const label = payload.roleDisplayNames[role];
+        if (typeof label !== "string") continue;
+        const trimmed = label.trim();
+        if (!trimmed) continue;
+        if (trimmed.length > 32) {
+          throw new ValidationError(`Role name for ${role} must be 32 characters or fewer`);
+        }
+        roleDisplayNames[role] = trimmed;
+      }
+    }
+
     const updated = await this.guildRepo.updateSettings(guildId, {
       taxRatePercent: payload.taxRatePercent,
       attendancePoints: payload.attendancePoints,
@@ -337,6 +362,7 @@ export class GuildService {
       secondaryCurrencyCode: payload.secondaryCurrencyCode,
       secondaryCurrencySymbol: payload.secondaryCurrencySymbol,
       pointsResetCycle: payload.pointsResetCycle,
+      roleDisplayNames,
     });
 
     await this.auditRepo.create({
@@ -384,12 +410,12 @@ export const getGuildMembers = (guildId: string): Promise<GuildMemberWithUser[]>
 export const updateMemberRole = (
   guildId: string,
   memberId: string,
-  newRole: GuildRoleType,
+  input: { role?: GuildRoleType; customRoleId?: string | null },
   actorId: string,
   ipAddress?: string,
   userAgent?: string,
 ): Promise<GuildMemberWithUser> =>
-  guildService.updateMemberRole(guildId, memberId, newRole, actorId, ipAddress, userAgent);
+  guildService.updateMemberRole(guildId, memberId, input, actorId, ipAddress, userAgent);
 
 export const getGuildSettings = (guildId: string): Promise<GuildSettings> =>
   guildService.getGuildSettings(guildId);

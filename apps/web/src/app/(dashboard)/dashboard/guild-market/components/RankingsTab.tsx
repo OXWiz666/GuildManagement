@@ -3,15 +3,9 @@
 import { useMemo, useState } from "react";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
+import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 
-const ROLE_OPTIONS = [
-  { value: "ALL", label: "All roles" },
-  { value: "GUILD_LEADER", label: "Guild Leader" },
-  { value: "OFFICER", label: "Officer" },
-  { value: "CORE_MEMBER", label: "Core Member" },
-  { value: "ELITE_MEMBER", label: "Elite Member" },
-  { value: "MEMBER", label: "Member" },
-];
+const ROLE_FILTER_VALUES = ["ALL", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"] as const;
 
 interface RankingsTabProps {
   accounting: any;
@@ -55,6 +49,7 @@ export default function RankingsTab({
   onSearchChange,
 }: RankingsTabProps) {
   const [roleFilter, setRoleFilter] = useState("ALL");
+  const { resolveRoleName } = useRoleDisplayNames();
 
   // Full sorted ladder (unfiltered) — drives ranks, podium and bar scale
   const sortedAll = useMemo(() => {
@@ -156,8 +151,8 @@ export default function RankingsTab({
               onChange={(e) => setRoleFilter(e.target.value)}
               className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
             >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+              {ROLE_FILTER_VALUES.map((value) => (
+                <option key={value} value={value}>{value === "ALL" ? "All roles" : resolveRoleName(value)}</option>
               ))}
             </select>
             <div className="relative max-w-xs w-full">
@@ -210,7 +205,7 @@ export default function RankingsTab({
                       </td>
                       <td className="px-4 py-3 font-semibold text-white">{row.ign}</td>
                       <td className="px-4 py-3">
-                        <Badge role={row.role} />
+                        <Badge role={row.role} customName={row.customRole?.name} customColor={row.customRole?.color} />
                       </td>
                       <td className="px-4 py-3 text-white/60">{row.class}</td>
                       <td className="px-4 py-3 text-center font-mono text-cyan-400">

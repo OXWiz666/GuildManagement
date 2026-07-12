@@ -11,9 +11,9 @@ export const PATCH = withApi(
   async (req: NextRequest, ctx: RouteContext<"/api/guilds/[guildId]/members/[memberId]/role">) => {
     const { guildId, memberId } = await ctx.params;
     const { user } = await requireGuildRole(req, "GUILD_LEADER", guildId);
-    const { role } = await readJson<{ role?: string }>(req);
+    const { role, customRoleId } = await readJson<{ role?: string; customRoleId?: string | null }>(req);
 
-    if (!role || !GUILD_ROLES.includes(role as GuildRoleType)) {
+    if (!customRoleId && (!role || !GUILD_ROLES.includes(role as GuildRoleType))) {
       throw new BadRequestError(`Invalid role. Must be one of: ${GUILD_ROLES.join(", ")}`);
     }
 
@@ -21,7 +21,7 @@ export const PATCH = withApi(
     const updated = await services.guild.updateMemberRole(
       guildId,
       memberId,
-      role as GuildRoleType,
+      { role: role as GuildRoleType | undefined, customRoleId },
       user.userId,
       ipAddress,
       userAgent,

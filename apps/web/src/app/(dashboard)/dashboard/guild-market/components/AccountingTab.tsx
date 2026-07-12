@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import MarketStatCard from "./MarketStatCard";
+import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 
 interface AccountingTabProps {
   accounting: any;
@@ -17,14 +18,7 @@ interface AccountingTabProps {
   onPageChange: (page: number) => void;
 }
 
-const ROLE_OPTIONS = [
-  { value: "ALL", label: "All roles" },
-  { value: "GUILD_LEADER", label: "Guild Leader" },
-  { value: "OFFICER", label: "Officer" },
-  { value: "CORE_MEMBER", label: "Core Member" },
-  { value: "ELITE_MEMBER", label: "Elite Member" },
-  { value: "MEMBER", label: "Member" },
-];
+const ROLE_FILTER_VALUES = ["ALL", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"] as const;
 
 export default function AccountingTab({
   accounting,
@@ -37,6 +31,7 @@ export default function AccountingTab({
   ledgerPage,
   onPageChange,
 }: AccountingTabProps) {
+  const { resolveRoleName } = useRoleDisplayNames();
   return (
     <div className="space-y-6">
       {/* Treasury statistics */}
@@ -111,8 +106,8 @@ export default function AccountingTab({
               onChange={(e) => onRoleFilterChange(e.target.value)}
               className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
             >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+              {ROLE_FILTER_VALUES.map((value) => (
+                <option key={value} value={value}>{value === "ALL" ? "All roles" : resolveRoleName(value)}</option>
               ))}
             </select>
             <div className="relative max-w-xs w-full">
@@ -158,7 +153,7 @@ export default function AccountingTab({
                     style={{ animationDelay: `${Math.min(index, 16) * 30}ms` }}
                   >
                     <td className="px-4 py-3 font-semibold text-white">{m.ign}</td>
-                    <td className="px-4 py-3"><Badge role={m.role} /></td>
+                    <td className="px-4 py-3"><Badge role={m.role} customName={m.customRole?.name} customColor={m.customRole?.color} /></td>
                     <td className="px-4 py-3 text-zinc-400">{m.class}</td>
                     <td className="px-4 py-3 text-center font-mono font-bold text-cyan-400">{m.cp.toLocaleString()}</td>
                     <td className="px-4 py-3 text-center font-mono font-bold text-amber-400">{m.dkp}</td>

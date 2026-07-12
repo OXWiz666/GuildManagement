@@ -5,6 +5,7 @@ import SettingsCard from "./SettingsCard";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { guildApi } from "@/lib/api";
+import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import { useToast } from "@/components/ui/Toast";
 import { Magnetic } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
@@ -15,6 +16,7 @@ export interface GuildSettingsSectionProps {
 
 export default function GuildSettingsSection({ guildId }: GuildSettingsSectionProps) {
   const { addToast } = useToast();
+  const { resolveRoleName } = useRoleDisplayNames();
   const [isSaving, setIsSaving] = useState(false);
 
   // Form states
@@ -208,35 +210,35 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <Input
-                label="Guild Leader"
+                label={resolveRoleName("GUILD_LEADER")}
                 type="number"
                 step="0.1"
                 value={multGL}
                 onChange={(e) => setMultGL(e.target.value)}
               />
               <Input
-                label="Officer"
+                label={resolveRoleName("OFFICER")}
                 type="number"
                 step="0.1"
                 value={multOfficer}
                 onChange={(e) => setMultOfficer(e.target.value)}
               />
               <Input
-                label="Core Member"
+                label={resolveRoleName("CORE_MEMBER")}
                 type="number"
                 step="0.1"
                 value={multCore}
                 onChange={(e) => setMultCore(e.target.value)}
               />
               <Input
-                label="Elite Member"
+                label={resolveRoleName("ELITE_MEMBER")}
                 type="number"
                 step="0.1"
                 value={multElite}
                 onChange={(e) => setMultElite(e.target.value)}
               />
               <Input
-                label="Member"
+                label={resolveRoleName("MEMBER")}
                 type="number"
                 step="0.1"
                 value={multMember}

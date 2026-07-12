@@ -10,8 +10,8 @@ export const GET = withApi(
   async (req: NextRequest, ctx: { params: Promise<{ guildId: string }> }) => {
     const { guildId } = await ctx.params;
     await requireGuildRole(req, "MEMBER", guildId);
-    const categories = await services.memberCategory.listMemberCategories(guildId);
-    return ok({ categories });
+    const roles = await services.customRole.listCustomRoles(guildId);
+    return ok({ roles });
   },
 );
 
@@ -19,10 +19,10 @@ export const POST = withApi(
   async (req: NextRequest, ctx: { params: Promise<{ guildId: string }> }) => {
     const { guildId } = await ctx.params;
     const { user } = await requireGuildRole(req, "GUILD_LEADER", guildId);
-    const body = await readJson<{ name?: string; color?: string; description?: string }>(req);
+    const body = await readJson<{ name?: string; color?: string; band?: string }>(req);
     const { ipAddress, userAgent } = getClientInfo(req);
 
-    const category = await services.memberCategory.createMemberCategory(
+    const role = await services.customRole.createCustomRole(
       user.userId,
       guildId,
       body,
@@ -30,7 +30,7 @@ export const POST = withApi(
       userAgent,
     );
 
-    broadcastToGuild(guildId, "member_categories_updated", { guildId });
-    return ok({ category });
+    broadcastToGuild(guildId, "custom_roles_updated", { guildId });
+    return ok({ role });
   },
 );

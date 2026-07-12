@@ -36,6 +36,29 @@ export const ROLE_PERMISSIONS: Record<GuildRoleType, string> = {
   MEMBER: "Standard permissions",
 };
 
+// Rank tiers a Guild Leader may rename per-guild. GUILD_LEADER/FACTION_LEADER/ADMIN
+// stay fixed — they carry structural meaning (leadership transfer, faction/platform UI).
+export const CUSTOMIZABLE_ROLES = [
+  "OFFICER",
+  "CORE_MEMBER",
+  "ELITE_MEMBER",
+  "MEMBER",
+] as const;
+
+export type CustomizableRoleType = (typeof CUSTOMIZABLE_ROLES)[number];
+
+/**
+ * Resolve a role's display label, layering a guild's custom overrides on top
+ * of the canonical name. Never affects the underlying role/permissions.
+ */
+export function resolveRoleDisplayName(
+  role: GuildRoleType,
+  overrides?: Partial<Record<GuildRoleType, string>> | null,
+): string {
+  const override = overrides?.[role]?.trim();
+  return override || ROLE_DISPLAY_NAMES[role];
+}
+
 // Recommended rank display names
 export const RANK_DISPLAY_NAMES = [
   "Guild Leader",

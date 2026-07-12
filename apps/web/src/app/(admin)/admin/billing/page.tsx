@@ -25,12 +25,7 @@ export default function AdminBillingPage() {
   );
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[var(--forge-gold-bright)]">Platform</p>
-        <h1 className="mt-1 text-2xl font-black tracking-tight text-white">Billing</h1>
-      </div>
-
+    <div className="animate-fade-in space-y-5">
       {overview && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric label="Total Revenue" value={money(overview.totalRevenue)} />

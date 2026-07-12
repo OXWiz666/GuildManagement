@@ -113,7 +113,7 @@ const ALL_ITEMS = NAV.flatMap((s) => s.items);
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[var(--obsidian-deep)]">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-[var(--obsidian-deep)]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -122,7 +122,7 @@ function LoadingScreen({ label }: { label: string }) {
             "radial-gradient(circle 420px at 50% 42%, rgba(212,168,83,0.08), transparent 70%)",
         }}
       />
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-5">
+      <div className="relative z-10 flex h-full flex-col items-center justify-center gap-5">
         <div className="relative flex h-16 w-16 items-center justify-center">
           <div className="absolute inset-0 rounded-2xl border border-white/[0.05] bg-white/[0.01] backdrop-blur-sm" />
           <div className="premium-loader-spin absolute inset-0 rounded-2xl border-2 border-transparent border-t-[var(--forge-gold)]" />

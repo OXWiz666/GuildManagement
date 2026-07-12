@@ -62,7 +62,7 @@ export default function DashboardShell({
 
   if (!mounted || isLoading || !isAuthenticated || !isSessionReady || user?.platformRole) {
     return (
-      <div className="min-h-screen bg-[var(--obsidian-deep)] flex flex-col items-center justify-center gap-6 animate-fade-in relative overflow-hidden">
+      <div className="fixed inset-0 z-50 bg-[var(--obsidian-deep)] flex flex-col items-center justify-center gap-6 animate-fade-in overflow-hidden">
         {/* Ambient background glows */}
         <div
           aria-hidden

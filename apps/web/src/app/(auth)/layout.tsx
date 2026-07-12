@@ -101,7 +101,7 @@ export default function AuthLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-[100dvh] bg-[#08080a] flex flex-col items-center justify-center gap-6 animate-fade-in relative overflow-hidden">
+      <div className="fixed inset-0 z-50 bg-[#08080a] flex flex-col items-center justify-center gap-6 animate-fade-in overflow-hidden">
         <SceneBackground intensity="subtle" />
         <div
           aria-hidden

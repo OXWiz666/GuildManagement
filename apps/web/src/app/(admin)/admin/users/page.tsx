@@ -99,7 +99,7 @@ export default function AdminUsersPage() {
       {isLoading && !data ? (
         <Skeleton className="h-64 w-full rounded-2xl animate-pulse" />
       ) : (
-        <div className="overflow-auto rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
+        <div className="overflow-auto scroll-fade-x rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
           <table className="w-full min-w-[720px] text-[12px]">
             <thead>
               <tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-white/45">

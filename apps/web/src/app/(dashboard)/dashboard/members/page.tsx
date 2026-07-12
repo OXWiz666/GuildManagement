@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
-import { guildApi, type GuildMemberData, type JoinRequestData } from "@/lib/api";
+import { guildApi, type GuildMemberData, type JoinRequestData, type MemberCategoryData } from "@/lib/api";
 import { hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import { useToast } from "@/components/ui/Toast";
 import Card from "@/components/ui/Card";
@@ -24,6 +24,7 @@ import ApplicationsTab from "./components/ApplicationsTab";
 import InviteTab from "./components/InviteTab";
 import RoleConfirmModal from "./components/RoleConfirmModal";
 import StalkProfileModal from "./components/StalkProfileModal";
+import CategoryManagerModal from "./components/CategoryManagerModal";
 
 export default function MembersPage() {
   const { user } = useAuth();
@@ -42,6 +43,8 @@ export default function MembersPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
   const [selectedStalkMember, setSelectedStalkMember] = useState<GuildMemberData | null>(null);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
 
   // New admin flow state variables
   const [activeTab, setActiveTab] = useState<"members" | "applications" | "invites">("members");
@@ -99,6 +102,18 @@ export default function MembersPage() {
     { persist: true, staleTime: 60000 }
   );
 
+  // 4. Member Categories Query (customizable roster tags)
+  const { data: categoriesRaw } = useQuery<MemberCategoryData[]>(
+    activeGuild ? `guild_member_categories:${activeGuild.guildId}` : "guild_member_categories_empty",
+    async () => {
+      if (!activeGuild) return [];
+      const result = await guildApi.getMemberCategories(activeGuild.guildId);
+      return result.success && result.data?.categories ? result.data.categories : [];
+    },
+    { persist: true, staleTime: 30000 }
+  );
+  const categories = categoriesRaw || [];
+
   // Listen to real-time events to refresh members list and pending join applications instantly
   useEffect(() => {
     if (!socket || !activeGuild) return;
@@ -120,7 +135,12 @@ export default function MembersPage() {
       queryClient.invalidateQueries(`guild_invite_code:${activeGuild.guildId}`);
     };
 
+    const handleCategoriesUpdate = () => {
+      queryClient.invalidateQueries(`guild_member_categories:${activeGuild.guildId}`);
+    };
+
     socket.on("member_role_updated", handleRosterUpdate);
+    socket.on("member_categories_updated", handleCategoriesUpdate);
     socket.on("join_request_created", handleApplicationsUpdate);
     socket.on("join_request_cancelled", handleApplicationsUpdate);
     socket.on("join_request_processed", handleApplicationsUpdate);
@@ -129,6 +149,7 @@ export default function MembersPage() {
 
     return () => {
       socket.off("member_role_updated", handleRosterUpdate);
+      socket.off("member_categories_updated", handleCategoriesUpdate);
       socket.off("join_request_created", handleApplicationsUpdate);
       socket.off("join_request_cancelled", handleApplicationsUpdate);
       socket.off("join_request_processed", handleApplicationsUpdate);
@@ -146,7 +167,10 @@ export default function MembersPage() {
         (m.ign && m.ign.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (m.memberCode && m.memberCode.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesRole = roleFilter === "ALL" || m.role === roleFilter;
-      return matchesSearch && matchesRole;
+      const matchesCategory =
+        categoryFilter === "ALL" ||
+        (categoryFilter === "NONE" ? !m.category : m.category?.id === categoryFilter);
+      return matchesSearch && matchesRole && matchesCategory;
     })
     .sort((a, b) => {
       if (sortBy === "CP") return (b.cp ?? 0) - (a.cp ?? 0);
@@ -189,6 +213,21 @@ export default function MembersPage() {
     } finally {
       setIsUpdating(false);
       setConfirmModal(null);
+    }
+  }
+
+  async function handleAssignCategory(memberId: string, categoryId: string | null) {
+    if (!activeGuild || !isGuildLeader) return;
+    try {
+      const result = await guildApi.assignMemberCategory(activeGuild.guildId, memberId, categoryId);
+      if (result.success) {
+        addToast("success", categoryId ? "Category assigned" : "Category cleared");
+        queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
+      } else {
+        addToast("error", result.error?.message || "Failed to assign category");
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "Failed to assign category");
     }
   }
 
@@ -265,19 +304,31 @@ export default function MembersPage() {
           }
           right={
             isGuildLeader ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/70 text-[11px] font-medium uppercase tracking-[0.18em]">
-                <svg
-                  className="h-3 w-3"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowCategoryManager(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/70 hover:text-white hover:border-primary-500/30 hover:bg-white/[0.06] transition-all text-[11px] font-medium uppercase tracking-[0.14em] cursor-pointer"
                 >
-                  <path d="M12 15l-2-4h4l-2 4z" />
-                  <path d="M5 7l3 4L12 3l4 8 3-4v12H5V7z" />
-                </svg>
-                Role management
-              </span>
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+                    <line x1="7" y1="7" x2="7.01" y2="7" />
+                  </svg>
+                  Customize Categories
+                </button>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/70 text-[11px] font-medium uppercase tracking-[0.18em]">
+                  <svg
+                    className="h-3 w-3"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 15l-2-4h4l-2 4z" />
+                    <path d="M5 7l3 4L12 3l4 8 3-4v12H5V7z" />
+                  </svg>
+                  Role management
+                </span>
+              </div>
             ) : null
           }
         />
@@ -340,6 +391,27 @@ export default function MembersPage() {
                   <option value="ELITE_MEMBER" className="bg-[#0f0f16] text-white">Elite Member</option>
                   <option value="MEMBER" className="bg-[#0f0f16] text-white">Member</option>
                 </select>
+
+                {/* Category Filter */}
+                {categories.length > 0 && (
+                  <select
+                    id="category-filter"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-white/25 transition-colors cursor-pointer appearance-none min-w-[160px]"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundPosition: "right 12px center",
+                    }}
+                  >
+                    <option value="ALL" className="bg-[#0f0f16] text-white">All Categories</option>
+                    <option value="NONE" className="bg-[#0f0f16] text-white">Uncategorized</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id} className="bg-[#0f0f16] text-white">{cat.name}</option>
+                    ))}
+                  </select>
+                )}
 
                 {/* Sort */}
                 <select
@@ -415,6 +487,8 @@ export default function MembersPage() {
                       handleRoleChange(member.id, member.user.displayName, member.role, newRole)
                     }
                     onAvatarClick={() => setSelectedStalkMember(member)}
+                    categories={categories}
+                    onAssignCategory={(categoryId) => handleAssignCategory(member.id, categoryId)}
                   />
                 ))}
               </div>
@@ -461,6 +535,15 @@ export default function MembersPage() {
           activeGuildName={activeGuild.guildName}
           onClose={() => setSelectedStalkMember(null)}
         />
+
+        {/* Customize Categories Modal (Guild Leader only) */}
+        {showCategoryManager && isGuildLeader && (
+          <CategoryManagerModal
+            guildId={activeGuild.guildId}
+            categories={categories}
+            onClose={() => setShowCategoryManager(false)}
+          />
+        )}
       </div>
     </div>
   );

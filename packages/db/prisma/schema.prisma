@@ -272,9 +272,34 @@ model Guild {
   mounts             GuildMount[]
   mountDistributions MountDistribution[]
   factionJoinRequests FactionJoinRequest[]
+  memberCategories   GuildMemberCategory[]
 
   @@index([factionId])
   @@map("guilds")
+}
+
+// Guild-defined, customizable member categories (e.g. "Raid Core", "Reserve").
+// A lightweight tagging layer, independent of the GuildRole permission
+// hierarchy — a Guild Leader creates categories and assigns one to each
+// member. Nothing downstream (market payouts, distribution, boss rotation)
+// depends on these; they are purely for the roster's own classification.
+model GuildMemberCategory {
+  id          String   @id @default(cuid())
+  guildId     String   @map("guild_id")
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name        String
+  // A color key (e.g. "amber", "cyan") mapped to badge styling on the client.
+  color       String   @default("slate")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members GuildMember[]
+
+  @@unique([guildId, name])
+  @@index([guildId])
+  @@map("guild_member_categories")
 }
 
 model GuildSettings {
@@ -327,6 +352,11 @@ model GuildMember {
 
   role       GuildRole @default(MEMBER)
   rankName   String    @default("Lower Rank") @map("rank_name")
+
+  // Optional guild-defined category (customizable tag) — see GuildMemberCategory.
+  categoryId String?              @map("category_id")
+  category   GuildMemberCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
   ign        String?   @map("ign") // In-Game Name
   cp         Int?      @map("cp") // Combat Power
   class      String?   @map("class") // Character class (e.g. Warrior, Mage)
@@ -357,6 +387,7 @@ model GuildMember {
   @@unique([userId, guildId])
   @@index([guildId])
   @@index([userId])
+  @@index([categoryId])
   @@map("guild_members")
 }
 

@@ -114,7 +114,7 @@ export default function SoldItemsTable({
           No sold items found. Log loot drops from an activity using the “Log sold items” action above.
         </div>
       ) : (
-        <div className="overflow-auto max-h-[600px] rounded-xl">
+        <div className="overflow-auto scroll-fade-x max-h-[600px] rounded-xl">
           <table className="w-full border-collapse text-left text-[12px]">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">

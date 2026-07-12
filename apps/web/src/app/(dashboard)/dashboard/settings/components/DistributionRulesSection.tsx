@@ -82,7 +82,7 @@ export default function DistributionRulesSection({ guildId }: Props) {
           </div>
 
           {/* Per-tier limits */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scroll-fade-x">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-white/55 mb-2">Per-tier item limits</h3>
             <table className="w-full text-[12px] min-w-[440px]">
               <thead>

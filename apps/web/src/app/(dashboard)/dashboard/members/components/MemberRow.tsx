@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { type GuildMemberData } from "@/lib/api";
+import { type GuildMemberData, type MemberCategoryData } from "@/lib/api";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
+import { categoryBadgeClass, categorySwatchClass } from "./categoryStyles";
 
 export const ASSIGNABLE_ROLES = [
   { value: "GUILD_LEADER", label: "Guild Leader", description: "Manage guild" },
@@ -22,6 +23,8 @@ export interface MemberRowProps {
   onToggleExpand: () => void;
   onRoleChange: (newRole: string) => void;
   onAvatarClick?: () => void;
+  categories?: MemberCategoryData[];
+  onAssignCategory?: (categoryId: string | null) => void;
 }
 
 export default function MemberRow({
@@ -33,9 +36,13 @@ export default function MemberRow({
   onToggleExpand,
   onRoleChange,
   onAvatarClick,
+  categories = [],
+  onAssignCategory,
 }: MemberRowProps) {
   const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const isSelf = member.userId === currentUserId;
+  const canManageCategories = isGuildLeader && !!onAssignCategory;
 
   return (
     <div
@@ -77,6 +84,11 @@ export default function MemberRow({
               </span>
             )}
             <Badge role={member.role} />
+            {member.category && (
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${categoryBadgeClass(member.category.color)}`}>
+                {member.category.name}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             {member.ign && (
@@ -99,6 +111,81 @@ export default function MemberRow({
             )}
           </div>
         </div>
+
+        {/* Category assignment (Guild Leader only) */}
+        {canManageCategories && (
+          <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowCategoryMenu(!showCategoryMenu);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] hover:bg-white/8 hover:border-primary-500/30 transition-all text-xs text-white/50 hover:text-white flex items-center gap-1.5 cursor-pointer"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </svg>
+              {member.category ? member.category.name : "Category"}
+            </button>
+
+            {showCategoryMenu && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowCategoryMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-56 glass-strong rounded-xl border border-white/10 shadow-2xl z-40 overflow-hidden animate-scale-in">
+                  <div className="p-2 border-b border-white/[0.05]">
+                    <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider px-2">
+                      Assign Category
+                    </p>
+                  </div>
+                  <div className="p-1.5 space-y-0.5 max-h-[300px] overflow-y-auto">
+                    <button
+                      onClick={() => {
+                        if (member.category) onAssignCategory?.(null);
+                        setShowCategoryMenu(false);
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors cursor-pointer ${
+                        !member.category ? "bg-primary-500/8 cursor-default" : "hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      <span className="h-3 w-3 rounded-full border border-white/25" />
+                      <span className="text-xs text-white/70 flex-1">No category</span>
+                      {!member.category && (
+                        <svg className="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                      )}
+                    </button>
+                    {categories.length === 0 ? (
+                      <p className="text-[11px] text-white/35 px-3 py-2">No categories yet. Create one from “Customize Categories”.</p>
+                    ) : (
+                      categories.map((cat) => {
+                        const isCurrent = member.category?.id === cat.id;
+                        return (
+                          <button
+                            key={cat.id}
+                            onClick={() => {
+                              if (!isCurrent) onAssignCategory?.(cat.id);
+                              setShowCategoryMenu(false);
+                            }}
+                            disabled={isCurrent}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors cursor-pointer ${
+                              isCurrent ? "bg-primary-500/8 cursor-default" : "hover:bg-white/[0.04]"
+                            }`}
+                          >
+                            <span className={`h-3 w-3 rounded-full ${categorySwatchClass(cat.color)}`} />
+                            <span className="text-xs text-white flex-1 truncate">{cat.name}</span>
+                            {isCurrent && (
+                              <svg className="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Role management (Guild Leader only) */}
         {isGuildLeader && !isSelf && (
@@ -218,6 +305,7 @@ export default function MemberRow({
             />
             <ProfileField label="Rank" value={member.rankName} icon="🏅" />
             <ProfileField label="Role" value={member.role.replace(/_/g, " ")} icon="👤" badge={member.role} />
+            <ProfileField label="Category" value={member.category?.name ?? null} icon="🏷️" />
             <ProfileField label="Class" value={member.class} icon="🛡️" />
             <ProfileField label="Weapon" value={member.weapon} icon="🗡️" />
             <ProfileField label="Member Code" value={member.memberCode} icon="🔑" mono />

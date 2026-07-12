@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
@@ -12,8 +12,9 @@ export default function DashboardShell({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, isSessionReady } = useAuth();
+  const { user, isAuthenticated, isLoading, isSessionReady } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -21,13 +22,45 @@ export default function DashboardShell({
     setMounted(true);
   }, []);
 
+  // Close the mobile drawer on navigation — covers browser back/forward, not
+  // just the Link onClick handlers already wired in the Sidebar.
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
+  // While the mobile drawer is open, lock body scroll (so the page behind the
+  // overlay doesn't scroll) and allow ESC to close it. The drawer is
+  // mobile-only; on lg+ it's pinned and `sidebarOpen` stays false.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [sidebarOpen]);
+
   useEffect(() => {
     if (mounted && !isLoading && !isAuthenticated) {
       router.replace("/login");
     }
   }, [isAuthenticated, isLoading, router, mounted]);
 
-  if (!mounted || isLoading || !isAuthenticated || !isSessionReady) {
+  // Platform admins (Super Admin, etc.) have no guild membership and never
+  // should — this is the platform-level operator area, not a guild account.
+  // Bounce them to /admin instead of loading any guild dashboard/sidebar.
+  useEffect(() => {
+    if (mounted && !isLoading && isAuthenticated && isSessionReady && user?.platformRole) {
+      router.replace("/admin");
+    }
+  }, [mounted, isLoading, isAuthenticated, isSessionReady, user, router]);
+
+  if (!mounted || isLoading || !isAuthenticated || !isSessionReady || user?.platformRole) {
     return (
       <div className="min-h-screen bg-[var(--obsidian-deep)] flex flex-col items-center justify-center gap-6 animate-fade-in relative overflow-hidden">
         {/* Ambient background glows */}

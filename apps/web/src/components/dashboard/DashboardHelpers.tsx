@@ -498,7 +498,7 @@ export function ModuleHeader({
             </p>
           )}
         </div>
-        {right && <div className="shrink-0">{right}</div>}
+        {right && <div className="shrink-0 max-sm:w-full">{right}</div>}
       </div>
     </Reveal>
   );
@@ -518,7 +518,7 @@ export function ModuleTabs<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="relative flex border-b border-white/[0.06] gap-1 overflow-x-auto">
+    <div className="relative flex border-b border-white/[0.06] gap-1 overflow-x-auto no-scrollbar scroll-fade-x">
       {tabs.map((tab) => {
         const isActive = active === tab.value;
         return (

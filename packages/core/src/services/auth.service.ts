@@ -73,6 +73,25 @@ export async function checkUsernameAvailable(rawUsername: string): Promise<{ ava
 }
 
 /**
+ * Check whether an email already belongs to a *confirmed* account, using our
+ * own DB as the source of truth instead of Supabase's signUp() response.
+ * Supabase's anti-enumeration behavior (an empty `identities` array on the
+ * returned user) is meant to signal "already registered", but re-signing-up
+ * an already-confirmed email can still come back looking like a fresh,
+ * pending signup client-side — leading a returning user to think they reset
+ * their password when they didn't. The register form calls this first so
+ * that case is caught deterministically before Supabase is ever involved.
+ */
+export async function checkEmailRegistered(rawEmail: string): Promise<{ registered: boolean }> {
+  const email = rawEmail.trim().toLowerCase();
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { emailVerifiedAt: true },
+  });
+  return { registered: Boolean(existing?.emailVerifiedAt) };
+}
+
+/**
  * Resolve a login identifier (username or email) to the real email address
  * Supabase/the legacy login need. Anything containing "@" is treated as an
  * email as-is (no lookup — avoids a pointless query and false negatives for

@@ -310,7 +310,7 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
       ) : visibleQueue.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/35 border border-dashed border-white/[0.06] rounded-2xl">No members to display.</div>
       ) : (
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-auto max-h-[600px]">
+        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-auto scroll-fade-x max-h-[600px]">
           <table className="w-full text-[12px] min-w-[560px]">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">

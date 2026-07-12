@@ -8,6 +8,7 @@ import {
   type LeaderOnboardingInput,
 } from "@guild/shared";
 import { writeAuditLog } from "./audit.service";
+import { ConflictError } from "../utils/errors";
 
 // ─── Leader Onboarding ───────────────────────────
 // Self-serve org creation. Runs once, right after a User row is first created
@@ -160,5 +161,48 @@ export async function createOrgForUser(
     userAgent: ctx?.userAgent,
   });
 
+  return result;
+}
+
+/**
+ * Self-serve org creation from the in-app onboarding screen (an already
+ * authenticated user chooses "Create a Guild" / "Create a Faction"), as
+ * opposed to createOrgForUser which runs once automatically at signup.
+ *
+ * Only an unaffiliated user may create an org this way — someone who already
+ * leads or belongs to a guild shouldn't spin up a second one from onboarding.
+ * Enforced here so every caller (route, future callers) gets the same guard.
+ */
+export async function createOrgSelfServe(
+  userId: string,
+  rawInput: LeaderOnboardingInput,
+  ctx?: { ipAddress?: string; userAgent?: string },
+): Promise<CreatedOrg> {
+  const input = leaderOnboardingSchema.parse(rawInput);
+  if (input.accountType === "MEMBER") {
+    throw new ConflictError("Choose Guild Leader or Faction Leader to create an org");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, displayName: true },
+  });
+  if (!user) throw new ConflictError("User not found");
+
+  // Guard: unaffiliated users only. A single existing membership means they've
+  // already joined/created a guild — block a duplicate org from onboarding.
+  const existingMembership = await prisma.guildMember.findFirst({
+    where: { userId, isActive: true },
+    select: { id: true },
+  });
+  if (existingMembership) {
+    throw new ConflictError("You already belong to a guild");
+  }
+
+  const result = await createOrgForUser(user, input, ctx);
+  if (!result) {
+    // Only reachable if input was MEMBER, already handled above — defensive.
+    throw new ConflictError("Nothing to create");
+  }
   return result;
 }

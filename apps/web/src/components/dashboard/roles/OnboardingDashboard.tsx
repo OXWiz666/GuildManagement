@@ -20,6 +20,11 @@ export default function OnboardingDashboard() {
   const { user, refreshUser } = useAuth();
   const { addToast } = useToast();
 
+  // Onboarding paths: join an existing guild, create your own guild, or create
+  // a faction (a group of guilds) + its first guild. Replaces the old
+  // registration-time "account type" choice.
+  const [mode, setMode] = useState<"join" | "create-guild" | "create-faction">("join");
+
   const [inviteCode, setInviteCode] = useState("");
   const [verifiedGuild, setVerifiedGuild] = useState<{
     id: string;
@@ -36,6 +41,12 @@ export default function OnboardingDashboard() {
   const [weapon, setWeapon] = useState(user?.weapon || "");
   const [gear, setGear] = useState<ConfirmEquipmentItem[]>([]);
   const [isSubmittingApp, setIsSubmittingApp] = useState(false);
+
+  // Create-guild / create-faction form state
+  const [orgGuildName, setOrgGuildName] = useState("");
+  const [orgFactionName, setOrgFactionName] = useState("");
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+  const [orgError, setOrgError] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -164,6 +175,46 @@ export default function OnboardingDashboard() {
     }
   }
 
+  async function handleCreateOrg(e: React.FormEvent) {
+    e.preventDefault();
+    setOrgError("");
+
+    const guildName = orgGuildName.trim();
+    if (guildName.length < 2) {
+      setOrgError("Guild name must be at least 2 characters");
+      return;
+    }
+    if (mode === "create-faction" && orgFactionName.trim().length < 2) {
+      setOrgError("Faction name must be at least 2 characters");
+      return;
+    }
+
+    setIsCreatingOrg(true);
+    try {
+      const result =
+        mode === "create-faction"
+          ? await guildApi.createFaction(orgFactionName.trim(), guildName)
+          : await guildApi.createGuild(guildName);
+
+      if (result.success) {
+        addToast(
+          "success",
+          mode === "create-faction"
+            ? `Faction "${orgFactionName.trim()}" created!`
+            : `Guild "${guildName}" created!`,
+        );
+        // Pull the freshly created membership so the dashboard leaves onboarding.
+        await refreshUser();
+      } else {
+        setOrgError(result.error?.message || "Failed to create. Please try again.");
+      }
+    } catch (err: any) {
+      setOrgError(err?.message || "Failed to create. Please try again.");
+    } finally {
+      setIsCreatingOrg(false);
+    }
+  }
+
   if (!user) return null;
 
   return (
@@ -184,11 +235,62 @@ export default function OnboardingDashboard() {
               <span className="text-white/40">.</span>
             </h1>
             <p className="text-sm text-white/50 mt-2 leading-relaxed max-w-xl">
-              Enter a Guild Invite Code to apply, then a leader will review
-              your character details.
+              Get started by creating your own guild, founding a faction, or
+              joining an existing guild with an invite code.
             </p>
           </div>
         </Reveal>
+
+        {/* Path selector — hidden while an application is pending review */}
+        {!isLoadingPending && !pendingApp && (
+          <Reveal delay={80}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <ModeCard
+                active={mode === "create-guild"}
+                onClick={() => {
+                  setMode("create-guild");
+                  setOrgError("");
+                }}
+                title="Create a Guild"
+                desc="Start and lead your own guild."
+                icon={
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                }
+              />
+              <ModeCard
+                active={mode === "create-faction"}
+                onClick={() => {
+                  setMode("create-faction");
+                  setOrgError("");
+                }}
+                title="Create a Faction"
+                desc="Run a faction spanning multiple guilds."
+                icon={
+                  <>
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                    <line x1="4" y1="22" x2="4" y2="15" />
+                  </>
+                }
+              />
+              <ModeCard
+                active={mode === "join"}
+                onClick={() => {
+                  setMode("join");
+                  setOrgError("");
+                }}
+                title="Join a Guild"
+                desc="Apply with an invite code from a leader."
+                icon={
+                  <>
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                    <polyline points="10 17 15 12 10 7" />
+                    <line x1="15" y1="12" x2="3" y2="12" />
+                  </>
+                }
+              />
+            </div>
+          </Reveal>
+        )}
 
         {isLoadingPending ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -294,7 +396,7 @@ export default function OnboardingDashboard() {
                     </div>
                   </div>
                 </Reveal>
-              ) : (
+              ) : mode === "join" ? (
                 <Reveal delay={120}>
                   <div className="relative glass-strong rounded-2xl p-6 md:p-7 border border-white/[0.08]">
                     <span
@@ -485,6 +587,86 @@ export default function OnboardingDashboard() {
                     )}
                   </div>
                 </Reveal>
+              ) : (
+                <Reveal delay={120}>
+                  <div className="relative glass-strong rounded-2xl p-6 md:p-7 border border-white/[0.08]">
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-6 top-0 h-px"
+                      style={{
+                        background:
+                          "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.20), transparent)",
+                      }}
+                    />
+                    <div className="flex items-center gap-2 mb-5">
+                      <span className="text-[10px] text-white/40 uppercase tracking-[0.22em]">
+                        {mode === "create-faction" ? "Found a faction" : "Found a guild"}
+                      </span>
+                      <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
+                    </div>
+                    <h2 className="text-[18px] font-semibold text-white mb-2 tracking-tight">
+                      {mode === "create-faction" ? "Create a faction" : "Create a guild"}
+                    </h2>
+                    <p className="text-[12px] text-white/50 leading-relaxed mb-5 max-w-md">
+                      {mode === "create-faction"
+                        ? "A faction groups multiple guilds under your command. Name your faction and its first guild — you'll lead both."
+                        : "Name your guild and you'll be set up as its leader, ready to invite members."}
+                    </p>
+
+                    <form onSubmit={handleCreateOrg} className="space-y-4 max-w-md">
+                      {mode === "create-faction" && (
+                        <FormField
+                          label="Faction name"
+                          placeholder="e.g. Kurakortz"
+                          value={orgFactionName}
+                          onChange={(v) => {
+                            setOrgFactionName(v);
+                            setOrgError("");
+                          }}
+                        />
+                      )}
+                      <FormField
+                        label={mode === "create-faction" ? "First guild name" : "Guild name"}
+                        placeholder="e.g. KuraCORP"
+                        value={orgGuildName}
+                        onChange={(v) => {
+                          setOrgGuildName(v);
+                          setOrgError("");
+                        }}
+                      />
+
+                      {orgError && (
+                        <p className="text-[11px] text-red-400/90 font-medium animate-slide-down flex items-center gap-1.5">
+                          <svg
+                            className="h-3 w-3"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          {orgError}
+                        </p>
+                      )}
+
+                      <div className="flex justify-end gap-2 border-t border-white/[0.06] pt-4">
+                        <Magnetic strength={4}>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            type="submit"
+                            isLoading={isCreatingOrg}
+                          >
+                            {mode === "create-faction" ? "Create faction" : "Create guild"}
+                          </Button>
+                        </Magnetic>
+                      </div>
+                    </form>
+                  </div>
+                </Reveal>
               )}
             </div>
 
@@ -500,11 +682,24 @@ export default function OnboardingDashboard() {
                   How it works
                 </h3>
                 <ol className="space-y-3.5">
-                  {[
-                    "Enter the invite code from your Guild Leader",
-                    "Fill in your character details for review",
-                    "Wait for the Guild Leader to approve your application",
-                  ].map((step, i) => (
+                  {(mode === "join"
+                    ? [
+                        "Enter the invite code from your Guild Leader",
+                        "Fill in your character details for review",
+                        "Wait for the Guild Leader to approve your application",
+                      ]
+                    : mode === "create-faction"
+                      ? [
+                          "Name your faction and its first guild",
+                          "You're set up as the Faction Leader",
+                          "Invite more guilds and members to grow",
+                        ]
+                      : [
+                          "Name your guild",
+                          "You're set up as the Guild Leader",
+                          "Share your invite code to recruit members",
+                        ]
+                  ).map((step, i) => (
                     <li
                       key={i}
                       className="group flex items-start gap-3 text-[12px] text-white/55 leading-relaxed transition-colors hover:text-white/80"
@@ -520,7 +715,7 @@ export default function OnboardingDashboard() {
                 </ol>
                 <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-center gap-1.5 text-[10px] text-white/35 uppercase tracking-[0.18em]">
                   <LiveDot tone="emerald" size={5} />
-                  Decisions usually within 24h
+                  {mode === "join" ? "Decisions usually within 24h" : "Set up in seconds"}
                 </div>
               </div>
             </Reveal>
@@ -532,6 +727,53 @@ export default function OnboardingDashboard() {
 }
 
 // ─── Local Components ────────────────────────────────
+function ModeCard({
+  active,
+  onClick,
+  title,
+  desc,
+  icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  desc: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`group relative text-left rounded-2xl border p-4 transition-all duration-200 ${
+        active
+          ? "border-amber-500/50 bg-amber-500/[0.07] shadow-[0_0_0_1px_rgba(245,184,65,0.12)]"
+          : "border-white/[0.07] bg-white/[0.02] hover:border-white/20"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+            active
+              ? "border-amber-500/30 bg-amber-500/[0.10] text-amber-300"
+              : "border-white/[0.08] bg-white/[0.03] text-white/50 group-hover:text-white/80"
+          }`}
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            {icon}
+          </svg>
+        </span>
+        <div className="min-w-0">
+          <p className={`text-[13px] font-semibold ${active ? "text-white" : "text-white/85"}`}>
+            {title}
+          </p>
+          <p className="text-[11px] text-white/45 leading-snug mt-0.5">{desc}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function MiniStat({
   label,
   value,

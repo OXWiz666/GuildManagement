@@ -8,7 +8,12 @@ import Button from "@/components/ui/Button";
 export interface SelectedDrop {
   item: DropCatalogItem;
   quantity: number;
+  // Optional override for this drop's display name (e.g. "Azzam Ring +12").
+  // Blank/absent falls back to the catalog item name everywhere it's shown.
+  customName?: string;
 }
+
+const MAX_CUSTOM_NAME_LENGTH = 60;
 
 export const dropKey = (i: { bucket: string; path: string }) => `${i.bucket}::${i.path}`;
 
@@ -56,6 +61,7 @@ export default function BossDropsPicker({
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [rarityFilter, setRarityFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   // Which type / rarity chips actually exist in the catalog
   const types = useMemo(() => {
@@ -103,6 +109,17 @@ export default function BossDropsPicker({
       if (!cur) return prev;
       const q = Math.max(1, Math.min(999, qty));
       next.set(k, { ...cur, quantity: q });
+      return next;
+    });
+  };
+
+  const setCustomName = (k: string, name: string) => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      const cur = next.get(k);
+      if (!cur) return prev;
+      const trimmed = name.trim().slice(0, MAX_CUSTOM_NAME_LENGTH);
+      next.set(k, { ...cur, customName: trimmed || undefined });
       return next;
     });
   };
@@ -217,13 +234,47 @@ export default function BossDropsPicker({
           <div className="shrink-0 border-t border-white/[0.06] bg-white/[0.01] px-5 py-3 max-h-[168px] overflow-y-auto">
             <p className="text-[10px] uppercase tracking-[0.18em] text-white/40 font-bold mb-2">Selected drops</p>
             <div className="flex flex-wrap gap-2">
-              {selectedList.map(({ item, quantity }) => {
+              {selectedList.map(({ item, quantity, customName }) => {
                 const k = dropKey(item);
                 const rs = rarityStyle(item.rarity);
+                const isEditing = editingKey === k;
                 return (
                   <span key={k} className={`inline-flex items-center gap-1.5 rounded-lg border ${rs.border} ${rs.bg} pl-1.5 pr-1 py-1`}>
-                    <img src={item.iconUrl} alt="" loading="lazy" className="h-5 w-5 rounded object-cover" referrerPolicy="no-referrer" />
-                    <span className="text-[11px] font-semibold text-white/85 max-w-[120px] truncate">{item.itemName}</span>
+                    <img src={item.iconUrl} alt="" loading="lazy" className="h-5 w-5 rounded object-cover shrink-0" referrerPolicy="no-referrer" />
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        defaultValue={customName ?? ""}
+                        placeholder={item.itemName}
+                        maxLength={MAX_CUSTOM_NAME_LENGTH}
+                        onBlur={(e) => { setCustomName(k, e.target.value); setEditingKey(null); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { setCustomName(k, e.currentTarget.value); setEditingKey(null); }
+                          if (e.key === "Escape") setEditingKey(null);
+                        }}
+                        className="w-28 bg-black/30 border border-white/15 rounded px-1.5 py-0.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-[var(--forge-gold)]/50"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingKey(k)}
+                        title={customName ? `Custom name for ${item.itemName} — click to edit` : "Click to customize name"}
+                        className="group/name inline-flex items-center gap-1 text-[11px] font-semibold text-white/85 max-w-[132px] hover:text-[var(--forge-gold-bright)] cursor-pointer transition-colors text-left"
+                      >
+                        <span className="truncate">{customName || item.itemName}</span>
+                        <svg
+                          className="h-2.5 w-2.5 shrink-0 text-white/30 group-hover/name:text-[var(--forge-gold-bright)] transition-colors"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                        >
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                        </svg>
+                      </button>
+                    )}
                     <span className="flex items-center rounded-md border border-white/10 bg-black/30">
                       <button type="button" onClick={() => setQty(k, quantity - 1)} className="px-1.5 text-white/50 hover:text-white cursor-pointer" aria-label="Decrease">−</button>
                       <span className="min-w-[16px] text-center text-[11px] font-mono text-white/80">{quantity}</span>

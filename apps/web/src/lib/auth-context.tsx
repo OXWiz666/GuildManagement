@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import type { LeaderOnboardingInput, PaymentMethodEntry } from "@guild/shared";
+import type { PaymentMethodEntry } from "@guild/shared";
 import { authApi, setAccessToken } from "./api";
 import { createClient } from "@/utils/supabase/client";
 import { friendlyAuthError } from "./auth-errors";
@@ -53,7 +53,6 @@ interface AuthContextType {
     confirmPassword: string,
     displayName: string,
     username: string,
-    onboarding?: LeaderOnboardingInput,
   ) => Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }>;
   verifyRegistrationCode: (
     email: string,
@@ -148,7 +147,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (error) {
-          // Fallback to local database login if Supabase auth fails (e.g. for seed accounts)
+          // Fallback to local database login if Supabase auth fails (e.g. for seed accounts).
+          // authApi.login() resolves with { success: false, error } rather than throwing,
+          // so the try/catch here only ever catches a genuine network failure — a normal
+          // wrong-password/unverified-email response falls through the `if` below.
           try {
             const localResult = await authApi.login(email, password);
             if (localResult.success && localResult.data?.user) {
@@ -160,6 +162,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const fullUser = await refreshUser();
               setIsSessionReady(true);
               return { success: true, platformRole: fullUser?.platformRole ?? null };
+            }
+            // Local login has its own account (e.g. no Supabase entry at all for a
+            // legacy/seed user) — its rejection reason is the real one; Supabase's
+            // error above was just "no such Supabase account" noise.
+            if (localResult.error?.message) {
+              const friendly = friendlyAuthError(localResult.error.message);
+              return { success: false, error: friendly.message, errorTitle: friendly.title };
             }
           } catch (localError) {
             console.error("Local login fallback failed:", localError);
@@ -214,7 +223,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       confirmPassword: string,
       displayName: string,
       username: string,
-      onboarding?: LeaderOnboardingInput,
     ): Promise<{ success: boolean; error?: string; errorTitle?: string; requiresVerification?: boolean }> => {
       if (password !== confirmPassword) {
         const friendly = friendlyAuthError("Passwords don't match");
@@ -232,15 +240,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // Chosen username, read back on first sync (see supabase-sync
               // route) — Supabase itself has no concept of a username.
               username,
-              // Leader onboarding intent — read back server-side on first sync
-              // to self-serve create the guild/faction (see supabase-sync route).
-              ...(onboarding && onboarding.accountType !== "MEMBER"
-                ? {
-                    account_type: onboarding.accountType,
-                    guild_name: onboarding.guildName,
-                    ...(onboarding.factionName ? { faction_name: onboarding.factionName } : {}),
-                  }
-                : {}),
             },
           },
         });

@@ -829,3 +829,25 @@ input:-webkit-autofill:focus {
 .premium-loader-pulse {
   animation: pulse-soft 3s ease-in-out infinite !important;
 }
+
+/* ─── Mobile: safe-area insets (notch / home indicator) ───────
+   Requires `viewport-fit=cover` (set via the layout `viewport` export).
+   `max()` guarantees a sensible fallback on browsers without safe-area
+   support. Applied to sticky headers and the drawer's bottom user card. */
+.pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+.pl-safe { padding-left: max(env(safe-area-inset-left), 0px); }
+.pr-safe { padding-right: max(env(safe-area-inset-right), 0px); }
+
+/* ─── Horizontal scroll affordance ───────────────
+   Edge-fade mask for horizontally-scrolling strips (tab bars, wide tables)
+   so it's visible there's more content off-screen. Mobile-only (max 639px)
+   so desktop full-width content isn't permanently faded at the edges. */
+@media (max-width: 639.98px) {
+  .scroll-fade-x {
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 16px, black calc(100% - 16px), transparent);
+            mask-image: linear-gradient(90deg, transparent, black 16px, black calc(100% - 16px), transparent);
+  }
+}
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

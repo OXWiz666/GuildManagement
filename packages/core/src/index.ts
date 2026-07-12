@@ -19,6 +19,7 @@ import * as guild from "./services/guild.service";
 import * as ledger from "./services/ledger.service";
 import * as loot from "./services/loot.service";
 import * as market from "./services/market.service";
+import * as memberCategory from "./services/memberCategory.service";
 import * as mounts from "./services/mounts.service";
 import * as notification from "./services/notification.service";
 import * as onboarding from "./services/onboarding.service";
@@ -42,6 +43,7 @@ export const services = {
   ledger,
   loot,
   market,
+  memberCategory,
   mounts,
   notification,
   onboarding,

@@ -28,6 +28,13 @@ export interface GuildMemberWithUser {
   memberCode: string | null;
   joinedAt: string;
   isActive: boolean;
+  category: {
+    id: string;
+    name: string;
+    color: string;
+    description: string | null;
+    sortOrder: number;
+  } | null;
   user: {
     id: string;
     displayName: string;
@@ -69,6 +76,15 @@ export class GuildService {
       memberCode: m.memberCode,
       joinedAt: m.joinedAt.toISOString(),
       isActive: m.isActive,
+      category: m.category
+        ? {
+            id: m.category.id,
+            name: m.category.name,
+            color: m.category.color,
+            description: m.category.description,
+            sortOrder: m.category.sortOrder,
+          }
+        : null,
       user: {
         id: m.user.id,
         displayName: m.user.displayName,
@@ -179,6 +195,15 @@ export class GuildService {
         memberCode: updatedTarget.memberCode,
         joinedAt: updatedTarget.joinedAt.toISOString(),
         isActive: updatedTarget.isActive,
+        category: updatedTarget.category
+          ? {
+              id: updatedTarget.category.id,
+              name: updatedTarget.category.name,
+              color: updatedTarget.category.color,
+              description: updatedTarget.category.description,
+              sortOrder: updatedTarget.category.sortOrder,
+            }
+          : null,
         user: updatedTarget.user,
       };
     }
@@ -242,6 +267,15 @@ export class GuildService {
       memberCode: updated.memberCode,
       joinedAt: updated.joinedAt.toISOString(),
       isActive: updated.isActive,
+      category: updated.category
+        ? {
+            id: updated.category.id,
+            name: updated.category.name,
+            color: updated.category.color,
+            description: updated.category.description,
+            sortOrder: updated.category.sortOrder,
+          }
+        : null,
       user: updated.user,
     };
   }

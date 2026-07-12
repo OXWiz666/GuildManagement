@@ -178,7 +178,7 @@ function SubscriptionsTab() {
   return (
     <div className="space-y-3">
       <div className="flex justify-end"><Button variant="primary" size="sm" onClick={() => setShowNew(true)}>New subscription</Button></div>
-      <div className="overflow-auto rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
+      <div className="overflow-auto scroll-fade-x rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
         <table className="w-full min-w-[640px] text-[12px]">
           <thead><tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-white/45">
             <th className="px-4 py-3">Guild</th><th className="px-4 py-3">Plan</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Renews</th><th className="px-4 py-3 text-right">Actions</th>
@@ -250,7 +250,7 @@ function PaymentsTab() {
   return (
     <div className="space-y-3">
       <div className="flex justify-end"><Button variant="primary" size="sm" onClick={() => setShowNew(true)}>Record payment</Button></div>
-      <div className="overflow-auto rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
+      <div className="overflow-auto scroll-fade-x rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
         <table className="w-full min-w-[640px] text-[12px]">
           <thead><tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-white/45">
             <th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Gateway</th><th className="px-4 py-3">Date</th><th className="px-4 py-3 text-right">Actions</th>
@@ -309,7 +309,7 @@ function CouponsTab() {
   return (
     <div className="space-y-3">
       <div className="flex justify-end"><Button variant="primary" size="sm" onClick={() => setShowNew(true)}>New coupon</Button></div>
-      <div className="overflow-auto rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
+      <div className="overflow-auto scroll-fade-x rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50">
         <table className="w-full min-w-[560px] text-[12px]">
           <thead><tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-white/45">
             <th className="px-4 py-3">Code</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Uses</th><th className="px-4 py-3 text-right">Actions</th>

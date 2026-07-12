@@ -439,6 +439,7 @@ export default function BossRotationPage() {
         bucket: d.item.bucket,
         path: d.item.path,
         quantity: d.quantity,
+        customName: d.customName,
       }));
       const result = killTarget.activeSchedule
         ? await dashboardApi.markBossRotationKilled(

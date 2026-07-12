@@ -272,34 +272,32 @@ model Guild {
   mounts             GuildMount[]
   mountDistributions MountDistribution[]
   factionJoinRequests FactionJoinRequest[]
-  memberCategories   GuildMemberCategory[]
+  roleDefinitions     GuildRoleDefinition[]
 
   @@index([factionId])
   @@map("guilds")
 }
 
-// Guild-defined, customizable member categories (e.g. "Raid Core", "Reserve").
-// A lightweight tagging layer, independent of the GuildRole permission
-// hierarchy — a Guild Leader creates categories and assigns one to each
-// member. Nothing downstream (market payouts, distribution, boss rotation)
-// depends on these; they are purely for the roster's own classification.
-model GuildMemberCategory {
-  id          String   @id @default(cuid())
-  guildId     String   @map("guild_id")
-  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  name        String
-  // A color key (e.g. "amber", "cyan") mapped to badge styling on the client.
-  color       String   @default("slate")
-  description String?
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+// Guild-defined custom rank names that fully inherit the permissions of one
+// of the four customizable GuildRole tiers ("band") — e.g. a "Raid Leader"
+// role at band=OFFICER behaves identically to a plain Officer for every
+// permission/business-logic check, but displays its own name + color.
+model GuildRoleDefinition {
+  id        String    @id @default(cuid())
+  guildId   String    @map("guild_id")
+  guild     Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name      String
+  color     String    @default("slate")
+  band      GuildRole // app + DB constrained to OFFICER | CORE_MEMBER | ELITE_MEMBER | MEMBER
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   members GuildMember[]
 
   @@unique([guildId, name])
   @@index([guildId])
-  @@map("guild_member_categories")
+  @@map("guild_role_definitions")
 }
 
 model GuildSettings {
@@ -337,6 +335,11 @@ model GuildSettings {
   // Shape: { cpTiers: { eliteMinCp, upperMinCp }, limits: { CORE/ELITE/UPPER/LOWER: { logs, temporalPieces, materials } }, weights: {...} }
   marketRules Json @default("{}") @map("market_rules")
 
+  // Per-guild overrides for how OFFICER/CORE_MEMBER/ELITE_MEMBER/MEMBER are displayed.
+  // Shape: { OFFICER?: string, CORE_MEMBER?: string, ELITE_MEMBER?: string, MEMBER?: string }
+  // Purely cosmetic — never read by permission checks or role hierarchy logic.
+  roleDisplayNames Json @default("{}") @map("role_display_names")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -353,9 +356,10 @@ model GuildMember {
   role       GuildRole @default(MEMBER)
   rankName   String    @default("Lower Rank") @map("rank_name")
 
-  // Optional guild-defined category (customizable tag) — see GuildMemberCategory.
-  categoryId String?              @map("category_id")
-  category   GuildMemberCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // Optional guild-defined custom rank (see GuildRoleDefinition) — when set,
+  // `role` above is always kept equal to the definition's `band`.
+  customRoleId String?              @map("custom_role_id")
+  customRole   GuildRoleDefinition? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   ign        String?   @map("ign") // In-Game Name
   cp         Int?      @map("cp") // Combat Power
@@ -387,7 +391,7 @@ model GuildMember {
   @@unique([userId, guildId])
   @@index([guildId])
   @@index([userId])
-  @@index([categoryId])
+  @@index([customRoleId])
   @@map("guild_members")
 }
 

@@ -21,12 +21,14 @@ export {
   ROLE_DISPLAY_NAMES,
   ROLE_PERMISSIONS,
   RANK_DISPLAY_NAMES,
+  CUSTOMIZABLE_ROLES,
   hasMinimumRole,
   getAssignableRoles,
   getManageableRoles,
   canManageRole,
+  resolveRoleDisplayName,
 } from "./types/roles";
-export type { GuildRoleType } from "./types/roles";
+export type { GuildRoleType, CustomizableRoleType } from "./types/roles";
 
 // Platform (SaaS-level) roles
 export {

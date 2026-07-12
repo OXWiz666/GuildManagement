@@ -1,7 +1,16 @@
+"use client";
+
+import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
+
 interface BadgeProps {
   role: string;
   size?: "sm" | "md";
   className?: string;
+  // Guild-defined custom role (see GuildRoleDefinition) — when present, its
+  // name/color override the plain band's label/color. The icon still comes
+  // from `role` (the band), since custom roles have no bespoke icon system.
+  customName?: string | null;
+  customColor?: string | null;
 }
 
 const roleStyles: Record<string, string> = {
@@ -14,14 +23,16 @@ const roleStyles: Record<string, string> = {
   MEMBER: "bg-white/[0.06] text-zinc-400 border-white/[0.10]",
 };
 
-const roleLabels: Record<string, string> = {
-  ADMIN: "Admin",
-  FACTION_LEADER: "Faction Leader",
-  GUILD_LEADER: "Guild Leader",
-  OFFICER: "Officer",
-  CORE_MEMBER: "Core Member",
-  ELITE_MEMBER: "Elite Member",
-  MEMBER: "Member",
+// Matches CUSTOM_ROLE_COLORS in packages/core/src/services/customRole.service.ts
+const customColorStyles: Record<string, string> = {
+  slate: "bg-white/[0.06] text-zinc-300 border-white/[0.14]",
+  amber: "bg-amber-500/10 text-amber-400 border-amber-500/25",
+  cyan: "bg-cyan-500/10 text-cyan-400 border-cyan-500/25",
+  emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
+  violet: "bg-violet-500/10 text-violet-400 border-violet-500/25",
+  rose: "bg-rose-500/10 text-rose-400 border-rose-500/25",
+  sky: "bg-sky-500/10 text-sky-400 border-sky-500/25",
+  orange: "bg-orange-500/10 text-orange-400 border-orange-500/25",
 };
 
 // Inline SVG icons for role badges — compact 12x12
@@ -64,9 +75,12 @@ function RoleIcon({ role, className }: { role: string; className?: string }) {
   }
 }
 
-export default function Badge({ role, size = "sm", className = "" }: BadgeProps) {
-  const styles = roleStyles[role] || roleStyles["MEMBER"]!;
-  const label = roleLabels[role] || role;
+export default function Badge({ role, size = "sm", className = "", customName, customColor }: BadgeProps) {
+  const { resolveRoleName } = useRoleDisplayNames();
+  const styles = customColor
+    ? customColorStyles[customColor] || customColorStyles.slate
+    : roleStyles[role] || roleStyles["MEMBER"]!;
+  const label = customName || resolveRoleName(role) || role;
 
   return (
     <span

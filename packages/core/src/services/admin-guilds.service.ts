@@ -204,12 +204,18 @@ export async function transferGuildOwnership(actorId: string, guildId: string, n
   });
 
   await prisma.$transaction([
+    // GUILD_LEADER/OFFICER are never valid custom-role bands, so both the
+    // demoted leader(s) and the promoted member must have any stale custom
+    // role reference cleared here too.
     ...currentLeaders.map((l) =>
-      prisma.guildMember.update({ where: { id: l.id }, data: { role: "OFFICER", rankName: "Officer" } }),
+      prisma.guildMember.update({
+        where: { id: l.id },
+        data: { role: "OFFICER", rankName: "Officer", customRoleId: null },
+      }),
     ),
     prisma.guildMember.update({
       where: { id: newMemberId },
-      data: { role: "GUILD_LEADER", rankName: "Guild Leader" },
+      data: { role: "GUILD_LEADER", rankName: "Guild Leader", customRoleId: null },
     }),
   ]);
 

@@ -1,12 +1,19 @@
 import { prisma, type Guild, type GuildMember, type GuildSettings } from "@guild/db";
 import { type GuildRoleType } from "@guild/shared";
 
+const CUSTOM_ROLE_SELECT = { id: true, name: true, color: true, band: true } as const;
+
 export interface IGuildRepository {
   getGuildById(guildId: string): Promise<Guild | null>;
   getMembers(guildId: string): Promise<any[]>;
   getMemberByUser(userId: string, guildId: string): Promise<GuildMember | null>;
   getMemberById(memberId: string): Promise<any | null>;
-  updateMemberRole(memberId: string, role: GuildRoleType, rankName: string): Promise<any>;
+  updateMemberRole(
+    memberId: string,
+    role: GuildRoleType,
+    rankName: string,
+    customRoleId?: string | null,
+  ): Promise<any>;
   transferLeadership(
     guildId: string,
     targetMemberId: string,
@@ -19,6 +26,10 @@ export interface IGuildRepository {
   getSettings(guildId: string): Promise<GuildSettings | null>;
   updateSettings(guildId: string, data: any): Promise<GuildSettings>;
   getInviteCode(guildId: string): Promise<string | null>;
+  getRoleDefinition(
+    guildId: string,
+    roleId: string,
+  ): Promise<{ id: string; name: string; color: string; band: string } | null>;
 }
 
 export class PrismaGuildRepository implements IGuildRepository {
@@ -43,9 +54,7 @@ export class PrismaGuildRepository implements IGuildRepository {
             avatarUrl: true,
           },
         },
-        category: {
-          select: { id: true, name: true, color: true, description: true, sortOrder: true },
-        },
+        customRole: { select: CUSTOM_ROLE_SELECT },
       },
       orderBy: [
         { role: "asc" },
@@ -77,16 +86,23 @@ export class PrismaGuildRepository implements IGuildRepository {
             avatarUrl: true,
           },
         },
+        customRole: { select: CUSTOM_ROLE_SELECT },
       },
     });
   }
 
-  async updateMemberRole(memberId: string, role: GuildRoleType, rankName: string): Promise<any> {
+  async updateMemberRole(
+    memberId: string,
+    role: GuildRoleType,
+    rankName: string,
+    customRoleId?: string | null,
+  ): Promise<any> {
     return prisma.guildMember.update({
       where: { id: memberId },
       data: {
         role: role as any,
         rankName,
+        customRoleId: customRoleId ?? null,
       },
       include: {
         user: {
@@ -97,9 +113,7 @@ export class PrismaGuildRepository implements IGuildRepository {
             avatarUrl: true,
           },
         },
-        category: {
-          select: { id: true, name: true, color: true, description: true, sortOrder: true },
-        },
+        customRole: { select: CUSTOM_ROLE_SELECT },
       },
     });
   }
@@ -116,7 +130,9 @@ export class PrismaGuildRepository implements IGuildRepository {
     return prisma.$transaction([
       prisma.guildMember.update({
         where: { id: targetMemberId },
-        data: { role: targetRole as any, rankName: targetRankName },
+        // GUILD_LEADER is never a valid custom-role band, so a promoted
+        // target can never keep a stale custom role reference.
+        data: { role: targetRole as any, rankName: targetRankName, customRoleId: null },
         include: {
           user: {
             select: {
@@ -126,14 +142,13 @@ export class PrismaGuildRepository implements IGuildRepository {
               avatarUrl: true,
             },
           },
-          category: {
-            select: { id: true, name: true, color: true, description: true, sortOrder: true },
-          },
         },
       }),
       prisma.guildMember.update({
         where: { id: actorMemberId },
-        data: { role: actorRole as any, rankName: actorRankName },
+        // Demoted actor reverts to a plain rank, not whatever custom role
+        // they may have held before becoming Guild Leader.
+        data: { role: actorRole as any, rankName: actorRankName, customRoleId: null },
       }),
     ]);
   }
@@ -157,5 +172,14 @@ export class PrismaGuildRepository implements IGuildRepository {
       select: { inviteCode: true },
     });
     return guild?.inviteCode || null;
+  }
+
+  async getRoleDefinition(
+    guildId: string,
+    roleId: string,
+  ): Promise<{ id: string; name: string; color: string; band: string } | null> {
+    const definition = await prisma.guildRoleDefinition.findUnique({ where: { id: roleId } });
+    if (!definition || definition.guildId !== guildId) return null;
+    return { id: definition.id, name: definition.name, color: definition.color, band: definition.band };
   }
 }

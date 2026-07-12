@@ -236,7 +236,7 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
                     <p className={`text-[11px] truncate ${color?.text || "text-white/40"}`}>{member.guild?.name || "Guild"}</p>
                   </div>
                 </div>
-                <Badge role={member.role} size="sm" className="shrink-0" />
+                <Badge role={member.role} size="sm" className="shrink-0" customName={member.customRole?.name} customColor={member.customRole?.color} />
                 <p className="text-[11px] text-white/35 shrink-0 w-16 text-right">CP {(member.cp || 0).toLocaleString()}</p>
               </div>
             );

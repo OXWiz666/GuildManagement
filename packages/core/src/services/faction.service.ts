@@ -123,6 +123,7 @@ export async function getFactionMembers(actorId: string) {
     include: {
       guild: { select: { id: true, name: true, slug: true, avatarUrl: true } },
       user: { select: { id: true, displayName: true, email: true, avatarUrl: true } },
+      customRole: { select: { id: true, name: true, color: true } },
     },
     orderBy: [{ guild: { name: "asc" } }, { role: "asc" }, { joinedAt: "asc" }],
   });
@@ -139,6 +140,7 @@ export async function getFactionMembers(actorId: string) {
     weapon: m.weapon,
     memberCode: m.memberCode,
     joinedAt: m.joinedAt.toISOString(),
+    customRole: m.customRole ? { id: m.customRole.id, name: m.customRole.name, color: m.customRole.color } : null,
     guild: m.guild,
     user: m.user,
   }));

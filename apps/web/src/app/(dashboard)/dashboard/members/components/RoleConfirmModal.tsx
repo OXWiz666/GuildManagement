@@ -2,6 +2,7 @@
 
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 
 export interface RoleConfirmModalProps {
   confirmModal: {
@@ -22,6 +23,8 @@ export default function RoleConfirmModal({
   onClose,
   onConfirm,
 }: RoleConfirmModalProps) {
+  const { resolveRoleName } = useRoleDisplayNames();
+
   if (!confirmModal) return null;
 
   return (
@@ -48,7 +51,7 @@ export default function RoleConfirmModal({
             </p>
             <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-3 my-4">
               <p className="text-xs text-amber-400/90 text-center">
-                ⚠️ You will be demoted to <span className="font-semibold">Officer</span>. This action cannot be undone by you.
+                ⚠️ You will be demoted to <span className="font-semibold">{resolveRoleName("OFFICER")}</span>. This action cannot be undone by you.
               </p>
             </div>
           </>

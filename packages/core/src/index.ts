@@ -12,6 +12,7 @@ import * as auction from "./services/auction.service";
 import * as audit from "./services/audit.service";
 import * as auditLog from "./services/audit-log.service";
 import * as auth from "./services/auth.service";
+import * as customRole from "./services/customRole.service";
 import * as dashboard from "./services/dashboard.service";
 import * as equipment from "./services/equipment.service";
 import * as faction from "./services/faction.service";
@@ -19,7 +20,6 @@ import * as guild from "./services/guild.service";
 import * as ledger from "./services/ledger.service";
 import * as loot from "./services/loot.service";
 import * as market from "./services/market.service";
-import * as memberCategory from "./services/memberCategory.service";
 import * as mounts from "./services/mounts.service";
 import * as notification from "./services/notification.service";
 import * as onboarding from "./services/onboarding.service";
@@ -36,6 +36,7 @@ export const services = {
   audit,
   auditLog,
   auth,
+  customRole,
   dashboard,
   equipment,
   faction,
@@ -43,7 +44,6 @@ export const services = {
   ledger,
   loot,
   market,
-  memberCategory,
   mounts,
   notification,
   onboarding,

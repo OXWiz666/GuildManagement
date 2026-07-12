@@ -3340,6 +3340,7 @@ export async function getAccountingDashboard(guildId: string, actorId: string, p
           avatarUrl: true,
         },
       },
+      customRole: { select: { id: true, name: true, color: true } },
     },
   });
 
@@ -3410,6 +3411,7 @@ export async function getAccountingDashboard(guildId: string, actorId: string, p
       ign: m.ign || m.user.displayName,
       role: m.role,
       rankName: m.rankName,
+      customRole: m.customRole ? { id: m.customRole.id, name: m.customRole.name, color: m.customRole.color } : null,
       cp: m.cp || 0,
       class: m.class || "Unknown",
       dkp,

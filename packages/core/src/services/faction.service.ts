@@ -145,6 +145,98 @@ export async function getFactionMembers(actorId: string) {
 }
 
 // ═══════════════════════════════════════════════════
+// FACTION OVERVIEW
+// A read-only snapshot of the faction the actor's guild belongs to — the
+// faction identity plus every member guild (with member counts and leader
+// names). Unlike `getFactionMembers`, this is available to ANY faction
+// member, not just managers, so a guild that has already joined can see the
+// faction it is part of.
+// ═══════════════════════════════════════════════════
+
+export async function getFactionOverview(actorId: string) {
+  const memberships = await requireFactionMember(actorId);
+  const guildIds = memberships.map((m) => m.guildId);
+
+  const ownGuilds = await prisma.guild.findMany({
+    where: { id: { in: guildIds } },
+    select: { id: true, factionId: true },
+  });
+  const factionId = ownGuilds.find((g) => g.factionId)?.factionId ?? null;
+
+  const canManage = memberships.some((m) => {
+    if (!isFactionManagerRole(m.role)) return false;
+    const guild = ownGuilds.find((g) => g.id === m.guildId);
+    return guild?.factionId === factionId && factionId !== null;
+  });
+
+  if (!factionId) {
+    return { faction: null, guilds: [], totalGuilds: 0, totalMembers: 0, canManage: false };
+  }
+
+  const faction = await prisma.faction.findUnique({
+    where: { id: factionId },
+    select: { id: true, name: true, slug: true, description: true, avatarUrl: true, createdAt: true },
+  });
+  if (!faction) {
+    return { faction: null, guilds: [], totalGuilds: 0, totalMembers: 0, canManage: false };
+  }
+
+  const guilds = await prisma.guild.findMany({
+    where: { factionId, isActive: true },
+    select: { id: true, name: true, slug: true, avatarUrl: true },
+    orderBy: { name: "asc" },
+  });
+  const memberGuildIds = guilds.map((g) => g.id);
+
+  const counts = memberGuildIds.length
+    ? await prisma.guildMember.groupBy({
+        by: ["guildId"],
+        where: { guildId: { in: memberGuildIds }, isActive: true },
+        _count: { _all: true },
+      })
+    : [];
+  const countMap = new Map(counts.map((c) => [c.guildId, c._count._all]));
+
+  const leaders = memberGuildIds.length
+    ? await prisma.guildMember.findMany({
+        where: { guildId: { in: memberGuildIds }, isActive: true, role: { in: ["GUILD_LEADER", "FACTION_LEADER"] } },
+        select: { guildId: true, user: { select: { displayName: true } } },
+        orderBy: { role: "asc" },
+      })
+    : [];
+  const leaderMap = new Map<string, string>();
+  for (const l of leaders) {
+    if (!leaderMap.has(l.guildId)) leaderMap.set(l.guildId, l.user.displayName);
+  }
+
+  const ownGuildIds = new Set(guildIds);
+  const overviewGuilds = guilds.map((g) => ({
+    id: g.id,
+    name: g.name,
+    slug: g.slug,
+    avatarUrl: g.avatarUrl,
+    memberCount: countMap.get(g.id) ?? 0,
+    leaderName: leaderMap.get(g.id) ?? null,
+    isOwnGuild: ownGuildIds.has(g.id),
+  }));
+
+  return {
+    faction: {
+      id: faction.id,
+      name: faction.name,
+      slug: faction.slug,
+      description: faction.description,
+      avatarUrl: faction.avatarUrl,
+      createdAt: faction.createdAt.toISOString(),
+    },
+    guilds: overviewGuilds,
+    totalGuilds: overviewGuilds.length,
+    totalMembers: overviewGuilds.reduce((sum, g) => sum + g.memberCount, 0),
+    canManage,
+  };
+}
+
+// ═══════════════════════════════════════════════════
 // FACTION GUILD INVITES
 // Faction Leaders can search for unaffiliated guilds to invite (Multi-Guild
 // join requests are created in `inviteGuildToFaction` below).

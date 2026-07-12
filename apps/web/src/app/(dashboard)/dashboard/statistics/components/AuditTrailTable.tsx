@@ -22,7 +22,7 @@ export default function AuditTrailTable({
         🔱 Guild Event Log
       </h3>
 
-      <div className="overflow-x-auto pr-1">
+      <div className="overflow-x-auto scroll-fade-x pr-1">
         <table className="w-full text-left font-mono text-[11px]">
           <thead>
             <tr className="text-zinc-500 border-b border-white/[0.05] pb-2">

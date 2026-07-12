@@ -219,6 +219,13 @@ export const authApi = {
     );
   },
 
+  async checkEmailRegistered(email: string) {
+    return api.get<{ registered: boolean }>(
+      `/auth/email-registered?email=${encodeURIComponent(email)}`,
+      { skipAuth: true },
+    );
+  },
+
   async resolveIdentifier(identifier: string) {
     return api.post<{ email: string | null }>(
       "/auth/resolve-identifier",
@@ -345,12 +352,21 @@ export interface GuildMemberData {
   memberCode: string | null;
   joinedAt: string;
   isActive: boolean;
+  category: MemberCategoryData | null;
   user: {
     id: string;
     displayName: string;
     email: string;
     avatarUrl: string | null;
   };
+}
+
+export interface MemberCategoryData {
+  id: string;
+  name: string;
+  color: string;
+  description: string | null;
+  sortOrder: number;
 }
 
 export interface JoinRequestGearItem {
@@ -397,9 +413,66 @@ export const guildApi = {
     );
   },
 
+  // ─── Member categories (customizable roster tags) ─────────
+  async getMemberCategories(guildId: string) {
+    return api.get<{ categories: MemberCategoryData[] }>(
+      `/guilds/${guildId}/categories`,
+    );
+  },
+
+  async createMemberCategory(
+    guildId: string,
+    payload: { name: string; color?: string; description?: string },
+  ) {
+    return api.post<{ category: MemberCategoryData }>(
+      `/guilds/${guildId}/categories`,
+      payload,
+    );
+  },
+
+  async updateMemberCategory(
+    guildId: string,
+    categoryId: string,
+    payload: Partial<{ name: string; color: string; description: string; sortOrder: number }>,
+  ) {
+    return api.patch<{ category: MemberCategoryData }>(
+      `/guilds/${guildId}/categories/${categoryId}`,
+      payload,
+    );
+  },
+
+  async deleteMemberCategory(guildId: string, categoryId: string) {
+    return api.delete<{ success: boolean }>(
+      `/guilds/${guildId}/categories/${categoryId}`,
+    );
+  },
+
+  async assignMemberCategory(guildId: string, memberId: string, categoryId: string | null) {
+    return api.patch<{ member: GuildMemberData }>(
+      `/guilds/${guildId}/members/${memberId}/category`,
+      { categoryId },
+    );
+  },
+
   async verifyInviteCode(code: string) {
     return api.get<{ guild: { id: string; name: string; slug: string; description: string | null; avatarUrl: string | null } }>(
       `/guilds/invite/${code}`,
+    );
+  },
+
+  // Self-serve org creation from the onboarding screen. The current user
+  // becomes the leader of whatever they create.
+  async createGuild(guildName: string) {
+    return api.post<{ guildId: string; guildSlug: string; factionId: string | null }>(
+      `/onboarding/create-org`,
+      { accountType: "GUILD_LEADER", guildName },
+    );
+  },
+
+  async createFaction(factionName: string, guildName: string) {
+    return api.post<{ guildId: string; guildSlug: string; factionId: string | null }>(
+      `/onboarding/create-org`,
+      { accountType: "FACTION_LEADER", factionName, guildName },
     );
   },
 
@@ -634,6 +707,10 @@ export interface BossDropInput {
   bucket: string;
   path: string;
   quantity?: number;
+  // Overrides the catalog item name for this recorded drop (e.g. to note a
+  // specific roll/variant). Falls back to the catalog name server-side when
+  // absent or blank.
+  customName?: string;
 }
 
 /** A distinct item a boss is known to drop (for the sold-items loot picker). */
@@ -892,7 +969,9 @@ export const dashboardApi = {
     return api.post<{
       schedule: BossScheduleData | null;
       nextSchedule: BossScheduleData | null;
-      rotationId: string;
+      // null for an unaffiliated guild — there's no faction-wide BossRotation
+      // row for a solo guild's kill.
+      rotationId: string | null;
     }>(
       `/dashboard/boss-rotation/${guildId}/${scheduleId}/killed`,
       { killedAt, takenGuildId, drops },
@@ -904,7 +983,7 @@ export const dashboardApi = {
     return api.post<{
       schedule: BossScheduleData | null;
       nextSchedule: BossScheduleData | null;
-      rotationId: string;
+      rotationId: string | null;
     }>(
       `/dashboard/boss-rotation/${guildId}/boss/${encodeURIComponent(bossName)}/killed`,
       { killedAt, takenGuildId, drops },
@@ -1234,6 +1313,31 @@ export type FactionMemberData = GuildMemberData & {
   };
 };
 
+export interface FactionOverviewGuild {
+  id: string;
+  name: string;
+  slug: string;
+  avatarUrl: string | null;
+  memberCount: number;
+  leaderName: string | null;
+  isOwnGuild: boolean;
+}
+
+export interface FactionOverviewData {
+  faction: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    avatarUrl: string | null;
+    createdAt: string;
+  } | null;
+  guilds: FactionOverviewGuild[];
+  totalGuilds: number;
+  totalMembers: number;
+  canManage: boolean;
+}
+
 export interface FactionGuildSearchResult {
   id: string;
   name: string;
@@ -1265,6 +1369,10 @@ export interface FactionJoinRequestData {
 }
 
 export const factionApi = {
+  async getOverview() {
+    return api.get<FactionOverviewData>(`/faction/overview`);
+  },
+
   async getMembers() {
     return api.get<{ members: FactionMemberData[] }>(`/faction/members`);
   },

@@ -50,7 +50,13 @@ export interface BossDropInput {
   bucket: string;
   path: string;
   quantity?: number;
+  // Client-supplied override for this drop's display name (e.g. to note a
+  // specific roll/variant). Blank/whitespace-only falls back to the catalog
+  // item name.
+  customName?: string;
 }
+
+const MAX_DROP_CUSTOM_NAME_LENGTH = 60;
 
 type StoredBossDrop = {
   itemName: string;
@@ -79,12 +85,13 @@ async function normalizeBossDrops(drops: BossDropInput[] | undefined): Promise<S
     const item = catalog.get(key);
     if (!item) continue;
     const qty = Math.max(1, Math.min(999, Math.floor(Number(drop.quantity) || 1)));
+    const customName = typeof drop.customName === "string" ? drop.customName.trim().slice(0, MAX_DROP_CUSTOM_NAME_LENGTH) : "";
     const existing = merged.get(key);
     if (existing) {
       existing.quantity += qty;
     } else {
       merged.set(key, {
-        itemName: item.itemName,
+        itemName: customName || item.itemName,
         type: item.type,
         category: item.category,
         rarity: item.rarity,
@@ -213,8 +220,20 @@ async function getGuildFactionId(guildId: string): Promise<string | null> {
 
 // Every guild-list query that feeds a rotation queue MUST be scoped by
 // factionId — an unscoped `isActive: true` guild list leaks every other
-// faction's guilds into this faction's rotations/master list.
-async function getActiveFactionGuilds(factionId: string | null) {
+// faction's guilds into this faction's rotations/master list. A guild with no
+// faction has nothing to rotate with but itself, so `factionId: null` must
+// NOT be passed straight to Prisma (that would match every unaffiliated
+// guild in the whole system) — `soloGuildId` scopes it down to just that one
+// guild instead.
+async function getActiveFactionGuilds(factionId: string | null, soloGuildId?: string) {
+  if (!factionId) {
+    if (!soloGuildId) return [];
+    const guild = await prisma.guild.findFirst({
+      where: { id: soloGuildId, isActive: true },
+      select: { id: true, name: true, slug: true, avatarUrl: true },
+    });
+    return guild ? [guild] : [];
+  }
   return prisma.guild.findMany({
     where: { isActive: true, factionId },
     select: { id: true, name: true, slug: true, avatarUrl: true },
@@ -1026,7 +1045,7 @@ export async function getBossRotation(guildId: string, actorId: string) {
     getGuildFactionId(guildId),
     getBossRegistryForRotation(),
   ]);
-  const guilds = await getActiveFactionGuilds(factionId);
+  const guilds = await getActiveFactionGuilds(factionId, guildId);
   // `canManage` only gates the "Taken" action in the UI (not queue reordering),
   // so it reflects the wider taken-permission set, which includes Officers.
   const canManage = canMarkBossTaken(membership.role);
@@ -1195,6 +1214,118 @@ export async function updateBossRotationQueue(
   return getBossRotation(guildId, actorId);
 }
 
+/**
+ * Kill-logging path for a guild with no faction. There is no cross-guild
+ * queue to maintain — the guild just logs its own kill and records drops
+ * (the whole point of this codepath: item registration must not require a
+ * faction). Mirrors the faction path's side effects (schedule update,
+ * check-in session, next-spawn scheduling, audit log with drops) minus the
+ * BossRotation queue row and next-guild notifications, which only make sense
+ * across multiple guilds.
+ */
+async function finishSoloBossKill(params: {
+  guildId: string;
+  guildName: string;
+  bossName: string;
+  existingSchedule: { id: string } | null;
+  bossImageUrl: string | null;
+  location: string;
+  killedDate: Date;
+  actorId: string;
+  storedDrops: StoredBossDrop[];
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const {
+    guildId,
+    guildName,
+    bossName,
+    existingSchedule,
+    bossImageUrl,
+    location,
+    killedDate,
+    actorId,
+    storedDrops,
+    ipAddress,
+    userAgent,
+  } = params;
+
+  const nextSpawnTime = getNextBossSpawnTime(bossName, killedDate);
+
+  const updatedEvent = existingSchedule
+    ? await prisma.bossSchedule.update({
+        where: { id: existingSchedule.id },
+        data: {
+          status: BossEventStatus.KILLED,
+          killedAt: killedDate,
+          guildTurn: guildName,
+          guildTurnGuildId: guildId,
+        },
+      })
+    : await prisma.bossSchedule.create({
+        data: {
+          guildId,
+          bossName,
+          bossImageUrl,
+          spawnTime: killedDate,
+          location,
+          status: BossEventStatus.KILLED,
+          killedAt: killedDate,
+          guildTurn: guildName,
+          guildTurnGuildId: guildId,
+          creatorId: actorId,
+        },
+      });
+
+  // Auto-open a code-free check-in window so members can claim attendance
+  // for this kill immediately, same as the faction path.
+  const checkInSession = await openBossCheckInSession(guildId, updatedEvent.id, bossName);
+
+  const nextSchedule = await syncNextRotationSchedule({
+    bossName,
+    factionGuildIds: [guildId],
+    fallbackGuildId: guildId,
+    bossImageUrl,
+    location,
+    spawnTime: nextSpawnTime,
+    nextGuildName: guildName,
+    nextGuildId: guildId,
+    creatorId: actorId,
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId,
+      guildId,
+      action: "BOSS_ROTATION_KILLED",
+      target: "BossRotation",
+      targetId: updatedEvent.id,
+      detail: {
+        bossName,
+        killedAt: killedDate.toISOString(),
+        takenGuildId: guildId,
+        takenGuildName: guildName,
+        nextSpawnTime: nextSpawnTime.toISOString(),
+        nextGuildId: guildId,
+        nextGuildName: guildName,
+        nextScheduleId: nextSchedule?.id ?? null,
+        scheduleId: updatedEvent.id,
+        checkInSessionId: checkInSession.id,
+        drops: storedDrops,
+      },
+      ipAddress,
+      userAgent,
+    },
+  });
+
+  return {
+    schedule: serializeBossScheduleForApi(updatedEvent),
+    nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
+    rotationId: null as string | null,
+    factionId: null as string | null,
+  };
+}
+
 export async function markBossRotationKilled(
   guildId: string,
   scheduleId: string,
@@ -1211,16 +1342,12 @@ export async function markBossRotationKilled(
     throw new BadRequestError("Killed timestamp is invalid");
   }
   const storedDrops = await normalizeBossDrops(drops);
-  const factionId = await getGuildFactionId(guildId);
-  if (!factionId) {
-    throw new BadRequestError("This guild is not part of a faction yet");
-  }
 
-  const [schedule, guilds] = await Promise.all([
+  const [schedule, guild] = await Promise.all([
     prisma.bossSchedule.findUnique({
       where: { id: scheduleId },
     }),
-    getActiveFactionGuilds(factionId),
+    prisma.guild.findUnique({ where: { id: guildId }, select: { name: true, factionId: true } }),
   ]);
 
   if (!schedule) {
@@ -1230,6 +1357,29 @@ export async function markBossRotationKilled(
     throw new BadRequestError("This boss kill has already been logged");
   }
 
+  // No faction — nothing to rotate with. The guild just logs its own kill and
+  // drops; no cross-guild queue, notifications, or BossRotation row apply.
+  if (!guild?.factionId) {
+    if (takenGuildId !== guildId) {
+      throw new BadRequestError("This guild has no faction — it can only take its own boss");
+    }
+    return finishSoloBossKill({
+      guildId,
+      guildName: guild?.name ?? "Guild",
+      bossName: schedule.bossName,
+      existingSchedule: schedule,
+      bossImageUrl: schedule.bossImageUrl,
+      location: schedule.location,
+      killedDate,
+      actorId,
+      storedDrops,
+      ipAddress,
+      userAgent,
+    });
+  }
+
+  const factionId = guild.factionId;
+  const guilds = await getActiveFactionGuilds(factionId);
   const activeGuildIds = guilds.map((g) => g.id);
   const guildMap = new Map(guilds.map((g) => [g.id, g]));
   const takenGuild = guildMap.get(takenGuildId);
@@ -1411,11 +1561,9 @@ export async function markBossRotationKilledByName(
     throw new BadRequestError("Killed timestamp is invalid");
   }
   const storedDrops = await normalizeBossDrops(drops);
-  const factionId = await getGuildFactionId(guildId);
-  if (!factionId) {
-    throw new BadRequestError("This guild is not part of a faction yet");
-  }
-  const guilds = await getActiveFactionGuilds(factionId);
+  const guild = await prisma.guild.findUnique({ where: { id: guildId }, select: { name: true, factionId: true } });
+  const factionId = guild?.factionId ?? null;
+  const guilds = await getActiveFactionGuilds(factionId, guildId);
   const factionGuildIds = guilds.map((g) => g.id);
 
   // Load registry, active schedule, and existing rotation in parallel
@@ -1429,9 +1577,11 @@ export async function markBossRotationKilledByName(
       },
       orderBy: { spawnTime: "asc" },
     }),
-    prisma.bossRotation.findUnique({
-      where: { factionId_bossName: { factionId, bossName: bossName.trim() } },
-    }),
+    factionId
+      ? prisma.bossRotation.findUnique({
+          where: { factionId_bossName: { factionId, bossName: bossName.trim() } },
+        })
+      : Promise.resolve(null),
   ]);
 
   const registryBoss = bosses.find((boss) => boss.name.toLowerCase() === bossName.trim().toLowerCase());
@@ -1450,6 +1600,28 @@ export async function markBossRotationKilledByName(
       userAgent,
       drops,
     );
+  }
+
+  // No faction and no live schedule yet — first time this (unaffiliated)
+  // guild takes this boss. Log the kill for just this guild; no cross-guild
+  // queue or BossRotation row applies.
+  if (!factionId) {
+    if (takenGuildId !== guildId) {
+      throw new BadRequestError("This guild has no faction — it can only take its own boss");
+    }
+    return finishSoloBossKill({
+      guildId,
+      guildName: guild?.name ?? "Guild",
+      bossName: registryBoss.name,
+      existingSchedule: null,
+      bossImageUrl: getBossImageUrl(registryBoss.name),
+      location: registryBoss.location,
+      killedDate,
+      actorId,
+      storedDrops,
+      ipAddress,
+      userAgent,
+    });
   }
 
   const activeGuildIds = guilds.map((g) => g.id);
@@ -1720,7 +1892,7 @@ export async function getBossMasterList(guildId: string, actorId: string) {
     getBossRegistryForRotation(),
   ]);
   const [guilds, rotations] = await Promise.all([
-    getActiveFactionGuilds(factionId),
+    getActiveFactionGuilds(factionId, guildId),
     factionId ? prisma.bossRotation.findMany({ where: { factionId } }) : Promise.resolve([]),
   ]);
 
@@ -1869,7 +2041,7 @@ export async function getLowBossRotation(guildId: string, actorId: string) {
     getBossRegistryForRotation(),
   ]);
   const [guilds, config] = await Promise.all([
-    getActiveFactionGuilds(factionId),
+    getActiveFactionGuilds(factionId, guildId),
     factionId ? prisma.bossLowRotation.findUnique({ where: { factionId } }) : Promise.resolve(null),
   ]);
 

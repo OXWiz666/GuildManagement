@@ -154,6 +154,21 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     setUserMenuOpen(false);
   }, [pathname]);
 
+  // Lock body scroll + ESC-to-close while the mobile drawer is open.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileNavOpen]);
+
   // Redirect unauthenticated users to login (same contract as the dashboard shell).
   useEffect(() => {
     if (mounted && !isLoading && isSessionReady && !isAuthenticated) {
@@ -341,7 +356,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
               onClick={() => setMobileNavOpen(false)}
             />
-            <aside className="animate-slide-in-left absolute inset-y-0 left-0 w-72 border-r border-white/[0.08] bg-[#0a0b10] shadow-2xl">
+            <aside className="animate-slide-in-left absolute inset-y-0 left-0 w-72 border-r border-white/[0.08] bg-[#0a0b10] shadow-2xl pb-safe">
               {navTree}
             </aside>
           </div>

@@ -131,7 +131,7 @@ export default function AccountingTab({
         {filteredMembers.length === 0 ? (
           <div className="py-16 text-center text-xs text-white/35 italic">No member balances found.</div>
         ) : (
-          <div className="overflow-auto max-h-[560px] rounded-xl">
+          <div className="overflow-auto scroll-fade-x max-h-[560px] rounded-xl">
             <table className="w-full border-collapse text-left text-[12px]">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">
@@ -205,7 +205,7 @@ export default function AccountingTab({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="overflow-auto max-h-[520px] rounded-xl">
+            <div className="overflow-auto scroll-fade-x max-h-[520px] rounded-xl">
               <table className="w-full border-collapse text-left text-[11px]">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[9px] text-white/45 font-bold uppercase tracking-wider">

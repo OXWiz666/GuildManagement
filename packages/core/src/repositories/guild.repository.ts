@@ -43,6 +43,9 @@ export class PrismaGuildRepository implements IGuildRepository {
             avatarUrl: true,
           },
         },
+        category: {
+          select: { id: true, name: true, color: true, description: true, sortOrder: true },
+        },
       },
       orderBy: [
         { role: "asc" },
@@ -94,6 +97,9 @@ export class PrismaGuildRepository implements IGuildRepository {
             avatarUrl: true,
           },
         },
+        category: {
+          select: { id: true, name: true, color: true, description: true, sortOrder: true },
+        },
       },
     });
   }
@@ -119,6 +125,9 @@ export class PrismaGuildRepository implements IGuildRepository {
               email: true,
               avatarUrl: true,
             },
+          },
+          category: {
+            select: { id: true, name: true, color: true, description: true, sortOrder: true },
           },
         },
       }),

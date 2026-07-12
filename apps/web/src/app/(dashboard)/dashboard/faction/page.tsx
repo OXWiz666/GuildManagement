@@ -14,16 +14,17 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
-import AddGuildTab from "./components/AddGuildTab";
+import FactionOverviewTab from "./components/FactionOverviewTab";
+import FactionMembersTab from "./components/FactionMembersTab";
 import JoinFactionTab from "./components/JoinFactionTab";
 
-type FactionTab = "ANNOUNCEMENTS" | "EVENTS" | "MEMBERS" | "ADD_GUILD" | "JOIN_FACTION";
+type FactionTab = "OVERVIEW" | "ANNOUNCEMENTS" | "EVENTS" | "MEMBERS" | "JOIN_FACTION";
 
 export default function FactionPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const activeGuild = user?.guilds?.[0];
-  const [activeTab, setActiveTab] = useState<FactionTab>("ANNOUNCEMENTS");
+  const [activeTab, setActiveTab] = useState<FactionTab>("OVERVIEW");
   const [announcementForm, setAnnouncementForm] = useState({ title: "", body: "", priority: "NORMAL" });
   const [eventForm, setEventForm] = useState({ title: "", description: "", startsAt: "", endsAt: "", location: "" });
   const [isSaving, setIsSaving] = useState(false);
@@ -49,7 +50,8 @@ export default function FactionPage() {
     { persist: true, staleTime: 30000 },
   );
 
-  const { data: membersRaw, isLoading: isLoadingMembers } = useQuery<FactionMemberData[]>(
+  // Same query key as FactionMembersTab — shares its cache, just for the tab count badge.
+  const { data: membersRaw } = useQuery<FactionMemberData[]>(
     canManage ? "faction_members" : "faction_members_locked",
     async () => {
       if (!canManage) return [];
@@ -125,10 +127,10 @@ export default function FactionPage() {
   }
 
   const tabs: Array<{ id: FactionTab; label: string; count?: number }> = [
+    { id: "OVERVIEW", label: "Overview" },
     { id: "ANNOUNCEMENTS", label: "Announcements", count: announcements.length },
     { id: "EVENTS", label: "Events", count: events.length },
-    { id: "MEMBERS", label: "Members", count: members.length },
-    ...(canManage ? [{ id: "ADD_GUILD" as FactionTab, label: "Multi-Guild" }] : []),
+    ...(canManage ? [{ id: "MEMBERS" as FactionTab, label: "Members", count: members.length }] : []),
     ...(isGuildLeader ? [{ id: "JOIN_FACTION" as FactionTab, label: "Join a Faction" }] : []),
   ];
 
@@ -162,6 +164,8 @@ export default function FactionPage() {
             </button>
           ))}
         </div>
+
+        {activeTab === "OVERVIEW" && <FactionOverviewTab canManage={canManage} />}
 
         {activeTab === "ANNOUNCEMENTS" && (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
@@ -246,38 +250,7 @@ export default function FactionPage() {
           </div>
         )}
 
-        {activeTab === "MEMBERS" && (
-          !canManage ? (
-            <EmptyPanel title="Faction roster is restricted" body="Only Faction Leaders and Admins can view members across all guilds." />
-          ) : isLoadingMembers ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((item) => <Skeleton key={item} className="h-16 rounded-xl" />)}
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <FactionGuildsList members={members} />
-              <div className="space-y-2">
-              {members.map((member) => (
-                <div key={member.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{member.ign || member.user.displayName}</p>
-                    <p className="text-[11px] text-white/40 truncate">{member.guild?.name || "Guild"} - {member.role.replaceAll("_", " ")}</p>
-                  </div>
-                  <p className="text-[11px] text-white/35 shrink-0">CP {member.cp || 0}</p>
-                </div>
-              ))}
-              </div>
-            </div>
-          )
-        )}
-
-        {activeTab === "ADD_GUILD" && (
-          canManage ? (
-            <AddGuildTab />
-          ) : (
-            <EmptyPanel title="Inviting guilds is restricted" body="Only Faction Leaders and Admins can invite guilds into the faction." />
-          )
-        )}
+        {activeTab === "MEMBERS" && <FactionMembersTab canManage={canManage} />}
 
         {activeTab === "JOIN_FACTION" && activeGuild && <JoinFactionTab guildId={activeGuild.guildId} />}
       </div>
@@ -330,65 +303,6 @@ function Field({ label, value, onChange, type = "text" }: { label: string; value
         className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-amber-500/35"
       />
     </label>
-  );
-}
-
-function FactionGuildsList({ members }: { members: FactionMemberData[] }) {
-  const { addToast } = useToast();
-  const [removingId, setRemovingId] = useState<string | null>(null);
-
-  const guilds = new Map<string, { id: string; name: string; count: number }>();
-  for (const m of members) {
-    const guildId = m.guild?.id;
-    if (!guildId) continue;
-    const existing = guilds.get(guildId);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      guilds.set(guildId, { id: guildId, name: m.guild?.name || "Guild", count: 1 });
-    }
-  }
-  const guildList = Array.from(guilds.values());
-
-  async function remove(guildId: string, name: string) {
-    if (!confirm(`Remove ${name} from the faction? This clears it from every boss rotation queue.`)) return;
-    setRemovingId(guildId);
-    try {
-      const result = await factionApi.removeGuildFromFaction(guildId);
-      if (result.success) {
-        addToast("success", `${name} removed from the faction`);
-        queryClient.invalidateQueries("faction_members");
-      } else {
-        addToast("error", result.error?.message || "Failed to remove guild");
-      }
-    } finally {
-      setRemovingId(null);
-    }
-  }
-
-  if (guildList.length === 0) return null;
-
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-white/80 px-1">Guilds in this faction</h3>
-      {guildList.map((guild) => (
-        <div key={guild.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{guild.name}</p>
-            <p className="text-[11px] text-white/40">{guild.count} member{guild.count === 1 ? "" : "s"}</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => remove(guild.id, guild.name)}
-            isLoading={removingId === guild.id}
-            className="shrink-0 hover:text-red-300 hover:border-red-500/35"
-          >
-            Remove
-          </Button>
-        </div>
-      ))}
-    </div>
   );
 }
 

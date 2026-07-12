@@ -139,7 +139,7 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
           No legendary priority requests yet.
         </div>
       ) : (
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-auto max-h-[560px]">
+        <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur overflow-auto scroll-fade-x max-h-[560px]">
           <table className="w-full text-[12px]">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">

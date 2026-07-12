@@ -91,7 +91,7 @@ export default function VerificationQueue({
           Verification queue is empty. Member check-ins for this boss will show up here instantly.
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-fade-x">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-white/[0.06] text-white/40 font-bold uppercase tracking-wider text-[10px]">

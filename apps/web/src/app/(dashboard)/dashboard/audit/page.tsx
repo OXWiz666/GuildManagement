@@ -302,7 +302,7 @@ export default function AuditLogPage() {
 
         {/* Dynamic Log Table view */}
         <Card className="p-4 sm:p-6 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scroll-fade-x">
             {(isLoading && logs.length === 0) ? (
               /* Shimmer Loading State (only on initial fetch when no cached data exists) */
               <div className="space-y-4 py-4">

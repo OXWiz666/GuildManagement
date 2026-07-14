@@ -61,6 +61,53 @@ export const createDistributionSchema = z.object({
 });
 export type CreateDistributionInput = z.infer<typeof createDistributionSchema>;
 
+// ─── Guild Storage ──────────────────────────────────────────────────
+
+export const registerStorageInMarketSchema = z.object({
+  price: z.number().min(0, "A valid listing price is required").max(1_000_000_000),
+});
+export type RegisterStorageInMarketInput = z.infer<typeof registerStorageInMarketSchema>;
+
+export const markStorageSoldSchema = z.object({
+  saleValue: z.number().min(0, "A valid sale value is required").max(1_000_000_000),
+  // Validated as a real date in the service layer; kept loose here.
+  soldAt: z.string().trim().min(1).max(40).optional(),
+});
+export type MarkStorageSoldInput = z.infer<typeof markStorageSoldSchema>;
+
+// Distribute a stored item — direct guild sale or DKP auction.
+export const distributeStorageSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("GUILD_SALE"),
+    memberId: z.string().min(1, "Target member is required"),
+    note: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    mode: z.literal("GUILD_AUCTION"),
+    startingBid: z.number().int().min(0).max(1_000_000).default(0),
+    durationHours: z.number().int().min(1).max(168).default(24),
+    note: z.string().trim().max(500).optional(),
+  }),
+]);
+export type DistributeStorageInput = z.infer<typeof distributeStorageSchema>;
+
+// ─── Auctions (DKP bidding hall) ────────────────────────────────────
+
+export const createAuctionSchema = z.object({
+  itemName: z.string().trim().min(1, "Item name is required").max(120),
+  description: z.string().trim().max(500).optional(),
+  imageUrl: z.string().trim().max(500).optional(),
+  category: z.string().trim().max(40).optional(),
+  startingBid: z.number().int().min(0).max(1_000_000).default(0),
+  durationHours: z.number().int().min(1).max(168).default(24),
+});
+export type CreateAuctionInput = z.infer<typeof createAuctionSchema>;
+
+export const placeBidSchema = z.object({
+  bidAmount: z.number().int().min(1, "Bid must be at least 1 point").max(10_000_000),
+});
+export type PlaceBidInput = z.infer<typeof placeBidSchema>;
+
 // ─── Member item wishlist (per-piece: rarity + quantity) ────────────
 
 export const wishlistItemSchema = z.object({

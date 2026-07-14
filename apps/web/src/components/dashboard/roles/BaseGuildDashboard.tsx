@@ -158,11 +158,22 @@ export default function BaseGuildDashboard({
     });
   }, [sortedSchedules, rotationByBoss, activeGuild?.guildId]);
 
-  // Carousel slides — every upcoming spawn for OUR guild, soonest first. Each
-  // boss only ever has one live schedule row, so this is already one slide per
-  // boss; we don't dedup by date here since the guild-scoped set is small and
-  // two of our own bosses landing on the same day should both stay visible.
-  const dateSlides = useMemo(() => myGuildSchedules.slice(0, 7), [myGuildSchedules]);
+  // Carousel slides — the next upcoming spawn per boss for OUR guild, soonest
+  // first. A boss can have more than one live schedule row (e.g. an overlapping
+  // re-log or a stale duplicate), which previously surfaced the same boss twice
+  // in the carousel. Dedup by boss name, keeping the earliest spawn — since
+  // `myGuildSchedules` is already sorted soonest-first, the first row wins.
+  const dateSlides = useMemo(() => {
+    const seen = new Set<string>();
+    const deduped: typeof myGuildSchedules = [];
+    for (const s of myGuildSchedules) {
+      const key = s.bossName.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(s);
+    }
+    return deduped.slice(0, 7);
+  }, [myGuildSchedules]);
 
   // 2. Dashboard Stats Query
   const {
@@ -454,6 +465,20 @@ export default function BaseGuildDashboard({
                 stats.guildPoints.raw,
               ]}
             />
+              <StatCard
+              label="Boss Today"
+              value={stats.bossToday.raw}
+              sub={stats.bossToday.sub}
+              tone="warning"
+              icon={<SkullIcon />}
+              data={[
+                stats.bossToday.raw > 2 ? stats.bossToday.raw - 2 : 0,
+                stats.bossToday.raw > 1 ? stats.bossToday.raw - 1 : 0,
+                stats.bossToday.raw,
+                stats.bossToday.raw,
+                stats.bossToday.raw,
+              ]}
+            />
             <StatCard
               label="Members"
               value={stats.members.raw}
@@ -466,20 +491,6 @@ export default function BaseGuildDashboard({
                 stats.members.raw > 3 ? stats.members.raw - 3 : 0,
                 stats.members.raw > 1 ? stats.members.raw - 1 : 0,
                 stats.members.raw,
-              ]}
-            />
-            <StatCard
-              label="Boss Today"
-              value={stats.bossToday.raw}
-              sub={stats.bossToday.sub}
-              tone="warning"
-              icon={<SkullIcon />}
-              data={[
-                stats.bossToday.raw > 2 ? stats.bossToday.raw - 2 : 0,
-                stats.bossToday.raw > 1 ? stats.bossToday.raw - 1 : 0,
-                stats.bossToday.raw,
-                stats.bossToday.raw,
-                stats.bossToday.raw,
               ]}
             />
           </StaggerReveal>

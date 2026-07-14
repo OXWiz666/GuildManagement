@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
 import { dashboardApi, guildApi, type BossScheduleData } from "@/lib/api";
@@ -9,17 +10,19 @@ import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader, Magnetic } from "@/components/dashboard/DashboardHelpers";
-import LootStatsGrid from "./components/LootStatsGrid";
-import SoldItemsTable from "./components/SoldItemsTable";
-import AccountingTab from "./components/AccountingTab";
-import RankingsTab from "./components/RankingsTab";
-import RecordSaleModal from "./components/RecordSaleModal";
-import TreasuryAdjModal from "./components/TreasuryAdjModal";
-import RequestItemPanel from "./components/RequestItemPanel";
-import LegendaryPriorityTab from "./components/LegendaryPriorityTab";
-import ItemDistributionTab from "./components/ItemDistributionTab";
-import DistributionHistoryTab from "./components/DistributionHistoryTab";
 import MarketNav, { type MarketTab } from "./components/MarketNav";
+
+// Only one tab is ever visible at a time, and the two modals only mount on
+// user action — code-split each so the initial route chunk only ships
+// MarketNav plus whichever tab is active first.
+const LootStatsGrid = dynamic(() => import("./components/LootStatsGrid"));
+const SoldItemsTable = dynamic(() => import("./components/SoldItemsTable"));
+const AccountingTab = dynamic(() => import("./components/AccountingTab"));
+const RankingsTab = dynamic(() => import("./components/RankingsTab"));
+const RecordSaleModal = dynamic(() => import("./components/RecordSaleModal"));
+const TreasuryAdjModal = dynamic(() => import("./components/TreasuryAdjModal"));
+const GuildStorageTab = dynamic(() => import("./components/GuildStorageTab"));
+const AuctionHallTab = dynamic(() => import("./components/AuctionHallTab"));
 import { useQuery, queryClient } from "@/lib/query";
 
 export default function GuildMarketPage() {
@@ -159,37 +162,23 @@ export default function GuildMarketPage() {
       invalidateAll();
     };
 
-    // Distribution-module events → refresh the relevant tab caches
     const gid = activeGuild.guildId;
-    const handleRequests = () => {
-      queryClient.invalidateQueries(`market_requests:${gid}`);
-      queryClient.invalidateQueries(`market_my_requests:${gid}`);
+    const handleStorage = () => queryClient.invalidateQueries(`market_storage:${gid}`);
+    const handleAuction = () => {
+      queryClient.invalidateQueries(`market_auctions:${gid}`);
+      queryClient.invalidateQueries(`market_auction_history:${gid}`);
     };
-    const handleLegendary = () => queryClient.invalidateQueries(`market_legendary:${gid}`);
-    const handleDistribution = () => {
-      queryClient.invalidateQueries(`market_priority:${gid}`);
-      queryClient.invalidateQueries(`market_distributions:${gid}`);
-      queryClient.invalidateQueries(`market_distributions_mine:${gid}`);
-      queryClient.invalidateQueries(`market_audit:${gid}`);
-    };
-    const handlePriority = () => queryClient.invalidateQueries(`market_priority:${gid}`);
 
     socket.on("loot_sale_recorded", handleMarketUpdate);
     socket.on("treasury_adjusted", handleMarketUpdate);
-    socket.on("legendary_priority_submitted", handleLegendary);
-    socket.on("legendary_priority_updated", handleLegendary);
-    socket.on("item_distributed", handleDistribution);
-    socket.on("priority_sequence_changed", handlePriority);
-    socket.on("market_rules_updated", handlePriority);
+    socket.on("storage_updated", handleStorage);
+    socket.on("auction_updated", handleAuction);
 
     return () => {
       socket.off("loot_sale_recorded", handleMarketUpdate);
       socket.off("treasury_adjusted", handleMarketUpdate);
-      socket.off("legendary_priority_submitted", handleLegendary);
-      socket.off("legendary_priority_updated", handleLegendary);
-      socket.off("item_distributed", handleDistribution);
-      socket.off("priority_sequence_changed", handlePriority);
-      socket.off("market_rules_updated", handlePriority);
+      socket.off("storage_updated", handleStorage);
+      socket.off("auction_updated", handleAuction);
     };
   }, [socket, activeGuild]);
 
@@ -445,7 +434,6 @@ export default function GuildMarketPage() {
                   totalDividendsVal={totalDividendsVal}
                   taxRatePercent={settings?.taxRatePercent ?? 10}
                 />
-                <RequestItemPanel guildId={activeGuild.guildId} isOfficer={isOfficer} />
                 <SoldItemsTable
                   sales={filteredSales}
                   lootSearch={lootSearch}
@@ -501,18 +489,11 @@ export default function GuildMarketPage() {
           </>
         )}
 
-        {/* Tab Content 4: LEGENDARY PRIORITY */}
-        {activeTab === "legendary" && <LegendaryPriorityTab guildId={activeGuild.guildId} />}
+        {/* Tab Content 4: GUILD STORAGE */}
+        {activeTab === "storage" && <GuildStorageTab guildId={activeGuild.guildId} />}
 
-        {/* Tab Content 5: ITEM DISTRIBUTION */}
-        {activeTab === "distribution" && (
-          <ItemDistributionTab guildId={activeGuild.guildId} isOfficer={isOfficer} />
-        )}
-
-        {/* Tab Content 6: DISTRIBUTION HISTORY / AUDIT */}
-        {activeTab === "history" && (
-          <DistributionHistoryTab guildId={activeGuild.guildId} isOfficer={isOfficer} />
-        )}
+        {/* Tab Content 5: AUCTION HALL (DKP) */}
+        {activeTab === "auctions" && <AuctionHallTab guildId={activeGuild.guildId} />}
 
         </div>
 

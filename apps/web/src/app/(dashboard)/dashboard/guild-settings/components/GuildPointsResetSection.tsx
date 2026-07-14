@@ -77,7 +77,7 @@ export default function GuildPointsResetSection({ guildId }: GuildPointsResetSec
 
   return (
     <SettingsCard
-      eyebrow="Leader Panel"
+      eyebrow="Guild Settings"
       title="Guild Points reset cycle"
       description="Choose how often member Guild Points reset for ranking. This only affects the points leaderboard — member balances, dividends and treasury are never touched."
     >

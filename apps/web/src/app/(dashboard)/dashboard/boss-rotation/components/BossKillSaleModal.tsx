@@ -347,7 +347,7 @@ export default function BossKillSaleModal({
                 Close
               </Button>
               <Button variant="primary" size="sm" type="submit" isLoading={isSubmitting}>
-                Log sold items
+                Log items
               </Button>
             </div>
           </form>

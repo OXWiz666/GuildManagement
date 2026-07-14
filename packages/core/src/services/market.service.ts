@@ -3,6 +3,8 @@ import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { createNotifications } from "./notification.service";
 import { broadcastToGuild } from "../lib/socket";
+import { cache as redisCache } from "../lib/redis";
+import { cacheKeys, ttl as cacheTtl } from "../lib/cache-keys";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import {
   GUILD_ROLES,
@@ -245,6 +247,7 @@ export async function createLegendaryRequest(
     metadata: { requestId: request.id, category: payload.category },
   });
 
+  await redisCache.del(cacheKeys.marketAuditPage1(guildId));
   void broadcastToGuild(guildId, "legendary_priority_submitted", { id: request.id });
   return request;
 }
@@ -465,6 +468,10 @@ export async function createDistribution(
   // to DISTRIBUTED so the wishlist master list reflects reality.
   await markWishlistFulfilled(guildId, target, items, actorId);
 
+  await redisCache.delMany([
+    cacheKeys.marketDistributions(guildId),
+    cacheKeys.marketAuditPage1(guildId),
+  ]);
   void broadcastToGuild(guildId, "item_distributed", { id: distribution.id, memberId: target.id });
   return distribution;
 }
@@ -479,9 +486,8 @@ async function markWishlistFulfilled(
   distItems: Record<string, number | boolean | string>,
   actorId: string,
 ) {
-  const rules = await getEffectiveMarketRules(guildId);
+  const [rules, mountIds] = await Promise.all([getEffectiveMarketRules(guildId), activeMountIds(guildId)]);
   const tier = resolveDistributionTier(target, rules);
-  const mountIds = await activeMountIds(guildId);
   const wishlist = normalizeWishlist(target.marketWishlist, rules, tier, mountIds);
   if (wishlist.length === 0) return;
 
@@ -508,6 +514,7 @@ async function markWishlistFulfilled(
     targetId: target.id,
     detail: { ign: target.ign, items: fulfilled },
   });
+  await redisCache.del(cacheKeys.marketWishlistMaster(guildId));
   void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: target.id });
 }
 
@@ -539,7 +546,19 @@ export async function getDistributions(
     prisma.itemDistribution.findMany({
       where,
       include: {
-        member: { include: { user: { select: { displayName: true, avatarUrl: true } } } },
+        // Most rendered fields (ign/class/cp/tier) are already snapshotted on
+        // the distribution row itself — this relation only needs the *current*
+        // rank label + avatar, not the full member row (skips `marketWishlist`
+        // Json and other columns unused here).
+        member: {
+          select: {
+            id: true,
+            ign: true,
+            role: true,
+            rankName: true,
+            user: { select: { displayName: true, avatarUrl: true } },
+          },
+        },
       },
       orderBy: { distributedAt: "desc" },
       skip: (page - 1) * take,
@@ -658,21 +677,23 @@ export function wishlistSummary(items: WishlistItem[]): { total: number; distrib
 
 /** Member views their own wishlist + the taxonomy caps for their tier. */
 export async function getMyWishlist(guildId: string, actorId: string) {
-  const member = await requireActiveMember(guildId, actorId);
-  const rules = await getEffectiveMarketRules(guildId);
-  const tier = resolveDistributionTier(member, rules);
-  const formType: "CORE" | "NON_CORE" = tier === "CORE" ? "CORE" : "NON_CORE";
-  const mountIds = await activeMountIds(guildId);
-  const items = normalizeWishlist(member.marketWishlist, rules, tier, mountIds);
-  return { items, tier, formType, caps: wishlistCaps(rules, tier) };
+  // Per-user by definition ("mine") — actorId is already part of the key,
+  // so there's no cross-viewer leak risk here the way there is elsewhere.
+  return redisCache.getOrSet(cacheKeys.marketWishlistMine(guildId, actorId), cacheTtl.marketWishlistMine, async () => {
+    const member = await requireActiveMember(guildId, actorId);
+    const [rules, mountIds] = await Promise.all([getEffectiveMarketRules(guildId), activeMountIds(guildId)]);
+    const tier = resolveDistributionTier(member, rules);
+    const formType: "CORE" | "NON_CORE" = tier === "CORE" ? "CORE" : "NON_CORE";
+    const items = normalizeWishlist(member.marketWishlist, rules, tier, mountIds);
+    return { items, tier, formType, caps: wishlistCaps(rules, tier) };
+  });
 }
 
 /** Member sets their own wishlist. Items are normalized + clamped to their tier. */
 export async function setWishlist(guildId: string, actorId: string, items: WishlistItem[]) {
   const member = await requireActiveMember(guildId, actorId);
-  const rules = await getEffectiveMarketRules(guildId);
+  const [rules, mountIds] = await Promise.all([getEffectiveMarketRules(guildId), activeMountIds(guildId)]);
   const tier = resolveDistributionTier(member, rules);
-  const mountIds = await activeMountIds(guildId);
 
   // Preserve prior distribution status so a member re-saving can't reset a
   // fulfilled item back to pending.
@@ -692,6 +713,10 @@ export async function setWishlist(guildId: string, actorId: string, items: Wishl
     data: { marketWishlist: cleaned as object },
   });
 
+  await redisCache.delMany([
+    cacheKeys.marketWishlistMine(guildId, actorId),
+    cacheKeys.marketWishlistMaster(guildId),
+  ]);
   void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: member.id });
   return { items: cleaned, tier, caps: wishlistCaps(rules, tier) };
 }
@@ -700,14 +725,22 @@ export async function setWishlist(guildId: string, actorId: string, items: Wishl
 
 export async function getPriorityQueue(guildId: string, actorId: string) {
   await requireActiveMember(guildId, actorId);
-  const rules = await getEffectiveMarketRules(guildId);
-  const w = rules.weights;
-  const mountIds = await activeMountIds(guildId);
+  // Not viewer-specific — the whole ranked roster, same for everyone.
+  return redisCache.getOrSet(cacheKeys.marketPriority(guildId), cacheTtl.marketPriority, () =>
+    getPriorityQueueUncached(guildId),
+  );
+}
 
-  const members = await prisma.guildMember.findMany({
-    where: { guildId, isActive: true },
-    include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
-  });
+async function getPriorityQueueUncached(guildId: string) {
+  const [rules, mountIds, members] = await Promise.all([
+    getEffectiveMarketRules(guildId),
+    activeMountIds(guildId),
+    prisma.guildMember.findMany({
+      where: { guildId, isActive: true },
+      include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+    }),
+  ]);
+  const w = rules.weights;
   if (members.length === 0) return [];
 
   const userIds = members.map((m) => m.userId);
@@ -842,6 +875,7 @@ export async function overridePrioritySeq(
     detail: { ign: target.ign, oldSeq: target.marketPrioritySeq, newSeq: prioritySeq, reason },
   });
 
+  await redisCache.del(cacheKeys.marketPriority(guildId));
   void broadcastToGuild(guildId, "priority_sequence_changed", { memberId, prioritySeq });
   return updated;
 }
@@ -866,6 +900,34 @@ export async function getWishlistMasterList(
   filters: { status?: "PENDING" | "DISTRIBUTED"; category?: string; memberId?: string; search?: string } = {},
 ): Promise<WishlistMasterRow[]> {
   await requireOfficer(guildId, actorId);
+
+  // The filters below are applied in-memory on an otherwise unfiltered,
+  // guild-wide row set — cache that unfiltered set (safe to share across
+  // every officer regardless of which filters THEY passed) and filter/sort
+  // per-request against it, instead of caching once per filter combination.
+  const rows = await redisCache.getOrSet(
+    cacheKeys.marketWishlistMaster(guildId),
+    cacheTtl.marketWishlistMaster,
+    () => getWishlistMasterRowsUncached(guildId),
+  );
+
+  let out = rows;
+  if (filters.status) out = out.filter((r) => r.status === filters.status);
+  if (filters.category) out = out.filter((r) => r.item.category === filters.category);
+  if (filters.memberId) out = out.filter((r) => r.memberId === filters.memberId);
+  if (filters.search?.trim()) {
+    const s = filters.search.toLowerCase();
+    out = out.filter((r) => r.ign.toLowerCase().includes(s) || r.label.toLowerCase().includes(s));
+  }
+
+  // Pending first, then by member IGN, then item label.
+  return [...out].sort((a, b) => {
+    if (a.status !== b.status) return a.status === "PENDING" ? -1 : 1;
+    return a.ign.localeCompare(b.ign) || a.label.localeCompare(b.label);
+  });
+}
+
+async function getWishlistMasterRowsUncached(guildId: string): Promise<WishlistMasterRow[]> {
   const rules = await getEffectiveMarketRules(guildId);
   const mountIds = await activeMountIds(guildId);
   const mounts = prisma.guildMount
@@ -906,20 +968,7 @@ export async function getWishlistMasterList(
     }
   }
 
-  let out = rows;
-  if (filters.status) out = out.filter((r) => r.status === filters.status);
-  if (filters.category) out = out.filter((r) => r.item.category === filters.category);
-  if (filters.memberId) out = out.filter((r) => r.memberId === filters.memberId);
-  if (filters.search?.trim()) {
-    const s = filters.search.toLowerCase();
-    out = out.filter((r) => r.ign.toLowerCase().includes(s) || r.label.toLowerCase().includes(s));
-  }
-
-  // Pending first, then by member IGN, then item label.
-  return out.sort((a, b) => {
-    if (a.status !== b.status) return a.status === "PENDING" ? -1 : 1;
-    return a.ign.localeCompare(b.ign) || a.label.localeCompare(b.label);
-  });
+  return rows;
 }
 
 // ─── Notify members to submit a request ──────────────────────────────
@@ -969,7 +1018,10 @@ export async function notifyMembersToRequest(
 
 export async function getMarketRules(guildId: string, actorId: string) {
   await requireActiveMember(guildId, actorId);
-  return getEffectiveMarketRules(guildId);
+  // Not viewer-specific — same rules for everyone in the guild.
+  return redisCache.getOrSet(cacheKeys.marketRules(guildId), cacheTtl.marketRules, () =>
+    getEffectiveMarketRules(guildId),
+  );
 }
 
 export async function updateMarketRules(guildId: string, actorId: string, rules: MarketRules) {
@@ -991,6 +1043,7 @@ export async function updateMarketRules(guildId: string, actorId: string, rules:
     detail: { rules: merged },
   });
 
+  await redisCache.del(cacheKeys.marketRules(guildId));
   void broadcastToGuild(guildId, "market_rules_updated", { guildId });
   return merged;
 }
@@ -1005,9 +1058,22 @@ export async function getMarketAuditLogs(
   await requireOfficer(guildId, actorId);
   const page = opts.page || 1;
   const take = Math.min(opts.limit || 30, 100);
+
+  // Only the plain, unfiltered page-1 default view is cached (same
+  // "invalidate just page 1" reasoning as boss rotation's audit log —
+  // filtered/deeper pages go straight to the DB).
+  if (page === 1 && !opts.action && take === 30) {
+    return redisCache.getOrSet(cacheKeys.marketAuditPage1(guildId), cacheTtl.marketAudit, () =>
+      getMarketAuditLogsUncached(guildId, page, take, opts.action),
+    );
+  }
+  return getMarketAuditLogsUncached(guildId, page, take, opts.action);
+}
+
+async function getMarketAuditLogsUncached(guildId: string, page: number, take: number, action?: string) {
   const where: any = {
     guildId,
-    action: opts.action ? opts.action : { in: MARKET_AUDIT_ACTIONS },
+    action: action ? action : { in: MARKET_AUDIT_ACTIONS },
   };
 
   const [logs, total] = await Promise.all([

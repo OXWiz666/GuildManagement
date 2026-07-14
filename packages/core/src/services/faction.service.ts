@@ -116,10 +116,10 @@ function serializeEvent(item: any) {
 }
 
 export async function getFactionMembers(actorId: string) {
-  await requireFactionManager(actorId);
+  const { factionId } = await requireManagedFaction(actorId);
 
   const members = await prisma.guildMember.findMany({
-    where: { isActive: true },
+    where: { isActive: true, guild: { factionId } },
     include: {
       guild: { select: { id: true, name: true, slug: true, avatarUrl: true } },
       user: { select: { id: true, displayName: true, email: true, avatarUrl: true } },

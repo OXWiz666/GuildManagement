@@ -7,8 +7,10 @@
 
 // ─── Services (grouped namespace) ───────────────
 import * as activity from "./services/activity.service";
+import * as activityPoints from "./services/activityPoints.service";
 import * as application from "./services/application.service";
 import * as auction from "./services/auction.service";
+import * as bossCommitment from "./services/bossCommitment.service";
 import * as audit from "./services/audit.service";
 import * as auditLog from "./services/audit-log.service";
 import * as auth from "./services/auth.service";
@@ -24,6 +26,7 @@ import * as mounts from "./services/mounts.service";
 import * as notification from "./services/notification.service";
 import * as onboarding from "./services/onboarding.service";
 import * as platform from "./services/platform.service";
+import * as storage from "./services/storage.service";
 import * as adminUsers from "./services/admin-users.service";
 import * as adminGuilds from "./services/admin-guilds.service";
 import * as billing from "./services/billing.service";
@@ -31,8 +34,10 @@ import * as requests from "./services/requests.service";
 
 export const services = {
   activity,
+  activityPoints,
   application,
   auction,
+  bossCommitment,
   audit,
   auditLog,
   auth,
@@ -48,6 +53,7 @@ export const services = {
   notification,
   onboarding,
   platform,
+  storage,
   adminUsers,
   adminGuilds,
   billing,
@@ -85,7 +91,13 @@ export {
 export * from "./utils/pagination";
 
 // ─── Cache ──────────────────────────────────────
+// `cache` (in-memory) is the existing engine every service currently uses.
+// `redisCache` is the Upstash-backed layer from /docs/redis-caching-design.md
+// — exported under its own name so migrating a call site is an explicit
+// opt-in, not a silent behavior change for everyone importing `cache`.
 export { cache, getCacheStats } from "./lib/cache";
+export { cache as redisCache, isRedisConfigured } from "./lib/redis";
+export { cacheKeys, ttl as cacheTtl } from "./lib/cache-keys";
 
 // ─── Realtime broadcasting ──────────────────────
 export { broadcastToGuild, broadcastToUser, broadcastToFaction } from "./lib/socket";

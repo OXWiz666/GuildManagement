@@ -4,9 +4,10 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import Avatar from "../ui/Avatar";
-import { dashboardApi, notificationApi, type BossScheduleData, type BossRotationItem, type NotificationData } from "@/lib/api";
+import { dashboardApi, notificationApi, type BossScheduleData, type BossRotationItem, type BossRotationResponse, type NotificationData } from "@/lib/api";
 import { useSocket } from "@/components/providers/socket-provider";
 import { getRealtimeBossTimer } from "@guild/shared";
+import { useQuery, queryClient } from "@/lib/query";
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -23,10 +24,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const notificationMenuRef = useRef<HTMLDivElement>(null);
 
   // Dynamic Header State
-  const [guildSchedules, setGuildSchedules] = useState<BossScheduleData[]>([]);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [notifications, setNotifications] = useState<NotificationData[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -65,111 +63,144 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
 
   const activeGuild = user?.guilds?.[0];
 
-  useEffect(() => {
-    if (!user) return;
-
-    async function loadNotifications() {
+  const notificationsKey = user ? `notifications:${user.id}` : "notifications_empty";
+  const { data: notificationsData } = useQuery<{ notifications: NotificationData[]; unreadCount: number }>(
+    notificationsKey,
+    async () => {
+      if (!user) return { notifications: [], unreadCount: 0 };
       const result = await notificationApi.getNotifications(20);
-      if (result.success && result.data) {
-        setNotifications(result.data.notifications);
-        setUnreadCount(result.data.unreadCount);
-      }
-    }
+      return result.success && result.data ? result.data : { notifications: [], unreadCount: 0 };
+    },
+    { staleTime: 20000, enabled: !!user },
+  );
+  const notifications = notificationsData?.notifications ?? [];
+  const unreadCount = notificationsData?.unreadCount ?? 0;
 
-    loadNotifications();
-  }, [user]);
-
+  // Push real-time notifications straight into the cache (optimistic write) —
+  // every consumer of `notificationsKey` re-renders instantly, no refetch.
   useEffect(() => {
     if (!socket || !user) return;
 
     const handleNotification = (payload: NotificationData) => {
-      setNotifications((prev) => [payload, ...prev.filter((item) => item.id !== payload.id)].slice(0, 20));
-      setUnreadCount((prev) => prev + (payload.readAt ? 0 : 1));
+      queryClient.setQueryData<{ notifications: NotificationData[]; unreadCount: number }>(
+        notificationsKey,
+        (old) => {
+          const prevList = old?.notifications ?? [];
+          return {
+            notifications: [payload, ...prevList.filter((item) => item.id !== payload.id)].slice(0, 20),
+            unreadCount: (old?.unreadCount ?? 0) + (payload.readAt ? 0 : 1),
+          };
+        },
+      );
     };
 
     socket.on("notification_created", handleNotification);
     return () => {
       socket.off("notification_created", handleNotification);
     };
-  }, [socket, user]);
+  }, [socket, user, notificationsKey]);
 
   async function markNotificationRead(notificationId: string) {
+    const { rollback } = queryClient.setQueryData<{ notifications: NotificationData[]; unreadCount: number }>(
+      notificationsKey,
+      (old) => ({
+        notifications: (old?.notifications ?? []).map((item) =>
+          item.id === notificationId ? { ...item, readAt: item.readAt || new Date().toISOString() } : item,
+        ),
+        unreadCount: Math.max(0, (old?.unreadCount ?? 0) - 1),
+      }),
+    );
+
     const result = await notificationApi.markRead(notificationId);
-    if (result.success && result.data?.notification) {
-      setNotifications((prev) =>
-        prev.map((item) => item.id === notificationId ? result.data!.notification : item),
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    }
+    if (!result.success) rollback();
   }
 
   async function markAllNotificationsRead() {
+    const { rollback } = queryClient.setQueryData<{ notifications: NotificationData[]; unreadCount: number }>(
+      notificationsKey,
+      (old) => ({
+        notifications: (old?.notifications ?? []).map((item) => ({
+          ...item,
+          readAt: item.readAt || new Date().toISOString(),
+        })),
+        unreadCount: 0,
+      }),
+    );
+
     const result = await notificationApi.markAllRead();
-    if (result.success) {
-      const readAt = new Date().toISOString();
-      setNotifications((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || readAt })));
-      setUnreadCount(0);
-    }
+    if (!result.success) rollback();
   }
 
-  // Fetch next upcoming boss schedule
-  useEffect(() => {
-    const guildId = activeGuild?.guildId;
-    if (!guildId) return;
-    async function loadNextBoss() {
-      try {
-        // Fetch schedules + rotation together so the header shows the next boss
-        // that actually belongs to THIS guild — the same ownership rule the
-        // dashboard "Next boss spawn · your guild" carousel uses — instead of the
-        // globally-earliest spawn (which can be a faction-wide or another guild's boss).
-        const [schedRes, rotRes] = await Promise.all([
-          dashboardApi.getBossSchedules(guildId as string),
-          dashboardApi.getBossRotation(guildId as string),
-        ]);
-        if (!schedRes.success || !schedRes.data?.schedules) return;
+  // Next-boss widget shares its cache keys with boss-rotation/page.tsx and
+  // boss-schedule/page.tsx — whichever loads first warms the cache for both,
+  // so this never duplicates a request the user's other tabs already made.
+  const bossSchedulesKey = activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty";
+  const bossRotationKey = activeGuild ? `boss_rotation_v2:${activeGuild.guildId}` : "boss_rotation_empty";
 
-        const rotByBoss = new Map<string, BossRotationItem>();
-        for (const rot of rotRes.success && rotRes.data ? rotRes.data.rotations : []) {
-          rotByBoss.set(rot.bossName.toLowerCase(), rot);
-        }
+  const { data: schedulesRaw } = useQuery<BossScheduleData[]>(
+    bossSchedulesKey,
+    async () => {
+      if (!activeGuild) return [];
+      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
+      return result.success && result.data?.schedules ? result.data.schedules : [];
+    },
+    { persist: true, staleTime: 15000, enabled: !!activeGuild },
+  );
 
-        const mine = schedRes.data.schedules
-          .filter((s) => s.status !== "KILLED")
-          .filter((s) => {
-            // A non-null `guildId` means this schedule row is a guild-specific
-            // spawn instance and belongs to that guild outright — check this
-            // FIRST, since the rotation's `currentGuild` is a cross-guild
-            // "whose turn in the shared queue" pointer and must not override it.
-            if (s.guildId) return s.guildId === guildId;
-            const rot = rotByBoss.get(s.bossName.toLowerCase());
-            const ownerId = s.guildTurnGuildId || rot?.currentGuild?.id || null;
-            return ownerId === guildId;
-          })
-          .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
-
-        setGuildSchedules(mine);
-      } catch (e) {
-        // fail silently
+  const { data: rotationData } = useQuery<BossRotationResponse>(
+    bossRotationKey,
+    async () => {
+      if (!activeGuild) {
+        return { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", factionId: null, guilds: [], rotations: [] };
       }
+      const result = await dashboardApi.getBossRotation(activeGuild.guildId);
+      return result.success && result.data
+        ? result.data
+        : { serverTime: new Date().toISOString(), canManage: false, viewerRole: "MEMBER", factionId: null, guilds: [], rotations: [] };
+    },
+    { persist: true, staleTime: 10000, enabled: !!activeGuild },
+  );
+
+  // Fetch next upcoming boss schedule
+  const guildSchedules = useMemo(() => {
+    const guildId = activeGuild?.guildId;
+    if (!guildId || !schedulesRaw) return [];
+
+    const rotByBoss = new Map<string, BossRotationItem>();
+    for (const rot of rotationData?.rotations ?? []) {
+      rotByBoss.set(rot.bossName.toLowerCase(), rot);
     }
-    loadNextBoss();
 
-    // Listen to real-time events to refresh the next boss widget instantly (0 polling)
-    if (socket) {
-      const handleUpdate = () => {
-        console.log("[TopBar Socket]: Boss rotation changed. Refreshing next boss...");
-        loadNextBoss();
-      };
+    return schedulesRaw
+      .filter((s) => s.status !== "KILLED")
+      .filter((s) => {
+        // A non-null `guildId` means this schedule row is a guild-specific
+        // spawn instance and belongs to that guild outright — check this
+        // FIRST, since the rotation's `currentGuild` is a cross-guild
+        // "whose turn in the shared queue" pointer and must not override it.
+        if (s.guildId) return s.guildId === guildId;
+        const rot = rotByBoss.get(s.bossName.toLowerCase());
+        const ownerId = s.guildTurnGuildId || rot?.currentGuild?.id || null;
+        return ownerId === guildId;
+      })
+      .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
+  }, [activeGuild, schedulesRaw, rotationData]);
 
-      socket.on("boss_rotation_updated", handleUpdate);
-      socket.on("boss_schedule_deleted", handleUpdate);
+  // Listen to real-time events to refresh the next boss widget instantly (0 polling)
+  useEffect(() => {
+    if (!socket || !activeGuild) return;
+    const handleUpdate = () => {
+      queryClient.invalidateQueries(bossSchedulesKey);
+      queryClient.invalidateQueries(bossRotationKey);
+    };
 
-      return () => {
-        socket.off("boss_rotation_updated", handleUpdate);
-        socket.off("boss_schedule_deleted", handleUpdate);
-      };
-    }
-  }, [activeGuild, socket]);
+    socket.on("boss_rotation_updated", handleUpdate);
+    socket.on("boss_schedule_deleted", handleUpdate);
+    return () => {
+      socket.off("boss_rotation_updated", handleUpdate);
+      socket.off("boss_schedule_deleted", handleUpdate);
+    };
+  }, [activeGuild, socket, bossSchedulesKey, bossRotationKey]);
 
   // Format Clock Values
   const formattedDate = currentTime.toLocaleDateString("en-US", {

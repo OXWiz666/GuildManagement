@@ -4,12 +4,6 @@ import { useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import type { ActivityInput, ActivityType, ActivityStatus, ActivityResult, GuildActivityData } from "@/lib/api";
 
-const TYPES: Array<{ id: ActivityType; label: string }> = [
-  { id: "GUILD_BOSS", label: "Guild Boss" },
-  { id: "GUILD_WAR", label: "Guild War" },
-  { id: "PK_WAR", label: "PK War" },
-];
-
 function toLocalParts(iso: string): { date: string; time: string } {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -25,16 +19,21 @@ export default function ActivityModal({
   editing,
   saving,
   onSubmit,
-  defaultType = "GUILD_WAR",
+  activityTypes,
+  defaultType,
+  defaultDate,
 }: {
   open: boolean;
   onClose: () => void;
   editing: GuildActivityData | null;
   saving: boolean;
   onSubmit: (payload: ActivityInput) => void;
+  activityTypes: Array<{ key: string; label: string }>;
   defaultType?: ActivityType;
+  defaultDate?: string;
 }) {
-  const [type, setType] = useState<ActivityType>(defaultType);
+  const fallbackType = defaultType ?? activityTypes[0]?.key ?? "";
+  const [type, setType] = useState<ActivityType>(fallbackType);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -64,9 +63,9 @@ export default function ActivityModal({
     } else {
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
-      setType(defaultType);
+      setType(fallbackType);
       setTitle("");
-      setDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+      setDate(defaultDate || `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
       setTime(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
       setLocation("");
       setOpponent("");
@@ -76,11 +75,10 @@ export default function ActivityModal({
       setScoreFor("");
       setScoreAgainst("");
     }
-  }, [open, editing, defaultType]);
+  }, [open, editing, fallbackType, defaultDate]);
 
   if (!open) return null;
 
-  const isWar = type === "GUILD_WAR" || type === "PK_WAR";
   const canSubmit = title.trim() && date && time && !saving;
 
   function submit() {
@@ -121,13 +119,13 @@ export default function ActivityModal({
         {/* Type selector */}
         <div className="mb-4">
           <span className={label}>Activity type</span>
-          <div className="grid grid-cols-3 gap-2">
-            {TYPES.map((t) => (
+          <div className="flex flex-wrap gap-2">
+            {activityTypes.map((t) => (
               <button
-                key={t.id}
-                onClick={() => setType(t.id)}
-                className={`px-2 py-2 rounded-lg border text-[12px] font-semibold transition-all cursor-pointer ${
-                  type === t.id
+                key={t.key}
+                onClick={() => setType(t.key)}
+                className={`px-2.5 py-2 rounded-lg border text-[12px] font-semibold transition-all cursor-pointer ${
+                  type === t.key
                     ? "border-[var(--forge-gold)]/45 bg-[var(--forge-glow)] text-[var(--forge-gold-bright)]"
                     : "border-white/[0.08] bg-white/[0.02] text-white/45 hover:text-white/75"
                 }`}
@@ -141,7 +139,7 @@ export default function ActivityModal({
         <div className="space-y-3">
           <div>
             <span className={label}>Title</span>
-            <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isWar ? "e.g. Castle Siege" : "e.g. World Boss run"} />
+            <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. World Boss run" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -161,8 +159,8 @@ export default function ActivityModal({
               <input className={field} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Optional" />
             </div>
             <div>
-              <span className={label}>{isWar ? "Opponent guild" : "Opponent"}</span>
-              <input className={field} value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder={isWar ? "Enemy guild" : "Optional"} />
+              <span className={label}>Opponent</span>
+              <input className={field} value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder="Optional" />
             </div>
           </div>
 

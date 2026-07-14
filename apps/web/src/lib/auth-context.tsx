@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import type { PaymentMethodEntry } from "@guild/shared";
@@ -19,6 +20,7 @@ interface User {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  bannerUrl: string | null;
   createdAt: string;
   guilds: Guild[];
   ign?: string | null;
@@ -154,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const localResult = await authApi.login(email, password);
             if (localResult.success && localResult.data?.user) {
-              const basicUser = { ...localResult.data.user, guilds: [] };
+              const basicUser = { ...localResult.data.user, bannerUrl: null, guilds: [] };
               setUser(basicUser);
               if (typeof window !== "undefined") {
                 localStorage.setItem("auth_profile", JSON.stringify(basicUser));
@@ -183,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.session) {
           const syncResult = await authApi.supabaseSync(data.session.access_token);
           if (syncResult.success && syncResult.data?.user) {
-            const basicUser = { ...syncResult.data.user, guilds: [] };
+            const basicUser = { ...syncResult.data.user, bannerUrl: null, guilds: [] };
             setUser(basicUser);
             if (typeof window !== "undefined") {
               localStorage.setItem("auth_profile", JSON.stringify(basicUser));
@@ -284,7 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.session) {
           const syncResult = await authApi.supabaseSync(data.session.access_token);
           if (syncResult.success && syncResult.data?.user) {
-            const basicUser = { ...syncResult.data.user, guilds: [] };
+            const basicUser = { ...syncResult.data.user, bannerUrl: null, guilds: [] };
             setUser(basicUser);
             if (typeof window !== "undefined") {
               localStorage.setItem("auth_profile", JSON.stringify(basicUser));
@@ -366,7 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const syncResult = await authApi.supabaseSync(data.session.access_token);
         if (syncResult.success && syncResult.data?.user) {
-          const basicUser = { ...syncResult.data.user, guilds: [] };
+          const basicUser = { ...syncResult.data.user, bannerUrl: null, guilds: [] };
           setUser(basicUser);
           if (typeof window !== "undefined") {
             localStorage.setItem("auth_profile", JSON.stringify(basicUser));
@@ -436,60 +438,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 30 minutes inactive automatic logout
-  useEffect(() => {
-    if (!user) return;
-
-    let timeoutId: NodeJS.Timeout;
-
-    const resetTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        console.log("Inactivity logout triggered (30 minutes inactive)");
-        logout();
-      }, 30 * 60 * 1000); // 30 minutes
-    };
-
-    // Events to track user activity
-    const activityEvents = [
-      "mousedown",
-      "mousemove",
-      "keypress",
-      "scroll",
-      "touchstart",
-    ];
-
-    // Start timer on mount
-    resetTimer();
-
-    // Register event listeners
-    activityEvents.forEach((event) => {
-      window.addEventListener(event, resetTimer);
-    });
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      activityEvents.forEach((event) => {
-        window.removeEventListener(event, resetTimer);
-      });
-    };
-  }, [user, logout]);
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      isSessionReady,
+      login,
+      register,
+      verifyRegistrationCode,
+      resendVerificationCode,
+      logout,
+      refreshUser,
+    }),
+    [user, isLoading, isSessionReady, login, register, verifyRegistrationCode, resendVerificationCode, logout, refreshUser],
+  );
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        isSessionReady,
-        login,
-        register,
-        verifyRegistrationCode,
-        resendVerificationCode,
-        logout,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

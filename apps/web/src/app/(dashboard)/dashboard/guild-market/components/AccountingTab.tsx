@@ -98,7 +98,7 @@ export default function AccountingTab({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-4 mb-4">
           <div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">Member Balance board</h3>
-            <p className="text-[10px] text-white/40 mt-1">Guild Points and net ledger balances.</p>
+            <p className="text-[10px] text-white/40 mt-1">Net ledger balances per member.</p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <select
@@ -132,9 +132,6 @@ export default function AccountingTab({
                 <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">
                   <th className="px-4 py-3">In-Game Name</th>
                   <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Class</th>
-                  <th className="px-4 py-3 text-center">Combat Power</th>
-                  <th className="px-4 py-3 text-center">Guild Points</th>
                   <th className="px-4 py-3 text-right">Total Payouts PHP</th>
                   <th className="px-4 py-3 text-right">Net Balance PHP</th>
                   {accounting?.treasury?.secondary?.currencyCode && (
@@ -154,9 +151,6 @@ export default function AccountingTab({
                   >
                     <td className="px-4 py-3 font-semibold text-white">{m.ign}</td>
                     <td className="px-4 py-3"><Badge role={m.role} customName={m.customRole?.name} customColor={m.customRole?.color} /></td>
-                    <td className="px-4 py-3 text-zinc-400">{m.class}</td>
-                    <td className="px-4 py-3 text-center font-mono font-bold text-cyan-400">{m.cp.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-center font-mono font-bold text-amber-400">{m.dkp}</td>
                     <td className="px-4 py-3 text-right font-mono text-zinc-400">
                       {settings?.currencySymbol || "₱"}{" "}
                       {m.totalEarned.toLocaleString("en-US", { minimumFractionDigits: 2 })}

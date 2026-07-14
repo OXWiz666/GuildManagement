@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useMemo,
   type ReactNode,
 } from "react";
 
@@ -63,13 +64,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, [theme]);
 
-  return (
-    <ThemeContext.Provider
-      value={{ theme, resolvedTheme, setTheme: setThemeState }}
-    >
-      {children}
-    </ThemeContext.Provider>
+  const value = useMemo<ThemeContextType>(
+    () => ({ theme, resolvedTheme, setTheme: setThemeState }),
+    [theme, resolvedTheme],
   );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

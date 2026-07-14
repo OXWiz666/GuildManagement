@@ -40,6 +40,7 @@ export interface GuildMemberWithUser {
     displayName: string;
     email: string;
     avatarUrl: string | null;
+    bannerUrl: string | null;
   };
 }
 
@@ -84,6 +85,7 @@ export class GuildService {
         displayName: m.user.displayName,
         email: m.user.email,
         avatarUrl: m.user.avatarUrl,
+        bannerUrl: m.user.bannerUrl,
       },
     }));
   }

@@ -26,6 +26,7 @@ model User {
   passwordHash String   @map("password_hash")
   displayName  String   @map("display_name")
   avatarUrl    String?  @map("avatar_url")
+  bannerUrl    String?  @map("banner_url")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -273,6 +274,8 @@ model Guild {
   mountDistributions MountDistribution[]
   factionJoinRequests FactionJoinRequest[]
   roleDefinitions     GuildRoleDefinition[]
+  storageItems        GuildStorageItem[]
+  bossCommitments     BossCommitment[]
 
   @@index([factionId])
   @@map("guilds")
@@ -340,6 +343,12 @@ model GuildSettings {
   // Purely cosmetic — never read by permission checks or role hierarchy logic.
   roleDisplayNames Json @default("{}") @map("role_display_names")
 
+  // Leader's Panel "Register Activity" — customizable catalog of point-earning
+  // activities (Boss, PVP, Guild Boss, ...) with a base point value and a
+  // per-rank multiplier keyed by the 4 customizable role bands.
+  // Shape: { activities: [{ key, label, basePoints, multipliers: { OFFICER, CORE_MEMBER, ELITE_MEMBER, MEMBER } }] }
+  activityPointRules Json @default("{}") @map("activity_point_rules")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -387,6 +396,8 @@ model GuildMember {
   itemDistributions  ItemDistribution[]
   equipment          MemberEquipment[]
   mountDistributions MountDistribution[]
+  storageReceipts    GuildStorageItem[]         @relation("StorageRecipient")
+  bossCommitments    BossCommitment[]
 
   @@unique([userId, guildId])
   @@index([guildId])
@@ -558,6 +569,53 @@ model LegendaryPriorityRequest {
   @@index([guildId, status])
   @@index([memberId])
   @@map("legendary_priority_requests")
+}
+
+// ═══════════════════════════════════════════════════
+// GUILD STORAGE — vault of high-value drops (e.g. Clemantis → Legend
+// Weapon). While IN_STORAGE, leaders/officers can register the item into
+// the next market listing, or distribute it directly to a member
+// (GUILD_SALE) or via a DKP auction (GUILD_AUCTION). Purely additive.
+// ═══════════════════════════════════════════════════
+model GuildStorageItem {
+  id      String @id @default(cuid())
+  guildId String @map("guild_id")
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  itemName   String  @map("item_name")
+  category   String  @default("LEGEND_WEAPON") // LEGEND_WEAPON | LEGEND_ARMOR | LEGEND_ACCESSORY | MOUNT | OTHER
+  sourceBoss String? @map("source_boss") // e.g. "Clemantis"
+  rarity     String  @default("LEGEND")
+  imageUrl   String? @map("image_url")
+  quantity   Int     @default(1)
+  note       String?
+
+  // IN_STORAGE | LISTED_MARKET | DISTRIBUTED
+  status String @default("IN_STORAGE")
+  // How it left storage: MARKET | GUILD_SALE | GUILD_AUCTION | null (still stored)
+  disposition String?
+
+  // Asking price (integer cents) set when registered into the next market;
+  // cleared back to null on recall. The final sale amount lives on the
+  // LootSale row created when the item is marked sold, not here.
+  listingPrice BigInt? @map("listing_price")
+
+  // Direct-sale recipient (GUILD_SALE)
+  recipientMemberId String?      @map("recipient_member_id")
+  recipient         GuildMember? @relation("StorageRecipient", fields: [recipientMemberId], references: [id], onDelete: SetNull)
+
+  // DKP auction created when distributed via GUILD_AUCTION
+  auctionItemId String? @map("auction_item_id")
+
+  addedById    String    @map("added_by_id")
+  resolvedById String?   @map("resolved_by_id")
+  resolvedAt   DateTime? @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([guildId, status])
+  @@map("guild_storage_items")
 }
 
 // ═══════════════════════════════════════════════════
@@ -927,6 +985,7 @@ model BossSchedule {
   lootDrop      String?    @map("loot_drop")
   screenshotUrl String?    @map("screenshot_url")
   lootSales     LootSale[]
+  commitments   BossCommitment[]
 
   @@index([guildId])
   @@index([guildTurnGuildId])
@@ -936,6 +995,28 @@ model BossSchedule {
   @@index([bossName, status, spawnTime])
   @@index([bossName, status, killedAt])
   @@map("boss_schedules")
+}
+
+// ═══════════════════════════════════════════════════
+// BOSS COMMITMENTS — pre-fight headcount. A member marks themselves as able
+// to participate in a SPECIFIC upcoming spawn (one row per live BossSchedule),
+// so leaders can gauge war-readiness turnout before the boss is even taken.
+// Distinct from AttendanceRecord, which confirms who actually showed up
+// AFTER a kill is logged.
+// ═══════════════════════════════════════════════════
+model BossCommitment {
+  id         String      @id @default(cuid())
+  guildId    String      @map("guild_id")
+  guild      Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  scheduleId String      @map("schedule_id")
+  schedule   BossSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  memberId   String      @map("member_id")
+  member     GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@unique([scheduleId, memberId])
+  @@index([guildId, scheduleId])
+  @@map("boss_commitments")
 }
 
 model BossRotation {

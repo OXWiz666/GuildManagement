@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
-import { dashboardApi, type BossScheduleData, type BossData, type AttendanceSessionData, type AttendanceRecordData } from "@/lib/api";
+import { dashboardApi, type BossScheduleData, type AttendanceSessionData, type AttendanceSessionSummary } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
@@ -14,11 +15,13 @@ import {
 } from "@/components/dashboard/DashboardHelpers";
 
 // Imports from co-located components
-import OpenCheckIns from "./components/OpenCheckIns";
-import CheckInHistory, { type CheckInHistoryItem } from "./components/CheckInHistory";
-import VerificationQueue from "./components/VerificationQueue";
-import EditSessionModal from "./components/EditSessionModal";
-import AddScheduleModal from "../boss-schedule/components/AddScheduleModal";
+import AttendanceCoverflow from "./components/AttendanceCoverflow";
+import AttendanceHistoryList, { type AttendanceHistoryItem } from "./components/AttendanceHistoryList";
+
+// Both are modals mounted only on demand — code-split out of the main route
+// chunk.
+const EditSessionModal = dynamic(() => import("./components/EditSessionModal"));
+const AttendanceSessionModal = dynamic(() => import("./components/AttendanceSessionModal"));
 
 interface AttendanceStats {
   presenceRate: number;
@@ -31,7 +34,7 @@ interface AttendanceStats {
     createdAt: string;
     expiresAt: string;
   }>;
-  history: CheckInHistoryItem[];
+  history: AttendanceHistoryItem[];
 }
 
 export default function BossAttendancePage() {
@@ -44,20 +47,14 @@ export default function BossAttendancePage() {
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
 
+  // Which attendance session's detail modal is open — kept as an id and
+  // re-resolved against the live queries below, so the modal's countdown,
+  // status, and roster stay in sync instead of freezing on a snapshot.
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
   // Officer Session Editing State
   const [showEditSessionModal, setShowEditSessionModal] = useState<AttendanceSessionData | null>(null);
   const [isEditingSession, setIsEditingSession] = useState(false);
-
-  // Officer Verification Queue State
-  const [isVerifying, setIsVerifying] = useState<string | null>(null); // recordId of loading verification
-  const [isVerifyingAll, setIsVerifyingAll] = useState(false);
-
-  // Officer "Edit Boss" state (reuses the schedule's AddScheduleModal in edit mode)
-  const [editingEvent, setEditingEvent] = useState<BossScheduleData | null>(null);
-  const [showBossModal, setShowBossModal] = useState(false);
-  const [isSubmittingBoss, setIsSubmittingBoss] = useState(false);
-  const [spawnDate, setSpawnDate] = useState("");
-  const [spawnTime, setSpawnTime] = useState("");
 
   const activeGuild = user?.guilds?.[0];
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
@@ -85,7 +82,7 @@ export default function BossAttendancePage() {
     },
     { persist: true, staleTime: 15000 }
   );
-  const schedules = schedulesRaw || [];
+  const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
 
   // 2. Attendance Stats Query
   const {
@@ -101,34 +98,21 @@ export default function BossAttendancePage() {
     { persist: true, staleTime: 30000 }
   );
 
-  // 3. Officer Verification Queue Query
+  // 3. Attendance sessions — every check-in window, open or closed. Powers
+  // the coverflow browse list and the detail modal's officer roster.
   const {
-    data: pendingAttendanceRaw,
-    isLoading: isLoadingPending,
-    refetch: refetchPendingRecords,
-  } = useQuery<{ activeSession: AttendanceSessionData | null; pendingRecords: AttendanceRecordData[] } | null>(
-    activeGuild && isOfficer ? `pending_attendance:${activeGuild.guildId}` : "pending_attendance_empty",
+    data: sessionsRaw,
+    isLoading: isLoadingSessions,
+  } = useQuery<AttendanceSessionSummary[]>(
+    activeGuild ? `attendance_sessions:${activeGuild.guildId}` : "attendance_sessions_empty",
     async () => {
-      if (!activeGuild || !isOfficer) return null;
-      const result = await dashboardApi.getPendingAttendance(activeGuild.guildId);
-      return result.success && result.data ? result.data : null;
+      if (!activeGuild) return [];
+      const result = await dashboardApi.listAttendanceSessions(activeGuild.guildId);
+      return result.success && result.data ? result.data : [];
     },
-    { persist: true, staleTime: 15000 }
+    { persist: true, staleTime: 20000 }
   );
-
-  // 4. Boss registry (for the Edit Boss modal)
-  const { data: bossRegistryRaw } = useQuery<BossData[]>(
-    "boss_registry",
-    async () => {
-      const result = await dashboardApi.getBosses();
-      return result.success && result.data?.bosses ? result.data.bosses : [];
-    },
-    { persist: true, staleTime: 300000 }
-  );
-  const bosses = bossRegistryRaw || [];
-
-  const selectedActiveSession = pendingAttendanceRaw?.activeSession || null;
-  const pendingRecords = pendingAttendanceRaw?.pendingRecords || [];
+  const sessions = useMemo(() => sessionsRaw || [], [sessionsRaw]);
 
   const isLoading = isLoadingSchedules || isLoadingStats;
 
@@ -137,6 +121,7 @@ export default function BossAttendancePage() {
     if (!activeGuild) return;
     queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
     queryClient.invalidateQueries(`attendance_stats:${activeGuild.guildId}`);
+    queryClient.invalidateQueries(`attendance_sessions:${activeGuild.guildId}`);
     if (isOfficer) {
       queryClient.invalidateQueries(`pending_attendance:${activeGuild.guildId}`);
     }
@@ -185,74 +170,6 @@ export default function BossAttendancePage() {
     }
   }, [activeGuild, addToast, invalidateAll]);
 
-  // Edit a boss schedule entry (Officer) — reuses the schedule's AddScheduleModal.
-  const handleEditSchedule = async (
-    scheduleId: string,
-    payload: {
-      bossName?: string;
-      bossImageUrl?: string;
-      spawnTime?: string;
-      location?: string;
-      guildTurn?: string;
-      isFaction?: boolean;
-    }
-  ) => {
-    if (!activeGuild) return;
-    setIsSubmittingBoss(true);
-    try {
-      const result = await dashboardApi.updateBossSchedule(activeGuild.guildId, scheduleId, payload);
-      if (result.success && result.data?.schedule) {
-        addToast("success", "Boss updated successfully!");
-        setShowBossModal(false);
-        setEditingEvent(null);
-        invalidateAll();
-      }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to update boss");
-    } finally {
-      setIsSubmittingBoss(false);
-    }
-  };
-
-  // Schedule new boss spawn(s) (Officer) — required by AddScheduleModal's add mode.
-  const handleAddScheduleBatch = async (
-    spawnDateArg: string,
-    isFactionWide: boolean,
-    items: Array<{ bossName: string; bossImageUrl?: string; spawnTime: string; location: string; guildTurn?: string }>
-  ) => {
-    if (!activeGuild || items.length === 0) return;
-    setIsSubmittingBoss(true);
-    try {
-      let succeeded = 0;
-      for (const item of items) {
-        const result = await dashboardApi.addBossSchedule(activeGuild.guildId, {
-          bossName: item.bossName,
-          bossImageUrl: item.bossImageUrl,
-          spawnTime: item.spawnTime,
-          location: item.location,
-          guildTurn: item.guildTurn,
-          isFaction: isFactionWide,
-        });
-        if (result.success && result.data?.schedule) succeeded++;
-      }
-      addToast("success", `Scheduled ${succeeded} boss spawn(s)!`);
-      setShowBossModal(false);
-      invalidateAll();
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to schedule boss");
-    } finally {
-      setIsSubmittingBoss(false);
-    }
-  };
-
-  const openEditBoss = useCallback((item: BossScheduleData) => {
-    setEditingEvent(item);
-    const d = new Date(item.spawnTime);
-    setSpawnDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-    setSpawnTime(d.toTimeString().substring(0, 5));
-    setShowBossModal(true);
-  }, []);
-
   // Edit attendance session (Officer)
   const handleEditSession = async (title: string, minutes: number, isActive: boolean) => {
     if (!activeGuild || !showEditSessionModal) return;
@@ -275,72 +192,6 @@ export default function BossAttendancePage() {
       addToast("error", err?.message || "Failed to update check-in window");
     } finally {
       setIsEditingSession(false);
-    }
-  };
-
-  // Delete attendance session (Officer)
-  const handleDeleteSession = (sessionId: string) => {
-    if (!activeGuild) return;
-
-    addToast(
-      "warning",
-      "Are you sure you want to close this check-in window? All pending check-in requests for it will be removed.",
-      0, // stays until action or dismiss
-      {
-        label: "Close",
-        variant: "danger",
-        onClick: async () => {
-          try {
-            const result = await dashboardApi.deleteAttendanceSession(activeGuild.guildId, sessionId);
-            if (result.success) {
-              addToast("success", "Check-in window closed.");
-              invalidateAll();
-            }
-          } catch (err: any) {
-            addToast("error", err?.message || "Failed to close check-in window");
-          }
-        },
-      }
-    );
-  };
-
-  // Verify pending attendance record (Officer)
-  const handleVerifyPresence = async (recordId: string) => {
-    if (!activeGuild) return;
-    setIsVerifying(recordId);
-    try {
-      const result = await dashboardApi.confirmAttendance(recordId, activeGuild.guildId);
-      if (result.success) {
-        addToast("success", `Verified member attendance.`);
-        invalidateAll();
-      }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to verify presence");
-    } finally {
-      setIsVerifying(null);
-    }
-  };
-
-  // Approve all pending check-ins at once (Officer batch verification)
-  const handleApproveAll = async () => {
-    if (!activeGuild || pendingRecords.length === 0) return;
-    setIsVerifyingAll(true);
-    try {
-      let succeeded = 0;
-      for (const rec of pendingRecords) {
-        try {
-          const res = await dashboardApi.confirmAttendance(rec.id, activeGuild.guildId);
-          if (res.success) succeeded++;
-        } catch {
-          // ignore failed attempts
-        }
-      }
-      addToast("success", `Approved ${succeeded} check-ins.`);
-      invalidateAll();
-    } catch {
-      addToast("error", "Error processing batch verification");
-    } finally {
-      setIsVerifyingAll(false);
     }
   };
 
@@ -400,6 +251,17 @@ export default function BossAttendancePage() {
       });
   }, [schedules, currentTime]);
 
+  const selectedSession = useMemo(
+    () => sessions.find((s) => s.id === selectedSessionId) || null,
+    [sessions, selectedSessionId],
+  );
+  // The matching schedule row carries the current user's own record — the
+  // session summary alone only has aggregate confirmed/pending counts.
+  const selectedSchedule = useMemo(
+    () => schedules.find((s) => s.id === selectedSession?.bossScheduleId) || null,
+    [schedules, selectedSession],
+  );
+
   // Smart detect the first open window the user has NOT claimed (for the banner)
   const activeSessionEvent = useMemo(() => {
     if (!user) return null;
@@ -451,20 +313,6 @@ export default function BossAttendancePage() {
           description="One-tap check-ins for every boss killed in Boss Schedule — plus your attendance stats."
           right={
             <div className="flex items-center gap-2">
-              {isOfficer && (
-                <Magnetic strength={4}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      refetchPendingRecords();
-                      addToast("success", "Queue refreshed");
-                    }}
-                    className="px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 text-[11px] font-medium text-white/70 hover:text-white transition-all cursor-pointer"
-                  >
-                    Refresh queue
-                  </button>
-                </Magnetic>
-              )}
               <Magnetic strength={4}>
                 <button
                   type="button"
@@ -605,36 +453,44 @@ export default function BossAttendancePage() {
           </div>
         </div>
 
-        {/* Open check-ins + personal history */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div className="lg:col-span-2">
-            <OpenCheckIns
-              openCheckIns={openCheckIns}
-              getUserRecordStatus={getUserRecordStatus}
-              getCountdownText={getCountdownText}
-              checkingInId={checkingInId}
-              onCheckIn={handleCheckIn}
-              isOfficer={isOfficer}
-              onEditBoss={openEditBoss}
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <CheckInHistory history={stats?.history || []} />
-          </div>
-        </div>
+        {/* Boss attendance — Netflix/coverflow row of every check-in window,
+            open or closed. Click a card for the full detail modal. */}
+        <AttendanceCoverflow
+          sessions={sessions}
+          isLoading={isLoadingSessions}
+          currentTime={currentTime}
+          onSelect={(session) => setSelectedSessionId(session.id)}
+        />
 
-        {/* Verification Queue (Officers only) */}
-        {isOfficer && (
-          <VerificationQueue
-            selectedActiveSession={selectedActiveSession}
-            pendingRecords={pendingRecords}
-            isLoadingPending={isLoadingPending}
-            isVerifyingAll={isVerifyingAll}
-            isVerifying={isVerifying}
-            handleApproveAll={handleApproveAll}
-            handleVerifyPresence={handleVerifyPresence}
-            onEditSession={(session) => setShowEditSessionModal(session)}
-            onDeleteSession={handleDeleteSession}
+        {/* Personal attendance history */}
+        <AttendanceHistoryList history={stats?.history || []} />
+
+        {/* Modal: attendance session detail — your status + check-in
+            action, and (officers/leaders) verification, roster, and
+            reopen/edit/close window controls. */}
+        {selectedSession && (
+          <AttendanceSessionModal
+            session={selectedSession}
+            schedule={selectedSchedule}
+            guildId={activeGuild.guildId}
+            isOfficer={isOfficer}
+            onClose={() => setSelectedSessionId(null)}
+            getUserRecordStatus={getUserRecordStatus}
+            getCountdownText={getCountdownText}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+            onEditSession={(session) =>
+              setShowEditSessionModal({
+                id: session.id,
+                guildId: activeGuild.guildId,
+                code: "",
+                type: session.type,
+                title: session.title,
+                isActive: session.isActive,
+                createdAt: session.createdAt,
+                expiresAt: session.expiresAt,
+              })
+            }
           />
         )}
 
@@ -646,27 +502,6 @@ export default function BossAttendancePage() {
           isSubmitting={isEditingSession}
           handleEditSession={handleEditSession}
         />
-
-        {/* Modal: Edit / Schedule Boss (officers) */}
-        {isOfficer && (
-          <AddScheduleModal
-            showAddModal={showBossModal}
-            setShowAddModal={(val) => {
-              setShowBossModal(val);
-              if (!val) setEditingEvent(null);
-            }}
-            bosses={bosses}
-            isFactionLeader={isFactionLeader}
-            isSubmitting={isSubmittingBoss}
-            spawnDate={spawnDate}
-            setSpawnDate={setSpawnDate}
-            spawnTime={spawnTime}
-            setSpawnTime={setSpawnTime}
-            handleAddScheduleBatch={handleAddScheduleBatch}
-            editingEvent={editingEvent}
-            handleEditSchedule={handleEditSchedule}
-          />
-        )}
       </div>
     </div>
   );

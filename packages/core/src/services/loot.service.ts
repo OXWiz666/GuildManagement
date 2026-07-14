@@ -13,25 +13,36 @@ interface CreateLootSaleInput {
   soldAt?: Date | null;
 }
 
-export async function createLootSale(input: CreateLootSaleInput) {
-  let attendees: Array<{ userId: string }> = [];
+interface LootSaleContext {
+  settings: Awaited<ReturnType<typeof prisma.guildSettings.findUnique>>;
+  attendees: Array<{ userId: string }>;
+  memberPoints: Record<string, number>;
+  totalPoints: number;
+}
 
-  // Run settings and attendee lookups in parallel when bossScheduleId is provided
-  const [settings, attendeeResult] = await Promise.all([
+/**
+ * Resolves the guild settings, confirmed attendees, and (for PRO_RATA) each
+ * attendee's DKP total for a loot sale (or a batch of them sharing the same
+ * bossScheduleId). These reads don't depend on any individual item's sale
+ * value, so a batch resolves this once and reuses it for every item instead
+ * of re-fetching per item.
+ */
+async function resolveLootSaleContext(guildId: string, bossScheduleId?: string | null): Promise<LootSaleContext> {
+  const [settings, attendees] = await Promise.all([
     prisma.guildSettings.findUnique({
-      where: { guildId: input.guildId },
+      where: { guildId },
     }),
-    input.bossScheduleId
+    bossScheduleId
       ? (async () => {
           const [schedule, records] = await Promise.all([
             prisma.bossSchedule.findUnique({
-              where: { id: input.bossScheduleId! },
+              where: { id: bossScheduleId },
               select: { id: true },
             }),
             prisma.attendanceRecord.findMany({
               where: {
                 status: "CONFIRMED",
-                session: { bossScheduleId: input.bossScheduleId! },
+                session: { bossScheduleId },
               },
               select: { userId: true },
             }),
@@ -51,23 +62,17 @@ export async function createLootSale(input: CreateLootSaleInput) {
 
           return result;
         })()
-      : Promise.resolve([]),
+      : Promise.resolve([] as Array<{ userId: string }>),
   ]);
 
-  attendees = attendeeResult;
-
-  const taxRatePercent = settings?.taxRatePercent ?? 10;
   const distributionModel = settings?.activeShareModel ?? "EQUAL";
-  const taxAmount = (input.saleValue * BigInt(taxRatePercent)) / 100n;
-  const netProfit = input.saleValue - taxAmount;
-
   const memberPoints: Record<string, number> = {};
   let totalPoints = 0;
-  if (netProfit > 0n && attendees.length > 0 && distributionModel === "PRO_RATA") {
+  if (attendees.length > 0 && distributionModel === "PRO_RATA") {
     const dkpRows = await prisma.ledgerEntry.groupBy({
       by: ["accountId"],
       where: {
-        guildId: input.guildId,
+        guildId,
         accountId: { in: attendees.map((member) => member.userId) },
         accountType: "MEMBER",
         referenceType: "ATTENDANCE",
@@ -81,6 +86,17 @@ export async function createLootSale(input: CreateLootSaleInput) {
       totalPoints += points;
     }
   }
+
+  return { settings, attendees, memberPoints, totalPoints };
+}
+
+async function createLootSaleWithContext(input: CreateLootSaleInput, ctx: LootSaleContext) {
+  const { settings, attendees, memberPoints, totalPoints } = ctx;
+
+  const taxRatePercent = settings?.taxRatePercent ?? 10;
+  const distributionModel = settings?.activeShareModel ?? "EQUAL";
+  const taxAmount = (input.saleValue * BigInt(taxRatePercent)) / 100n;
+  const netProfit = input.saleValue - taxAmount;
 
   const lootSale = await prisma.$transaction(async (tx) => {
     const createdSale = await tx.lootSale.create({
@@ -219,6 +235,11 @@ export async function createLootSale(input: CreateLootSaleInput) {
   return lootSale;
 }
 
+export async function createLootSale(input: CreateLootSaleInput) {
+  const ctx = await resolveLootSaleContext(input.guildId, input.bossScheduleId);
+  return createLootSaleWithContext(input, ctx);
+}
+
 interface CreateLootSaleBatchInput {
   guildId: string;
   bossScheduleId?: string | null;
@@ -234,24 +255,34 @@ interface CreateLootSaleBatchInput {
  * own LootSale (so taxes/dividends are split per item), but they share the same
  * activity (bossScheduleId), category, currency and sold date so the registry can
  * group them into one activity row.
+ *
+ * All items share the same guild settings, attendee list, and (for PRO_RATA)
+ * attendee DKP totals, so those reads are resolved once for the whole batch
+ * instead of once per item — a 5-item batch previously issued ~10-20 avoidable
+ * round trips re-fetching the same rows.
  */
 export async function createLootSaleBatch(input: CreateLootSaleBatchInput) {
   if (!input.items || input.items.length === 0) {
     throw new BadRequestError("At least one loot item is required");
   }
 
+  const ctx = await resolveLootSaleContext(input.guildId, input.bossScheduleId);
+
   const created = [];
   for (const item of input.items) {
-    const sale = await createLootSale({
-      guildId: input.guildId,
-      bossScheduleId: input.bossScheduleId ?? null,
-      itemName: item.itemName,
-      category: input.category,
-      saleValue: item.saleValue,
-      currency: input.currency,
-      creatorId: input.creatorId,
-      soldAt: input.soldAt ?? null,
-    });
+    const sale = await createLootSaleWithContext(
+      {
+        guildId: input.guildId,
+        bossScheduleId: input.bossScheduleId ?? null,
+        itemName: item.itemName,
+        category: input.category,
+        saleValue: item.saleValue,
+        currency: input.currency,
+        creatorId: input.creatorId,
+        soldAt: input.soldAt ?? null,
+      },
+      ctx,
+    );
     created.push(sale);
   }
   return created;

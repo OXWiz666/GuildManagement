@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import SettingsCard from "./SettingsCard";
+import SettingsCard from "../../settings/components/SettingsCard";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { guildApi } from "@/lib/api";
@@ -21,8 +21,6 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
 
   // Form states
   const [taxRatePercent, setTaxRatePercent] = useState("10");
-  const [attendancePoints, setAttendancePoints] = useState("10");
-  const [bossKillPoints, setBossKillPoints] = useState("50");
   const [activeShareModel, setActiveShareModel] = useState("EQUAL");
   const [currencyCode, setCurrencyCode] = useState("PHP");
   const [currencySymbol, setCurrencySymbol] = useState("₱");
@@ -55,8 +53,6 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
   useEffect(() => {
     if (guildSettings) {
       setTaxRatePercent(guildSettings.taxRatePercent.toString());
-      setAttendancePoints(guildSettings.attendancePoints.toString());
-      setBossKillPoints(guildSettings.bossKillPoints.toString());
       setActiveShareModel(guildSettings.activeShareModel);
       setCurrencyCode(guildSettings.currencyCode);
       setCurrencySymbol(guildSettings.currencySymbol);
@@ -79,8 +75,6 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
     try {
       const payload = {
         taxRatePercent: parseInt(taxRatePercent, 10),
-        attendancePoints: parseInt(attendancePoints, 10),
-        bossKillPoints: parseInt(bossKillPoints, 10),
         activeShareModel,
         currencyCode,
         currencySymbol,
@@ -112,7 +106,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
   if (isLoadingSettings) {
     return (
       <div className="glass rounded-2xl p-6 border border-white/[0.06] animate-pulse h-96 flex items-center justify-center">
-        <span className="text-white/40 text-sm font-semibold tracking-wider animate-pulse">Loading Leader Panel Configurations...</span>
+        <span className="text-white/40 text-sm font-semibold tracking-wider animate-pulse">Loading Guild Settings Configurations...</span>
       </div>
     );
   }
@@ -120,86 +114,112 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
   return (
     <div className="space-y-6">
       <SettingsCard
-        eyebrow="Leader Panel"
+        eyebrow="Guild Settings"
         title="Guild point system & configurations"
         description="Configure tax rates, point allocations for events, rank multipliers, and preferred economies."
       >
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Economy settings */}
+          {/* Economy settings — table view */}
           <div>
             <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-4 border-b border-white/[0.04] pb-1.5">
               Guild Economy & Tax
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Input
-                label="Tax Rate Percent (%)"
-                type="number"
-                value={taxRatePercent}
-                onChange={(e) => setTaxRatePercent(e.target.value)}
-                placeholder="e.g. 10"
-              />
-              <Input
-                label="Primary Currency Code"
-                value={currencyCode}
-                onChange={(e) => setCurrencyCode(e.target.value)}
-                placeholder="e.g. PHP"
-              />
-              <Input
-                label="Primary Currency Symbol"
-                value={currencySymbol}
-                onChange={(e) => setCurrencySymbol(e.target.value)}
-                placeholder="e.g. ₱"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-              <Input
-                label="Secondary Currency Code (Optional)"
-                value={secondaryCurrencyCode}
-                onChange={(e) => setSecondaryCurrencyCode(e.target.value)}
-                placeholder="e.g. DIAMOND"
-              />
-              <Input
-                label="Secondary Currency Symbol (Optional)"
-                value={secondaryCurrencySymbol}
-                onChange={(e) => setSecondaryCurrencySymbol(e.target.value)}
-                placeholder="e.g. 💎"
-              />
+            <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-white/[0.06]">
+                  <tr>
+                    <td className="px-4 py-3.5 text-[12px] font-medium text-white/60 w-1/3 align-middle">
+                      Tax Rate Percent (%)
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="number"
+                        value={taxRatePercent}
+                        onChange={(e) => setTaxRatePercent(e.target.value)}
+                        placeholder="e.g. 10"
+                        className="w-full max-w-[180px] px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3.5 text-[12px] font-medium text-white/60 align-middle">
+                      Primary Currency
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 max-w-[220px]">
+                          <span className="block text-[9px] text-white/30 uppercase tracking-wider mb-1">Code</span>
+                          <input
+                            value={currencyCode}
+                            onChange={(e) => setCurrencyCode(e.target.value)}
+                            placeholder="e.g. PHP"
+                            className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                          />
+                        </div>
+                        <div className="w-24 shrink-0">
+                          <span className="block text-[9px] text-white/30 uppercase tracking-wider mb-1">Symbol</span>
+                          <input
+                            value={currencySymbol}
+                            onChange={(e) => setCurrencySymbol(e.target.value)}
+                            placeholder="e.g. ₱"
+                            className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3.5 text-[12px] font-medium text-white/60 align-middle">
+                      Secondary Currency <span className="text-white/30 font-normal">(optional)</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 max-w-[220px]">
+                          <span className="block text-[9px] text-white/30 uppercase tracking-wider mb-1">Code</span>
+                          <input
+                            value={secondaryCurrencyCode}
+                            onChange={(e) => setSecondaryCurrencyCode(e.target.value)}
+                            placeholder="e.g. DIAMOND"
+                            className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                          />
+                        </div>
+                        <div className="w-24 shrink-0">
+                          <span className="block text-[9px] text-white/30 uppercase tracking-wider mb-1">Symbol</span>
+                          <input
+                            value={secondaryCurrencySymbol}
+                            onChange={(e) => setSecondaryCurrencySymbol(e.target.value)}
+                            placeholder="e.g. 💎"
+                            className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* DKP triggers */}
+          {/* Dividend distribution — attendance points themselves now come
+              entirely from the "Boss" activity in Activities Multiplier
+              (every real attendance session is boss-triggered), so the old
+              flat Base Attendance Points field has been retired here. */}
           <div>
             <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-4 border-b border-white/[0.04] pb-1.5">
-              ⏱️ Activity point triggers
+              Loot dividend distribution
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Input
-                label="Base Attendance Points"
-                type="number"
-                value={attendancePoints}
-                onChange={(e) => setAttendancePoints(e.target.value)}
-                placeholder="e.g. 10"
-              />
-              <Input
-                label="Boss Kill Points"
-                type="number"
-                value={bossKillPoints}
-                onChange={(e) => setBossKillPoints(e.target.value)}
-                placeholder="e.g. 50"
-              />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
-                  Default share model
-                </label>
-                <select
-                  value={activeShareModel}
-                  onChange={(e) => setActiveShareModel(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-white/20 transition-colors"
-                >
-                  <option className="bg-[#0b0c10]" value="EQUAL">EQUAL split among attendees</option>
-                  <option className="bg-[#0b0c10]" value="PRO_RATA">PRO RATA based on Guild Points</option>
-                </select>
-              </div>
+            <div className="max-w-xs flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
+                Default share model
+              </label>
+              <select
+                value={activeShareModel}
+                onChange={(e) => setActiveShareModel(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-white/20 transition-colors"
+              >
+                <option className="bg-[#0b0c10]" value="EQUAL">EQUAL split among attendees</option>
+                <option className="bg-[#0b0c10]" value="PRO_RATA">PRO RATA based on Guild Points</option>
+              </select>
             </div>
           </div>
 

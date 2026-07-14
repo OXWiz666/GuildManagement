@@ -19,6 +19,8 @@ import { writeAuditLog } from "./audit.service";
 import { createOrgForUser } from "./onboarding.service";
 import { AUDIT_ACTIONS, type LeaderOnboardingInput } from "@guild/shared";
 import { env } from "../config/env";
+import { broadcastToGuild } from "../lib/socket";
+import { publicUrl, uploadObject } from "../lib/supabaseStorage";
 import type {
   AuthResponse,
   UserPublic,
@@ -752,12 +754,7 @@ export async function updateUserProfile(
   data: {
     displayName?: string;
     email?: string;
-    avatarUrl?: string | null;
     password?: string;
-    ign?: string | null;
-    cp?: number | null;
-    class?: string | null;
-    weapon?: string | null;
   }
 ) {
   // if email is changing, check if unique
@@ -776,11 +773,6 @@ export async function updateUserProfile(
   const updateData: any = {};
   if (data.displayName !== undefined) updateData.displayName = data.displayName;
   if (data.email !== undefined) updateData.email = data.email.toLowerCase();
-  if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
-  if (data.ign !== undefined) updateData.ign = data.ign;
-  if (data.cp !== undefined) updateData.cp = data.cp;
-  if (data.class !== undefined) updateData.class = data.class;
-  if (data.weapon !== undefined) updateData.weapon = data.weapon;
 
   if (data.password) {
     updateData.passwordHash = await bcrypt.hash(data.password, env.BCRYPT_ROUNDS);
@@ -794,17 +786,82 @@ export async function updateUserProfile(
   return toUserPublic(user);
 }
 
+/** Notifies every guild a user belongs to that their profile card changed,
+ *  so open rosters refresh live instead of waiting for staleTime to lapse. */
+async function broadcastProfileUpdated(userId: string) {
+  const memberships = await prisma.guildMember.findMany({ where: { userId }, select: { guildId: true } });
+  await Promise.all(memberships.map((m) => broadcastToGuild(m.guildId, "member_profile_updated", { userId })));
+}
+
+const PROFILE_IMAGE_BUCKET = "ProfileImages";
+const PROFILE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const IMAGE_MIME_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/webp": "webp",
+};
+
+function decodeImageDataUrl(dataUrl: string): { buffer: Buffer; mime: string; ext: string } {
+  const match = /^data:(image\/[a-zA-Z+]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) throw new BadRequestError("Invalid image data");
+  const mime = match[1]!;
+  const ext = IMAGE_MIME_EXT[mime];
+  if (!ext) throw new BadRequestError("Unsupported image type");
+  const buffer = Buffer.from(match[2]!, "base64");
+  if (buffer.length === 0) throw new BadRequestError("Empty image");
+  if (buffer.length > PROFILE_IMAGE_MAX_BYTES) throw new BadRequestError("Image exceeds 8MB");
+  return { buffer, mime, ext };
+}
+
+/** Uploads a new avatar image and updates it everywhere the user is shown. */
+export async function updateAvatar(userId: string, dataUrl: string) {
+  const { buffer, mime, ext } = decodeImageDataUrl(dataUrl);
+  const path = `avatars/${userId}-${Date.now()}.${ext}`;
+  const uploaded = await uploadObject(PROFILE_IMAGE_BUCKET, path, buffer, mime);
+  if (!uploaded) throw new BadRequestError("Failed to upload avatar");
+
+  const avatarUrl = publicUrl(PROFILE_IMAGE_BUCKET, path);
+  const user = await prisma.user.update({ where: { id: userId }, data: { avatarUrl } });
+  await broadcastProfileUpdated(userId);
+  return toUserPublic(user);
+}
+
+/** Uploads a new profile banner image and updates it everywhere the user is shown. */
+export async function updateBanner(userId: string, dataUrl: string) {
+  const { buffer, mime, ext } = decodeImageDataUrl(dataUrl);
+  const path = `banners/${userId}-${Date.now()}.${ext}`;
+  const uploaded = await uploadObject(PROFILE_IMAGE_BUCKET, path, buffer, mime);
+  if (!uploaded) throw new BadRequestError("Failed to upload banner");
+
+  const bannerUrl = publicUrl(PROFILE_IMAGE_BUCKET, path);
+  const user = await prisma.user.update({ where: { id: userId }, data: { bannerUrl } });
+  await broadcastProfileUpdated(userId);
+  return toUserPublic(user);
+}
+
 /**
- * Update the member's Combat Power everywhere it's shown. CP is a character-wide
- * stat, so we set it on the user profile AND sync every guild membership in one
- * transaction (rosters, market, faction all read GuildMember.cp).
+ * Update character-profile fields (IGN / Combat Power / Class / Weapon)
+ * everywhere they're shown. These are character-wide stats, so we set them on
+ * the user profile AND sync every guild membership in one transaction
+ * (rosters, market, faction all read the GuildMember-level copies).
  */
-export async function updateCombatPower(userId: string, cp: number) {
+export async function updateCharacterProfile(
+  userId: string,
+  data: { ign?: string | null; cp?: number | null; class?: string | null; weapon?: string | null },
+) {
+  const updateData: any = {};
+  if (data.ign !== undefined) updateData.ign = data.ign;
+  if (data.cp !== undefined) updateData.cp = data.cp;
+  if (data.class !== undefined) updateData.class = data.class;
+  if (data.weapon !== undefined) updateData.weapon = data.weapon;
+
   const [user] = await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { cp } }),
-    prisma.guildMember.updateMany({ where: { userId }, data: { cp } }),
+    prisma.user.update({ where: { id: userId }, data: updateData }),
+    prisma.guildMember.updateMany({ where: { userId }, data: updateData }),
   ]);
-  return { cp: user.cp };
+  await broadcastProfileUpdated(userId);
+  return toUserPublic(user);
 }
 
 function toUserPublic(user: any): UserPublic {
@@ -814,6 +871,7 @@ function toUserPublic(user: any): UserPublic {
     username: user.username,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
+    bannerUrl: user.bannerUrl,
     createdAt: user.createdAt.toISOString(),
     ign: user.ign,
     cp: user.cp,

@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useRef,
+  useMemo,
   type ReactNode,
 } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -127,8 +128,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [isAuthenticated, isSessionReady, user]);
 
+  const value = useMemo<SocketContextType>(
+    () => ({ socket: socketRef.current, isConnected, error }),
+    [isConnected, error],
+  );
+
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, isConnected, error }}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   );

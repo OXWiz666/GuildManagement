@@ -123,7 +123,6 @@ export default function SettingsPage() {
       const result = await authApi.updateMe({
         displayName: displayName.trim(),
         email: email.trim(),
-        avatarUrl: avatarUrl.trim() || null,
       });
       if (result.success) {
         addToast("success", "Profile updated successfully");
@@ -138,6 +137,24 @@ export default function SettingsPage() {
     }
   }
 
+  // Avatar uploads save immediately (Discord-style) rather than waiting for
+  // the profile form's Save button — the server uploads to Supabase Storage
+  // and returns a real URL, replacing the old base64-in-column behavior.
+  async function handleAvatarChange(dataUrl: string) {
+    setAvatarUrl(dataUrl);
+    try {
+      const result = await authApi.uploadAvatar(dataUrl);
+      if (result.success) {
+        addToast("success", "Profile photo updated");
+        await refreshUser();
+      } else {
+        addToast("error", result.error?.message || "Failed to upload avatar");
+      }
+    } catch (err: any) {
+      addToast("error", err?.message || "An error occurred");
+    }
+  }
+
   async function handleUpdateCharacter(e: React.FormEvent) {
     e.preventDefault();
     setIsSavingCharacter(true);
@@ -148,7 +165,7 @@ export default function SettingsPage() {
         setIsSavingCharacter(false);
         return;
       }
-      const result = await authApi.updateMe({
+      const result = await authApi.updateCharacterProfile({
         ign: ign.trim() || null,
         cp: cpNumber,
         class: classType || null,
@@ -213,7 +230,7 @@ export default function SettingsPage() {
         <Reveal>
           <ProfileSection
             avatarUrl={avatarUrl}
-            setAvatarUrl={setAvatarUrl}
+            setAvatarUrl={handleAvatarChange}
             displayName={displayName}
             setDisplayName={setDisplayName}
             email={email}

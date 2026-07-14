@@ -190,7 +190,74 @@ export function useQuery<T>(
   };
 }
 
+/**
+ * Warm the cache for `key` without mounting a component — call on link hover/
+ * focus so the data is already in `globalQueryCache` by the time the user
+ * navigates (pairs with `useQuery`'s own key so the mounted hook hits cache
+ * instead of refetching).
+ */
+export function prefetchQuery<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  options: QueryOptions = {}
+): Promise<T> {
+  const staleTime = options.staleTime ?? 15000;
+  const cached = globalQueryCache.get(key);
+  if (cached && Date.now() - cached.timestamp < staleTime) {
+    return Promise.resolve(cached.data as T);
+  }
+
+  let request = inFlightQueries.get(key) as Promise<T> | undefined;
+  if (!request) {
+    request = fetcher().finally(() => {
+      inFlightQueries.delete(key);
+    });
+    inFlightQueries.set(key, request);
+  }
+
+  return request.then((result) => {
+    const timestamp = Date.now();
+    globalQueryCache.set(key, { data: result, timestamp });
+    if (options.persist && typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`query_cache:${key}`, JSON.stringify({ data: result, timestamp }));
+      } catch {
+        // quiet fail
+      }
+    }
+    listeners.get(key)?.forEach((listener) => listener());
+    return result;
+  });
+}
+
 export const queryClient = {
+  /**
+   * Optimistic write: immediately replace the cached value for `key` (so every
+   * mounted `useQuery(key, ...)` re-renders with the new data right away),
+   * returning a `rollback()` to restore the previous value if the mutation
+   * that triggered this later fails.
+   */
+  setQueryData<T>(key: string, updater: T | ((old: T | null) => T)): { rollback: () => void } {
+    const previous = globalQueryCache.get(key);
+    const previousData = (previous?.data ?? null) as T | null;
+    const nextData =
+      typeof updater === "function" ? (updater as (old: T | null) => T)(previousData) : updater;
+
+    globalQueryCache.set(key, { data: nextData, timestamp: Date.now() });
+    listeners.get(key)?.forEach((listener) => listener());
+
+    return {
+      rollback: () => {
+        if (previous) {
+          globalQueryCache.set(key, previous);
+        } else {
+          globalQueryCache.delete(key);
+        }
+        listeners.get(key)?.forEach((listener) => listener());
+      },
+    };
+  },
+
   invalidateQueries(keyPattern: string) {
     const cleanPattern = keyPattern.replace("*", "");
     

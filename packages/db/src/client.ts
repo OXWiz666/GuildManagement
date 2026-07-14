@@ -32,6 +32,14 @@ function createPool(): Pool {
     ssl: { rejectUnauthorized: false },
     // Keep the per-instance pool small — the Supabase pooler fans out to Postgres.
     max: 10,
+    // Release idle clients back after 30s instead of holding them open
+    // indefinitely — matters most in serverless, where a container can sit
+    // idle between invocations while still pinning pooled Postgres slots.
+    idleTimeoutMillis: 30_000,
+    // `pg`'s default is 0 (wait forever) for a free connection — under real
+    // load that turns pool exhaustion into a silent hang instead of a
+    // surfaced error. Fail fast instead.
+    connectionTimeoutMillis: 10_000,
   });
 }
 

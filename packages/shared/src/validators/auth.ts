@@ -145,18 +145,28 @@ export const changePasswordSchema = z
 export const updateUserSchema = z.object({
   displayName: displayNameSchema.optional(),
   email: emailSchema.optional(),
-  avatarUrl: z.string().nullable().optional(),
   password: passwordSchema.optional(),
-  ign: z.string().nullable().optional(),
-  cp: z.number().int().nonnegative().nullable().optional(),
-  class: z.string().nullable().optional(),
-  weapon: z.string().nullable().optional(),
+});
+
+// Character-profile fields (IGN / Combat Power / Class / Weapon) — character-wide
+// stats dual-written to the user profile and every guild membership.
+export const updateCharacterProfileSchema = z.object({
+  ign: z.string().trim().max(60).nullable().optional(),
+  cp: z.number().int().nonnegative().max(100_000_000).nullable().optional(),
+  class: z.string().trim().max(40).nullable().optional(),
+  weapon: z.string().trim().max(40).nullable().optional(),
 });
 
 // Combat Power update (e.g. from the screenshot scanner). CP is a character-wide
 // stat; 100M is generous headroom above any real in-game value.
 export const combatPowerSchema = z.object({
   cp: z.number().int().nonnegative().max(100_000_000),
+});
+
+// Avatar/banner upload — client sends a base64 data URL, decoded and re-uploaded
+// to Supabase Storage server-side (see auth.service.ts::updateAvatar/updateBanner).
+export const uploadProfileImageSchema = z.object({
+  dataUrl: z.string().min(1, "Image data is required"),
 });
 
 // ─── Payment methods (member profile QR codes) ──────────────────────
@@ -177,6 +187,8 @@ export type AddPaymentMethodInput = z.infer<typeof addPaymentMethodSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ResolveIdentifierInput = z.infer<typeof resolveIdentifierSchema>;
 export type CombatPowerInput = z.infer<typeof combatPowerSchema>;
+export type UpdateCharacterProfileInput = z.infer<typeof updateCharacterProfileSchema>;
+export type UploadProfileImageInput = z.infer<typeof uploadProfileImageSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

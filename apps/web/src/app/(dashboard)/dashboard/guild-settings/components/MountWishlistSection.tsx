@@ -116,7 +116,7 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
 
   return (
     <SettingsCard
-      eyebrow="Leader Panel"
+      eyebrow="Guild Settings"
       title="Mount wishlist catalog"
       description="Define which mounts members can wish for and how many of each can be distributed. Each distribution consumes one slot."
     >

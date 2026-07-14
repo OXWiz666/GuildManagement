@@ -58,6 +58,7 @@ export interface UserPublic {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  bannerUrl: string | null;
   createdAt: string;
   ign?: string | null;
   cp?: number | null;

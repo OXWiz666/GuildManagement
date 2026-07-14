@@ -103,9 +103,10 @@ async function apiFetch<T = unknown>(
 
 /**
  * Attempt to refresh the access token using the httpOnly cookie.
- * Returns true if successful.
+ * Returns true if successful. Exported so the Hono RPC client (lib/rpc.ts) can
+ * reuse the same one-shot refresh during the migration.
  */
-async function refreshAccessToken(): Promise<boolean> {
+export async function refreshAccessToken(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
@@ -242,6 +243,7 @@ export const authApi = {
         username: string;
         displayName: string;
         avatarUrl: string | null;
+        bannerUrl: string | null;
         createdAt: string;
         paymentMethods?: PaymentMethodEntry[];
         guilds: Array<{
@@ -262,12 +264,7 @@ export const authApi = {
   async updateMe(data: {
     displayName?: string;
     email?: string;
-    avatarUrl?: string | null;
     password?: string;
-    ign?: string | null;
-    cp?: number | null;
-    class?: string | null;
-    weapon?: string | null;
   }) {
     return api.put<{ user: any }>("/auth/me", data);
   },
@@ -276,6 +273,26 @@ export const authApi = {
   // guild memberships server-side.
   async updateCp(cp: number) {
     return api.put<{ cp: number | null }>("/auth/me/cp", { cp });
+  },
+
+  // Character-profile fields (IGN / Combat Power / Class / Weapon) — dual-written
+  // to the user profile and every guild membership server-side.
+  async updateCharacterProfile(data: {
+    ign?: string | null;
+    cp?: number | null;
+    class?: string | null;
+    weapon?: string | null;
+  }) {
+    return api.put<{ user: any }>("/auth/me/character", data);
+  },
+
+  // Avatar/banner upload — send a base64 data URL, server uploads it to
+  // Supabase Storage and returns the new public URL on the user record.
+  async uploadAvatar(dataUrl: string) {
+    return api.put<{ user: any }>("/auth/me/avatar", { dataUrl });
+  },
+  async uploadBanner(dataUrl: string) {
+    return api.put<{ user: any }>("/auth/me/banner", { dataUrl });
   },
 
   async addPaymentMethod(data: { method: string; label?: string; qrDataUrl: string }) {
@@ -358,6 +375,7 @@ export interface GuildMemberData {
     displayName: string;
     email: string;
     avatarUrl: string | null;
+    bannerUrl: string | null;
   };
 }
 
@@ -398,6 +416,17 @@ export interface JoinRequestData {
     email: string;
     avatarUrl: string | null;
   };
+}
+
+export interface ActivityPointRuleData {
+  key: string;
+  label: string;
+  basePoints: number;
+  multipliers: Record<string, number>;
+}
+
+export interface ActivityPointRulesData {
+  activities: ActivityPointRuleData[];
 }
 
 export const guildApi = {
@@ -526,6 +555,14 @@ export const guildApi = {
     return api.patch<any>(`/guilds/${guildId}/settings`, payload);
   },
 
+  async getActivityRules(guildId: string) {
+    return api.get<{ rules: ActivityPointRulesData }>(`/guilds/${guildId}/activity-rules`);
+  },
+
+  async updateActivityRules(guildId: string, rules: ActivityPointRulesData) {
+    return api.patch<{ rules: ActivityPointRulesData }>(`/guilds/${guildId}/activity-rules`, rules);
+  },
+
   async getAuditLogs(guildId: string, filter?: string, page = 1, limit = 30, memberId?: string) {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (filter) params.set("filter", filter);
@@ -569,6 +606,48 @@ export interface AttendanceRecordData {
   };
 }
 
+// A guild member who has not yet checked in to the active session.
+export interface AttendanceRosterMember {
+  userId: string;
+  ign: string | null;
+  user: {
+    id: string;
+    displayName: string;
+    email: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface AttendanceBossSummary {
+  bossName: string;
+  bossImageUrl: string;
+  location: string;
+  spawnTime: string;
+}
+
+export interface PendingAttendanceData {
+  activeSession: AttendanceSessionData | null;
+  bossSchedule: AttendanceBossSummary | null;
+  pendingRecords: AttendanceRecordData[];
+  confirmedRecords: AttendanceRecordData[];
+  notCheckedInMembers: AttendanceRosterMember[];
+}
+
+// Summary row for the "Past Attendance" browser (list of closed/expired
+// sessions an officer can reopen or inspect).
+export interface AttendanceSessionSummary {
+  id: string;
+  title: string;
+  type: "GUILD" | "FACTION";
+  isActive: boolean;
+  expiresAt: string;
+  createdAt: string;
+  bossScheduleId: string | null;
+  bossSchedule: AttendanceBossSummary | null;
+  confirmedCount: number;
+  pendingCount: number;
+}
+
 export interface BossData {
   id: string;
   name: string;
@@ -604,6 +683,19 @@ export interface FactionGuildData {
   name: string;
   slug: string;
   avatarUrl: string | null;
+}
+
+export interface BossCommitmentMember {
+  id: string;
+  ign: string | null;
+  role: string;
+  rankName: string | null;
+}
+
+export interface BossCommitmentData {
+  count: number;
+  committed: boolean;
+  members: BossCommitmentMember[];
 }
 
 export interface BossRotationItem {
@@ -754,8 +846,8 @@ export interface NotificationData {
   createdAt: string;
 }
 
-// ─── Guild Activities (Guild Boss / Guild War / PK War) ─────────
-export type ActivityType = "GUILD_BOSS" | "GUILD_WAR" | "PK_WAR";
+// ─── Guild Activities (dynamic types, sourced from Register Activity) ─────────
+export type ActivityType = string;
 export type ActivityStatus = "UPCOMING" | "COMPLETED" | "CANCELLED";
 export type ActivityResult = "WIN" | "LOSS" | "DRAW";
 
@@ -859,7 +951,7 @@ export const dashboardApi = {
   },
 
   async getPendingAttendance(guildId: string) {
-    return api.get<{ activeSession: AttendanceSessionData | null; pendingRecords: AttendanceRecordData[] }>(
+    return api.get<PendingAttendanceData>(
       `/dashboard/attendance/pending/${guildId}`,
     );
   },
@@ -867,6 +959,40 @@ export const dashboardApi = {
   async confirmAttendance(recordId: string, guildId: string) {
     return api.patch<{ success: boolean; record: AttendanceRecordData; points: number }>(
       `/dashboard/attendance/confirm/${recordId}`,
+      { guildId },
+    );
+  },
+
+  // ─── Past attendance (Officer / Guild Leader) ───────────────
+  async listAttendanceSessions(guildId: string) {
+    return api.get<AttendanceSessionSummary[]>(
+      `/dashboard/attendance/sessions/${guildId}`,
+    );
+  },
+
+  async getAttendanceSessionDetail(guildId: string, sessionId: string) {
+    return api.get<PendingAttendanceData>(
+      `/dashboard/attendance/session/${guildId}/${sessionId}`,
+    );
+  },
+
+  async reopenAttendanceSession(guildId: string, sessionId: string, minutes: number) {
+    return api.post<{ session: AttendanceSessionData }>(
+      `/dashboard/attendance/session/${guildId}/${sessionId}/reopen`,
+      { minutes },
+    );
+  },
+
+  async markMemberPresent(guildId: string, sessionId: string, userId: string) {
+    return api.post<{ success: boolean; record: AttendanceRecordData; points: number }>(
+      `/dashboard/attendance/mark-present`,
+      { guildId, sessionId, userId },
+    );
+  },
+
+  async revokeAttendance(recordId: string, guildId: string) {
+    return api.post<{ success: boolean }>(
+      `/dashboard/attendance/revoke/${recordId}`,
       { guildId },
     );
   },
@@ -898,6 +1024,19 @@ export const dashboardApi = {
   async getBossSchedules(guildId: string) {
     return api.get<{ schedules: BossScheduleData[] }>(
       `/dashboard/boss-schedule/${guildId}`,
+    );
+  },
+
+  async getBossCommitments(guildId: string, scheduleId: string) {
+    return api.get<BossCommitmentData>(
+      `/dashboard/boss-schedule/${guildId}/${scheduleId}/commitments`,
+    );
+  },
+
+  async setBossCommitment(guildId: string, scheduleId: string, committing: boolean) {
+    return api.post<{ committed: boolean; count: number }>(
+      `/dashboard/boss-schedule/${guildId}/${scheduleId}/commitments`,
+      { committing },
     );
   },
 
@@ -1507,6 +1646,65 @@ export interface LegendaryRequestData {
   member?: MarketMemberRef;
 }
 
+export interface StorageMemberRef {
+  id: string;
+  ign: string | null;
+  role: string;
+  rankName: string | null;
+}
+
+export interface StorageItemData {
+  id: string;
+  guildId: string;
+  itemName: string;
+  category: string;
+  sourceBoss: string | null;
+  rarity: string;
+  imageUrl: string | null;
+  quantity: number;
+  note: string | null;
+  status: "IN_STORAGE" | "LISTED_MARKET" | "DISTRIBUTED";
+  disposition: "MARKET" | "GUILD_SALE" | "GUILD_AUCTION" | null;
+  // Raw integer cents, serialized as a string (BigInt column) — divide by 100 to display.
+  listingPrice: string | null;
+  recipientMemberId: string | null;
+  recipient?: StorageMemberRef | null;
+  auctionItemId: string | null;
+  addedById: string;
+  resolvedById: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuctionBidData {
+  id: string;
+  auctionId: string;
+  memberId: string;
+  bidAmount: number;
+  createdAt: string;
+  member?: { ign: string | null; role: string; rankName: string | null };
+}
+
+export interface AuctionData {
+  id: string;
+  guildId: string;
+  creatorId: string;
+  itemName: string;
+  description: string | null;
+  imageUrl: string | null;
+  category: string;
+  startingBid: number;
+  currentBid: number;
+  winnerId: string | null;
+  status: "ACTIVE" | "ENDED" | "CANCELLED";
+  endsAt: string;
+  createdAt: string;
+  bids?: AuctionBidData[];
+  myBid?: number | null;
+  bidCount?: number;
+}
+
 export type WishlistRarity = "LEGEND" | "EPIC" | "MYTHIC";
 export type ArmorType = "CLOTH" | "LEATHER" | "PLATE";
 export type WishlistCategory =
@@ -1926,5 +2124,76 @@ export const marketApi = {
     return api.get<{ logs: AuditLogEntry[]; pagination: Paginated }>(
       `/market/${guildId}/audit?${qs.toString()}`,
     );
+  },
+
+  // ─ Guild Storage ─
+  async getStorage(guildId: string) {
+    return api.get<{ storage: StorageItemData[]; listed: StorageItemData[]; canManage: boolean }>(
+      `/market/${guildId}/storage`,
+    );
+  },
+  async registerStorageInMarket(guildId: string, id: string, price: number) {
+    return api.post<{ item: StorageItemData }>(`/market/${guildId}/storage/${id}/register`, { price });
+  },
+  async recallStorageItem(guildId: string, id: string) {
+    return api.post<{ item: StorageItemData }>(`/market/${guildId}/storage/${id}/recall`, {});
+  },
+  async markStorageItemSold(guildId: string, id: string, payload: { saleValue: number; soldAt?: string }) {
+    return api.post<{ item: StorageItemData }>(`/market/${guildId}/storage/${id}/sold`, payload);
+  },
+  async distributeStorageItem(
+    guildId: string,
+    id: string,
+    payload:
+      | { mode: "GUILD_SALE"; memberId: string; note?: string }
+      | { mode: "GUILD_AUCTION"; startingBid?: number; durationHours?: number; note?: string },
+  ) {
+    return api.post<{ item: StorageItemData; auction: AuctionData | null }>(
+      `/market/${guildId}/storage/${id}/distribute`,
+      payload,
+    );
+  },
+  async removeStorageItem(guildId: string, id: string) {
+    return api.delete<{ success: boolean }>(`/market/${guildId}/storage/${id}`);
+  },
+
+  // ─ Auctions (DKP bidding hall) ─
+  async getAuctions(guildId: string) {
+    return api.get<{ auctions: AuctionData[]; canManage: boolean; myBidPoints: number }>(
+      `/market/${guildId}/auctions`,
+    );
+  },
+  async getAuctionHistory(guildId: string, page = 1) {
+    return api.get<{ items: AuctionData[]; pagination: Paginated }>(
+      `/market/${guildId}/auctions/history?page=${page}`,
+    );
+  },
+  async createAuction(
+    guildId: string,
+    payload: {
+      itemName: string;
+      description?: string;
+      imageUrl?: string;
+      category?: string;
+      startingBid?: number;
+      durationHours?: number;
+    },
+  ) {
+    return api.post<{ auction: AuctionData }>(`/market/${guildId}/auctions`, payload);
+  },
+  async placeBid(guildId: string, id: string, bidAmount: number) {
+    return api.post<{ success: boolean; bid: AuctionBidData; newBidPoints: number }>(
+      `/market/${guildId}/auctions/${id}/bid`,
+      { bidAmount },
+    );
+  },
+  async endAuction(guildId: string, id: string) {
+    return api.post<{ success: boolean; winner: { ign: string | null } | null }>(
+      `/market/${guildId}/auctions/${id}/end`,
+      {},
+    );
+  },
+  async cancelAuction(guildId: string, id: string) {
+    return api.post<{ success: boolean }>(`/market/${guildId}/auctions/${id}/cancel`, {});
   },
 };

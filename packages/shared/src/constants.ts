@@ -1,5 +1,7 @@
 // ─── Application Constants ──────────────────────
 
+import { CUSTOMIZABLE_ROLES, type CustomizableRoleType } from "./types/roles";
+
 // Token expiration (also defined in env, these are fallbacks)
 export const TOKEN_EXPIRY = {
   ACCESS: "15m",
@@ -59,6 +61,9 @@ export const AUDIT_ACTIONS = {
   DISTRIBUTION_LIMIT_OVERRIDDEN: "DISTRIBUTION_LIMIT_OVERRIDDEN",
   PRIORITY_SEQUENCE_CHANGED: "PRIORITY_SEQUENCE_CHANGED",
   DISTRIBUTION_RULE_UPDATED: "DISTRIBUTION_RULE_UPDATED",
+
+  // Leader's Panel — Register Activity (point rules)
+  ACTIVITY_POINT_RULES_UPDATED: "ACTIVITY_POINT_RULES_UPDATED",
 
   // Guild Market — Wishlist & mounts
   WISHLIST_ITEM_DISTRIBUTED: "WISHLIST_ITEM_DISTRIBUTED",
@@ -149,6 +154,41 @@ export const LEGENDARY_CATEGORY_LABELS: Record<LegendaryCategory, string> = {
   ABILITY_REROLL: "Ability Reroll",
   ABILITY_PASSIVE: "Ability Passive",
 };
+
+// ─── Guild Storage (vault of high-value drops) ──────────────────────
+export const STORAGE_CATEGORIES = [
+  "LEGEND_WEAPON",
+  "LEGEND_ARMOR",
+  "LEGEND_ACCESSORY",
+  "MOUNT",
+  "OTHER",
+] as const;
+export type StorageCategory = (typeof STORAGE_CATEGORIES)[number];
+
+export const STORAGE_CATEGORY_LABELS: Record<StorageCategory, string> = {
+  LEGEND_WEAPON: "Legend Weapon",
+  LEGEND_ARMOR: "Legend Armor",
+  LEGEND_ACCESSORY: "Legend Accessory",
+  MOUNT: "Mount",
+  OTHER: "Other",
+};
+
+// Item lifecycle inside the vault
+export const STORAGE_STATUSES = ["IN_STORAGE", "LISTED_MARKET", "DISTRIBUTED"] as const;
+export type StorageStatus = (typeof STORAGE_STATUSES)[number];
+
+// How an item left the vault
+export const STORAGE_DISPOSITIONS = ["MARKET", "GUILD_SALE", "GUILD_AUCTION"] as const;
+export type StorageDisposition = (typeof STORAGE_DISPOSITIONS)[number];
+
+export const STORAGE_DISPOSITION_LABELS: Record<StorageDisposition, string> = {
+  MARKET: "Listed in Market",
+  GUILD_SALE: "Guild Sale",
+  GUILD_AUCTION: "Guild Auction",
+};
+
+// Notable bosses whose drops commonly enter storage (Clemantis → Legend Weapon)
+export const STORAGE_SOURCE_BOSSES = ["Clemantis"] as const;
 
 // Distribution rank tiers
 export const DISTRIBUTION_TIERS = ["CORE", "ELITE", "UPPER", "LOWER"] as const;
@@ -421,6 +461,44 @@ export type MarketRules = {
     previousReceived: number;
     recency: number;
   };
+};
+
+// ─── Activity Point Rules (Leader's Panel — Register Activity) ──────
+// Leader-customizable catalog of activities (Boss, PVP, Guild Boss, ...).
+// Each has a base point value and a per-rank multiplier keyed by the same
+// 4 customizable rank bands as role display names (see CUSTOMIZABLE_ROLES /
+// resolveRoleDisplayName) — so the multiplier columns always line up with
+// whatever a guild has renamed OFFICER/CORE_MEMBER/ELITE_MEMBER/MEMBER to.
+export type ActivityPointRule = {
+  key: string;
+  label: string;
+  basePoints: number;
+  multipliers: Record<CustomizableRoleType, number>;
+};
+
+export type ActivityPointRules = {
+  activities: ActivityPointRule[];
+};
+
+const DEFAULT_MULTIPLIERS: Record<CustomizableRoleType, number> = CUSTOMIZABLE_ROLES.reduce(
+  (acc, role) => {
+    acc[role] = 1;
+    return acc;
+  },
+  {} as Record<CustomizableRoleType, number>,
+);
+
+export const DEFAULT_ACTIVITY_POINT_RULES: ActivityPointRules = {
+  activities: [
+    { key: "BOSS", label: "Boss", basePoints: 3, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "PVP", label: "PVP", basePoints: 5, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "GUILD_BOSS", label: "Guild Boss", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "GUILD_WAR", label: "Guild War", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "PK_WAR", label: "PK War", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "PVE_RALLY_GARBANA", label: "PVE Rally / Garbana", basePoints: 0, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "PVE_CONTENTS", label: "PVE Contents", basePoints: 0, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "WORLD_BOSS", label: "World Boss", basePoints: 0, multipliers: { ...DEFAULT_MULTIPLIERS } },
+  ],
 };
 
 // ─── Member Equipment (Item Screenshot Update) ──────────────────────

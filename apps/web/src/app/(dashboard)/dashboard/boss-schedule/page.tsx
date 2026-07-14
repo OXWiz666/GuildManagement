@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   activityApi,
+  guildApi,
   type ActivityInput,
-  type ActivityType,
   type GuildActivitiesResponse,
   type GuildActivityData,
+  type ActivityPointRulesData,
 } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { useSocket } from "@/components/providers/socket-provider";
@@ -16,25 +17,18 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader, Magnetic } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
+import { buildActivityTypeMeta, resolveActivityTypeMeta, type ActivityTypeMeta } from "@/lib/activityTypeMeta";
 import ActivityModal from "./components/ActivityModal";
+import ActivityCalendar from "./components/ActivityCalendar";
 
-type TypeFilter = "ALL" | ActivityType;
-
-const TYPE_META: Record<ActivityType, { label: string; badge: string; dot: string }> = {
-  GUILD_BOSS: { label: "Guild Boss", badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300", dot: "#34d399" },
-  GUILD_WAR: { label: "Guild War", badge: "border-red-500/30 bg-red-500/10 text-red-300", dot: "#f87171" },
-  PK_WAR: { label: "PK War", badge: "border-violet-500/30 bg-violet-500/10 text-violet-300", dot: "#a78bfa" },
-};
-
-const FILTERS: Array<{ id: TypeFilter; label: string }> = [
-  { id: "ALL", label: "All" },
-  { id: "GUILD_BOSS", label: "Guild Boss" },
-  { id: "GUILD_WAR", label: "Guild War" },
-  { id: "PK_WAR", label: "PK War" },
-];
+type TypeFilter = "ALL" | string;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
+}
+
+function toDateKey(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 function countdown(iso: string, now: number) {
@@ -50,6 +44,7 @@ function countdown(iso: string, now: number) {
 }
 
 const EMPTY: GuildActivitiesResponse = { canManage: false, viewerRole: "MEMBER", activities: [] };
+const EMPTY_RULES: ActivityPointRulesData = { activities: [] };
 
 export default function GuildActivitiesPage() {
   const { user } = useAuth();
@@ -59,7 +54,9 @@ export default function GuildActivitiesPage() {
 
   const [now, setNow] = useState(Date.now());
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<GuildActivityData | null>(null);
   const [saving, setSaving] = useState(false);
@@ -82,12 +79,39 @@ export default function GuildActivitiesPage() {
     { persist: true, staleTime: 10000, enabled: !!activeGuild },
   );
 
+  // Registered activities (Guild Settings → Activities Multiplier / Register Activity) —
+  // this is the source of truth for schedulable activity types, kept in sync live below.
+  const rulesKey = activeGuild ? `activity_rules:${activeGuild.guildId}` : "activity_rules_empty";
+  const { data: rulesData } = useQuery<ActivityPointRulesData>(
+    rulesKey,
+    async () => {
+      if (!activeGuild) return EMPTY_RULES;
+      const res = await guildApi.getActivityRules(activeGuild.guildId);
+      if (!res.success || !res.data) {
+        // Throw instead of falling back to EMPTY_RULES: this query persists to
+        // localStorage, so silently returning "zero activities" on a transient
+        // failure would get cached as truth for the full 5-minute staleTime,
+        // making the registered activity types disappear from this modal even
+        // though Guild Settings still shows them (its state never gets
+        // overwritten on a failed fetch).
+        throw new Error(res.error?.message || "Failed to load activity types");
+      }
+      return res.data.rules;
+    },
+    { persist: true, staleTime: 300000, enabled: !!activeGuild },
+  );
+  const registeredActivities = useMemo(() => rulesData?.activities ?? [], [rulesData]);
+  const typeMeta = useMemo(() => buildActivityTypeMeta(registeredActivities), [registeredActivities]);
+
   useEffect(() => {
     if (!socket || !activeGuild) return;
     const refresh = () => queryClient.invalidateQueries(`guild_activities:${activeGuild.guildId}`);
+    const refreshRules = () => queryClient.invalidateQueries(`activity_rules:${activeGuild.guildId}`);
     socket.on("guild_activity_updated", refresh);
+    socket.on("activity_point_rules_updated", refreshRules);
     return () => {
       socket.off("guild_activity_updated", refresh);
+      socket.off("activity_point_rules_updated", refreshRules);
     };
   }, [socket, activeGuild]);
 
@@ -106,23 +130,24 @@ export default function GuildActivitiesPage() {
     );
   }, [activities, typeFilter, search]);
 
-  const upcoming = useMemo(
+  const dayActivities = useMemo(
     () =>
       filtered
-        .filter((a) => a.status === "UPCOMING")
+        .filter((a) => toDateKey(new Date(a.scheduledAt)) === selectedDate)
         .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
-    [filtered],
-  );
-  const history = useMemo(
-    () =>
-      filtered
-        .filter((a) => a.status !== "UPCOMING")
-        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
-    [filtered],
+    [filtered, selectedDate],
   );
 
   function refresh() {
     if (activeGuild) queryClient.invalidateQueries(`guild_activities:${activeGuild.guildId}`);
+  }
+
+  function handleSelectDate(date: string) {
+    setSelectedDate(date);
+    if (canManage) {
+      setEditing(null);
+      setModalOpen(true);
+    }
   }
 
   async function submit(payload: ActivityInput) {
@@ -206,6 +231,13 @@ export default function GuildActivitiesPage() {
     );
   }
 
+  const dayLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
   return (
     <div className="relative max-w-full xl:max-w-[1400px] mx-auto w-full px-2 md:px-4 lg:px-6">
       <DashboardDecor />
@@ -213,7 +245,7 @@ export default function GuildActivitiesPage() {
         <ModuleHeader
           eyebrow="Calendar"
           title="Guild Activities"
-          description="Schedule and track Guild Boss runs, Guild Wars, and PK Wars — with attendance and results."
+          description="Schedule and track Guild Boss runs, Guild Wars, PK Wars, and any custom activity your guild has registered — with attendance and results."
           right={
             <div className="flex items-center gap-2">
               {canManage && (
@@ -235,24 +267,54 @@ export default function GuildActivitiesPage() {
 
         {/* Type filter + search */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="inline-flex flex-wrap items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-xl p-1 gap-1">
-            {FILTERS.map((f) => {
-              const count = f.id === "ALL" ? activities.length : activities.filter((a) => a.type === f.id).length;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => setTypeFilter(f.id)}
-                  className={`relative px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
-                    typeFilter === f.id
-                      ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)]"
-                      : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
-                  }`}
-                >
-                  {f.label}
-                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${typeFilter === f.id ? "bg-[var(--forge-gold)]/15 text-[var(--forge-gold)]" : "bg-white/5 text-white/45"}`}>{count}</span>
-                </button>
-              );
-            })}
+          <div className="relative">
+            <button
+              onClick={() => setFilterOpen((o) => !o)}
+              className="inline-flex items-center gap-2 px-3.5 h-[42px] rounded-xl bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] text-[13px] font-semibold text-white/75 hover:text-white hover:border-white/20 transition-all cursor-pointer"
+            >
+              <svg className="h-4 w-4 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" /></svg>
+              Filter
+              <span className="text-[12px] font-semibold text-[var(--forge-gold-bright)]">
+                {typeFilter === "ALL" ? "All" : registeredActivities.find((r) => r.key === typeFilter)?.label ?? typeFilter}
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/45">
+                {typeFilter === "ALL" ? activities.length : activities.filter((a) => a.type === typeFilter).length}
+              </span>
+              <svg className={`h-3.5 w-3.5 text-white/40 transition-transform ${filterOpen ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+
+            {filterOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
+                <div className="absolute left-0 top-full mt-2 z-20 min-w-[240px] max-h-[320px] overflow-y-auto rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] p-1.5">
+                  <button
+                    onClick={() => { setTypeFilter("ALL"); setFilterOpen(false); }}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
+                      typeFilter === "ALL" ? "bg-[var(--forge-glow)] text-[var(--forge-gold-bright)]" : "text-white/60 hover:text-white hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    All
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/45">{activities.length}</span>
+                  </button>
+                  {registeredActivities.map((rule) => {
+                    const count = activities.filter((a) => a.type === rule.key).length;
+                    const active = typeFilter === rule.key;
+                    return (
+                      <button
+                        key={rule.key}
+                        onClick={() => { setTypeFilter(rule.key); setFilterOpen(false); }}
+                        className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
+                          active ? "bg-[var(--forge-glow)] text-[var(--forge-gold-bright)]" : "text-white/60 hover:text-white hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        {rule.label}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/45">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           <label className="relative block w-full lg:w-64">
@@ -271,19 +333,43 @@ export default function GuildActivitiesPage() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-44 rounded-xl" />)}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Skeleton className="h-96 rounded-2xl lg:col-span-2" />
+            <Skeleton className="h-96 rounded-2xl" />
           </div>
         ) : (
-          <>
-            <Section title="Upcoming" count={upcoming.length}>
-              {upcoming.length === 0 ? (
-                <EmptyState title="No upcoming activities" body={canManage ? "Create one with the New Activity button." : "Check back later."} />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+            <div className="lg:col-span-2">
+              <ActivityCalendar
+                activities={filtered}
+                typeMeta={typeMeta}
+                now={now}
+                selectedDate={selectedDate}
+                onSelectDate={handleSelectDate}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-white/80">{dayLabel}</h2>
+                {canManage && (
+                  <button
+                    onClick={() => { setEditing(null); setModalOpen(true); }}
+                    className="h-7 px-2.5 inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] text-[11px] text-white/60 hover:text-white cursor-pointer"
+                  >
+                    + Add
+                  </button>
+                )}
+              </div>
+
+              {dayActivities.length === 0 ? (
+                <EmptyState title="No activities" body={canManage ? "Add one for this day with the button above." : "Nothing scheduled for this day."} />
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {upcoming.map((a) => (
+                <div className="space-y-3">
+                  {dayActivities.map((a) => (
                     <ActivityCard
                       key={a.id} activity={a} now={now} canManage={canManage} busy={busyId === a.id}
+                      typeMeta={typeMeta}
                       expanded={expandedId === a.id} onToggleExpand={() => setExpandedId((id) => (id === a.id ? null : a.id))}
                       onCheckIn={() => toggleCheckIn(a)} onEdit={() => { setEditing(a); setModalOpen(true); }}
                       onDelete={() => remove(a)} onConfirmAttendee={confirmAttendee}
@@ -291,23 +377,8 @@ export default function GuildActivitiesPage() {
                   ))}
                 </div>
               )}
-            </Section>
-
-            {history.length > 0 && (
-              <Section title="History" count={history.length}>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {history.map((a) => (
-                    <ActivityCard
-                      key={a.id} activity={a} now={now} canManage={canManage} busy={busyId === a.id}
-                      expanded={expandedId === a.id} onToggleExpand={() => setExpandedId((id) => (id === a.id ? null : a.id))}
-                      onCheckIn={() => toggleCheckIn(a)} onEdit={() => { setEditing(a); setModalOpen(true); }}
-                      onDelete={() => remove(a)} onConfirmAttendee={confirmAttendee}
-                    />
-                  ))}
-                </div>
-              </Section>
-            )}
-          </>
+            </div>
+          </div>
         )}
       </div>
 
@@ -317,20 +388,10 @@ export default function GuildActivitiesPage() {
         editing={editing}
         saving={saving}
         onSubmit={submit}
-        defaultType={typeFilter === "ALL" ? "GUILD_WAR" : typeFilter}
+        activityTypes={registeredActivities.map((r) => ({ key: r.key, label: r.label }))}
+        defaultType={typeFilter === "ALL" ? undefined : typeFilter}
+        defaultDate={selectedDate}
       />
-    </div>
-  );
-}
-
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-white/70">{title}</h2>
-        <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 text-white/45">{count}</span>
-      </div>
-      {children}
     </div>
   );
 }
@@ -345,12 +406,13 @@ function ResultBadge({ result }: { result: "WIN" | "LOSS" | "DRAW" }) {
 }
 
 function ActivityCard({
-  activity, now, canManage, busy, expanded, onToggleExpand, onCheckIn, onEdit, onDelete, onConfirmAttendee,
+  activity, now, canManage, busy, typeMeta, expanded, onToggleExpand, onCheckIn, onEdit, onDelete, onConfirmAttendee,
 }: {
   activity: GuildActivityData;
   now: number;
   canManage: boolean;
   busy: boolean;
+  typeMeta: Record<string, ActivityTypeMeta>;
   expanded: boolean;
   onToggleExpand: () => void;
   onCheckIn: () => void;
@@ -358,7 +420,7 @@ function ActivityCard({
   onDelete: () => void;
   onConfirmAttendee: (a: GuildActivityData, userId: string, confirmed: boolean) => void;
 }) {
-  const meta = TYPE_META[activity.type];
+  const meta = resolveActivityTypeMeta(typeMeta, activity.type);
   const isUpcoming = activity.status === "UPCOMING";
   const cd = countdown(activity.scheduledAt, now);
   const when = new Date(activity.scheduledAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });

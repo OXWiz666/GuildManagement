@@ -6,9 +6,8 @@ export type MarketTab =
   | "loot"
   | "accounting"
   | "rankings"
-  | "legendary"
-  | "distribution"
-  | "history";
+  | "storage"
+  | "auctions";
 
 interface TabDef {
   value: MarketTab;
@@ -61,21 +60,17 @@ const ICONS = {
       <path d="M9 21h6M12 15v6" />
     </>,
   ),
-  sparkle: ico(
-    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />,
-  ),
-  gift: ico(
+  vault: ico(
     <>
-      <rect x="3" y="8" width="18" height="4" rx="1" />
-      <path d="M12 8v13M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7" />
-      <path d="M12 8S10 2 7 4s5 4 5 4M12 8s2-6 5-4-5 4-5 4" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 8.8V6M12 18v-2.8M15.2 12H18M6 12h2.8" />
     </>,
   ),
-  scroll: ico(
+  hammer: ico(
     <>
-      <path d="M8 3H5a2 2 0 0 0-2 2v3h5" />
-      <path d="M16 3H8v14a2 2 0 0 1-2 2h11a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" />
-      <path d="M11 8h4M11 12h4" />
+      <path d="M14 5l5 5-3 3-5-5z" />
+      <path d="M11 8L4 15a2 2 0 0 0 0 3 2 2 0 0 0 3 0l7-7" />
     </>,
   ),
 };
@@ -91,12 +86,11 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    key: "distribution",
-    label: "Distribution",
+    key: "vault",
+    label: "Vault",
     tabs: [
-      { value: "legendary", label: "Legendary Priority", short: "Legendary", icon: ICONS.sparkle },
-      { value: "distribution", label: "Member Wishlist", short: "Wishlist", icon: ICONS.gift },
-      { value: "history", label: "History", short: "History", icon: ICONS.scroll },
+      { value: "storage", label: "Guild Storage", short: "Storage", icon: ICONS.vault },
+      { value: "auctions", label: "Auction Hall", short: "Auctions", icon: ICONS.hammer },
     ],
   },
 ];

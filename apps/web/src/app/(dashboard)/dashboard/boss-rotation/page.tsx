@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import {
   dashboardApi,
@@ -23,13 +24,40 @@ import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
 import { getGuildColor } from "./utils/helpers";
 import MasterListTab from "./components/MasterListTab";
-import MaintenanceResetModal from "./components/MaintenanceResetModal";
 import BossDropsPicker, { type SelectedDrop, rarityStyle } from "./components/BossDropsPicker";
-import BossKillSaleModal from "./components/BossKillSaleModal";
+import BossCommitButton from "./components/BossCommitButton";
+
+// Modals are only ever needed after a user action (opening the maintenance
+// reset dialog, closing out a boss-kill sale) — code-split them out of the
+// main route chunk instead of shipping them on every boss-rotation load.
+const MaintenanceResetModal = dynamic(() => import("./components/MaintenanceResetModal"));
+const BossKillSaleModal = dynamic(() => import("./components/BossKillSaleModal"));
 import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, getBossCycleCategory, getRealtimeBossTimer } from "@guild/shared";
 
 type RotationTab = "LIVE" | "UPCOMING" | "MASTER" | "ACTIVITY" | "HISTORY";
 type CycleFilter = "ALL" | "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE";
+type SortMode = "TIME" | "GUILD";
+type ViewMode = "GRID" | "TIMELINE" | "CALENDAR";
+
+// Normalized shape both the LIVE (rotation) and UPCOMING (schedule) tabs
+// reduce down to, so Timeline/Calendar views only need to know one shape.
+interface ViewEntry {
+  id: string;
+  bossName: string;
+  bossImageUrl: string;
+  location: string;
+  spawnTime: string | null;
+  guildName: string;
+  timerText: string;
+  timerWarning: boolean;
+  timerLive: boolean;
+}
+
+const VIEW_OPTIONS: Array<{ id: ViewMode; label: string }> = [
+  { id: "GRID", label: "Grid" },
+  { id: "TIMELINE", label: "Timeline" },
+  { id: "CALENDAR", label: "Calendar" },
+];
 
 const CYCLE_FILTERS: Array<{ id: CycleFilter; label: string }> = [
   { id: "ALL", label: "All cycles" },
@@ -37,6 +65,38 @@ const CYCLE_FILTERS: Array<{ id: CycleFilter; label: string }> = [
   { id: "LONG_CYCLE", label: "Long Cycle Boss" },
   { id: "SHORT_CYCLE", label: "Short Cycle Boss" },
 ];
+
+const SORT_OPTIONS: Array<{ id: SortMode; label: string }> = [
+  { id: "TIME", label: "Sort: Nearest time" },
+  { id: "GUILD", label: "Sort: By guild" },
+];
+
+// Spawn times that are missing/never-taken sort to the end, not the front.
+function spawnSortValue(spawnTime: string | null | undefined) {
+  return spawnTime ? new Date(spawnTime).getTime() : Number.POSITIVE_INFINITY;
+}
+
+function guildGroupLabel(name: string | null | undefined) {
+  return name && name.trim() ? name : "Unassigned";
+}
+
+// Groups already-sorted-by-time items into per-guild sections (guild
+// alphabetical, "Unassigned" last), preserving the incoming item order
+// within each group so the nearest-time ordering carries over.
+function groupByGuild<T>(items: T[], getGuildName: (item: T) => string | null | undefined) {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const name = guildGroupLabel(getGuildName(item));
+    const bucket = map.get(name);
+    if (bucket) bucket.push(item);
+    else map.set(name, [item]);
+  }
+  return Array.from(map.entries()).sort(([a], [b]) => {
+    if (a === "Unassigned") return 1;
+    if (b === "Unassigned") return -1;
+    return a.localeCompare(b);
+  });
+}
 
 type AuditLogPage = {
   logs: AuditLogEntry[];
@@ -67,6 +127,38 @@ function getCountdown(spawnTime: string, nowMs: number) {
   };
 }
 
+function rotationToViewEntry(rotation: BossRotationItem, serverNow: number): ViewEntry {
+  const tick = rotation.spawnTime
+    ? getCountdown(rotation.spawnTime, serverNow)
+    : { text: "Not Taken Yet", warning: false, expired: false };
+  return {
+    id: rotation.id,
+    bossName: rotation.bossName,
+    bossImageUrl: rotation.bossImageUrl || getBossImageUrl(rotation.bossName),
+    location: rotation.location,
+    spawnTime: rotation.spawnTime,
+    guildName: guildGroupLabel(rotation.currentGuild?.name),
+    timerText: tick.text,
+    timerWarning: tick.warning,
+    timerLive: tick.expired,
+  };
+}
+
+function scheduleToViewEntry(schedule: BossScheduleData, serverNow: number): ViewEntry {
+  const timer = getRealtimeBossTimer(schedule.bossName, schedule.spawnTime, serverNow, { status: schedule.status });
+  return {
+    id: schedule.id,
+    bossName: schedule.bossName,
+    bossImageUrl: schedule.bossImageUrl || getBossImageUrl(schedule.bossName),
+    location: schedule.location,
+    spawnTime: schedule.spawnTime,
+    guildName: guildGroupLabel(schedule.guildTurnGuildName || schedule.guildTurn),
+    timerText: timer.live ? "LIVE" : timer.text,
+    timerWarning: timer.warning,
+    timerLive: timer.live,
+  };
+}
+
 export default function BossRotationPage() {
   const { user } = useAuth();
   const { socket } = useSocket();
@@ -84,6 +176,8 @@ export default function BossRotationPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTakingGuildId, setSelectedTakingGuildId] = useState("ALL");
   const [selectedCycle, setSelectedCycle] = useState<CycleFilter>("ALL");
+  const [sortMode, setSortMode] = useState<SortMode>("TIME");
+  const [viewMode, setViewMode] = useState<ViewMode>("GRID");
   const [activitySearch, setActivitySearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [now, setNow] = useState<number | null>(null);
@@ -101,10 +195,21 @@ export default function BossRotationPage() {
   const isKillingRef = useRef(false);
   const rotationQueryKey = activeGuild ? `boss_rotation_v2:${activeGuild.guildId}` : "boss_rotation_empty";
 
+  // Timeline/Calendar views compute their countdown text from this shared
+  // `now`, so the tick only needs to run there — the default Grid view's
+  // cards keep their own live countdown internally (see RotationCard /
+  // UpcomingCard), and Master/Activity/History have no countdown to show at
+  // all. Without this gate the whole page (every card, every tab) was
+  // re-rendering once a second regardless of what was actually on screen.
+  const needsSharedTick =
+    (activeTab === "LIVE" || activeTab === "UPCOMING") &&
+    (viewMode === "TIMELINE" || viewMode === "CALENDAR");
+
   useEffect(() => {
+    if (!needsSharedTick) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [needsSharedTick]);
 
   const {
     data: rotationData,
@@ -325,7 +430,7 @@ export default function BossRotationPage() {
 
   const filteredRotations = useMemo(() => {
     const needle = searchQuery.trim().toLowerCase();
-    return rotations.filter((rotation) => {
+    const filtered = rotations.filter((rotation) => {
       const matchesSearch = !needle ||
         rotation.bossName.toLowerCase().includes(needle) ||
         rotation.location.toLowerCase().includes(needle) ||
@@ -345,7 +450,18 @@ export default function BossRotationPage() {
 
       return matchesSearch && matchesGuild && matchesCycle;
     });
-  }, [rotations, searchQuery, selectedTakingGuildId, selectedCycle]);
+
+    // Nearest-spawn-first is the base order in every mode; guild mode groups
+    // on top of that ordering (see groupByGuild), so the time sort here
+    // guarantees soonest-first inside each guild section too.
+    return [...filtered].sort((a, b) => {
+      if (sortMode === "GUILD") {
+        const guildCompare = guildGroupLabel(a.currentGuild?.name).localeCompare(guildGroupLabel(b.currentGuild?.name));
+        if (guildCompare !== 0) return guildCompare;
+      }
+      return spawnSortValue(a.spawnTime) - spawnSortValue(b.spawnTime);
+    });
+  }, [rotations, searchQuery, selectedTakingGuildId, selectedCycle, sortMode]);
 
   // Generate upcoming entries for ALL bosses (including those without explicit schedules).
   // Built from filteredRotations so the shared search/guild/cycle toolbar actually
@@ -378,16 +494,19 @@ export default function BossRotationPage() {
       });
     }
 
-    // Sort by spawn time and limit to 24
-    return allUpcoming
-      .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime())
-      .slice(0, 24);
-  }, [filteredRotations, activeGuild]);
-
-  const upcomingSchedules = schedules
-    .filter((schedule) => schedule.status !== "KILLED")
-    .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime())
-    .slice(0, 24);
+    // Nearest spawn first as the base order; guild mode groups on top of it
+    // (see groupByGuild), so each guild's cards still read soonest-first.
+    allUpcoming.sort((a, b) => {
+      if (sortMode === "GUILD") {
+        const guildCompare = guildGroupLabel(a.guildTurnGuildName || a.guildTurn).localeCompare(
+          guildGroupLabel(b.guildTurnGuildName || b.guildTurn),
+        );
+        if (guildCompare !== 0) return guildCompare;
+      }
+      return spawnSortValue(a.spawnTime) - spawnSortValue(b.spawnTime);
+    });
+    return allUpcoming.slice(0, 24);
+  }, [filteredRotations, activeGuild, sortMode]);
 
   // Only guilds that actually hold a turn for this boss in the Master List
   // rotation queue may take it. Guilds absent from the master list are NOT
@@ -412,20 +531,26 @@ export default function BossRotationPage() {
     : null;
   const canConfirmTaken = Boolean(killTarget && killTime && selectedTakenGuild && !isKilling);
 
-  function openKillModal(rotation: BossRotationItem) {
-    isKillingRef.current = false;
-    setIsKilling(false);
-    const defaultGuildId =
-      rotation.activeSchedule?.guildTurnGuildId ||
-      rotation.currentGuild?.id ||
-      rotation.queue[0]?.id ||
-      takingGuilds[0]?.id ||
-      "";
-    setKillTarget(rotation);
-    setKillTime(toDateTimeInputValue(new Date()));
-    setSelectedTakenGuildId(defaultGuildId);
-    setKillDrops([]);
-  }
+  // Stable reference (vs. an inline `() => openKillModal(rotation)` per
+  // card) so RotationCard's memo isn't defeated by a fresh closure on every
+  // parent render — the card passes itself as the argument instead.
+  const openKillModal = useCallback(
+    (rotation: BossRotationItem) => {
+      isKillingRef.current = false;
+      setIsKilling(false);
+      const defaultGuildId =
+        rotation.activeSchedule?.guildTurnGuildId ||
+        rotation.currentGuild?.id ||
+        rotation.queue[0]?.id ||
+        takingGuilds[0]?.id ||
+        "";
+      setKillTarget(rotation);
+      setKillTime(toDateTimeInputValue(new Date()));
+      setSelectedTakenGuildId(defaultGuildId);
+      setKillDrops([]);
+    },
+    [takingGuilds],
+  );
 
   async function confirmKill() {
     if (isKillingRef.current || !activeGuild || !killTarget || !killTime || !selectedTakenGuild) return;
@@ -550,7 +675,7 @@ export default function BossRotationPage() {
   const tabs: Array<{ id: RotationTab; label: string; count?: number; hidden?: boolean }> = [
     { id: "LIVE", label: "Boss Rotation", count: filteredRotations.length },
     { id: "UPCOMING", label: "Upcoming", count: upcomingBosses.length },
-    { id: "MASTER", label: "Master List", hidden: !isOfficer },
+    { id: "MASTER", label: "Faction Schedule", hidden: !isOfficer },
     { id: "ACTIVITY", label: "Activity", count: auditLogPage.total },
     { id: "HISTORY", label: "Killed History", count: killedHistory.total },
   ];
@@ -601,34 +726,34 @@ export default function BossRotationPage() {
           }
         />
 
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="inline-flex flex-wrap items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-xl p-1 gap-1">
-            {tabs.filter((tab) => !tab.hidden).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer focus-ring ${
+        <div className="flex flex-nowrap items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-xl p-1 gap-1 min-w-0 max-w-full overflow-x-auto no-scrollbar">
+          {tabs.filter((tab) => !tab.hidden).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative shrink-0 whitespace-nowrap px-4 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer focus-ring ${
+                activeTab === tab.id
+                  ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] shadow-[0_0_12px_rgba(212,168,83,0.1)]"
+                  : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
+              }`}
+            >
+              {tab.label}
+              {typeof tab.count === "number" && (
+                <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${
                   activeTab === tab.id
-                    ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] shadow-[0_0_12px_rgba(212,168,83,0.1)]"
-                    : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
-                }`}
-              >
-                {tab.label}
-                {typeof tab.count === "number" && (
-                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${
-                    activeTab === tab.id
-                      ? "bg-[var(--forge-gold)]/15 text-[var(--forge-gold)]"
-                      : "bg-white/5 text-white/45"
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+                    ? "bg-[var(--forge-gold)]/15 text-[var(--forge-gold)]"
+                    : "bg-white/5 text-white/45"
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
-          <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(170px,210px)_minmax(180px,240px)_minmax(200px,300px)] gap-2 w-full lg:w-auto ${activeTab === "LIVE" || activeTab === "UPCOMING" ? "" : "hidden"}`}>
-            {(activeTab === "LIVE" || activeTab === "UPCOMING") && (
+        {(activeTab === "LIVE" || activeTab === "UPCOMING") && (
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(170px,210px)_minmax(170px,210px)_minmax(180px,240px)_minmax(200px,300px)] gap-2 w-full lg:w-auto">
               <label className="relative block">
                 <span className="sr-only">Filter boss cycle</span>
                 <select
@@ -643,40 +768,78 @@ export default function BossRotationPage() {
                   ))}
                 </select>
               </label>
-            )}
 
-            <label className="relative block">
-              <span className="sr-only">Filter taking guild</span>
-              <select
-                value={selectedTakingGuildId}
-                onChange={(event) => setSelectedTakingGuildId(event.target.value)}
-                className="w-full h-[42px] px-3.5 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-[13px] text-white/90 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors cursor-pointer"
-              >
-                <option className="bg-[#0c0d12]" value="ALL">All taking guilds</option>
-                <option className="bg-[#0c0d12]" value="UNASSIGNED">Unassigned</option>
-                {takingGuilds.map((guild) => (
-                  <option className="bg-[#0c0d12]" key={guild.id} value={guild.id}>
-                    {guild.name}
-                  </option>
+              {viewMode === "GRID" && (
+                <label className="relative block">
+                  <span className="sr-only">Sort order</span>
+                  <select
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value as SortMode)}
+                    className="w-full h-[42px] px-3.5 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-[13px] text-white/90 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors cursor-pointer"
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <option className="bg-[#0c0d12]" key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label className="relative block">
+                <span className="sr-only">Filter taking guild</span>
+                <select
+                  value={selectedTakingGuildId}
+                  onChange={(event) => setSelectedTakingGuildId(event.target.value)}
+                  className="w-full h-[42px] px-3.5 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-[13px] text-white/90 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors cursor-pointer"
+                >
+                  <option className="bg-[#0c0d12]" value="ALL">All taking guilds</option>
+                  <option className="bg-[#0c0d12]" value="UNASSIGNED">Unassigned</option>
+                  {takingGuilds.map((guild) => (
+                    <option className="bg-[#0c0d12]" key={guild.id} value={guild.id}>
+                      {guild.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="relative block">
+                <span className="sr-only">Search rotations</span>
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35" />
+                </svg>
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search boss or guild..."
+                  className="w-full h-[42px] pl-10 pr-4 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-sm text-white/90 placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[10px] uppercase tracking-[0.16em] text-white/30 font-bold mr-1">View</span>
+              <div className="inline-flex items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-lg p-1 gap-1">
+                {VIEW_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setViewMode(option.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all cursor-pointer focus-ring ${
+                      viewMode === option.id
+                        ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)]"
+                        : "text-white/40 hover:text-white/70 border border-transparent hover:bg-white/[0.03]"
+                    }`}
+                  >
+                    <ViewModeIcon mode={option.id} />
+                    {option.label}
+                  </button>
                 ))}
-              </select>
-            </label>
-
-            <label className="relative block">
-              <span className="sr-only">Search rotations</span>
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <path d="M21 21l-4.35-4.35" />
-              </svg>
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search boss or guild..."
-                className="w-full h-[42px] pl-10 pr-4 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-sm text-white/90 placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors"
-              />
-            </label>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {activeTab === "LIVE" && (
           isLoading ? (
@@ -685,15 +848,50 @@ export default function BossRotationPage() {
             </div>
           ) : filteredRotations.length === 0 ? (
             <EmptyState title="No rotations found" body="Try a different boss or guild search." />
+          ) : viewMode === "TIMELINE" ? (
+            <TimelineView
+              entries={filteredRotations.map((rotation) => rotationToViewEntry(rotation, serverNow))}
+              canManage={canManage}
+              onTaken={(id) => {
+                const rotation = filteredRotations.find((r) => r.id === id);
+                if (rotation) openKillModal(rotation);
+              }}
+            />
+          ) : viewMode === "CALENDAR" ? (
+            <CalendarView
+              entries={filteredRotations.map((rotation) => rotationToViewEntry(rotation, serverNow))}
+              canManage={canManage}
+              onTaken={(id) => {
+                const rotation = filteredRotations.find((r) => r.id === id);
+                if (rotation) openKillModal(rotation);
+              }}
+            />
+          ) : sortMode === "GUILD" ? (
+            <div className="space-y-7">
+              {groupByGuild(filteredRotations, (rotation) => rotation.currentGuild?.name).map(([guildName, guildRotations]) => (
+                <GuildSection key={guildName} guildName={guildName} count={guildRotations.length}>
+                  {guildRotations.map((rotation, index) => (
+                    <RotationCard
+                      key={rotation.id}
+                      rotation={rotation}
+                      canManage={canManage}
+                      onKilled={openKillModal}
+                      guildId={activeGuild.guildId}
+                      index={index}
+                    />
+                  ))}
+                </GuildSection>
+              ))}
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
               {filteredRotations.map((rotation, index) => (
                 <RotationCard
                   key={rotation.id}
                   rotation={rotation}
-                  serverNow={serverNow}
                   canManage={canManage}
-                  onKilled={() => openKillModal(rotation)}
+                  onKilled={openKillModal}
+                  guildId={activeGuild.guildId}
                   index={index}
                 />
               ))}
@@ -705,15 +903,47 @@ export default function BossRotationPage() {
           <div>
             {upcomingBosses.length === 0 ? (
               <EmptyState title="No upcoming bosses" body="All bosses that will spawn in the future appear here." />
+            ) : viewMode === "TIMELINE" ? (
+              <TimelineView entries={upcomingBosses.map((schedule) => scheduleToViewEntry(schedule, serverNow))} />
+            ) : viewMode === "CALENDAR" ? (
+              <CalendarView entries={upcomingBosses.map((schedule) => scheduleToViewEntry(schedule, serverNow))} />
+            ) : sortMode === "GUILD" ? (
+              <div className="space-y-7">
+                {groupByGuild(upcomingBosses, (schedule) => schedule.guildTurnGuildName || schedule.guildTurn).map(([guildName, guildSchedules]) => (
+                  <GuildSection key={guildName} guildName={guildName} count={guildSchedules.length}>
+                    {guildSchedules.map((schedule, index) => (
+                      <UpcomingCard
+                        key={schedule.id}
+                        schedule={schedule}
+                        guildId={activeGuild.guildId}
+                        index={index}
+                      />
+                    ))}
+                  </GuildSection>
+                ))}
+              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                {upcomingBosses.map((schedule, index) => (
-                  <UpcomingCard
-                    key={schedule.id}
-                    schedule={schedule}
-                    serverNow={serverNow}
-                    index={index}
-                  />
+              <div className="space-y-7">
+                {groupSchedulesByDay(upcomingBosses).map((group) => (
+                  <div key={group.key}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className={`text-[11px] font-bold uppercase tracking-[0.18em] ${group.label === "Today" ? "text-[var(--forge-gold-bright)]" : "text-white/50"}`}>
+                        {group.label}
+                      </span>
+                      <span className="h-px flex-1 bg-white/[0.06]" />
+                      <span className="text-[10px] text-white/30 font-mono">{group.items.length}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                      {group.items.map((schedule, index) => (
+                        <UpcomingCard
+                          key={schedule.id}
+                          schedule={schedule}
+                          guildId={activeGuild.guildId}
+                          index={index}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -1068,23 +1298,33 @@ export default function BossRotationPage() {
   );
 }
 
-function RotationCard({
+const RotationCard = memo(function RotationCard({
   rotation,
-  serverNow,
   canManage,
   onKilled,
+  guildId,
   index = 0,
 }: {
   rotation: BossRotationItem;
-  serverNow: number;
   canManage: boolean;
-  onKilled: () => void;
+  onKilled: (rotation: BossRotationItem) => void;
+  guildId: string;
   index?: number;
 }) {
+  // Ticks on its own, independent of the page — so opening a modal, typing in
+  // a filter, or any other unrelated state change up in BossRotationPage
+  // doesn't force every visible boss card (and everything nested inside it,
+  // like BossCommitButton) to re-render along with it.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // A cycle boss with no spawnTime has never been taken — there's no real
   // countdown to show yet; the "Taken" action below logs its first kill.
   const tick = rotation.spawnTime
-    ? getCountdown(rotation.spawnTime, serverNow)
+    ? getCountdown(rotation.spawnTime, now)
     : { text: "Not Taken Yet", warning: false, expired: false };
   const currentColor = getGuildColor(rotation.currentGuild?.name || "");
   const nextColor = getGuildColor(rotation.nextGuild?.name || "");
@@ -1092,6 +1332,19 @@ function RotationCard({
   const spawnLabel = rotation.spawnTime
     ? new Date(rotation.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : "—";
+
+  // `rotation.queue` is stored in a fixed roster order (e.g. alphabetical),
+  // not rotation order — numbering it as-is could show the current holder
+  // sitting at "2." with someone else at "1.", which reads as if that guild
+  // goes first. Rotate the list so the current holder is always "1." and the
+  // rest follow in actual hand-off order.
+  const currentQueueIndex = rotation.currentGuild
+    ? rotation.queue.findIndex((guild) => guild.id === rotation.currentGuild!.id)
+    : -1;
+  const displayQueue =
+    currentQueueIndex > 0
+      ? [...rotation.queue.slice(currentQueueIndex), ...rotation.queue.slice(0, currentQueueIndex)]
+      : rotation.queue;
 
   return (
     <article
@@ -1255,15 +1508,15 @@ function RotationCard({
         <div className="rounded-2xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/20 p-3 min-h-[66px] transition-all duration-700 group-hover:bg-[var(--obsidian-elevated)]/30">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30 transition-colors duration-500 group-hover:text-white/40">Queue Flow</span>
-            <span className="text-[9px] text-white/35 font-mono px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-500 group-hover:bg-white/[0.05]">{rotation.queue.length} Guilds</span>
+            <span className="text-[9px] text-white/35 font-mono px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-500 group-hover:bg-white/[0.05]">{displayQueue.length} Guilds</span>
           </div>
-          {rotation.queue.length === 0 ? (
+          {displayQueue.length === 0 ? (
             <div className="flex items-center justify-center py-2">
               <p className="text-[10px] text-white/30 italic">No guilds in queue</p>
             </div>
           ) : (
             <div className="flex items-center flex-wrap gap-1.5">
-              {rotation.queue.map((guild, index) => {
+              {displayQueue.map((guild, index) => {
                 const color = getGuildColor(guild.name);
                 const isCurrent = rotation.currentGuild?.id === guild.id;
 
@@ -1280,7 +1533,7 @@ function RotationCard({
                       <span className="font-mono text-[9px] opacity-65">{index + 1}.</span>
                       <span className="truncate max-w-[80px]">{guild.name}</span>
                     </span>
-                    {index < rotation.queue.length - 1 && (
+                    {index < displayQueue.length - 1 && (
                       <span className="text-white/15 text-[8px] font-bold shrink-0 transition-all duration-500 group-hover:text-white/25">
                         •
                       </span>
@@ -1291,6 +1544,11 @@ function RotationCard({
             </div>
           )}
         </div>
+
+        {/* War-planning headcount for this boss's current live spawn */}
+        {rotation.activeSchedule && (
+          <BossCommitButton guildId={guildId} scheduleId={rotation.activeSchedule.id} />
+        )}
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between gap-3 border-t border-white/[0.04] pt-3">
@@ -1313,7 +1571,7 @@ function RotationCard({
           {canManage && (
             <button
               type="button"
-              onClick={onKilled}
+              onClick={() => onKilled(rotation)}
               disabled={!canKill}
               aria-label={`Mark ${rotation.bossName} taken`}
               title={rotation.activeSchedule ? "Taken" : "Import killed time"}
@@ -1336,16 +1594,25 @@ function RotationCard({
       </div>
     </article>
   );
-}
+});
 
-function UpcomingCard({ schedule, serverNow, index = 0 }: { schedule: BossScheduleData; serverNow: number; index?: number }) {
+const UpcomingCard = memo(function UpcomingCard({ schedule, guildId, index = 0 }: { schedule: BossScheduleData; guildId: string; index?: number }) {
+  // Ticks on its own for the same reason RotationCard does — see there.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tickId = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tickId);
+  }, []);
+
   // Real-time countdown that projects forward along the boss's actual respawn
   // cycle, so a passed spawn shows a live future countdown instead of "LIVE".
-  const timer = getRealtimeBossTimer(schedule.bossName, schedule.spawnTime, serverNow, { status: schedule.status });
+  const timer = getRealtimeBossTimer(schedule.bossName, schedule.spawnTime, now, { status: schedule.status });
   const tick = { text: timer.text, warning: timer.warning, expired: timer.live };
   const color = getGuildColor(schedule.guildTurnGuildName || schedule.guildTurn || "");
   const spawnLabel = new Date(timer.nextSpawn).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const isLive = timer.live;
+  const dayLabel = dayKeyLabel(schedule.spawnTime).label;
+  const isToday = dayLabel === "Today";
 
   return (
     <article
@@ -1391,7 +1658,14 @@ function UpcomingCard({ schedule, serverNow, index = 0 }: { schedule: BossSchedu
             </div>
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
-            <h3 className="text-sm font-bold text-white truncate">{schedule.bossName}</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-bold text-white truncate">{schedule.bossName}</h3>
+              {isToday && (
+                <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider bg-[var(--forge-gold)]/15 text-[var(--forge-gold-bright)] border border-[var(--forge-gold)]/30">
+                  Today
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 text-white/40 mt-1">
               <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 2a8 8 0 00-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 00-8-8z" />
@@ -1450,10 +1724,13 @@ function UpcomingCard({ schedule, serverNow, index = 0 }: { schedule: BossSchedu
             {schedule.status}
           </span>
         </div>
+
+        {/* War-planning headcount for this specific upcoming spawn */}
+        <BossCommitButton guildId={guildId} scheduleId={schedule.id} />
       </div>
     </article>
   );
-}
+});
 
 function StatusDot({ expired, warning, guildColor }: { expired: boolean; warning: boolean; guildColor?: string }) {
   // Determine the dot color - use guild color primarily, with state overlays
@@ -1615,6 +1892,376 @@ function BossAvatar({ src, name }: { src: string; name: string }) {
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
     </div>
+  );
+}
+
+function dayKeyLabel(spawnTime: string | null) {
+  if (!spawnTime) return { key: "unscheduled", label: "Not scheduled" };
+  const date = new Date(spawnTime);
+  const key = date.toDateString();
+  const todayKey = new Date().toDateString();
+  const tomorrowKey = new Date(Date.now() + 86400000).toDateString();
+  const label =
+    key === todayKey
+      ? "Today"
+      : key === tomorrowKey
+        ? "Tomorrow"
+        : date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  return { key, label };
+}
+
+// Entries arrive pre-sorted chronologically, so grouping consecutive
+// same-day entries this way naturally keeps each day's items in time order.
+function groupByDay(entries: ViewEntry[]) {
+  const groups: Array<{ key: string; label: string; items: ViewEntry[] }> = [];
+  for (const entry of entries) {
+    const { key, label } = dayKeyLabel(entry.spawnTime);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push(entry);
+    else groups.push({ key, label, items: [entry] });
+  }
+  return groups;
+}
+
+// Same day-bucketing as groupByDay, but for raw schedule rows (Upcoming
+// Grid view) rather than the reduced ViewEntry shape. Assumes input is
+// already sorted soonest-first, same as groupByDay.
+function groupSchedulesByDay(schedules: BossScheduleData[]) {
+  const groups: Array<{ key: string; label: string; items: BossScheduleData[] }> = [];
+  for (const schedule of schedules) {
+    const { key, label } = dayKeyLabel(schedule.spawnTime);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push(schedule);
+    else groups.push({ key, label, items: [schedule] });
+  }
+  return groups;
+}
+
+function TimelineView({
+  entries,
+  canManage,
+  onTaken,
+}: {
+  entries: ViewEntry[];
+  canManage?: boolean;
+  onTaken?: (id: string) => void;
+}) {
+  const sorted = useMemo(
+    () => [...entries].sort((a, b) => spawnSortValue(a.spawnTime) - spawnSortValue(b.spawnTime)),
+    [entries],
+  );
+  const groups = useMemo(() => groupByDay(sorted), [sorted]);
+
+  return (
+    <div className="space-y-6 animate-scale-in">
+      {groups.map((group) => (
+        <div key={group.key}>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--forge-gold)]">{group.label}</span>
+            <span className="h-px flex-1 bg-white/[0.06]" />
+            <span className="text-[10px] text-white/30 font-mono">{group.items.length}</span>
+          </div>
+          <div className="relative pl-6 border-l border-white/[0.08] space-y-3">
+            {group.items.map((entry) => (
+              <TimelineRow key={entry.id} entry={entry} canManage={canManage} onTaken={onTaken} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TimelineRow({
+  entry,
+  canManage,
+  onTaken,
+}: {
+  entry: ViewEntry;
+  canManage?: boolean;
+  onTaken?: (id: string) => void;
+}) {
+  const color = getGuildColor(entry.guildName === "Unassigned" ? "" : entry.guildName);
+  const timeLabel = entry.spawnTime
+    ? new Date(entry.spawnTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+    : "--:--";
+  const dotColor = entry.timerLive ? "bg-emerald-400" : entry.timerWarning ? "bg-[var(--forge-gold)]" : "bg-white/25";
+
+  return (
+    <div className="relative flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035] hover:border-white/10 transition-colors p-3">
+      <span className={`absolute -left-[29px] top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-[#0c0d12] ${dotColor}`} />
+      <span className="w-14 shrink-0 font-mono text-xs text-white/50">{timeLabel}</span>
+      <BossAvatar src={entry.bossImageUrl} name={entry.bossName} />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-white truncate">{entry.bossName}</p>
+        <p className="text-[11px] text-white/40 truncate">{entry.location}</p>
+      </div>
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold shrink-0 ${color.border} ${color.bg} ${color.text}`}>
+        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color.dot }} />
+        {entry.guildName}
+      </span>
+      <span className={`shrink-0 font-mono text-xs font-bold ${entry.timerLive ? "text-emerald-400" : entry.timerWarning ? "text-[var(--forge-gold-bright)]" : "text-white/60"}`}>
+        {entry.timerText}
+      </span>
+      {canManage && onTaken && (
+        <button
+          type="button"
+          onClick={() => onTaken(entry.id)}
+          className="shrink-0 h-7 px-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-white transition-all cursor-pointer"
+        >
+          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+            <path d="M22 4L12 14.01l-3-3" />
+          </svg>
+          Taken
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CalendarView({
+  entries,
+  canManage,
+  onTaken,
+}: {
+  entries: ViewEntry[];
+  canManage?: boolean;
+  onTaken?: (id: string) => void;
+}) {
+  const [monthCursor, setMonthCursor] = useState(() => {
+    const date = new Date();
+    date.setDate(1);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+
+  const dayMap = useMemo(() => {
+    const map = new Map<string, ViewEntry[]>();
+    for (const entry of entries) {
+      if (!entry.spawnTime) continue;
+      const key = new Date(entry.spawnTime).toDateString();
+      const bucket = map.get(key);
+      if (bucket) bucket.push(entry);
+      else map.set(key, [entry]);
+    }
+    for (const bucket of map.values()) {
+      bucket.sort((a, b) => spawnSortValue(a.spawnTime) - spawnSortValue(b.spawnTime));
+    }
+    return map;
+  }, [entries]);
+
+  const monthLabel = monthCursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const firstWeekday = monthCursor.getDay();
+  const daysInMonth = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
+  const todayKey = new Date().toDateString();
+
+  const cells: Array<Date | null> = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(monthCursor.getFullYear(), monthCursor.getMonth(), day));
+
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] p-4 animate-scale-in">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          type="button"
+          onClick={() => setMonthCursor((month) => { const next = new Date(month); next.setMonth(next.getMonth() - 1); return next; })}
+          className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 transition-colors cursor-pointer focus-ring"
+          aria-label="Previous month"
+        >
+          <ChevronLeftIcon />
+        </button>
+        <h3 className="text-sm font-bold text-white">{monthLabel}</h3>
+        <button
+          type="button"
+          onClick={() => setMonthCursor((month) => { const next = new Date(month); next.setMonth(next.getMonth() + 1); return next; })}
+          className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 transition-colors cursor-pointer focus-ring"
+          aria-label="Next month"
+        >
+          <ChevronRightIcon />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          <div key={day} className="text-center text-[10px] uppercase tracking-wider text-white/30 font-bold py-1">{day}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1.5">
+        {cells.map((date, index) => {
+          if (!date) return <div key={`empty-${index}`} className="min-h-[86px]" />;
+          const key = date.toDateString();
+          const dayEntries = dayMap.get(key) || [];
+          const isToday = key === todayKey;
+          const hasEntries = dayEntries.length > 0;
+          return (
+            <div
+              key={key}
+              role={hasEntries ? "button" : undefined}
+              tabIndex={hasEntries ? 0 : undefined}
+              onClick={() => hasEntries && setSelectedDayKey(key)}
+              onKeyDown={(e) => {
+                if (hasEntries && (e.key === "Enter" || e.key === " ")) setSelectedDayKey(key);
+              }}
+              className={`min-h-[86px] rounded-lg border p-1.5 transition-colors ${
+                isToday ? "border-[var(--forge-gold)]/40 bg-[var(--forge-glow)]/20" : "border-white/[0.05] bg-white/[0.01]"
+              } ${hasEntries ? "cursor-pointer hover:border-white/20 hover:bg-white/[0.04] focus-ring" : ""}`}
+            >
+              <span className={`text-[10px] font-mono ${isToday ? "text-[var(--forge-gold-bright)] font-bold" : "text-white/35"}`}>{date.getDate()}</span>
+              <div className="mt-1 space-y-1">
+                {dayEntries.slice(0, 3).map((entry) => {
+                  const color = getGuildColor(entry.guildName === "Unassigned" ? "" : entry.guildName);
+                  return (
+                    <div
+                      key={entry.id}
+                      title={`${entry.bossName} · ${entry.guildName}`}
+                      className={`truncate text-[9px] font-semibold px-1 py-0.5 rounded border ${color.border} ${color.bg} ${color.text}`}
+                    >
+                      {entry.spawnTime && new Date(entry.spawnTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} {entry.bossName}
+                    </div>
+                  );
+                })}
+                {dayEntries.length > 3 && (
+                  <div className="text-[9px] text-white/35 px-1">+{dayEntries.length - 3} more</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Day detail modal — click a date to see its bosses and mark taken,
+          instead of a cramped per-entry button inside the tiny day cell. */}
+      {selectedDayKey && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedDayKey(null)}
+        >
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
+          <div
+            className="relative w-full max-w-md glass-strong rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden z-50 animate-scale-in max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/[0.06] flex items-center justify-between gap-3 shrink-0">
+              <div>
+                <p className="text-[10px] text-white/40 uppercase tracking-wider">Boss Spawns</p>
+                <h3 className="text-base font-bold text-white">
+                  {new Date(selectedDayKey).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedDayKey(null)}
+                className="text-white/40 hover:text-white/80 cursor-pointer shrink-0"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-3 space-y-2 overflow-y-auto">
+              {(dayMap.get(selectedDayKey) || []).map((entry) => {
+                const color = getGuildColor(entry.guildName === "Unassigned" ? "" : entry.guildName);
+                return (
+                  <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                    <BossAvatar src={entry.bossImageUrl} name={entry.bossName} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white truncate">{entry.bossName}</p>
+                      <p className="text-[11px] text-white/40 truncate">{entry.location}</p>
+                      <span className={`inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md border text-[10px] font-bold ${color.border} ${color.bg} ${color.text}`}>
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color.dot }} />
+                        {entry.guildName}
+                      </span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={`font-mono text-xs font-bold ${entry.timerLive ? "text-emerald-400" : entry.timerWarning ? "text-[var(--forge-gold-bright)]" : "text-white/60"}`}>
+                        {entry.timerText}
+                      </p>
+                      {entry.spawnTime && (
+                        <p className="text-[10px] text-white/35 mt-0.5">
+                          {new Date(entry.spawnTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      )}
+                    </div>
+                    {canManage && onTaken && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onTaken(entry.id);
+                          setSelectedDayKey(null);
+                        }}
+                        className="shrink-0 h-8 px-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-white transition-all cursor-pointer"
+                      >
+                        <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                          <path d="M22 4L12 14.01l-3-3" />
+                        </svg>
+                        Taken
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ViewModeIcon({ mode }: { mode: ViewMode }) {
+  if (mode === "TIMELINE") {
+    return (
+      <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="4" y1="6" x2="4" y2="18" />
+        <circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" />
+        <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" />
+        <circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" />
+        <line x1="9" y1="6" x2="20" y2="6" />
+        <line x1="9" y1="12" x2="20" y2="12" />
+        <line x1="9" y1="18" x2="20" y2="18" />
+      </svg>
+    );
+  }
+  if (mode === "CALENDAR") {
+    return (
+      <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+function GuildSection({ guildName, count, children }: { guildName: string; count: number; children: ReactNode }) {
+  const color = getGuildColor(guildName === "Unassigned" ? "" : guildName);
+  return (
+    <section>
+      <div className="flex items-center gap-2.5 mb-3.5">
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-[11px] font-bold ${color.border} ${color.bg} ${color.text}`}>
+          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color.dot }} />
+          {guildName}
+        </span>
+        <span className="text-[10px] text-white/35 font-mono">{count} boss{count === 1 ? "" : "es"}</span>
+        <span className="h-px flex-1 bg-white/[0.06]" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+        {children}
+      </div>
+    </section>
   );
 }
 

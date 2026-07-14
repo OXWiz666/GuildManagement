@@ -8,7 +8,8 @@ import {
 import { writeAuditLog } from "./audit.service";
 import { getGuildMemberByUser } from "./guild.service";
 import { broadcastToGuild } from "../lib/socket";
-import { cache } from "../lib/cache";
+import { cache as redisCache } from "../lib/redis";
+import { cacheKeys, ttl as cacheTtl } from "../lib/cache-keys";
 import { publicUrl, uploadObject, signUrl } from "../lib/supabaseStorage";
 import { ForbiddenError, BadRequestError } from "../utils/errors";
 
@@ -116,7 +117,7 @@ function classify(bucket: string, path: string): CatalogItem | null {
  * PUBLIC buckets so every returned icon has a working public URL. Cached.
  */
 async function getRawCatalog(): Promise<CatalogItem[]> {
-  return cache.getOrSet("equipment:catalog:raw", CATALOG_CACHE_TTL, async () => {
+  return redisCache.getOrSet(cacheKeys.equipCatalog(), CATALOG_CACHE_TTL, async () => {
     const rows = await prisma.$queryRawUnsafe<Array<{ bucket_id: string; name: string }>>(
       `select o.bucket_id, o.name
          from storage.objects o
@@ -225,7 +226,7 @@ function classifyConsumable(path: string): Omit<DropCatalogItem, "iconUrl"> | nu
 }
 
 async function getRawConsumables(): Promise<Array<Omit<DropCatalogItem, "iconUrl">>> {
-  return cache.getOrSet("drops:consumables:raw", CATALOG_CACHE_TTL, async () => {
+  return redisCache.getOrSet(cacheKeys.equipDropsCatalog(), CATALOG_CACHE_TTL, async () => {
     const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
       `select o.name
          from storage.objects o
@@ -339,13 +340,16 @@ async function attachUrls(
 }
 
 export async function getMyEquipment(guildId: string, userId: string) {
-  const member = await requireActiveMember(guildId, userId);
-  const rows = await prisma.memberEquipment.findMany({
-    where: { memberId: member.id },
-    orderBy: { slotType: "asc" },
+  // Per-user by definition ("mine") — always the caller's own gear.
+  return redisCache.getOrSet(cacheKeys.equipMine(guildId, userId), cacheTtl.equipMine, async () => {
+    const member = await requireActiveMember(guildId, userId);
+    const rows = await prisma.memberEquipment.findMany({
+      where: { memberId: member.id },
+      orderBy: { slotType: "asc" },
+    });
+    const equipment = await attachUrls(rows);
+    return { equipment };
   });
-  const equipment = await attachUrls(rows);
-  return { equipment };
 }
 
 // ─── Confirm & save ──────────────────────────────────────────────────
@@ -438,6 +442,7 @@ export async function confirmEquipment(
     },
   });
 
+  await redisCache.del(cacheKeys.equipMine(guildId, userId));
   void broadcastToGuild(guildId, "member_equipment_updated", { memberId: member.id });
 
   return getMyEquipment(guildId, userId);

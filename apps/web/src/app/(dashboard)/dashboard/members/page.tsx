@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
-import { guildApi, type GuildMemberData, type JoinRequestData, type CustomRoleData } from "@/lib/api";
-import { hasMinimumRole, type GuildRoleType } from "@guild/shared";
+import { guildApi, dashboardApi, type GuildMemberData, type JoinRequestData, type CustomRoleData } from "@/lib/api";
+import { hasMinimumRole, GUILD_ROLES, type GuildRoleType } from "@guild/shared";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import { useToast } from "@/components/ui/Toast";
 import Card from "@/components/ui/Card";
@@ -24,9 +24,9 @@ import MemberRow from "./components/MemberRow";
 import ApplicationsTab from "./components/ApplicationsTab";
 import InviteTab from "./components/InviteTab";
 import RoleConfirmModal from "./components/RoleConfirmModal";
-import StalkProfileModal from "./components/StalkProfileModal";
-import RoleCustomizationModal from "./components/RoleCustomizationModal";
-import CustomRolesModal from "./components/CustomRolesModal";
+import StalkProfileModal, { type MemberWithFinance } from "./components/StalkProfileModal";
+
+type SortMode = "NAME" | "RANKING" | "GUILD_POINTS" | "BALANCE" | "CLASS" | "CP" | "JOINED";
 
 export default function MembersPage() {
   const { user } = useAuth();
@@ -34,7 +34,7 @@ export default function MembersPage() {
   const { socket } = useSocket();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
-  const [sortBy, setSortBy] = useState<"NAME" | "CP" | "JOINED">("NAME");
+  const [sortBy, setSortBy] = useState<SortMode>("NAME");
   const [confirmModal, setConfirmModal] = useState<{
     memberId: string;
     memberName: string;
@@ -43,10 +43,7 @@ export default function MembersPage() {
     isTransfer: boolean;
   } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [expandedMember, setExpandedMember] = useState<string | null>(null);
-  const [selectedStalkMember, setSelectedStalkMember] = useState<GuildMemberData | null>(null);
-  const [showRoleCustomization, setShowRoleCustomization] = useState(false);
-  const [showCustomRolesManager, setShowCustomRolesManager] = useState(false);
+  const [selectedStalkMemberId, setSelectedStalkMemberId] = useState<string | null>(null);
 
   // New admin flow state variables
   const [activeTab, setActiveTab] = useState<"members" | "applications" | "invites">("members");
@@ -56,7 +53,7 @@ export default function MembersPage() {
   const activeGuild = user?.guilds[0];
   const isGuildLeader = !!activeGuild && hasMinimumRole(activeGuild.role as GuildRoleType, "GUILD_LEADER");
   const isOfficer = !!activeGuild && hasMinimumRole(activeGuild.role as GuildRoleType, "OFFICER");
-  const { overrides: roleDisplayOverrides, resolveRoleName } = useRoleDisplayNames();
+  const { resolveRoleName } = useRoleDisplayNames();
 
   // ─── Persistent Queries ────────────────────────────────
   
@@ -74,6 +71,35 @@ export default function MembersPage() {
     { persist: true, staleTime: 30000 }
   );
   const members = membersRaw || [];
+
+  // 1b. Accounting Query — sources Balance + Guild Points for the roster.
+  // Shares the `accounting_dashboard:${guildId}:1` cache key with Guild
+  // Market's Accounting tab (page 1), so visiting both costs one fetch.
+  const { data: accounting } = useQuery<any | null>(
+    activeGuild ? `accounting_dashboard:${activeGuild.guildId}:1` : "accounting_dashboard_empty",
+    async () => {
+      if (!activeGuild) return null;
+      const result = await dashboardApi.getAccountingDashboard(activeGuild.guildId, 1, 1);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 15000, enabled: !!activeGuild }
+  );
+
+  const currencySymbol = accounting?.treasury?.primary?.currencySymbol || "₱";
+  const balancesByMemberId = new Map<string, { balance: number; dkp: number }>(
+    (accounting?.memberBalances || []).map((b: any) => [b.memberId, { balance: b.balance, dkp: b.dkp }]),
+  );
+  const enrichedMembers: MemberWithFinance[] = members.map((m) => {
+    const fin = balancesByMemberId.get(m.id);
+    return { ...m, balance: fin?.balance ?? 0, guildPoints: fin?.dkp ?? 0, currencySymbol };
+  });
+
+  // Derived (not a snapshot) so edits made inside the card — avatar, banner,
+  // IGN, etc. — appear immediately once the roster query refetches, without
+  // needing to close and reopen the modal.
+  const selectedStalkMember: MemberWithFinance | null = selectedStalkMemberId
+    ? (enrichedMembers.find((m) => m.id === selectedStalkMemberId) ?? null)
+    : null;
 
   // 2. Applications Query
   const {
@@ -143,6 +169,7 @@ export default function MembersPage() {
     };
 
     socket.on("member_role_updated", handleRosterUpdate);
+    socket.on("member_profile_updated", handleRosterUpdate);
     socket.on("custom_roles_updated", handleCustomRolesUpdate);
     socket.on("join_request_created", handleApplicationsUpdate);
     socket.on("join_request_cancelled", handleApplicationsUpdate);
@@ -152,6 +179,7 @@ export default function MembersPage() {
 
     return () => {
       socket.off("member_role_updated", handleRosterUpdate);
+      socket.off("member_profile_updated", handleRosterUpdate);
       socket.off("custom_roles_updated", handleCustomRolesUpdate);
       socket.off("join_request_created", handleApplicationsUpdate);
       socket.off("join_request_cancelled", handleApplicationsUpdate);
@@ -161,8 +189,8 @@ export default function MembersPage() {
     };
   }, [socket, activeGuild, isOfficer]);
 
-  // Filter members
-  const filteredMembers = members
+  // Filter & sort members
+  const filteredMembers = enrichedMembers
     .filter((m) => {
       const matchesSearch =
         searchQuery === "" ||
@@ -173,9 +201,15 @@ export default function MembersPage() {
       return matchesSearch && matchesRole;
     })
     .sort((a, b) => {
+      if (sortBy === "RANKING") {
+        return GUILD_ROLES.indexOf(b.role as GuildRoleType) - GUILD_ROLES.indexOf(a.role as GuildRoleType);
+      }
+      if (sortBy === "GUILD_POINTS") return b.guildPoints - a.guildPoints;
+      if (sortBy === "BALANCE") return b.balance - a.balance;
+      if (sortBy === "CLASS") return (a.class || "").localeCompare(b.class || "");
       if (sortBy === "CP") return (b.cp ?? 0) - (a.cp ?? 0);
       if (sortBy === "JOINED") return new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime();
-      return a.user.displayName.localeCompare(b.user.displayName);
+      return (a.ign || a.user.displayName).localeCompare(b.ign || b.user.displayName);
     });
 
   async function handleRoleChange(
@@ -302,37 +336,6 @@ export default function MembersPage() {
               {members.length} members in {activeGuild.guildName}
             </span>
           }
-          right={
-            isGuildLeader ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowRoleCustomization(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/70 hover:text-white hover:border-primary-500/30 hover:bg-white/[0.06] transition-all text-[11px] font-medium uppercase tracking-[0.14em] cursor-pointer"
-                >
-                  <svg
-                    className="h-3 w-3"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M12 15l-2-4h4l-2 4z" />
-                    <path d="M5 7l3 4L12 3l4 8 3-4v12H5V7z" />
-                  </svg>
-                  Role Customization
-                </button>
-                <button
-                  onClick={() => setShowCustomRolesManager(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/70 hover:text-white hover:border-primary-500/30 hover:bg-white/[0.06] transition-all text-[11px] font-medium uppercase tracking-[0.14em] cursor-pointer"
-                >
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Custom Roles
-                </button>
-              </div>
-            ) : null
-          }
         />
 
         {/* Tabs */}
@@ -398,7 +401,7 @@ export default function MembersPage() {
                 <select
                   id="member-sort"
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "NAME" | "CP" | "JOINED")}
+                  onChange={(e) => setSortBy(e.target.value as SortMode)}
                   className="px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-white/25 transition-colors cursor-pointer appearance-none min-w-[160px]"
                   style={{
                     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
@@ -407,6 +410,10 @@ export default function MembersPage() {
                   }}
                 >
                   <option value="NAME" className="bg-[#0f0f16] text-white">Sort: Name</option>
+                  <option value="RANKING" className="bg-[#0f0f16] text-white">Sort: Ranking</option>
+                  <option value="GUILD_POINTS" className="bg-[#0f0f16] text-white">Sort: Guild Points</option>
+                  <option value="BALANCE" className="bg-[#0f0f16] text-white">Sort: Balance</option>
+                  <option value="CLASS" className="bg-[#0f0f16] text-white">Sort: Class</option>
                   <option value="CP" className="bg-[#0f0f16] text-white">Sort: CP</option>
                   <option value="JOINED" className="bg-[#0f0f16] text-white">Sort: Join date</option>
                 </select>
@@ -460,14 +467,10 @@ export default function MembersPage() {
                     index={index}
                     isGuildLeader={isGuildLeader}
                     currentUserId={user.id}
-                    isExpanded={expandedMember === member.id}
-                    onToggleExpand={() =>
-                      setExpandedMember(expandedMember === member.id ? null : member.id)
-                    }
+                    onSelect={() => setSelectedStalkMemberId(member.id)}
                     onRoleChange={(newRole) =>
                       handleRoleChange(member.id, member.user.displayName, member.role, newRole)
                     }
-                    onAvatarClick={() => setSelectedStalkMember(member)}
                     customRoles={customRoles}
                     onAssignCustomRole={(customRoleId) => handleAssignCustomRole(member.id, customRoleId)}
                   />
@@ -514,26 +517,11 @@ export default function MembersPage() {
         <StalkProfileModal
           selectedStalkMember={selectedStalkMember}
           activeGuildName={activeGuild.guildName}
-          onClose={() => setSelectedStalkMember(null)}
+          guildId={activeGuild.guildId}
+          currentUserId={user.id}
+          onClose={() => setSelectedStalkMemberId(null)}
         />
 
-        {/* Role Customization Modal (Guild Leader only) */}
-        {showRoleCustomization && isGuildLeader && (
-          <RoleCustomizationModal
-            guildId={activeGuild.guildId}
-            currentOverrides={roleDisplayOverrides || {}}
-            onClose={() => setShowRoleCustomization(false)}
-          />
-        )}
-
-        {/* Custom Roles Modal (Guild Leader only) */}
-        {showCustomRolesManager && isGuildLeader && (
-          <CustomRolesModal
-            guildId={activeGuild.guildId}
-            roles={customRoles}
-            onClose={() => setShowCustomRolesManager(false)}
-          />
-        )}
       </div>
     </div>
   );

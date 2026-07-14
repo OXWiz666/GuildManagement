@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { type GuildMemberData, type CustomRoleData } from "@/lib/api";
+import { type CustomRoleData } from "@/lib/api";
+import { type MemberWithFinance } from "./StalkProfileModal";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import Avatar from "@/components/ui/Avatar";
 import Badge from "@/components/ui/Badge";
@@ -15,14 +16,12 @@ export const ASSIGNABLE_ROLES = [
 ] as const;
 
 export interface MemberRowProps {
-  member: GuildMemberData;
+  member: MemberWithFinance;
   index: number;
   isGuildLeader: boolean;
   currentUserId: string;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
+  onSelect: () => void;
   onRoleChange: (newRole: string) => void;
-  onAvatarClick?: () => void;
   customRoles?: CustomRoleData[];
   onAssignCustomRole?: (customRoleId: string) => void;
 }
@@ -32,10 +31,8 @@ export default function MemberRow({
   index,
   isGuildLeader,
   currentUserId,
-  isExpanded,
-  onToggleExpand,
+  onSelect,
   onRoleChange,
-  onAvatarClick,
   customRoles = [],
   onAssignCustomRole,
 }: MemberRowProps) {
@@ -45,37 +42,23 @@ export default function MemberRow({
 
   return (
     <div
-      className="glass rounded-2xl relative transition-all duration-300 hover:bg-white/[0.04]"
+      onClick={onSelect}
+      className="glass rounded-2xl relative transition-all duration-300 hover:bg-white/[0.04] hover:ring-1 hover:ring-white/10 cursor-pointer select-none"
       style={{ animationDelay: `${index * 50}ms` }}
     >
-      {/* Main row */}
-      <div
-        className="flex items-center gap-4 p-4 cursor-pointer select-none"
-        onClick={onToggleExpand}
-      >
+      <div className="flex items-center gap-4 p-4">
         {/* Avatar */}
-        <div
-          onClick={(e) => {
-            if (onAvatarClick) {
-              e.stopPropagation();
-              onAvatarClick();
-            }
-          }}
-          className="hover:scale-105 active:scale-95 transition-all duration-200"
-        >
-          <Avatar
-            name={member.user.displayName}
-            src={member.user.avatarUrl}
-            size="lg"
-            className="cursor-pointer hover:ring-2 hover:ring-primary-500/50 transition-shadow"
-          />
-        </div>
+        <Avatar
+          name={member.ign || member.user.displayName}
+          src={member.user.avatarUrl}
+          size="lg"
+        />
 
-        {/* Info */}
+        {/* Identity — IGN is the highlighted primary name */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-white truncate">
-              {member.user.displayName}
+            <h3 className="font-bold text-white truncate">
+              {member.ign || <span className="italic text-white/40 font-normal">IGN not set</span>}
             </h3>
             {isSelf && (
               <span className="px-1.5 py-0.5 text-[10px] font-medium bg-primary-500/15 text-white rounded-full">
@@ -84,25 +67,22 @@ export default function MemberRow({
             )}
             <Badge role={member.role} customName={member.customRole?.name} customColor={member.customRole?.color} />
           </div>
-          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            {member.ign && (
-              <span className="text-xs text-white/40">
-                <span className="text-white/35">IGN:</span>{" "}
-                <span className="text-white/50">{member.ign}</span>
-              </span>
-            )}
-            {member.cp != null && (
-              <span className="text-xs text-white/40">
-                <span className="text-white/35">CP:</span>{" "}
-                <span className="text-amber-400/80 font-medium">{member.cp.toLocaleString()}</span>
-              </span>
-            )}
-            {member.memberCode && (
-              <span className="text-xs text-white/40">
-                <span className="text-white/35">Code:</span>{" "}
-                <span className="text-white/50 font-mono">{member.memberCode}</span>
-              </span>
-            )}
+          <p className="text-[11px] text-white/35 truncate mt-0.5">{member.user.displayName}</p>
+        </div>
+
+        {/* Balance & Guild Points */}
+        <div className="hidden sm:flex items-center gap-4 shrink-0 pr-1">
+          <div className="text-right">
+            <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider">Balance</p>
+            <p className={`text-[12px] font-bold font-mono ${member.balance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              {member.currencySymbol}{member.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider">Guild Points</p>
+            <p className="text-[12px] font-bold font-mono text-[var(--forge-gold-bright,#f5c451)]">
+              {member.guildPoints.toLocaleString()}
+            </p>
           </div>
         </div>
 
@@ -236,105 +216,6 @@ export default function MemberRow({
               </>
             )}
           </div>
-        )}
-
-        {/* Expand chevron */}
-        <svg
-          className={`h-4 w-4 text-white/35 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </div>
-
-      {/* Expanded Profile */}
-      {isExpanded && (
-        <div className="border-t border-white/[0.05] p-4 rounded-b-2xl animate-slide-down">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            <ProfileField label="IGN" value={member.ign} icon="🎮" />
-            <ProfileField
-              label="Combat Power"
-              value={member.cp != null ? member.cp.toLocaleString() : null}
-              icon="⚔️"
-              highlight
-            />
-            <ProfileField label="Rank" value={member.rankName} icon="🏅" />
-            <ProfileField
-              label="Role"
-              value={member.customRole?.name ?? resolveRoleName(member.role)}
-              icon="👤"
-              badge={member.role}
-              badgeCustomName={member.customRole?.name}
-              badgeCustomColor={member.customRole?.color}
-            />
-            <ProfileField label="Class" value={member.class} icon="🛡️" />
-            <ProfileField label="Weapon" value={member.weapon} icon="🗡️" />
-            <ProfileField label="Member Code" value={member.memberCode} icon="🔑" mono />
-            <ProfileField
-              label="Joined"
-              value={new Date(member.joinedAt).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })}
-              icon="📅"
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Profile Field Component ──────────────────────────────
-
-export interface ProfileFieldProps {
-  label: string;
-  value: string | null | undefined;
-  icon: string;
-  highlight?: boolean;
-  mono?: boolean;
-  badge?: string;
-  badgeCustomName?: string | null;
-  badgeCustomColor?: string | null;
-}
-
-export function ProfileField({
-  label,
-  value,
-  icon,
-  highlight = false,
-  mono = false,
-  badge,
-  badgeCustomName,
-  badgeCustomColor,
-}: ProfileFieldProps) {
-  return (
-    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-      <span className="text-base mt-0.5 shrink-0">{icon}</span>
-      <div className="min-w-0">
-        <p className="text-[10px] font-medium text-white/35 uppercase tracking-wider">
-          {label}
-        </p>
-        {badge ? (
-          <div className="mt-1">
-            <Badge role={badge} size="sm" customName={badgeCustomName} customColor={badgeCustomColor} />
-          </div>
-        ) : (
-          <p
-            className={`text-sm mt-0.5 truncate ${
-              highlight
-                ? "text-amber-400 font-semibold"
-                : mono
-                  ? "text-white/70 font-mono"
-                  : "text-white"
-            } ${!value ? "text-white/35 italic" : ""}`}
-          >
-            {value || "Not set"}
-          </p>
         )}
       </div>
     </div>

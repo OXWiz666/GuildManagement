@@ -1,18 +1,26 @@
 import { prisma } from "@guild/db";
 import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
+import { getEffectiveActivityPointRules } from "./activityPoints.service";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../utils/errors";
 
-// ─── Guild Activities (Guild Boss / Guild War / PK War) ─────────
+// ─── Guild Activities (Guild Boss / Guild War / PK War / custom) ─────────
 // A unified, simple scheduler for guild events with optional opponent, result,
-// and member attendance (check-in → officer confirmation).
+// and member attendance (check-in → officer confirmation). The set of valid
+// `type` values is not a fixed enum — it's whatever activities the guild has
+// registered in Register Activity (Guild Settings → Activities Multiplier),
+// so leaders can add custom activity types without a code change.
 
-const ACTIVITY_TYPES = ["GUILD_BOSS", "GUILD_WAR", "PK_WAR"] as const;
 const ACTIVITY_STATUSES = ["UPCOMING", "COMPLETED", "CANCELLED"] as const;
 const ACTIVITY_RESULTS = ["WIN", "LOSS", "DRAW"] as const;
 const OFFICER_ROLES = ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
 
-type ActivityType = (typeof ACTIVITY_TYPES)[number];
+async function validateActivityType(guildId: string, type: unknown): Promise<string> {
+  if (typeof type !== "string" || !type.trim()) throw new BadRequestError("Activity type is required");
+  const rules = await getEffectiveActivityPointRules(guildId);
+  if (!rules.activities.some((a) => a.key === type)) throw new BadRequestError("Invalid activity type");
+  return type;
+}
 
 async function requireActiveMember(actorId: string, guildId: string) {
   const membership = await getGuildMemberByUser(actorId, guildId);
@@ -102,11 +110,19 @@ async function hydrateUsers(userIds: string[]) {
   return new Map(users.map((u) => [u.id, { displayName: u.displayName, avatarUrl: u.avatarUrl }]));
 }
 
+// Without a bound this query pulls every activity (and every attendee row on
+// every one of them) a guild has ever logged — it only ever grows, so a guild
+// with months of Guild War/PK War history turns "open the tab" into a
+// multi-thousand-row fetch+serialize every time. Cap to a trailing window;
+// older activities stop appearing in the calendar/search past this point.
+const ACTIVITY_LIST_WINDOW_DAYS = 90;
+
 export async function listActivities(guildId: string, actorId: string) {
   const membership = await requireActiveMember(actorId, guildId);
 
+  const cutoff = new Date(Date.now() - ACTIVITY_LIST_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const activities = await prisma.guildActivity.findMany({
-    where: { guildId },
+    where: { guildId, scheduledAt: { gte: cutoff } },
     orderBy: { scheduledAt: "desc" },
     include: { attendees: { select: { userId: true, status: true } } },
   });
@@ -147,8 +163,7 @@ export async function createActivity(
 ) {
   await requireOfficer(actorId, guildId);
 
-  const type = payload.type as ActivityType;
-  if (!ACTIVITY_TYPES.includes(type)) throw new BadRequestError("Invalid activity type");
+  const type = await validateActivityType(guildId, payload.type);
   const title = validText(payload.title, "Title");
   const scheduled = new Date(payload.scheduledAt ?? "");
   if (Number.isNaN(scheduled.getTime())) throw new BadRequestError("A valid date & time is required");
@@ -195,8 +210,7 @@ export async function updateActivity(
 
   const data: Record<string, unknown> = {};
   if (payload.type !== undefined) {
-    if (!ACTIVITY_TYPES.includes(payload.type as ActivityType)) throw new BadRequestError("Invalid activity type");
-    data["type"] = payload.type;
+    data["type"] = payload.type === existing.type ? existing.type : await validateActivityType(guildId, payload.type);
   }
   if (payload.title !== undefined) data["title"] = validText(payload.title, "Title");
   if (payload.location !== undefined) data["location"] = optText(payload.location);

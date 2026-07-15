@@ -2,6 +2,19 @@ import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Every avatar/icon/gear image the app renders is a Supabase Storage
+  // public object (see lib/storage.ts) — `*.supabase.co` (not a hardcoded
+  // project ref, which has already differed between this repo's .env and
+  // memory of the "production" ref) covers any project this app points at.
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
   // Keep the Prisma engine/runtime and the pg driver out of the bundler
   // (loaded at runtime; pg has dynamic requires that must not be bundled).
   serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],

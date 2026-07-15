@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type AttendanceSessionSummary } from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getBossImageUrl } from "@guild/shared";
@@ -8,7 +8,6 @@ import { getBossImageUrl } from "@guild/shared";
 export interface AttendanceCoverflowProps {
   sessions: AttendanceSessionSummary[];
   isLoading: boolean;
-  currentTime: number;
   onSelect: (session: AttendanceSessionSummary) => void;
 }
 
@@ -29,8 +28,18 @@ function sessionStatus(session: AttendanceSessionSummary, now: number) {
  * horizontally. Tapping a card opens AttendanceSessionModal for the full
  * picture (your status, and for officers: roster + verification + reopen).
  */
-export default function AttendanceCoverflow({ sessions, isLoading, currentTime, onSelect }: AttendanceCoverflowProps) {
+export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: AttendanceCoverflowProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+
+  // Ticks on its own — this used to come from the page's shared per-second
+  // ticker, which meant the entire attendance page (stats cards, header,
+  // etc.) re-rendered every second just so this row's session badges could
+  // flip from "Open" to "Closed" the moment a window expires.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   function scrollBy(delta: number) {
     trackRef.current?.scrollBy({ left: delta, behavior: "smooth" });
@@ -78,7 +87,7 @@ export default function AttendanceCoverflow({ sessions, isLoading, currentTime, 
               const bossName = boss?.bossName || session.title;
               const imageSrc = boss?.bossImageUrl || getBossImageUrl(bossName);
               const dateSrc = boss?.spawnTime || session.createdAt;
-              const status = sessionStatus(session, currentTime);
+              const status = sessionStatus(session, now);
 
               return (
                 <button

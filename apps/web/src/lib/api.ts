@@ -1033,6 +1033,14 @@ export const dashboardApi = {
     );
   },
 
+  /** One request for many boss cards' commitment data, instead of one per card. */
+  async getBossCommitmentsBatch(guildId: string, scheduleIds: string[]) {
+    return api.post<Record<string, BossCommitmentData>>(
+      `/dashboard/boss-schedule/${guildId}/commitments/batch`,
+      { scheduleIds },
+    );
+  },
+
   async setBossCommitment(guildId: string, scheduleId: string, committing: boolean) {
     return api.post<{ committed: boolean; count: number }>(
       `/dashboard/boss-schedule/${guildId}/${scheduleId}/commitments`,

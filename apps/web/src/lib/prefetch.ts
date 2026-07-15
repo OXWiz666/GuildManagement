@@ -133,3 +133,45 @@ export function prefetchForRoute(href: string, guildId: string | undefined) {
       break;
   }
 }
+
+/**
+ * Every sidebar destination `prefetchForRoute` knows how to warm. Kept as an
+ * explicit list (rather than derived from Sidebar's navGroups) so this module
+ * has no dependency on a component file.
+ */
+const ALL_PREFETCHABLE_ROUTES = [
+  "/dashboard",
+  "/dashboard/statistics",
+  "/dashboard/faction",
+  "/dashboard/equipment",
+  "/dashboard/boss-rotation",
+  "/dashboard/boss-schedule",
+  "/dashboard/boss-attendance",
+  "/dashboard/members",
+  "/dashboard/guild-market",
+  "/dashboard/guild-settings",
+];
+
+/**
+ * Warms every sidebar tab's data in the background right after login/guild
+ * switch, so tab switching later hits a warm cache even without a preceding
+ * hover/focus (mobile taps, keyboard nav straight to a link, etc.). Requests
+ * are staggered one at a time on the idle callback queue instead of firing
+ * all at once, so this never competes with the current page's own fetch for
+ * bandwidth or DB connections.
+ */
+export function prefetchAllRoutes(guildId: string | undefined) {
+  if (!guildId || typeof window === "undefined") return;
+
+  const schedule = (fn: () => void) => {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(fn, { timeout: 2000 });
+    } else {
+      setTimeout(fn, 300);
+    }
+  };
+
+  ALL_PREFETCHABLE_ROUTES.forEach((href, i) => {
+    setTimeout(() => schedule(() => prefetchForRoute(href, guildId)), i * 150);
+  });
+}

@@ -30,17 +30,26 @@ function buildMonthGrid(viewMonth: Date): Date[] {
 export default function ActivityCalendar({
   activities,
   typeMeta,
-  now,
   selectedDate,
   onSelectDate,
 }: {
   activities: GuildActivityData[];
   typeMeta: Record<string, ActivityTypeMeta>;
-  now: number;
   selectedDate: string;
   onSelectDate: (date: string) => void;
 }) {
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date(`${selectedDate}T00:00:00`)));
+
+  // Only ever used to compute which grid cell is "today" — a date, not a
+  // live countdown — so this doesn't need a 1s tick. It used to receive
+  // `now` from the page's shared per-second ticker, which meant this whole
+  // 42-cell grid re-rendered every second for a value that only actually
+  // changes once every 24 hours. A minute is more than precise enough.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const selected = new Date(`${selectedDate}T00:00:00`);

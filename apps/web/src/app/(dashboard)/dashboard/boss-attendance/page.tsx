@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, type CSSProperties } from "react";
+import { useState, useEffect, useCallback, useMemo, memo, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
@@ -61,11 +61,16 @@ export default function BossAttendancePage() {
   const isFactionLeader = activeGuild?.role === "FACTION_LEADER" || activeGuild?.role === "ADMIN";
   const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader || isFactionLeader;
 
-  // Sync clocks every second
+  // `currentTime` now only feeds getUserRecordStatus/getCountdownText, which
+  // only matter while the session detail modal is open (AttendanceCoverflow
+  // and the check-in banner tick on their own — see AttendanceCoverflow.tsx
+  // and CheckInAlertBanner below). Gating the tick to "modal open" means this
+  // whole page stops re-rendering every second in the common case.
   useEffect(() => {
+    if (!selectedSessionId) return;
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [selectedSessionId]);
 
   // ─── Persistent Queries ────────────────────────────────
 
@@ -237,20 +242,6 @@ export default function BossAttendancePage() {
     return { expired: false, text, warning };
   }, [currentTime]);
 
-  // Bosses with an open check-in window (auto-opened when a kill is logged).
-  const openCheckIns = useMemo(() => {
-    return schedules
-      .filter((s) => {
-        const session = s.attendanceSessions?.[0];
-        return session && session.isActive && new Date(session.expiresAt).getTime() > currentTime;
-      })
-      .sort((a, b) => {
-        const aExp = new Date(a.attendanceSessions![0].expiresAt).getTime();
-        const bExp = new Date(b.attendanceSessions![0].expiresAt).getTime();
-        return aExp - bExp;
-      });
-  }, [schedules, currentTime]);
-
   const selectedSession = useMemo(
     () => sessions.find((s) => s.id === selectedSessionId) || null,
     [sessions, selectedSessionId],
@@ -261,15 +252,6 @@ export default function BossAttendancePage() {
     () => schedules.find((s) => s.id === selectedSession?.bossScheduleId) || null,
     [schedules, selectedSession],
   );
-
-  // Smart detect the first open window the user has NOT claimed (for the banner)
-  const activeSessionEvent = useMemo(() => {
-    if (!user) return null;
-    return openCheckIns.find((s) => {
-      const userRecord = s.attendanceSessions![0].records?.find(r => r.userId === user.id);
-      return !userRecord;
-    }) || null;
-  }, [openCheckIns, user]);
 
   if (!user || !activeGuild) {
     return (
@@ -326,39 +308,15 @@ export default function BossAttendancePage() {
           }
         />
 
-        {/* SMART INLINE CHECK-IN ALERT (one-click, no codes) */}
-        {activeSessionEvent && (
-          <div className="rounded-2xl border border-violet-500/25 bg-violet-950/10 p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex items-start gap-4">
-              <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-300 text-base shrink-0">
-                ✦
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-violet-300 uppercase tracking-widest block">
-                  Check-in Open
-                </span>
-                <h3 className="font-bold text-white text-sm mt-0.5">
-                  {activeSessionEvent.bossName} was killed — claim your attendance
-                </h3>
-                <div className="flex items-center gap-2 mt-2 text-xs text-white/55">
-                  <span className="text-[11px] text-white/40">Closes in</span>
-                  <span className="font-mono bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded font-bold text-xs text-amber-400">
-                    {getCountdownText(activeSessionEvent.attendanceSessions![0].expiresAt).text}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleCheckIn(activeSessionEvent)}
-              disabled={checkingInId === activeSessionEvent.id}
-              className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 active:scale-95 disabled:opacity-50 text-sm font-bold text-white rounded-xl transition-all cursor-pointer shadow-lg shadow-violet-500/20 shrink-0"
-            >
-              {checkingInId === activeSessionEvent.id ? "Checking in…" : "Check In Now"}
-            </button>
-          </div>
-        )}
+        {/* SMART INLINE CHECK-IN ALERT (one-click, no codes) — self-ticking,
+            see CheckInAlertBanner: keeps the per-second countdown isolated
+            instead of re-rendering this whole page every second. */}
+        <CheckInAlertBanner
+          schedules={schedules}
+          user={user}
+          checkingInId={checkingInId}
+          onCheckIn={handleCheckIn}
+        />
 
         {/* Missed Attendance Alerts Banner */}
         {stats && stats.missedAlerts && stats.missedAlerts.length > 0 && (
@@ -458,7 +416,6 @@ export default function BossAttendancePage() {
         <AttendanceCoverflow
           sessions={sessions}
           isLoading={isLoadingSessions}
-          currentTime={currentTime}
           onSelect={(session) => setSelectedSessionId(session.id)}
         />
 
@@ -506,3 +463,89 @@ export default function BossAttendancePage() {
     </div>
   );
 }
+
+// ─── Check-in Alert Banner ───
+// Owns its own tick + the "which open window hasn't the viewer claimed yet"
+// computation entirely internally, so this — the only always-visible piece
+// of the page that genuinely needs a live per-second countdown — is the only
+// thing re-rendering every second, not the whole attendance page.
+const CheckInAlertBanner = memo(function CheckInAlertBanner({
+  schedules,
+  user,
+  checkingInId,
+  onCheckIn,
+}: {
+  schedules: BossScheduleData[];
+  user: { id: string } | null;
+  checkingInId: string | null;
+  onCheckIn: (item: BossScheduleData) => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const openCheckIns = useMemo(() => {
+    return schedules
+      .filter((s) => {
+        const session = s.attendanceSessions?.[0];
+        return session && session.isActive && new Date(session.expiresAt).getTime() > now;
+      })
+      .sort((a, b) => {
+        const aExp = new Date(a.attendanceSessions![0].expiresAt).getTime();
+        const bExp = new Date(b.attendanceSessions![0].expiresAt).getTime();
+        return aExp - bExp;
+      });
+  }, [schedules, now]);
+
+  // Smart detect the first open window the user has NOT claimed
+  const activeSessionEvent = useMemo(() => {
+    if (!user) return null;
+    return openCheckIns.find((s) => {
+      const userRecord = s.attendanceSessions![0].records?.find((r) => r.userId === user.id);
+      return !userRecord;
+    }) || null;
+  }, [openCheckIns, user]);
+
+  if (!activeSessionEvent) return null;
+
+  const target = new Date(activeSessionEvent.attendanceSessions![0].expiresAt).getTime();
+  const diff = target - now;
+  const countdownText = diff <= 0
+    ? "EXPIRED"
+    : `${String(Math.floor(diff / (3600 * 1000))).padStart(2, "0")}:${String(Math.floor((diff % (3600 * 1000)) / (60 * 1000))).padStart(2, "0")}:${String(Math.floor((diff % (60 * 1000)) / 1000)).padStart(2, "0")}`;
+
+  return (
+    <div className="rounded-2xl border border-violet-500/25 bg-violet-950/10 p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="flex items-start gap-4">
+        <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-300 text-base shrink-0">
+          ✦
+        </div>
+        <div>
+          <span className="text-[10px] font-bold text-violet-300 uppercase tracking-widest block">
+            Check-in Open
+          </span>
+          <h3 className="font-bold text-white text-sm mt-0.5">
+            {activeSessionEvent.bossName} was killed — claim your attendance
+          </h3>
+          <div className="flex items-center gap-2 mt-2 text-xs text-white/55">
+            <span className="text-[11px] text-white/40">Closes in</span>
+            <span className="font-mono bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded font-bold text-xs text-amber-400">
+              {countdownText}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onCheckIn(activeSessionEvent)}
+        disabled={checkingInId === activeSessionEvent.id}
+        className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 active:scale-95 disabled:opacity-50 text-sm font-bold text-white rounded-xl transition-all cursor-pointer shadow-lg shadow-violet-500/20 shrink-0"
+      >
+        {checkingInId === activeSessionEvent.id ? "Checking in…" : "Check In Now"}
+      </button>
+    </div>
+  );
+});

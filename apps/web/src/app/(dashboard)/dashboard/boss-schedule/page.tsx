@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   activityApi,
@@ -52,7 +52,6 @@ export default function GuildActivitiesPage() {
   const { socket } = useSocket();
   const activeGuild = user?.guilds?.[0];
 
-  const [now, setNow] = useState(Date.now());
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
   const [filterOpen, setFilterOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -62,11 +61,6 @@ export default function GuildActivitiesPage() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const key = activeGuild ? `guild_activities:${activeGuild.guildId}` : "guild_activities_empty";
   const { data, isLoading } = useQuery<GuildActivitiesResponse>(
@@ -343,7 +337,6 @@ export default function GuildActivitiesPage() {
               <ActivityCalendar
                 activities={filtered}
                 typeMeta={typeMeta}
-                now={now}
                 selectedDate={selectedDate}
                 onSelectDate={handleSelectDate}
               />
@@ -368,7 +361,7 @@ export default function GuildActivitiesPage() {
                 <div className="space-y-3">
                   {dayActivities.map((a) => (
                     <ActivityCard
-                      key={a.id} activity={a} now={now} canManage={canManage} busy={busyId === a.id}
+                      key={a.id} activity={a} canManage={canManage} busy={busyId === a.id}
                       typeMeta={typeMeta}
                       expanded={expandedId === a.id} onToggleExpand={() => setExpandedId((id) => (id === a.id ? null : a.id))}
                       onCheckIn={() => toggleCheckIn(a)} onEdit={() => { setEditing(a); setModalOpen(true); }}
@@ -405,11 +398,10 @@ function ResultBadge({ result }: { result: "WIN" | "LOSS" | "DRAW" }) {
   return <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md border ${map[result]}`}>{result}</span>;
 }
 
-function ActivityCard({
-  activity, now, canManage, busy, typeMeta, expanded, onToggleExpand, onCheckIn, onEdit, onDelete, onConfirmAttendee,
+const ActivityCard = memo(function ActivityCard({
+  activity, canManage, busy, typeMeta, expanded, onToggleExpand, onCheckIn, onEdit, onDelete, onConfirmAttendee,
 }: {
   activity: GuildActivityData;
-  now: number;
   canManage: boolean;
   busy: boolean;
   typeMeta: Record<string, ActivityTypeMeta>;
@@ -420,6 +412,15 @@ function ActivityCard({
   onDelete: () => void;
   onConfirmAttendee: (a: GuildActivityData, userId: string, confirmed: boolean) => void;
 }) {
+  // Ticks on its own so unrelated state changes on the page (filters,
+  // opening the add/edit modal, expanding a different card) don't force
+  // every visible activity card to re-render every second along with it.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const meta = resolveActivityTypeMeta(typeMeta, activity.type);
   const isUpcoming = activity.status === "UPCOMING";
   const cd = countdown(activity.scheduledAt, now);
@@ -527,7 +528,7 @@ function ActivityCard({
       )}
     </article>
   );
-}
+});
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (

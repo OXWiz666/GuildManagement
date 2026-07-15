@@ -105,8 +105,29 @@ async function apiFetch<T = unknown>(
  * Attempt to refresh the access token using the httpOnly cookie.
  * Returns true if successful. Exported so the Hono RPC client (lib/rpc.ts) can
  * reuse the same one-shot refresh during the migration.
+ *
+ * The refresh token rotates server-side on every call (old one is revoked,
+ * a new one issued) and reuse of an already-revoked token nukes the entire
+ * token family, forcing a re-login. Several requests can 401 around the same
+ * moment (e.g. a boss action plus the tab refetches it triggers), and without
+ * de-duping they'd all POST /auth/refresh with the same cookie — the first
+ * would win, and every other one would look like replay and trip that
+ * family-wide revocation. All concurrent callers share one in-flight promise
+ * so only a single refresh request ever goes out at a time.
  */
-export async function refreshAccessToken(): Promise<boolean> {
+let refreshPromise: Promise<boolean> | null = null;
+
+export function refreshAccessToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = doRefreshAccessToken().finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+}
+
+async function doRefreshAccessToken(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",

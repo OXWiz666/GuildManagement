@@ -2331,9 +2331,8 @@ export async function maintenanceResetBossTimers(
     guildId,
     actorId,
     bosses,
-    // getNextBossSpawnTime advances a cycle boss by its cooldown from the given
-    // instant, so passing the maintenance-end time yields "end + cooldown".
-    (boss) => getNextBossSpawnTime(boss.name, endDate),
+    // Cycle bosses go live the instant maintenance ends — not "end + cooldown".
+    () => endDate,
     "BOSS_MAINTENANCE_RESET",
     { maintenanceEndTime: endDate.toISOString() },
     ipAddress,

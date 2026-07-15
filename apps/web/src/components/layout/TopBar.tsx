@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, memo } from "react";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import Avatar from "../ui/Avatar";
@@ -22,9 +23,6 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const [scrolled, setScrolled] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
-
-  // Dynamic Header State
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -53,12 +51,6 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     onScroll();
     main.addEventListener("scroll", onScroll, { passive: true });
     return () => main.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Clock ticks every second
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
   }, []);
 
   const activeGuild = user?.guilds?.[0];
@@ -202,43 +194,6 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     };
   }, [activeGuild, socket, bossSchedulesKey, bossRotationKey]);
 
-  // Format Clock Values
-  const formattedDate = currentTime.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric"
-  });
-
-  const formattedTime = currentTime.toLocaleTimeString("en-US", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-
-  // Calculate Timezone Offset String (e.g. UTC +2)
-  const offsetMinutes = -currentTime.getTimezoneOffset();
-  const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
-  const offsetSign = offsetMinutes >= 0 ? "+" : "-";
-  const timezoneStr = `UTC ${offsetSign}${offsetHours}`;
-
-  // Pick the guild's truly-soonest boss every tick. An overdue spawn rolls
-  // forward along its real respawn cycle (same shared helper the dashboard's
-  // "Next boss spawn · your guild" carousel uses) instead of freezing on
-  // "LIVE" forever, so the ordering can change as time passes.
-  const nextBossInfo = useMemo(() => {
-    if (guildSchedules.length === 0) return null;
-    let best: { boss: BossScheduleData; timer: ReturnType<typeof getRealtimeBossTimer> } | null = null;
-    for (const s of guildSchedules) {
-      const timer = getRealtimeBossTimer(s.bossName, s.spawnTime, currentTime.getTime(), { status: s.status });
-      if (!best || timer.nextSpawn < best.timer.nextSpawn) best = { boss: s, timer };
-    }
-    return best;
-  }, [guildSchedules, currentTime]);
-
-  const nextBoss = nextBossInfo?.boss ?? null;
-  const countdown = nextBossInfo ? { text: nextBossInfo.timer.text, warning: nextBossInfo.timer.warning } : null;
-
   return (
     <header
       className={`sticky top-0 z-40 h-20 flex items-center px-6 lg:px-8 gap-4 transition-all duration-300 ${
@@ -288,74 +243,11 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* COMMAND CENTER WIDGETS (Middle-Right area) */}
-      <div className="hidden md:flex items-center gap-5">
-        {/* Next Boss Spawn Widget */}
-        {nextBoss && countdown && (
-          <div
-            className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all duration-300 bg-[var(--obsidian-surface)] ${
-              countdown.warning
-                ? "border-[var(--forge-gold)]/30 shadow-[0_0_18px_rgba(212,168,83,0.10)]"
-                : "border-[var(--metal-border)]"
-            }`}
-            style={countdown.warning ? { animation: "glow-pulse 3s ease-in-out infinite" } : undefined}
-          >
-            <div className="h-9 w-9 rounded-lg bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0">
-              {nextBoss.bossImageUrl ? (
-                <img
-                  src={nextBoss.bossImageUrl}
-                  alt={nextBoss.bossName}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <svg className="h-5 w-5 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
-              )}
-            </div>
-            <div className="text-left select-none">
-              <span className="block text-[8px] text-[var(--forge-gold-dim)] uppercase tracking-[0.25em] font-bold">
-                Next Boss Spawn
-              </span>
-              <span className="block text-xs font-semibold text-white/95 leading-tight">
-                {nextBoss.bossName}
-              </span>
-              <span
-                className={`block text-[11px] font-mono leading-none mt-0.5 ${
-                  countdown.warning
-                    ? "text-[var(--forge-gold-bright)] font-bold"
-                    : "text-emerald-400/90 font-medium"
-                }`}
-              >
-                {countdown.text}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Current Date & Time Widget */}
-        <div className="flex items-center gap-3 px-4 py-2 rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-surface)]">
-          <div className="h-9 w-9 rounded-lg bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center shrink-0">
-            <svg className="h-4 w-4 text-[var(--forge-gold)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-          </div>
-          <div className="text-left select-none">
-            <span className="block text-[8px] text-[var(--forge-gold-dim)] uppercase tracking-[0.25em] font-bold">
-              Server Time
-            </span>
-            <span className="block text-xs font-semibold text-white/90 leading-tight">
-              {formattedDate} {formattedTime.substring(0, 5)}
-            </span>
-            <span className="block text-[9px] text-zinc-500 font-mono leading-none mt-0.5">
-              {timezoneStr}
-            </span>
-          </div>
-        </div>
-      </div>
+      {/* COMMAND CENTER WIDGETS (Middle-Right area) — self-ticking, see
+          CommandCenterWidgets: keeps the per-second clock/countdown isolated
+          instead of re-rendering the whole TopBar (present on every
+          dashboard page) every second. */}
+      <CommandCenterWidgets guildSchedules={guildSchedules} />
 
       {/* Global Actions (Far-Right) */}
       <div className="flex items-center gap-2">
@@ -542,3 +434,127 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     </header>
   );
 }
+
+// ─── Command Center Widgets (next-boss countdown + server clock) ───
+// Owns its own 1s tick entirely internally. TopBar is mounted on every
+// dashboard page, so ticking at the TopBar level re-rendered the whole
+// header (notifications, user menu, etc.) every second for the sake of two
+// small always-on widgets.
+const CommandCenterWidgets = memo(function CommandCenterWidgets({
+  guildSchedules,
+}: {
+  guildSchedules: BossScheduleData[];
+}) {
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedDate = now.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  const formattedTime = now.toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+
+  const offsetMinutes = -now.getTimezoneOffset();
+  const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+  const offsetSign = offsetMinutes >= 0 ? "+" : "-";
+  const timezoneStr = `UTC ${offsetSign}${offsetHours}`;
+
+  // Pick the guild's truly-soonest boss every tick. An overdue spawn rolls
+  // forward along its real respawn cycle (same shared helper the dashboard's
+  // "Next boss spawn · your guild" carousel uses) instead of freezing on
+  // "LIVE" forever, so the ordering can change as time passes.
+  const nextBossInfo = useMemo(() => {
+    if (guildSchedules.length === 0) return null;
+    let best: { boss: BossScheduleData; timer: ReturnType<typeof getRealtimeBossTimer> } | null = null;
+    for (const s of guildSchedules) {
+      const timer = getRealtimeBossTimer(s.bossName, s.spawnTime, now.getTime(), { status: s.status });
+      if (!best || timer.nextSpawn < best.timer.nextSpawn) best = { boss: s, timer };
+    }
+    return best;
+  }, [guildSchedules, now]);
+
+  const nextBoss = nextBossInfo?.boss ?? null;
+  const countdown = nextBossInfo ? { text: nextBossInfo.timer.text, warning: nextBossInfo.timer.warning } : null;
+
+  return (
+    <div className="hidden md:flex items-center gap-5">
+      {/* Next Boss Spawn Widget */}
+      {nextBoss && countdown && (
+        <div
+          className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all duration-300 bg-[var(--obsidian-surface)] ${
+            countdown.warning
+              ? "border-[var(--forge-gold)]/30 shadow-[0_0_18px_rgba(212,168,83,0.10)]"
+              : "border-[var(--metal-border)]"
+          }`}
+          style={countdown.warning ? { animation: "glow-pulse 3s ease-in-out infinite" } : undefined}
+        >
+          <div className="relative h-9 w-9 rounded-lg bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0">
+            {nextBoss.bossImageUrl ? (
+              <Image
+                src={nextBoss.bossImageUrl}
+                alt={nextBoss.bossName}
+                fill
+                sizes="36px"
+                className="object-cover"
+              />
+            ) : (
+              <svg className="h-5 w-5 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+            )}
+          </div>
+          <div className="text-left select-none">
+            <span className="block text-[8px] text-[var(--forge-gold-dim)] uppercase tracking-[0.25em] font-bold">
+              Next Boss Spawn
+            </span>
+            <span className="block text-xs font-semibold text-white/95 leading-tight">
+              {nextBoss.bossName}
+            </span>
+            <span
+              className={`block text-[11px] font-mono leading-none mt-0.5 ${
+                countdown.warning
+                  ? "text-[var(--forge-gold-bright)] font-bold"
+                  : "text-emerald-400/90 font-medium"
+              }`}
+            >
+              {countdown.text}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Current Date & Time Widget */}
+      <div className="flex items-center gap-3 px-4 py-2 rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-surface)]">
+        <div className="h-9 w-9 rounded-lg bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center shrink-0">
+          <svg className="h-4 w-4 text-[var(--forge-gold)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </div>
+        <div className="text-left select-none">
+          <span className="block text-[8px] text-[var(--forge-gold-dim)] uppercase tracking-[0.25em] font-bold">
+            Server Time
+          </span>
+          <span className="block text-xs font-semibold text-white/90 leading-tight">
+            {formattedDate} {formattedTime.substring(0, 5)}
+          </span>
+          <span className="block text-[9px] text-zinc-500 font-mono leading-none mt-0.5">
+            {timezoneStr}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+});

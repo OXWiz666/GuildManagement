@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 
 type ToastType = "success" | "error" | "info" | "warning";
 
@@ -18,13 +18,26 @@ export interface Toast {
   action?: ToastAction;
 }
 
-interface ToastContextType {
-  toasts: Toast[];
+interface ToastActionsContextType {
   addToast: (type: ToastType, message: string, duration?: number, action?: ToastAction) => void;
   removeToast: (id: string) => void;
 }
 
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
+interface ToastStateContextType {
+  toasts: Toast[];
+}
+
+// Split from the state on purpose: `addToast`/`removeToast` are stable
+// (useCallback, empty/fixed deps) but `toasts` changes on every toast add
+// *and* every auto-dismiss timeout — i.e. constantly. Bundling them in one
+// context value meant every one of the ~45 `useToast()` call sites re-rendered
+// on any toast event anywhere in the app, even though every one of them only
+// ever calls `addToast`/`removeToast` and never reads `toasts` (verified —
+// `ToastContainer` below gets the list via a direct prop, not the hook).
+// `useToast()` intentionally only subscribes to the actions context; the
+// state context exists solely for `ToastContainer`.
+const ToastActionsContext = createContext<ToastActionsContextType | undefined>(undefined);
+const ToastStateContext = createContext<ToastStateContextType | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -44,18 +57,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [removeToast],
   );
 
+  const actions = useMemo(() => ({ addToast, removeToast }), [addToast, removeToast]);
+  const state = useMemo(() => ({ toasts }), [toasts]);
+
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
-      {children}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
-    </ToastContext.Provider>
+    <ToastActionsContext.Provider value={actions}>
+      <ToastStateContext.Provider value={state}>
+        {children}
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+      </ToastStateContext.Provider>
+    </ToastActionsContext.Provider>
   );
 }
 
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) throw new Error("useToast must be used within ToastProvider");
-  return context;
+/**
+ * Only reads the actions context — stable forever, so callers of `addToast`/
+ * `removeToast` never re-render on unrelated toast activity. `toasts` isn't
+ * exposed here since no call site reads it (only `ToastContainer` does, via
+ * a direct prop) — read `ToastStateContext` directly if a future consumer
+ * genuinely needs the live list.
+ */
+export function useToast(): ToastActionsContextType {
+  const actions = useContext(ToastActionsContext);
+  if (!actions) throw new Error("useToast must be used within ToastProvider");
+  return actions;
 }
 
 // ─── Toast Container ────────────────────────────

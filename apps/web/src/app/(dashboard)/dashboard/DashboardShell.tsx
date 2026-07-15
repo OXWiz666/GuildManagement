@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import { SocketProvider } from "@/components/providers/socket-provider";
+import { prefetchAllRoutes } from "@/lib/prefetch";
 
 export default function DashboardShell({
   children,
@@ -50,6 +51,18 @@ export default function DashboardShell({
       router.replace("/login");
     }
   }, [isAuthenticated, isLoading, router, mounted]);
+
+  // Warm every sidebar tab's data once, right after the active guild is
+  // known — so switching tabs later reads a warm cache instantly instead of
+  // waiting on the hover-prefetch in Sidebar (which mobile taps skip). Keyed
+  // off guildId via a ref so a guild switch re-warms but re-renders don't.
+  const prefetchedGuildRef = useRef<string | undefined>(undefined);
+  const activeGuildId = user?.guilds?.[0]?.guildId;
+  useEffect(() => {
+    if (!activeGuildId || prefetchedGuildRef.current === activeGuildId) return;
+    prefetchedGuildRef.current = activeGuildId;
+    prefetchAllRoutes(activeGuildId);
+  }, [activeGuildId]);
 
   // Platform admins (Super Admin, etc.) have no guild membership and never
   // should — this is the platform-level operator area, not a guild account.

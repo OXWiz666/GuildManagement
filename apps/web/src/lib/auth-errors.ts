@@ -82,7 +82,7 @@ export function friendlyAuthError(
   // you can only request this after N seconds", not the words "rate limit") ──
   if (
     lower.includes("rate limit") ||
-    lower.includes("too many requests") ||
+    lower.includes("too many") ||
     lower.includes("security purposes") ||
     lower.includes("only request this after")
   ) {

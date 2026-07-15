@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 
 interface AvatarProps {
   src?: string | null;
@@ -84,6 +85,12 @@ export default function Avatar({
   }, [normalized]);
 
   const showImage = normalized && !failed;
+  // next/image only accepts an internal path, a configured remotePatterns
+  // host, or a static import — not a data: URI. `data:image/` shows up here
+  // for the avatar-upload preview (see AvatarUploadField in
+  // DashboardHelpers.tsx, which reads the file via FileReader before it's
+  // uploaded to Supabase Storage), so that case stays on a plain <img>.
+  const canUseNextImage = showImage && /^https?:\/\//i.test(normalized);
 
   return (
     <div className={`relative inline-flex shrink-0 ${className}`}>
@@ -99,18 +106,33 @@ export default function Avatar({
 
         {/* Image layer */}
         {showImage && (
-          <img
-            src={normalized}
-            alt={name}
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            decoding="async"
-            onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
-              loaded ? "opacity-100" : "opacity-0"
-            }`}
-          />
+          canUseNextImage ? (
+            <Image
+              src={normalized}
+              alt={name}
+              fill
+              sizes="64px"
+              referrerPolicy="no-referrer"
+              onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
+              className={`object-cover transition-opacity duration-500 ${
+                loaded ? "opacity-100" : "opacity-0"
+              }`}
+            />
+          ) : (
+            <img
+              src={normalized}
+              alt={name}
+              referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
+              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
+                loaded ? "opacity-100" : "opacity-0"
+              }`}
+            />
+          )
         )}
       </div>
 

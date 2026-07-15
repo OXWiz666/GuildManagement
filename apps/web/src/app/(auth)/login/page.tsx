@@ -85,7 +85,23 @@ export default function LoginPage() {
     if (!trimmedIdentifier.includes("@")) {
       try {
         const resolution = await authApi.resolveIdentifier(trimmedIdentifier);
-        if (!resolution.success || !resolution.data?.email) {
+        if (!resolution.success) {
+          // Rate limiting (and other server-side failures) is a real, distinct
+          // problem — surfacing it as "wrong credentials" sends the user on a
+          // pointless hunt for a typo that was never there.
+          if (resolution.error?.code === "TOO_MANY_REQUESTS") {
+            const friendly = friendlyAuthError(resolution.error.message, "Too many attempts. Please wait a moment and try again.");
+            setError(friendly.message);
+            setErrorTitle(friendly.title);
+            setIsLoading(false);
+            return;
+          }
+          setError("Couldn't reach the server. Check your connection and try again.");
+          setErrorTitle("Connection problem");
+          setIsLoading(false);
+          return;
+        }
+        if (!resolution.data?.email) {
           // Never reveal *why* — same generic message a wrong password gets,
           // so a username-guessing attacker learns nothing from the response.
           setError("The username/email or password you entered is incorrect. Please try again.");

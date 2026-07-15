@@ -10,6 +10,7 @@ import {
   type BossDropDisplay,
   type BossKilledHistoryEntry,
   type BossKilledHistoryResponse,
+  type BossCommitmentData,
   type BossRotationItem,
   type BossRotationResponse,
   type BossScheduleData,
@@ -508,6 +509,39 @@ export default function BossRotationPage() {
     return allUpcoming.slice(0, 24);
   }, [filteredRotations, activeGuild, sortMode]);
 
+  // Every boss card currently on screen (LIVE + UPCOMING) mounts its own
+  // BossCommitButton, which otherwise fires one `getBossCommitments` request
+  // per card. Fetch all of them here in one batched call and pass each
+  // card its own slice as `initialData` (see BossCommitButton) so a card
+  // that mounts once this has already resolved — tab switches, filter
+  // changes, revisits — skips its own request entirely. Keyed on the
+  // actual id set so a boss appearing/disappearing (kill, filter change)
+  // refreshes the batch, not just guildId.
+  const commitScheduleIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const rotation of filteredRotations) {
+      if (rotation.activeSchedule?.id) ids.add(rotation.activeSchedule.id);
+    }
+    for (const schedule of upcomingBosses) {
+      ids.add(schedule.id);
+    }
+    return Array.from(ids).sort();
+  }, [filteredRotations, upcomingBosses]);
+
+  const commitmentsBatchKey = activeGuild && commitScheduleIds.length > 0
+    ? `boss_commitments_batch:${activeGuild.guildId}:${commitScheduleIds.join(",")}`
+    : "boss_commitments_batch_empty";
+
+  const { data: commitmentsBatch } = useQuery<Record<string, BossCommitmentData>>(
+    commitmentsBatchKey,
+    async () => {
+      if (!activeGuild || commitScheduleIds.length === 0) return {};
+      const res = await dashboardApi.getBossCommitmentsBatch(activeGuild.guildId, commitScheduleIds);
+      return res.success && res.data ? res.data : {};
+    },
+    { staleTime: 20000, enabled: !!activeGuild && commitScheduleIds.length > 0 },
+  );
+
   // Only guilds that actually hold a turn for this boss in the Master List
   // rotation queue may take it. Guilds absent from the master list are NOT
   // eligible and must not appear in the "Taking Guild" picker. If a boss has no
@@ -878,6 +912,7 @@ export default function BossRotationPage() {
                       onKilled={openKillModal}
                       guildId={activeGuild.guildId}
                       index={index}
+                      commitmentsBatch={commitmentsBatch}
                     />
                   ))}
                 </GuildSection>
@@ -893,6 +928,7 @@ export default function BossRotationPage() {
                   onKilled={openKillModal}
                   guildId={activeGuild.guildId}
                   index={index}
+                  commitmentsBatch={commitmentsBatch}
                 />
               ))}
             </div>
@@ -917,6 +953,7 @@ export default function BossRotationPage() {
                         schedule={schedule}
                         guildId={activeGuild.guildId}
                         index={index}
+                        commitmentsBatch={commitmentsBatch}
                       />
                     ))}
                   </GuildSection>
@@ -940,6 +977,7 @@ export default function BossRotationPage() {
                           schedule={schedule}
                           guildId={activeGuild.guildId}
                           index={index}
+                          commitmentsBatch={commitmentsBatch}
                         />
                       ))}
                     </div>
@@ -1304,12 +1342,14 @@ const RotationCard = memo(function RotationCard({
   onKilled,
   guildId,
   index = 0,
+  commitmentsBatch,
 }: {
   rotation: BossRotationItem;
   canManage: boolean;
   onKilled: (rotation: BossRotationItem) => void;
   guildId: string;
   index?: number;
+  commitmentsBatch?: Record<string, BossCommitmentData> | null;
 }) {
   // Ticks on its own, independent of the page — so opening a modal, typing in
   // a filter, or any other unrelated state change up in BossRotationPage
@@ -1547,7 +1587,11 @@ const RotationCard = memo(function RotationCard({
 
         {/* War-planning headcount for this boss's current live spawn */}
         {rotation.activeSchedule && (
-          <BossCommitButton guildId={guildId} scheduleId={rotation.activeSchedule.id} />
+          <BossCommitButton
+            guildId={guildId}
+            scheduleId={rotation.activeSchedule.id}
+            initialData={commitmentsBatch?.[rotation.activeSchedule.id]}
+          />
         )}
 
         {/* Footer Actions */}
@@ -1596,7 +1640,17 @@ const RotationCard = memo(function RotationCard({
   );
 });
 
-const UpcomingCard = memo(function UpcomingCard({ schedule, guildId, index = 0 }: { schedule: BossScheduleData; guildId: string; index?: number }) {
+const UpcomingCard = memo(function UpcomingCard({
+  schedule,
+  guildId,
+  index = 0,
+  commitmentsBatch,
+}: {
+  schedule: BossScheduleData;
+  guildId: string;
+  index?: number;
+  commitmentsBatch?: Record<string, BossCommitmentData> | null;
+}) {
   // Ticks on its own for the same reason RotationCard does — see there.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -1726,7 +1780,11 @@ const UpcomingCard = memo(function UpcomingCard({ schedule, guildId, index = 0 }
         </div>
 
         {/* War-planning headcount for this specific upcoming spawn */}
-        <BossCommitButton guildId={guildId} scheduleId={schedule.id} />
+        <BossCommitButton
+          guildId={guildId}
+          scheduleId={schedule.id}
+          initialData={commitmentsBatch?.[schedule.id]}
+        />
       </div>
     </article>
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { dashboardApi } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { dashboardApi, type BossCommitmentData } from "@/lib/api";
 import { useQuery, queryClient } from "@/lib/query";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useToast } from "@/components/ui/Toast";
@@ -9,20 +9,36 @@ import { useToast } from "@/components/ui/Toast";
 interface Props {
   guildId: string;
   scheduleId: string;
+  /** Pre-fetched slice from the page-level batch commitments call (see
+   *  boss-rotation/page.tsx). When present at mount time, the first read
+   *  is seeded from this instead of firing this card's own network request —
+   *  every visible card doing its own `getBossCommitments` call otherwise
+   *  adds up to one request per card. Only helps on mount; live updates
+   *  still go through the socket-driven invalidation below. */
+  initialData?: BossCommitmentData;
 }
 
 /** War-planning headcount for a specific boss spawn. Any member can toggle
  *  "I can commit"; everyone sees the live count and can expand the roster. */
-export default function BossCommitButton({ guildId, scheduleId }: Props) {
+export default function BossCommitButton({ guildId, scheduleId, initialData }: Props) {
   const { addToast } = useToast();
   const { socket } = useSocket();
   const [expanded, setExpanded] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
 
+  // Consumed once — after the first fetch, subsequent invalidations (toggle,
+  // socket event) should always hit the network for a real up-to-date read.
+  const seedRef = useRef(initialData);
+
   const key = `boss_commitments:${scheduleId}`;
   const { data } = useQuery(
     key,
     async () => {
+      if (seedRef.current) {
+        const seeded = seedRef.current;
+        seedRef.current = undefined;
+        return seeded;
+      }
       const res = await dashboardApi.getBossCommitments(guildId, scheduleId);
       return res.success && res.data ? res.data : { count: 0, committed: false, members: [] };
     },

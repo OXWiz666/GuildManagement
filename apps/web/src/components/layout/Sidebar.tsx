@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import Avatar from "../ui/Avatar";
 import Badge from "../ui/Badge";
@@ -226,10 +227,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-[var(--forge-gold)] shadow-[0_0_10px_2px_rgba(212,168,83,0.6)]" />
               </div>
               <div className="absolute inset-0 overflow-hidden rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-surface)] backdrop-blur flex items-center justify-center transition-all duration-300 group-hover:border-[var(--forge-gold)]/30 group-hover:shadow-[0_0_12px_2px_rgba(212,168,83,0.15)]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src="/forgekeep-icon.png"
                   alt="ForgeKeep"
+                  width={34}
+                  height={34}
                   className="h-[34px] w-[34px] object-contain transition-transform duration-500 group-hover:scale-110"
                   draggable={false}
                 />
@@ -305,6 +307,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         onClick={onClose}
                         onMouseEnter={() => handlePrefetch(item.href)}
                         onFocus={() => handlePrefetch(item.href)}
+                        onTouchStart={() => handlePrefetch(item.href)}
                         className={`
                           relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
                           transition-all duration-200 cursor-pointer group overflow-hidden

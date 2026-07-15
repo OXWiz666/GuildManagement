@@ -7,8 +7,7 @@ export type GuildSettingsTab =
   | "activities"
   | "roles"
   | "distribution"
-  | "mounts"
-  | "attendance";
+  | "mounts";
 
 interface TabDef {
   value: GuildSettingsTab;
@@ -67,12 +66,6 @@ const ICONS = {
       <circle cx="17" cy="19" r="1.5" />
     </>,
   ),
-  check: ico(
-    <>
-      <path d="M9 11l3 3L22 4" />
-      <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-    </>,
-  ),
 };
 
 const GROUPS: Group[] = [
@@ -85,13 +78,6 @@ const GROUPS: Group[] = [
       { value: "roles", label: "Moderator & Permission", short: "Roles", icon: ICONS.shield },
       { value: "distribution", label: "Distribution Rules", short: "Distribution", icon: ICONS.split },
       { value: "mounts", label: "Mount Wishlist", short: "Mounts", icon: ICONS.mount },
-    ],
-  },
-  {
-    key: "operations",
-    label: "Operations",
-    tabs: [
-      { value: "attendance", label: "Attendance", short: "Attendance", icon: ICONS.check },
     ],
   },
 ];

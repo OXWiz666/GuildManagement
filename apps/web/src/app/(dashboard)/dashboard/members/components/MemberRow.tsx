@@ -70,8 +70,14 @@ export default function MemberRow({
           <p className="text-[11px] text-white/35 truncate mt-0.5">{member.user.displayName}</p>
         </div>
 
-        {/* Balance & Guild Points */}
+        {/* Combat Power, Balance & Guild Points */}
         <div className="hidden sm:flex items-center gap-4 shrink-0 pr-1">
+          <div className="text-right">
+            <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider">Combat Power</p>
+            <p className="text-[12px] font-bold font-mono text-white/80">
+              {member.cp != null ? member.cp.toLocaleString() : <span className="text-white/25">—</span>}
+            </p>
+          </div>
           <div className="text-right">
             <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider">Balance</p>
             <p className={`text-[12px] font-bold font-mono ${member.balance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>

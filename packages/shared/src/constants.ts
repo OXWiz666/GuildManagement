@@ -73,6 +73,9 @@ export const AUDIT_ACTIONS = {
 
   // Member Equipment — Item Screenshot Update
   MEMBER_EQUIPMENT_UPDATED: "MEMBER_EQUIPMENT_UPDATED",
+
+  // Member profile — Combat Power changes (powers the Members tab's CP Growth stat)
+  MEMBER_CP_UPDATED: "MEMBER_CP_UPDATED",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -474,6 +477,10 @@ export type ActivityPointRule = {
   label: string;
   basePoints: number;
   multipliers: Record<CustomizableRoleType, number>;
+  // Named swatch id (see ACTIVITY_COLOR_OPTIONS in the web app's
+  // activityTypeMeta.ts) — undefined falls back to a hash-derived color so
+  // legacy/unset activities still get a stable, distinct badge.
+  color?: string;
 };
 
 export type ActivityPointRules = {
@@ -488,16 +495,17 @@ const DEFAULT_MULTIPLIERS: Record<CustomizableRoleType, number> = CUSTOMIZABLE_R
   {} as Record<CustomizableRoleType, number>,
 );
 
+// Default activity catalog every new Faction/Guild Leader account starts
+// with (applies whenever a guild hasn't customized its own registry — see
+// mergeActivityPointRules). Each has a distinct default color swatch.
 export const DEFAULT_ACTIVITY_POINT_RULES: ActivityPointRules = {
   activities: [
-    { key: "BOSS", label: "Boss", basePoints: 3, multipliers: { ...DEFAULT_MULTIPLIERS } },
-    { key: "PVP", label: "PVP", basePoints: 5, multipliers: { ...DEFAULT_MULTIPLIERS } },
-    { key: "GUILD_BOSS", label: "Guild Boss", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS } },
-    { key: "GUILD_WAR", label: "Guild War", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS } },
-    { key: "PK_WAR", label: "PK War", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS } },
-    { key: "PVE_RALLY_GARBANA", label: "PVE Rally / Garbana", basePoints: 0, multipliers: { ...DEFAULT_MULTIPLIERS } },
-    { key: "PVE_CONTENTS", label: "PVE Contents", basePoints: 0, multipliers: { ...DEFAULT_MULTIPLIERS } },
-    { key: "WORLD_BOSS", label: "World Boss", basePoints: 0, multipliers: { ...DEFAULT_MULTIPLIERS } },
+    { key: "FIELD_BOSS", label: "Field Boss", basePoints: 5, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "amber" },
+    { key: "GUILD_BOSS", label: "Guild Boss", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "violet" },
+    { key: "GUILD_ARENA", label: "Guild Arena", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "red" },
+    { key: "PVP", label: "PVP", basePoints: 5, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "sky" },
+    { key: "PVE", label: "PVE", basePoints: 3, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "emerald" },
+    { key: "CUSTOM", label: "Custom", basePoints: 0, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "teal" },
   ],
 };
 

@@ -9,6 +9,15 @@ import { dashboardApi, notificationApi, type BossScheduleData, type BossRotation
 import { useSocket } from "@/components/providers/socket-provider";
 import { getRealtimeBossTimer } from "@guild/shared";
 import { useQuery, queryClient } from "@/lib/query";
+import {
+  playNotificationSound,
+  isNotificationSoundMuted,
+  setNotificationSoundMuted,
+  NOTIFICATION_SOUNDS,
+  getNotificationSoundId,
+  setNotificationSoundId,
+  previewNotificationSound,
+} from "@/lib/notificationSound";
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -21,8 +30,19 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [soundPrefs, setSoundPrefs] = useState({ muted: false, soundId: NOTIFICATION_SOUNDS[0].id });
+  const { muted: soundMuted, soundId } = soundPrefs;
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
+
+  // Read the persisted sound preferences after mount. Deliberate two-phase
+  // read (SSR/first-paint defaults, then the real localStorage value) to
+  // avoid a hydration mismatch — there's no subscribe API for localStorage
+  // to use instead.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSoundPrefs({ muted: isNotificationSoundMuted(), soundId: getNotificationSoundId() });
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -84,6 +104,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           };
         },
       );
+      if (!payload.readAt) playNotificationSound();
     };
 
     socket.on("notification_created", handleNotification);
@@ -123,9 +144,9 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     if (!result.success) rollback();
   }
 
-  // Next-boss widget shares its cache keys with boss-rotation/page.tsx and
-  // boss-schedule/page.tsx — whichever loads first warms the cache for both,
-  // so this never duplicates a request the user's other tabs already made.
+  // Next-boss widget shares its cache keys with boss-rotation/page.tsx —
+  // whichever loads first warms the cache for both, so this never
+  // duplicates a request the user's other tabs already made.
   const bossSchedulesKey = activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty";
   const bossRotationKey = activeGuild ? `boss_rotation_v2:${activeGuild.guildId}` : "boss_rotation_empty";
 
@@ -288,14 +309,57 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                   <p className="text-[11px] font-semibold text-white">Notifications</p>
                   <p className="text-[9px] text-white/40">{unreadCount} unread</p>
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllNotificationsRead}
-                    className="text-[9px] uppercase tracking-[0.14em] text-[var(--forge-gold-dim)] hover:text-[var(--forge-gold)] cursor-pointer"
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <select
+                    value={soundId}
+                    disabled={soundMuted}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setSoundPrefs((prev) => ({ ...prev, soundId: next }));
+                      setNotificationSoundId(next);
+                      previewNotificationSound(next);
+                    }}
+                    className="rounded-md border border-white/[0.08] bg-black/30 px-1.5 py-0.5 text-[9px] text-white/70 focus:border-[var(--forge-gold)]/50 focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Notification sound"
+                    title="Notification sound"
                   >
-                    Mark all read
+                    {NOTIFICATION_SOUNDS.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => {
+                      const next = !soundMuted;
+                      setSoundPrefs((prev) => ({ ...prev, muted: next }));
+                      setNotificationSoundMuted(next);
+                    }}
+                    className="text-white/40 hover:text-[var(--forge-gold)] transition-colors cursor-pointer"
+                    aria-label={soundMuted ? "Unmute notification sound" : "Mute notification sound"}
+                    title={soundMuted ? "Unmute notification sound" : "Mute notification sound"}
+                  >
+                    {soundMuted ? (
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                        <path d="M23 9l-6 6M17 9l6 6" />
+                      </svg>
+                    ) : (
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                        <path d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
+                      </svg>
+                    )}
                   </button>
-                )}
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllNotificationsRead}
+                      className="text-[9px] uppercase tracking-[0.14em] text-[var(--forge-gold-dim)] hover:text-[var(--forge-gold)] cursor-pointer"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="max-h-[300px] overflow-y-auto p-1">

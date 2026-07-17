@@ -236,5 +236,7 @@ export {
   getBossImageUrl,
   getRealtimeBossTimer,
   getBossCycleCategory,
+  getDailyRotationIndex,
+  SHORT_CYCLE_MAX_HOURS,
 } from "./types/bosses";
 export type { PredefinedBoss, RealtimeBossTimer, BossCycleCategory } from "./types/bosses";

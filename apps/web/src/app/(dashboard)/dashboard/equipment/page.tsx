@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/components/ui/Toast";
 import { useQuery, queryClient } from "@/lib/query";
@@ -27,12 +28,15 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader, Magnetic } from "@/components/dashboard/DashboardHelpers";
 import UploadDropzone from "./components/UploadDropzone";
-import CropSelector from "./components/CropSelector";
 import ScanProgress from "./components/ScanProgress";
 import EquipmentGrid, { type SlotView } from "./components/EquipmentGrid";
-import CorrectionPicker from "./components/CorrectionPicker";
-import ScanDebugOverlay from "./components/ScanDebugOverlay";
 import ErrorState from "./components/ErrorState";
+
+// Only needed once a scan is actually in progress (cropping/review) — deferred
+// out of the initial equipment-tab bundle.
+const CropSelector = dynamic(() => import("./components/CropSelector"));
+const CorrectionPicker = dynamic(() => import("./components/CorrectionPicker"));
+const ScanDebugOverlay = dynamic(() => import("./components/ScanDebugOverlay"));
 
 type Phase = "idle" | "cropping" | "scanning" | "review" | "saving" | "error";
 

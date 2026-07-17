@@ -856,10 +856,36 @@ export async function updateCharacterProfile(
   if (data.class !== undefined) updateData.class = data.class;
   if (data.weapon !== undefined) updateData.weapon = data.weapon;
 
+  // CP has no dedicated history table — the Members tab's "CP Growth" stat is
+  // derived entirely from this audit trail, so it only needs the value right
+  // before the change, not a diff of every field.
+  const previousUser =
+    data.cp !== undefined ? await prisma.user.findUnique({ where: { id: userId }, select: { cp: true } }) : null;
+
   const [user] = await prisma.$transaction([
     prisma.user.update({ where: { id: userId }, data: updateData }),
     prisma.guildMember.updateMany({ where: { userId }, data: updateData }),
   ]);
+
+  if (data.cp !== undefined && previousUser && previousUser.cp !== data.cp) {
+    const memberships = await prisma.guildMember.findMany({
+      where: { userId, isActive: true },
+      select: { guildId: true },
+    });
+    await Promise.all(
+      memberships.map((membership) =>
+        writeAuditLog({
+          actorId: userId,
+          guildId: membership.guildId,
+          action: "MEMBER_CP_UPDATED",
+          target: "GuildMember",
+          targetId: userId,
+          detail: { oldCp: previousUser.cp, newCp: data.cp },
+        }),
+      ),
+    );
+  }
+
   await broadcastProfileUpdated(userId);
   return toUserPublic(user);
 }

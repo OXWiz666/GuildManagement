@@ -76,6 +76,10 @@ export const dashboard = new Hono<AppEnv>()
       cache.invalidatePattern(`boss-schedule:${result.guildId}:*`),
       cache.invalidatePattern(`attendance:pending:${result.guildId}:*`),
       cache.invalidatePattern(`attendance:stats:${result.guildId}:*`),
+      // An advance check-in (see checkInToBoss) can open a brand-new session
+      // instead of attaching to an existing one — refresh the sessions list
+      // too so it shows up immediately instead of waiting on cache TTL.
+      cache.invalidatePattern(`attendance:sessions:${result.guildId}*`),
     ]);
     const serializedRecord = { ...result.record, joinedAt: result.record.joinedAt.toISOString() };
     const payload = { ...result, record: serializedRecord };
@@ -112,6 +116,8 @@ export const dashboard = new Hono<AppEnv>()
       cache.invalidatePattern(`attendance:pending:${guildId}:*`),
       cache.invalidatePattern(`attendance:stats:${guildId}:*`),
       cache.invalidatePattern(`stats:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-card:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
     ]);
     const serializedRecord = { ...result.record, joinedAt: result.record.joinedAt.toISOString() };
     const payload = { ...result, record: serializedRecord };
@@ -130,6 +136,8 @@ export const dashboard = new Hono<AppEnv>()
       cache.invalidatePattern(`attendance:sessions:${guildId}*`),
       cache.invalidatePattern(`attendance:stats:${guildId}:*`),
       cache.invalidatePattern(`stats:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-card:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
     ]);
     const serializedRecord = { ...result.record, joinedAt: result.record.joinedAt.toISOString() };
     const payload = { ...result, record: serializedRecord };
@@ -159,6 +167,8 @@ export const dashboard = new Hono<AppEnv>()
       cache.invalidatePattern(`attendance:sessions:${guildId}*`),
       cache.invalidatePattern(`attendance:stats:${guildId}:*`),
       cache.invalidatePattern(`stats:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-card:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
     ]);
     broadcastToGuild(guildId, "attendance_record_revoked", { recordId });
     return ok(c, result);
@@ -257,6 +267,43 @@ export const dashboard = new Hono<AppEnv>()
     const stats = await services.dashboard.getMemberAttendanceStats(guildId, user.userId);
     await cache.set(cacheKey, stats, 15);
     return ok(c, stats);
+  })
+  // Members-tab profile card stat block — any active guildmate can view any
+  // other member's card, same audience already able to see their CP/class/
+  // weapon on the roster.
+  .get("/members/:guildId/:userId/stats-card", requireAuth, async (c) => {
+    const user = c.get("user");
+    const guildId = c.req.param("guildId");
+    const targetUserId = c.req.param("userId");
+    const cacheKey = `member:stats-card:${guildId}:${targetUserId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const card = await services.dashboard.getMemberStatsCard(guildId, targetUserId, user.userId);
+    await cache.set(cacheKey, card, 15);
+    return ok(c, card);
+  })
+  // Members-tab Statistics view — the same per-member card, for every active
+  // member in the guild at once.
+  .get("/members/:guildId/stats-board", requireAuth, async (c) => {
+    const user = c.get("user");
+    const guildId = c.req.param("guildId");
+    const cacheKey = `member:stats-board:${guildId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const board = await services.dashboard.getGuildMemberStatsBoard(guildId, user.userId);
+    await cache.set(cacheKey, board, 20);
+    return ok(c, board);
+  })
+  // Members-tab Statistics header cards — guild-wide 30d-vs-previous-30d KPIs.
+  .get("/members/:guildId/stats-summary", requireAuth, async (c) => {
+    const user = c.get("user");
+    const guildId = c.req.param("guildId");
+    const cacheKey = `member:stats-summary:${guildId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const summary = await services.dashboard.getGuildStatsSummary(guildId, user.userId);
+    await cache.set(cacheKey, summary, 60);
+    return ok(c, summary);
   })
 
   // ═══ Boss rotation ══════════════════════════════════════════

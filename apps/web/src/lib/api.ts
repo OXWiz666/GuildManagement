@@ -444,6 +444,7 @@ export interface ActivityPointRuleData {
   label: string;
   basePoints: number;
   multipliers: Record<string, number>;
+  color?: string;
 }
 
 export interface ActivityPointRulesData {
@@ -773,12 +774,13 @@ export interface LowBossRotationBoss {
   level: number;
   type: string;
   location: string;
+  cooldownHours: number | null;
 }
 
 export interface LowBossRotationResponse {
   canManage: boolean;
   viewerRole: string;
-  mode: "WEEKLY" | "MONTHLY";
+  mode: "WEEKLY" | "MONTHLY" | "DAILY";
   /** Boss names flagged to follow the day rotation. */
   lowBossNames: string[];
   /** weekday index ("0"=Sun .. "6"=Sat) → guildId */
@@ -790,7 +792,7 @@ export interface LowBossRotationResponse {
 }
 
 export interface LowBossRotationUpdate {
-  mode?: "WEEKLY" | "MONTHLY";
+  mode?: "WEEKLY" | "MONTHLY" | "DAILY";
   lowBossNames?: string[];
   weekly?: Record<string, string>;
   /** date → guildId, or date → null to clear that day */
@@ -838,6 +840,7 @@ export interface BossKilledHistoryEntry {
     displayName: string;
     avatarUrl: string | null;
   };
+  takenGuildName: string | null;
   nextGuildName: string | null;
   nextSpawnTime: string | null;
   bossScheduleId: string | null;
@@ -856,6 +859,37 @@ export interface BossKilledHistoryResponse {
   days: BossKilledHistoryDay[];
 }
 
+// Members-tab profile card stat block — CP growth + the same attendance
+// metrics shown on the member's own Boss Attendance page, for any teammate.
+export interface MemberStatsCard {
+  cp: number | null;
+  cpGrowth: number | null;
+  cpGrowthWindowDays: number;
+  presenceRate: number;
+  currentStreak: number;
+  participationCount: number;
+  totalPoints: number;
+}
+
+// Members-tab Statistics view — the same card shape, for every active member.
+export interface MemberStatsBoardRow extends MemberStatsCard {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface MemberStatsBoardResponse {
+  members: MemberStatsBoardRow[];
+}
+
+// Members-tab Statistics header cards — guild-wide current-vs-previous-30d KPIs.
+export interface GuildStatsSummary {
+  windowDays: number;
+  attendanceRate: { current: number; previous: number };
+  activityPoints: { current: number; previous: number };
+  raidParticipation: { current: number; previous: number };
+}
+
 export interface NotificationData {
   id: string;
   userId: string;
@@ -871,6 +905,7 @@ export interface NotificationData {
 export type ActivityType = string;
 export type ActivityStatus = "UPCOMING" | "COMPLETED" | "CANCELLED";
 export type ActivityResult = "WIN" | "LOSS" | "DRAW";
+export type ActivityRepeatInterval = "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
 export interface ActivityAttendee {
   userId: string;
@@ -891,6 +926,7 @@ export interface GuildActivityData {
   result: ActivityResult | null;
   scoreFor: number | null;
   scoreAgainst: number | null;
+  repeatInterval: ActivityRepeatInterval | null;
   creatorId: string;
   creatorName: string;
   createdAt: string;
@@ -917,6 +953,7 @@ export interface ActivityInput {
   result?: ActivityResult | null;
   scoreFor?: number | null;
   scoreAgainst?: number | null;
+  repeatInterval?: ActivityRepeatInterval | null;
 }
 
 export const activityApi = {
@@ -1040,6 +1077,18 @@ export const dashboardApi = {
         joinedAt: string | null;
       }>;
     }>(`/dashboard/attendance/stats/${guildId}`);
+  },
+
+  async getMemberStatsCard(guildId: string, userId: string) {
+    return api.get<MemberStatsCard>(`/dashboard/members/${guildId}/${userId}/stats-card`);
+  },
+
+  async getMemberStatsBoard(guildId: string) {
+    return api.get<MemberStatsBoardResponse>(`/dashboard/members/${guildId}/stats-board`);
+  },
+
+  async getGuildStatsSummary(guildId: string) {
+    return api.get<GuildStatsSummary>(`/dashboard/members/${guildId}/stats-summary`);
   },
 
   async getBossSchedules(guildId: string) {

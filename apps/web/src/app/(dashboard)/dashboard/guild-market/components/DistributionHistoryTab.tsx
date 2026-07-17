@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { SLOT_LABELS } from "@guild/shared";
 import { marketApi, type AuditLogEntry, type ItemDistributionData } from "@/lib/api";
 import { useQuery } from "@/lib/query";
@@ -67,17 +67,19 @@ function AuditLogView({ guildId }: { guildId: string }) {
     },
     { staleTime: 15000 },
   );
-  const logs = (data || []) as AuditLogEntry[];
-  const filtered = logs.filter((l) => {
-    if (actionFilter !== "ALL" && l.action !== actionFilter) return false;
-    if (!search.trim()) return true;
-    const s = search.toLowerCase();
-    return (
-      (ACTION_LABELS[l.action] || l.action).toLowerCase().includes(s) ||
-      l.actor.displayName.toLowerCase().includes(s) ||
-      summarizeDetail(l.detail).toLowerCase().includes(s)
-    );
-  });
+  const logs = useMemo(() => (data || []) as AuditLogEntry[], [data]);
+  const filtered = useMemo(() => {
+    return logs.filter((l) => {
+      if (actionFilter !== "ALL" && l.action !== actionFilter) return false;
+      if (!search.trim()) return true;
+      const s = search.toLowerCase();
+      return (
+        (ACTION_LABELS[l.action] || l.action).toLowerCase().includes(s) ||
+        l.actor.displayName.toLowerCase().includes(s) ||
+        summarizeDetail(l.detail).toLowerCase().includes(s)
+      );
+    });
+  }, [logs, actionFilter, search]);
 
   if (isLoading && logs.length === 0) return <Skeleton className="h-64 w-full rounded-2xl animate-pulse" />;
 

@@ -157,7 +157,7 @@ export default function ItemDetailModal({
           <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border text-3xl ${rs.border} ${rs.bg}`}>
             {item.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.imageUrl} alt="" className="h-full w-full rounded-2xl object-cover" />
+              <img src={item.imageUrl} alt="" className="h-full w-full rounded-2xl object-cover" loading="lazy" decoding="async" />
             ) : (
               <span aria-hidden>{CATEGORY_ICONS[item.category] || "📦"}</span>
             )}

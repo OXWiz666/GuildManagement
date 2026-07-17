@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { services } from "@guild/core";
+import { services, cache } from "@guild/core";
 import { confirmEquipmentSchema, uploadScreenshotSchema } from "@guild/shared";
 import type { AppEnv } from "../env";
 import { ok } from "../respond";
@@ -15,11 +15,21 @@ import { requireAuth, requireGuildRole } from "../middleware/auth";
  */
 export const equipment = new Hono<AppEnv>()
   // Static catalog routes registered before `:guildId` to avoid ambiguity.
+  // Global (not per-guild) and never invalidated by writes here, so a longer
+  // TTL is safe.
   .get("/catalog", requireAuth, async (c) => {
-    return ok(c, await services.equipment.getCatalog());
+    const cached = await cache.get<unknown>("equipment:catalog");
+    if (cached) return ok(c, cached);
+    const data = await services.equipment.getCatalog();
+    await cache.set("equipment:catalog", data, 300);
+    return ok(c, data);
   })
   .get("/drops-catalog", requireAuth, async (c) => {
-    return ok(c, await services.equipment.getDropsCatalog());
+    const cached = await cache.get<unknown>("equipment:drops-catalog");
+    if (cached) return ok(c, cached);
+    const data = await services.equipment.getDropsCatalog();
+    await cache.set("equipment:drops-catalog", data, 300);
+    return ok(c, data);
   })
   .get("/:guildId/mine", requireGuildRole("MEMBER"), async (c) => {
     const guildId = c.req.param("guildId");

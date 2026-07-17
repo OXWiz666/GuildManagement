@@ -371,7 +371,7 @@ export type BossCycleCategory = "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE";
 
 // Bosses that respawn at least once a day (windowed bosses or a cooldown of a
 // day or less) are "short cycle"; longer multi-day cooldowns are "long cycle".
-const SHORT_CYCLE_MAX_HOURS = 24;
+export const SHORT_CYCLE_MAX_HOURS = 24;
 
 export function getBossCycleCategory(
   bossName: string,
@@ -387,6 +387,18 @@ export function getBossCycleCategory(
     return "SHORT_CYCLE";
   }
   return "LONG_CYCLE";
+}
+
+// ─── Faction Schedule "Daily" cadence ────────────────────────
+// For sub-24h-cooldown bosses that can spawn more than once in a day, the
+// Faction Schedule's "Daily" mode auto-rotates the guild-of-the-day instead
+// of requiring a leader to fill in a calendar. Anchored to the Unix epoch so
+// it's a pure function of (guild count, date) — no per-day map to store or
+// keep refilling; the pattern only shifts if the guild roster itself changes.
+export function getDailyRotationIndex(guildCount: number, date: Date = new Date()): number {
+  if (guildCount <= 0) return -1;
+  const daysSinceEpoch = Math.floor(date.getTime() / 86400000);
+  return ((daysSinceEpoch % guildCount) + guildCount) % guildCount;
 }
 
 export function getBossImageUrl(bossName: string): string {

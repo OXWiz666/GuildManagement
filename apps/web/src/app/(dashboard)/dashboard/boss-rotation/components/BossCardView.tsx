@@ -50,6 +50,8 @@ export default function BossCardView({
               <img
                 src={boss.imageUrl || getBossImageUrl(boss.name)}
                 alt={boss.name}
+                loading="lazy"
+                decoding="async"
                 className="h-full w-full object-cover transform scale-100 group-hover:scale-110 group-hover:brightness-110 transition-all duration-700 ease-in-out"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=400";

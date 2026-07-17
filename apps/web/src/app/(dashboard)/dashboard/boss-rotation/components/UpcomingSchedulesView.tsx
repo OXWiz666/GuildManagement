@@ -38,6 +38,8 @@ export default function UpcomingSchedulesView({
                 <img
                   src={getBossImageUrl(sched.bossName)}
                   alt={sched.bossName}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src =

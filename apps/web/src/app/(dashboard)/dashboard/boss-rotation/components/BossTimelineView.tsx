@@ -52,6 +52,8 @@ export default function BossTimelineView({
                 <img
                   src={boss.imageUrl || getBossImageUrl(boss.name)}
                   alt={boss.name}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=100";

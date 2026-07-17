@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { services } from "@guild/core";
+import { services, cache, broadcastToGuild } from "@guild/core";
 import {
   createItemRequestSchema,
   reviewRequestSchema,
@@ -167,13 +167,18 @@ export const market = new Hono<AppEnv>()
   .get("/:guildId/rules", requireGuildRole("MEMBER"), async (c) => {
     const guildId = c.req.param("guildId");
     const user = c.get("user");
+    const cacheKey = `market-rules:${guildId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { rules: cached });
     const rules = await services.market.getMarketRules(guildId, user.userId);
+    await cache.set(cacheKey, rules, 120);
     return ok(c, { rules });
   })
   .patch("/:guildId/rules", requireGuildRole("GUILD_LEADER"), zBody(marketRulesSchema), async (c) => {
     const guildId = c.req.param("guildId");
     const user = c.get("user");
     const rules = await services.market.updateMarketRules(guildId, user.userId, c.req.valid("json") as never);
+    await cache.delete(`market-rules:${guildId}`);
     return ok(c, { rules });
   })
 
@@ -197,16 +202,22 @@ export const market = new Hono<AppEnv>()
   })
 
   // ─── Mounts catalog ──────────────────────────────────────────
+  // Short TTL: distributing a mount changes slots-remaining shown in the list.
   .get("/:guildId/mounts", requireGuildRole("MEMBER"), async (c) => {
     const guildId = c.req.param("guildId");
     const user = c.get("user");
+    const cacheKey = `market-mounts:${guildId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { mounts: cached });
     const mounts = await services.mounts.listMounts(guildId, user.userId);
+    await cache.set(cacheKey, mounts, 20);
     return ok(c, { mounts });
   })
   .post("/:guildId/mounts", requireGuildRole("GUILD_LEADER"), zBody(mountCatalogSchema), async (c) => {
     const guildId = c.req.param("guildId");
     const user = c.get("user");
     const mount = await services.mounts.upsertMount(guildId, user.userId, c.req.valid("json"));
+    await cache.delete(`market-mounts:${guildId}`);
     return ok(c, { mount }, 201);
   })
   .patch("/:guildId/mounts/:mountId", requireGuildRole("GUILD_LEADER"), zBody(mountCatalogSchema), async (c) => {
@@ -214,19 +225,23 @@ export const market = new Hono<AppEnv>()
     const mountId = c.req.param("mountId");
     const user = c.get("user");
     const mount = await services.mounts.upsertMount(guildId, user.userId, { ...c.req.valid("json"), id: mountId });
+    await cache.delete(`market-mounts:${guildId}`);
     return ok(c, { mount });
   })
   .delete("/:guildId/mounts/:mountId", requireGuildRole("GUILD_LEADER"), async (c) => {
     const guildId = c.req.param("guildId");
     const mountId = c.req.param("mountId");
     const user = c.get("user");
-    return ok(c, await services.mounts.deleteMount(guildId, user.userId, mountId));
+    const result = await services.mounts.deleteMount(guildId, user.userId, mountId);
+    await cache.delete(`market-mounts:${guildId}`);
+    return ok(c, result);
   })
   .post("/:guildId/mounts/:mountId/distribute", requireGuildRole("OFFICER"), zBody(distributeMountSchema), async (c) => {
     const guildId = c.req.param("guildId");
     const mountId = c.req.param("mountId");
     const user = c.get("user");
     const record = await services.mounts.distributeMount(guildId, user.userId, { ...c.req.valid("json"), mountId });
+    await cache.delete(`market-mounts:${guildId}`);
     return ok(c, { record }, 201);
   })
 
@@ -261,6 +276,16 @@ export const market = new Hono<AppEnv>()
     const id = c.req.param("id");
     const user = c.get("user");
     const item = await services.storage.markStorageItemSold(guildId, id, user.userId, c.req.valid("json"));
+    // markStorageItemSold also writes a LootSale row — bust the same caches
+    // and fire the same event the direct "Record Sale" endpoints do, so the
+    // Loot Sales registry picks it up immediately instead of waiting out the
+    // 120s server cache.
+    await Promise.all([
+      cache.invalidatePattern(`loot:${guildId}:*`),
+      cache.invalidatePattern(`accounting:${guildId}:*`),
+      cache.invalidatePattern(`stats:${guildId}:*`),
+    ]);
+    broadcastToGuild(guildId, "loot_sale_recorded", { guildId, itemId: id });
     return ok(c, { item });
   })
   .post("/:guildId/storage/:id/distribute", requireGuildRole("OFFICER"), zBody(distributeStorageSchema), async (c) => {

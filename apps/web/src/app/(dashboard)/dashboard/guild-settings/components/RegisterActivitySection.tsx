@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Magnetic } from "@/components/dashboard/DashboardHelpers";
 import SettingsCard from "../../settings/components/SettingsCard";
+import { ACTIVITY_COLOR_OPTIONS, ACTIVITY_COLOR_IDS } from "@/lib/activityTypeMeta";
 
 interface Props {
   guildId: string;
@@ -114,6 +115,7 @@ export default function RegisterActivitySection({ guildId }: Props) {
               <thead>
                 <tr className="text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">
                   <th className="py-2 pr-3">Activity</th>
+                  <th className="py-2 px-2">Color</th>
                   <th className="py-2 px-2">Base</th>
                   <th colSpan={CUSTOMIZABLE_ROLES.length} className="py-1 px-2 text-center text-[9px] text-[var(--forge-gold-bright)] tracking-[0.18em]">
                     Multiplier · Customizable
@@ -122,6 +124,7 @@ export default function RegisterActivitySection({ guildId }: Props) {
                 </tr>
                 <tr className="text-[10px] text-white/35 font-semibold uppercase tracking-wider text-left border-b border-white/[0.06]">
                   <th className="pb-2 pr-3" />
+                  <th className="pb-2 px-2" />
                   <th className="pb-2 px-2" />
                   {CUSTOMIZABLE_ROLES.map((role) => (
                     <th key={role} className="pb-2 px-2 text-center whitespace-nowrap">
@@ -142,6 +145,23 @@ export default function RegisterActivitySection({ guildId }: Props) {
                         placeholder="Activity name"
                         className="w-full min-w-[140px] rounded-lg bg-surface-100 border border-white/8 text-white placeholder:text-white/25 px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20"
                       />
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <div className="flex items-center gap-1">
+                        {ACTIVITY_COLOR_IDS.map((colorId) => (
+                          <button
+                            key={colorId}
+                            type="button"
+                            onClick={() => updateRow(row.key, { color: colorId })}
+                            title={colorId}
+                            aria-label={`Use ${colorId} for ${row.label || "this activity"}`}
+                            className={`h-4 w-4 rounded-full cursor-pointer transition-transform ${
+                              row.color === colorId ? "ring-2 ring-white/70 ring-offset-1 ring-offset-[#0c0d12] scale-110" : "hover:scale-110"
+                            }`}
+                            style={{ backgroundColor: ACTIVITY_COLOR_OPTIONS[colorId]!.dot }}
+                          />
+                        ))}
+                      </div>
                     </td>
                     <td className="py-1.5 px-2">
                       <input

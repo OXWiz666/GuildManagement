@@ -62,6 +62,7 @@ export default function AttendanceSessionModal({
   const { addToast } = useToast();
   const [actionId, setActionId] = useState<string | null>(null);
   const [isVerifyingAll, setIsVerifyingAll] = useState(false);
+  const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set());
   const [showReopen, setShowReopen] = useState(false);
   const [reopenMinutes, setReopenMinutes] = useState(30);
@@ -157,6 +158,28 @@ export default function AttendanceSessionModal({
     }
   }
 
+  async function handleMarkAllPresent() {
+    if (!detailRaw) return;
+    const ids = detailRaw.notCheckedInMembers.map((m) => m.userId);
+    if (ids.length === 0) return;
+    setIsMarkingAll(true);
+    try {
+      let succeeded = 0;
+      for (const userId of ids) {
+        try {
+          const res = await dashboardApi.markMemberPresent(guildId, session.id, userId);
+          if (res.success) succeeded++;
+        } catch {
+          // ignore individual failures, continue the batch
+        }
+      }
+      addToast("success", `Marked ${succeeded} member(s) present.`);
+      invalidateAll();
+    } finally {
+      setIsMarkingAll(false);
+    }
+  }
+
   async function handleReopen() {
     setIsReopening(true);
     try {
@@ -218,7 +241,7 @@ export default function AttendanceSessionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-lg max-h-full overflow-y-auto custom-scrollbar animate-scale-in rounded-2xl border border-white/[0.1] bg-[#0c0d12] shadow-2xl shadow-black/60">
+      <div className="relative w-full max-w-2xl max-h-full overflow-y-auto custom-scrollbar animate-scale-in rounded-2xl border border-white/[0.1] bg-[#0c0d12] shadow-2xl shadow-black/60">
         <button
           type="button"
           onClick={onClose}
@@ -371,26 +394,40 @@ export default function AttendanceSessionModal({
                 <>
                   {/* NOT CHECKED-IN */}
                   <section>
-                    <h5 className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-400/80 mb-2">
-                      Not Checked-In ({detailRaw.notCheckedInMembers.length})
-                    </h5>
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-400/80">
+                        Not Checked-In ({detailRaw.notCheckedInMembers.length})
+                      </h5>
+                      {detailRaw.notCheckedInMembers.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllPresent}
+                          disabled={isMarkingAll || actionId !== null}
+                          className="px-2.5 py-1 bg-violet-650 hover:bg-violet-755 disabled:bg-white/[0.18] text-[10px] font-semibold text-white rounded-md transition-all cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          {isMarkingAll ? "Marking…" : `Mark All Present (${detailRaw.notCheckedInMembers.length})`}
+                        </button>
+                      )}
+                    </div>
                     {detailRaw.notCheckedInMembers.length === 0 ? (
                       <p className="text-[11px] text-white/35 italic px-1">Every active member checked in.</p>
                     ) : (
-                      <div className="rounded-lg border border-white/[0.05] divide-y divide-zinc-850 overflow-hidden">
-                        {detailRaw.notCheckedInMembers.map((member) => (
-                          <div key={member.userId} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-white/[0.01]">
-                            <MemberIdentity displayName={member.user.displayName} email={member.user.email} />
-                            <button
-                              type="button"
-                              onClick={() => handleMarkPresent(member.userId)}
-                              disabled={actionId === member.userId}
-                              className="px-2.5 py-1.25 bg-white/[0.10] hover:bg-white/[0.14] disabled:bg-white/[0.18] text-[11px] font-semibold text-white rounded-md transition-all cursor-pointer shrink-0"
-                            >
-                              Mark Present
-                            </button>
-                          </div>
-                        ))}
+                      <div className="rounded-lg border border-white/[0.05] max-h-72 overflow-y-auto custom-scrollbar p-1.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {detailRaw.notCheckedInMembers.map((member) => (
+                            <div key={member.userId} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-md bg-white/[0.015] border border-white/[0.04] hover:bg-white/[0.03]">
+                              <MemberIdentity displayName={member.user.displayName} email={member.user.email} />
+                              <button
+                                type="button"
+                                onClick={() => handleMarkPresent(member.userId)}
+                                disabled={actionId === member.userId}
+                                className="px-2.5 py-1.25 bg-white/[0.10] hover:bg-white/[0.14] disabled:bg-white/[0.18] text-[11px] font-semibold text-white rounded-md transition-all cursor-pointer shrink-0"
+                              >
+                                Mark Present
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </section>
@@ -426,7 +463,7 @@ export default function AttendanceSessionModal({
                     {checkedIn.length === 0 ? (
                       <p className="text-[11px] text-white/35 italic px-1">No one checked in for this window.</p>
                     ) : (
-                      <div className="rounded-lg border border-white/[0.05] divide-y divide-zinc-850 overflow-hidden">
+                      <div className="rounded-lg border border-white/[0.05] max-h-72 overflow-y-auto custom-scrollbar divide-y divide-zinc-850">
                         {checkedIn.map((rec) => {
                           const isPendingRec = rec.status === "PENDING";
                           return (

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { compress } from "hono/compress";
 import type { AppEnv } from "./env";
 import { onError } from "./respond";
 import { market } from "./routes/market";
@@ -25,6 +26,9 @@ import { health } from "./routes/health";
 const app = new Hono<AppEnv>().basePath("/api");
 
 app.onError(onError);
+// gzip/deflate every response — Node runtime only (mandatory here, see the
+// catch-all route handler), since compress() relies on Node's zlib streams.
+app.use(compress());
 
 const routes = app
   .route("/market", market)

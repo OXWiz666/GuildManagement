@@ -20,6 +20,7 @@ export interface MemberRowProps {
   index: number;
   isGuildLeader: boolean;
   currentUserId: string;
+  isOnline: boolean;
   onSelect: () => void;
   onRoleChange: (newRole: string) => void;
   customRoles?: CustomRoleData[];
@@ -31,6 +32,7 @@ export default function MemberRow({
   index,
   isGuildLeader,
   currentUserId,
+  isOnline,
   onSelect,
   onRoleChange,
   customRoles = [],
@@ -52,6 +54,8 @@ export default function MemberRow({
           name={member.ign || member.user.displayName}
           src={member.user.avatarUrl}
           size="lg"
+          showStatus
+          isOnline={isOnline}
         />
 
         {/* Identity — IGN is the highlighted primary name */}

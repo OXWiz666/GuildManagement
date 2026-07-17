@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { services, BadRequestError } from "@guild/core";
+import { services, cache, BadRequestError } from "@guild/core";
 import type { AppEnv } from "../env";
 import { ok } from "../respond";
 import { getClientInfo, readJson } from "../request";
@@ -97,9 +97,24 @@ export const faction = new Hono<AppEnv>()
   })
 
   // ─── Members & overview ──────────────────────────────────────
+  // Short TTL, no explicit invalidation: bounds staleness after guild/member
+  // changes elsewhere in the faction without wiring cache-busting across every
+  // mutation site (matches the attendance:* caching pattern in dashboard.ts).
   .get("/members", requireAuth, async (c) => {
-    return ok(c, { members: await services.faction.getFactionMembers(c.get("user").userId) });
+    const userId = c.get("user").userId;
+    const cacheKey = `faction-members:${userId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { members: cached });
+    const members = await services.faction.getFactionMembers(userId);
+    await cache.set(cacheKey, members, 20);
+    return ok(c, { members });
   })
   .get("/overview", requireAuth, async (c) => {
-    return ok(c, await services.faction.getFactionOverview(c.get("user").userId));
+    const userId = c.get("user").userId;
+    const cacheKey = `faction-overview:${userId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const overview = await services.faction.getFactionOverview(userId);
+    await cache.set(cacheKey, overview, 20);
+    return ok(c, overview);
   });

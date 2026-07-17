@@ -20,19 +20,25 @@ interface SocketContextType {
   } | null;
   isConnected: boolean;
   error: string | null;
+  // User IDs of guild members currently connected (tracked via Supabase
+  // Realtime Presence on the guild channel — see the guildChannel.track()
+  // call below). Only reflects the active guild's own channel.
+  onlineUserIds: Set<string>;
 }
 
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
   error: null,
+  onlineUserIds: new Set(),
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isSessionReady } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+
   const listeners = useRef<Record<string, Set<Function>>>({});
 
   // Re-create the Socket.IO client interface for backward compatibility
@@ -54,6 +60,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isAuthenticated || !isSessionReady || !user) {
       setIsConnected(false);
+      setOnlineUserIds(new Set());
       return;
     }
 
@@ -92,18 +99,31 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       console.log(`[Realtime Client]: Subscribing to guild room: guild-${guildId}`);
       
       guildChannel = supabase.channel(`guild-${guildId}`, {
-        config: { broadcast: { self: true } },
+        config: { broadcast: { self: true }, presence: { key: user.id } },
       });
+
+      const syncPresence = () => {
+        const state = guildChannel.presenceState();
+        const ids = new Set<string>();
+        for (const presences of Object.values(state) as any[]) {
+          for (const p of presences as any[]) {
+            if (p?.user_id) ids.add(p.user_id);
+          }
+        }
+        setOnlineUserIds(ids);
+      };
 
       guildChannel
         .on("broadcast", { event: "*" }, ({ event, payload }: { event: string; payload: any }) => {
           handleBroadcast(event, payload);
         })
-        .subscribe((status: string) => {
+        .on("presence", { event: "sync" }, syncPresence)
+        .subscribe(async (status: string) => {
           console.log(`[Realtime Client]: Guild channel status: ${status}`);
           // Trigger the 'joined_guild_room' event for backward compatibility
           if (status === "SUBSCRIBED") {
             handleBroadcast("joined_guild_room", { guildId });
+            await guildChannel.track({ user_id: user.id, online_at: new Date().toISOString() });
           }
         });
     }
@@ -125,12 +145,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       if (globalChannel) supabase.removeChannel(globalChannel);
       if (guildChannel) supabase.removeChannel(guildChannel);
       if (userChannel) supabase.removeChannel(userChannel);
+      setOnlineUserIds(new Set());
     };
   }, [isAuthenticated, isSessionReady, user]);
 
   const value = useMemo<SocketContextType>(
-    () => ({ socket: socketRef.current, isConnected, error }),
-    [isConnected, error],
+    () => ({ socket: socketRef.current, isConnected, error, onlineUserIds }),
+    [isConnected, error, onlineUserIds],
   );
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { LEGENDARY_CATEGORIES, LEGENDARY_CATEGORY_LABELS, LEGENDARY_STATUSES } from "@guild/shared";
 
@@ -43,21 +43,23 @@ export default function LegendaryPriorityTab({ guildId }: Props) {
     { staleTime: 15000 },
   );
 
-  const requests = (data?.requests || []) as LegendaryRequestData[];
+  const requests = useMemo(() => (data?.requests || []) as LegendaryRequestData[], [data]);
   const canManage = data?.canManage || false;
   const refresh = () => queryClient.invalidateQueries(key);
 
-  const filtered = requests.filter((r) => {
-    if (categoryFilter !== "ALL" && r.category !== categoryFilter) return false;
-    if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
-    if (!search.trim()) return true;
-    const s = search.toLowerCase();
-    return (
-      (r.member?.ign || "").toLowerCase().includes(s) ||
-      r.category.toLowerCase().includes(s) ||
-      (r.member?.user?.displayName || "").toLowerCase().includes(s)
-    );
-  });
+  const filtered = useMemo(() => {
+    return requests.filter((r) => {
+      if (categoryFilter !== "ALL" && r.category !== categoryFilter) return false;
+      if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
+      if (!search.trim()) return true;
+      const s = search.toLowerCase();
+      return (
+        (r.member?.ign || "").toLowerCase().includes(s) ||
+        r.category.toLowerCase().includes(s) ||
+        (r.member?.user?.displayName || "").toLowerCase().includes(s)
+      );
+    });
+  }, [requests, categoryFilter, statusFilter, search]);
 
   async function review(id: string, action: "APPROVED" | "REJECTED" | "COMPLETED") {
     setBusyId(id);

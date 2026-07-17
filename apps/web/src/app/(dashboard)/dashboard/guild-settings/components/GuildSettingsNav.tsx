@@ -7,7 +7,8 @@ export type GuildSettingsTab =
   | "activities"
   | "roles"
   | "distribution"
-  | "mounts";
+  | "mounts"
+  | "discord";
 
 interface TabDef {
   value: GuildSettingsTab;
@@ -66,6 +67,19 @@ const ICONS = {
       <circle cx="17" cy="19" r="1.5" />
     </>,
   ),
+  // Discord's mark, traced with the same 1.8 stroke as the others so it reads
+  // as part of the set rather than a pasted-in brand asset.
+  discord: ico(
+    <>
+      <path d="M8.5 9.5c1-.4 2.2-.6 3.5-.6s2.5.2 3.5.6" />
+      <path d="M9 16.5c-1 .3-2 .5-3 .5" />
+      <path d="M15 16.5c1 .3 2 .5 3 .5" />
+      <path d="M8.2 5.5A13 13 0 0 1 12 5c1.3 0 2.6.2 3.8.5l1.6 1.1c2 1.7 3.1 4.2 3.1 6.9 0 1.4-.3 2.8-1 4-1.2.8-2.6 1.4-4 1.7l-.9-1.6" />
+      <path d="M8.2 5.5L6.6 6.6C4.6 8.3 3.5 10.8 3.5 13.5c0 1.4.3 2.8 1 4 1.2.8 2.6 1.4 4 1.7l.9-1.6" />
+      <circle cx="9.5" cy="12.5" r="1" />
+      <circle cx="14.5" cy="12.5" r="1" />
+    </>,
+  ),
 };
 
 const GROUPS: Group[] = [
@@ -79,6 +93,13 @@ const GROUPS: Group[] = [
       { value: "distribution", label: "Distribution Rules", short: "Distribution", icon: ICONS.split },
       { value: "mounts", label: "Mount Wishlist", short: "Mounts", icon: ICONS.mount },
     ],
+  },
+  // Its own group (the nav draws a divider between groups): Discord is an
+  // external connection, not another knob on the guild's own rules.
+  {
+    key: "integrations",
+    label: "Integrations",
+    tabs: [{ value: "discord", label: "Discord", short: "Discord", icon: ICONS.discord }],
   },
 ];
 

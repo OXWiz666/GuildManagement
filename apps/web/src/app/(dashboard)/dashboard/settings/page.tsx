@@ -16,6 +16,7 @@ import {
 import ProfileSection from "./components/ProfileSection";
 import PaymentMethodsSection from "./components/PaymentMethodsSection";
 import CharacterSection from "./components/CharacterSection";
+import DiscordSection from "./components/DiscordSection";
 import PasswordSection from "./components/PasswordSection";
 import SessionsSection, { type SessionData } from "./components/SessionsSection";
 
@@ -259,6 +260,11 @@ export default function SettingsPage() {
             isSavingCharacter={isSavingCharacter}
             handleUpdateCharacter={handleUpdateCharacter}
           />
+        </Reveal>
+
+        {/* Discord account linking (mints the one-time code for `!link`) */}
+        <Reveal>
+          <DiscordSection />
         </Reveal>
 
         {/* Change Password */}

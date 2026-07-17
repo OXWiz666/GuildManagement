@@ -8,6 +8,7 @@ import {
 } from "@guild/shared";
 import { BadRequestError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
 import { cache } from "../lib/cache";
+import { broadcastToGuild } from "../lib/socket";
 import { IGuildRepository, PrismaGuildRepository } from "../repositories/guild.repository";
 import { IAuditRepository, PrismaAuditRepository } from "../repositories/audit.repository";
 
@@ -271,6 +272,17 @@ export class GuildService {
 
     // Invalidate the target's cached membership so the new role takes effect now.
     await cache.delete(membershipCacheKey(guildId, targetMember.userId));
+
+    // Announce the change to realtime subscribers. The Discord bot caches
+    // (discordId, guildId) → role and has no other way to learn a role changed
+    // here, so without this its permission gate stays stale until its TTL
+    // lapses. Fire-and-forget: broadcastToGuild swallows its own errors, and a
+    // realtime hiccup must never fail a promotion.
+    await broadcastToGuild(guildId, "member_role_updated", {
+      userId: targetMember.userId,
+      oldRole,
+      newRole,
+    });
 
     return {
       id: updated.id,

@@ -376,6 +376,60 @@ export const authApi = {
   },
 };
 
+// ─── Discord account linking ────────────────────
+// The bot never authenticates anyone itself: the site mints a short-lived
+// one-time code for the current session, the member echoes it in Discord with
+// `!link <code>`, and the bot binds their Discord id to this account.
+
+export const discordApi = {
+  async getLinkStatus() {
+    return api.get<{
+      linked: boolean;
+      discordUsername: string | null;
+      linkedAt: string | null;
+    }>("/discord/link-status");
+  },
+
+  async createLinkCode() {
+    return api.post<{ code: string; expiresAt: string }>("/discord/link-code", {});
+  },
+
+  async unlink() {
+    return api.delete<{ unlinked: boolean }>("/discord/link");
+  },
+
+  // ─── Guild-level config (Guild Settings → Discord Integration) ───
+
+  async getGuildIntegration(guildId: string) {
+    return api.get<{
+      server: {
+        discordGuildId: string;
+        timezone: string;
+        linkedAt: string;
+        linkedByName: string | null;
+      } | null;
+      channels: Array<{ purpose: string; channelId: string }>;
+      aliases: Array<{ id: string; alias: string; bossName: string }>;
+      canManage: boolean;
+    }>(`/discord/guilds/${guildId}/integration`);
+  },
+
+  async addBossAlias(guildId: string, alias: string, bossName: string) {
+    return api.post<{ id: string; alias: string; bossName: string }>(
+      `/discord/guilds/${guildId}/aliases`,
+      { alias, bossName },
+    );
+  },
+
+  async removeBossAlias(guildId: string, aliasId: string) {
+    return api.delete<{ removed: boolean }>(`/discord/guilds/${guildId}/aliases/${aliasId}`);
+  },
+
+  async unbindGuild(guildId: string) {
+    return api.delete<{ unbound: boolean }>(`/discord/guilds/${guildId}/binding`);
+  },
+};
+
 // ─── Guild-specific API calls ───────────────────
 
 export interface GuildMemberData {

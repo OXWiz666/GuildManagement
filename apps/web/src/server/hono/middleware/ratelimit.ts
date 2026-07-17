@@ -75,3 +75,12 @@ export function searchLimit(c: Context, userId?: string): void {
 export function attendanceSubmitLimit(c: Context, userId?: string): void {
   enforce("attendance", userOrIpKey(c, userId), 60 * 1000, 10, "Too many attendance submissions. Please wait a moment.");
 }
+
+/**
+ * Discord link-code minting: 5 requests / 10 min / user.
+ * Each call issues a credential that binds a Discord account to this user, so
+ * it's kept tight — a legitimate user needs one code, occasionally two.
+ */
+export function discordLinkLimit(c: Context, userId?: string): void {
+  enforce("discord-link", userOrIpKey(c, userId), 10 * 60 * 1000, 5, "Too many link code requests. Please wait a few minutes.");
+}

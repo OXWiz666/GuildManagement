@@ -42,6 +42,13 @@ model User {
   class  String?
   weapon String?
 
+  // Discord identity. Set by redeeming a one-time code (`!link <code>`) minted
+  // by the website, so the bot never handles credentials. This link is what
+  // lets a Discord message resolve to an actorId for permission checks.
+  discordId       String?   @unique @map("discord_id")
+  discordUsername String?   @map("discord_username")
+  discordLinkedAt DateTime? @map("discord_linked_at")
+
   // Member-owned payment QR codes (GCash, Maya, etc.) shown to whoever pays
   // them — an array of { id, method, label, qrUrl, updatedAt }.
   paymentMethods Json @default("[]") @map("payment_methods")
@@ -62,6 +69,12 @@ model User {
   loginEvents          LoginEvent[]
   foundedFactions      Faction[]             @relation("FactionLeader")
   factionInvitesSent   FactionJoinRequest[]  @relation("FactionJoinRequestInviter")
+  discordLinkCodes     DiscordLinkCode[]
+  discordServersLinked DiscordServer[]       @relation("DiscordServerLinker")
+  discordChannelsSet   DiscordChannel[]      @relation("DiscordChannelSetter")
+  cpUpdatesMade        CombatPowerHistory[]  @relation("CpUpdateActor")
+  cpHistory            CombatPowerHistory[]  @relation("CpUpdateSubject")
+  cpFieldsUpdated      GuildMember[]         @relation("CpUpdatedBy")
 
   @@map("users")
 }
@@ -277,6 +290,10 @@ model Guild {
   roleDefinitions     GuildRoleDefinition[]
   storageItems        GuildStorageItem[]
   bossCommitments     BossCommitment[]
+  discordServers      DiscordServer[]
+  cpHistory           CombatPowerHistory[]
+  cpSnapshots         GuildCpSnapshot[]
+  notificationHistory NotificationHistory[]
 
   @@index([factionId])
   @@map("guilds")
@@ -350,6 +367,12 @@ model GuildSettings {
   // Shape: { activities: [{ key, label, basePoints, multipliers: { OFFICER, CORE_MEMBER, ELITE_MEMBER, MEMBER } }] }
   activityPointRules Json @default("{}") @map("activity_point_rules")
 
+  // Optional catalog of character classes for this guild, used to detect a
+  // class from a CP screenshot. `guild_members.class` is free text with no
+  // canonical list, so OCR matches against the distinct values already on the
+  // roster PLUS this override. Shape: string[] e.g. ["Destroyer", "Hunter"].
+  characterClasses Json @default("[]") @map("character_classes")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -375,6 +398,13 @@ model GuildMember {
   cp         Int?      @map("cp") // Combat Power
   class      String?   @map("class") // Character class (e.g. Warrior, Mage)
   weapon     String?   @map("weapon") // Equipped weapon
+
+  // CP provenance, denormalized onto the row so `!cp` renders "last updated"
+  // without touching the history table. CombatPowerHistory stays the append-only
+  // record of every change; these two are just the latest entry's who/when.
+  cpUpdatedAt   DateTime? @map("cp_updated_at")
+  cpUpdatedById String?   @map("cp_updated_by_id")
+  cpUpdatedBy   User?     @relation("CpUpdatedBy", fields: [cpUpdatedById], references: [id], onDelete: SetNull)
   memberCode String?   @unique @map("member_code") // Unique member identifier
   joinedAt   DateTime  @default(now()) @map("joined_at")
   isActive   Boolean   @default(true) @map("is_active")
@@ -399,12 +429,14 @@ model GuildMember {
   mountDistributions MountDistribution[]
   storageReceipts    GuildStorageItem[]         @relation("StorageRecipient")
   bossCommitments    BossCommitment[]
+  cpHistory          CombatPowerHistory[]
 
   @@unique([userId, guildId])
   @@index([guildId])
   @@index([guildId, isActive])
   @@index([userId])
   @@index([customRoleId])
+  @@index([cpUpdatedById])
   @@map("guild_members")
 }
 
@@ -910,6 +942,8 @@ model GuildJoinRequest {
   @@unique([userId, guildId])
   @@index([guildId])
   @@index([userId])
+  @@index([userId, status])
+  @@index([guildId, status, createdAt])
   @@map("guild_join_requests")
 }
 
@@ -1311,4 +1345,172 @@ model Coupon {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("coupons")
+}
+
+// ═══════════════════════════════════════════════════
+// DISCORD BOT
+// The bot shares this database with the website — it never owns a second copy
+// of guild/boss/member state. Boss kills and spawns live in BossSchedule;
+// members live in GuildMember. Only Discord-specific concepts are modeled here.
+// ═══════════════════════════════════════════════════
+
+/**
+ * One-time code minted by the website and redeemed in Discord via `!link`.
+ * Short TTL + single use: `consumedAt` is set in the same transaction that
+ * writes User.discordId, so a leaked code can't be replayed.
+ */
+model DiscordLinkCode {
+  code                String    @id
+  userId              String    @map("user_id")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt           DateTime  @map("expires_at")
+  consumedAt          DateTime? @map("consumed_at")
+  consumedByDiscordId String?   @map("consumed_by_discord_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("discord_link_codes")
+}
+
+/**
+ * Binds a Discord server to a ForgeKeep guild. Every command resolves its
+ * tenant through this row — an unbound Discord server can read nothing.
+ */
+model DiscordServer {
+  id             String   @id @default(cuid())
+  discordGuildId String   @unique @map("discord_guild_id")
+  guildId        String   @map("guild_id")
+  guild          Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // IANA zone for interpreting bare `!kill <boss> HH:MM` wall-clock times.
+  timezone       String   @default("Asia/Singapore")
+  isActive       Boolean  @default(true) @map("is_active")
+  linkedById     String?  @map("linked_by_id")
+  linkedBy       User?    @relation("DiscordServerLinker", fields: [linkedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  channels            DiscordChannel[]
+  aliases             DiscordAlias[]
+  notificationHistory NotificationHistory[]
+
+  @@index([guildId])
+  @@map("discord_servers")
+}
+
+/** !notifhere / !cmdhere / !threadhere targets — one channel per purpose. */
+model DiscordChannel {
+  id              String        @id @default(cuid())
+  discordServerId String        @map("discord_server_id")
+  discordServer   DiscordServer @relation(fields: [discordServerId], references: [id], onDelete: Cascade)
+  purpose         String // NOTIFICATION | COMMAND | THREAD
+  channelId       String        @map("channel_id")
+  setById         String?       @map("set_by_id")
+  setBy           User?         @relation("DiscordChannelSetter", fields: [setById], references: [id], onDelete: SetNull)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@unique([discordServerId, purpose])
+  @@map("discord_channels")
+}
+
+/**
+ * Boss nickname → registry name (e.g. "baron" → "Baron Baraudmore").
+ * A null discordServerId is a global alias; a server-scoped row overrides it.
+ * Uniqueness is enforced by two partial indexes in SQL (see migration 0019) —
+ * NULL != NULL would let a plain compound unique admit duplicate globals.
+ */
+model DiscordAlias {
+  id              String         @id @default(cuid())
+  discordServerId String?        @map("discord_server_id")
+  discordServer   DiscordServer? @relation(fields: [discordServerId], references: [id], onDelete: Cascade)
+  alias           String // stored lowercase
+  bossName        String         @map("boss_name")
+  createdById     String?        @map("created_by_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  @@map("discord_aliases")
+}
+
+/**
+ * Append-only record of every notification the bot sends.
+ *
+ * `dedupeKey` is UNIQUE and is the deduplication mechanism: the sender inserts
+ * the key BEFORE dispatching and treats a unique violation as "already sent".
+ * Dedup is therefore atomic in Postgres and survives restarts and multiple bot
+ * instances — Redis only caches this, it is never the authority.
+ */
+model NotificationHistory {
+  id              String         @id @default(cuid())
+  discordServerId String?        @map("discord_server_id")
+  discordServer   DiscordServer? @relation(fields: [discordServerId], references: [id], onDelete: Cascade)
+  guildId         String?        @map("guild_id")
+  guild           Guild?         @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  kind            String // SPAWN_WARNING | SPAWN | KILL | CP_UPDATE | MAINTENANCE | ANNOUNCEMENT
+  dedupeKey       String         @unique @map("dedupe_key")
+  channelId       String?        @map("channel_id")
+  messageId       String?        @map("message_id")
+  status          String         @default("PENDING") // PENDING | SENT | FAILED
+  error           String?
+  payload         Json?
+  createdAt       DateTime       @default(now()) @map("created_at")
+  sentAt          DateTime?      @map("sent_at")
+
+  @@index([kind, createdAt])
+  @@index([discordServerId, createdAt])
+  @@map("notification_history")
+}
+
+/** Append-only CP change ledger — powers `!cp history` and growth stats. */
+model CombatPowerHistory {
+  id       String      @id @default(cuid())
+  guildId  String      @map("guild_id")
+  guild    Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  memberId String      @map("member_id")
+  member   GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  userId   String      @map("user_id")
+  user     User        @relation("CpUpdateSubject", fields: [userId], references: [id], onDelete: Cascade)
+
+  oldCp Int? @map("old_cp")
+  newCp Int  @map("new_cp")
+  // Denormalized (newCp - oldCp) so growth queries stay a plain SUM.
+  delta Int?
+
+  source         String  @default("DISCORD") // DISCORD | DISCORD_OCR | WEB | SYSTEM
+  actorId        String? @map("actor_id")
+  actor          User?   @relation("CpUpdateActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorDiscordId String? @map("actor_discord_id")
+
+  // ─── OCR provenance (source = DISCORD_OCR) ───
+  // Discord CDN URL; note Discord expires signed attachment URLs (~24h), so
+  // this serves near-term officer review rather than permanent forensics.
+  imageUrl      String? @map("image_url")
+  /// Page-level OCR confidence 0..1; null for typed updates.
+  ocrConfidence Float?  @map("ocr_confidence")
+  /// Scan looked suspicious (implausible jump / low confidence / IGN mismatch).
+  /// The update still applied — this only marks it for officer review.
+  flagged       Boolean @default(false)
+  flagReason    String? @map("flag_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([memberId, createdAt(sort: Desc)])
+  @@index([guildId, createdAt(sort: Desc)])
+  @@map("combat_power_history")
+}
+
+/** Periodic guild CP aggregate written by the scheduled CP monitor. */
+model GuildCpSnapshot {
+  id             String   @id @default(cuid())
+  guildId        String   @map("guild_id")
+  guild          Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  highestCp      Int?     @map("highest_cp")
+  lowestCp       Int?     @map("lowest_cp")
+  averageCp      Int?     @map("average_cp")
+  totalCp        BigInt?  @map("total_cp")
+  membersCounted Int      @default(0) @map("members_counted")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([guildId, createdAt(sort: Desc)])
+  @@map("guild_cp_snapshots")
 }

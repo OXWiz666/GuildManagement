@@ -50,6 +50,22 @@ export const ttl = {
   acctLedgerOtherPages: 60,
   acctLootSales: 120,
   leaderboardIndex: 3600,
+
+  // ─── Discord bot ───
+  // Server binding rarely changes and is read on EVERY message — the longest
+  // TTL here, actively invalidated on `!bindguild`.
+  discordServer: 600,
+  // Deliberately short. This caches a member's ROLE, which an officer can
+  // change on the website at any time; the bot has no way to observe that. A
+  // stale role only affects the bot's friendly-error gate — @guild/core
+  // re-checks authorization against the DB on every call — so the exposure is
+  // a slightly wrong error message for <30s, never a privilege escalation.
+  discordActor: 30,
+  discordAliases: 300,
+  discordMessageClaim: 120,
+  // Class candidates for OCR: derived from the roster + guild settings, both
+  // of which move slowly.
+  discordClassCandidates: 300,
 } as const;
 
 export const cacheKeys = {
@@ -117,4 +133,17 @@ export const cacheKeys = {
 
   // ─── 10. Leaderboards (sorted sets — see redis.ts zincrby/ztopN/zrank) ───
   leaderboardPoints: (guildId: string, period: "all" | "weekly" | "monthly") => `${NS}:lb:points:${guildId}:${period}`,
+
+  // ─── 11. Discord bot ───
+  /** Keyed by DISCORD guild id (what a message carries), not ForgeKeep guild id. */
+  discordServer: (discordGuildId: string) => `${NS}:discord:server:${discordGuildId}`,
+  discordActor: (discordId: string, guildId: string) => `${NS}:discord:actor:${discordId}:${guildId}`,
+  discordAliases: (discordServerId: string) => `${NS}:discord:aliases:${discordServerId}`,
+  discordMessageClaim: (messageId: string) => `${NS}:discord:msg:${messageId}`,
+  discordClassCandidates: (guildId: string) => `${NS}:discord:classes:${guildId}`,
+
+  // ─── 12. Discord bot rate limiting (fixed-window counters) ───
+  /** `window` is the epoch-minute/hour bucket — see the bot's RateLimiter. */
+  discordRateCommands: (discordId: string, window: number) => `${NS}:discord:rl:cmd:${discordId}:${window}`,
+  discordRateScans: (discordId: string, window: number) => `${NS}:discord:rl:scan:${discordId}:${window}`,
 } as const;

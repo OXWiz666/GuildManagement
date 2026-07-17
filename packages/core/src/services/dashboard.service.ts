@@ -493,8 +493,17 @@ async function ensureUpcomingSpawns(guildId: string, factionId: string | null) {
   //  • Cycle bosses   — advance to the rotation's real `nextSpawnTime` when one has
   //    been established by a kill. (A cycle boss with no future rotation time
   //    intentionally stays "live / ready" until its first kill sets the cadence.)
+  //
+  // Rows explicitly marked SPAWNED are exempt. This roll-forward exists to fix
+  // *stale timers* — a schedule nobody has touched whose time simply passed —
+  // not to overrule a human. `SPAWNED` is only ever written by an officer
+  // force-spawning a boss (see `forceSpawnBosses`), i.e. an assertion that it
+  // IS up right now; auto-advancing that would silently undo the command a
+  // moment after it ran. Such a boss stays live until a kill is logged, which
+  // is what clears the status.
   const rollForward: Array<{ id: string; spawnTime: Date }> = [];
   for (const s of existing) {
+    if (s.status === BossEventStatus.SPAWNED) continue; // explicitly forced live
     if (s.spawnTime.getTime() > now.getTime()) continue; // not stale
     const key = s.bossName.toLowerCase();
     if (fixedByName.has(key)) {
@@ -586,10 +595,20 @@ async function syncNextRotationSchedule(
   // Scoped to this faction's own guilds — `bossName` is no longer globally
   // unique across factions, so two factions' same-named boss must not stomp
   // each other's schedule rows.
+  //
+  // `guildId: null` rows are FACTION-UNIFIED schedules (see the BossSchedule
+  // model) and SQL `IN` never matches NULL, so omitting the explicit OR here
+  // silently excludes them. That's how a kill on a boss with a null-scoped
+  // schedule row created a DUPLICATE guild-scoped row instead of rolling the
+  // existing one forward — leaving the stale null row behind, still pointing
+  // at the just-passed spawn, while a fresh correct row also existed. The next
+  // read (bot or website) could then sort the stale row first and show a
+  // spawn time that had already elapsed. Every read path here already includes
+  // null (see getBossSchedulesShared); this write path must match.
   const openSchedules = await db.bossSchedule.findMany({
     where: {
       bossName: params.bossName,
-      guildId: { in: params.factionGuildIds },
+      OR: [{ guildId: { in: params.factionGuildIds } }, { guildId: null }],
       status: { not: BossEventStatus.KILLED },
     },
     orderBy: { spawnTime: "asc" },
@@ -600,7 +619,7 @@ async function syncNextRotationSchedule(
     await db.bossSchedule.updateMany({
       where: {
         bossName: params.bossName,
-        guildId: { in: params.factionGuildIds },
+        OR: [{ guildId: { in: params.factionGuildIds } }, { guildId: null }],
         status: { not: BossEventStatus.KILLED },
       },
       data: {
@@ -2072,10 +2091,14 @@ export async function markBossRotationKilledByName(
   // Load registry, active schedule, and existing rotation in parallel
   const [bosses, activeSchedule, existingRotation] = await Promise.all([
     getBossRegistryForRotation(),
+    // `guildId: null` = a faction-unified schedule row; must be included or a
+    // kill on that row silently falls through to the "first kill ever"
+    // branch below and creates a duplicate instead of updating it. See the
+    // longer note on this same pattern in syncNextRotationSchedule.
     prisma.bossSchedule.findFirst({
       where: {
         bossName: bossName.trim(),
-        guildId: { in: factionGuildIds },
+        OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
         status: { not: BossEventStatus.KILLED },
       },
       orderBy: { spawnTime: "asc" },
@@ -2322,6 +2345,11 @@ async function applyBossTimerReset(
   auditDetail: Record<string, unknown>,
   ipAddress?: string,
   userAgent?: string,
+  // Status to write on the affected schedule rows. Defaults to UPCOMING, which
+  // is what a timer *reset* means. Force-spawning passes SPAWNED so the boss
+  // reads as genuinely up rather than relying on the live-grace window, which
+  // would expire after an hour and silently make it "upcoming" again.
+  status: BossEventStatus = BossEventStatus.UPCOMING,
 ) {
   const affectedNames = bosses.map((b) => b.name);
   const factionId = await getGuildFactionId(guildId);
@@ -2352,8 +2380,18 @@ async function applyBossTimerReset(
     });
 
     await prisma.bossSchedule.updateMany({
-      where: { bossName: boss.name, guildId: { in: factionGuildIds }, status: { not: BossEventStatus.KILLED } },
-      data: { spawnTime: nextSpawn, status: BossEventStatus.UPCOMING },
+      where: {
+        bossName: boss.name,
+        // `guildId IS NULL` is a FACTION-UNIFIED schedule (see the BossSchedule
+        // model). SQL `IN` never matches NULL, so scoping on factionGuildIds
+        // alone silently skipped those rows — every read path includes them
+        // (ensureUpcomingSpawns, getBossSchedules, the dashboard), so a "reset
+        // all timers" would leave the faction row showing the old spawn while
+        // the guild rows moved. Same boss, two contradictory times on one board.
+        OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
+        status: { not: BossEventStatus.KILLED },
+      },
+      data: { spawnTime: nextSpawn, status },
     });
   }
 
@@ -2390,6 +2428,197 @@ export async function resetAllBossTimers(
     { resetAt: now.toISOString() },
     ipAddress,
     userAgent,
+  );
+}
+
+/**
+ * Correct the kill time of an already-logged kill, and roll the boss's next
+ * spawn forward from the corrected time.
+ *
+ * The common case: someone logs `!kill Venatus` twenty minutes late, so every
+ * downstream timer is twenty minutes wrong for the whole faction.
+ *
+ * Deliberately does NOT re-run the full kill flow. The queue was already
+ * advanced when the kill was logged, the drops already vaulted, the check-in
+ * session already opened — this only restates *when* it happened, so it touches
+ * exactly the three things that derive from the timestamp:
+ *   1. the KILLED row's `killedAt`
+ *   2. the rotation pointer's `nextSpawnTime`
+ *   3. the live schedule row's `spawnTime`
+ * Re-advancing the queue here would hand the boss to the wrong guild.
+ *
+ * All three writes are one transaction: a partial apply would leave the kill
+ * time and the next spawn disagreeing, which is exactly the corruption this
+ * command exists to fix.
+ */
+export async function editBossKillTime(
+  guildId: string,
+  bossName: string,
+  killedAt: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossTakenManager(actorId, guildId);
+
+  const killedDate = new Date(killedAt);
+  if (Number.isNaN(killedDate.getTime())) {
+    throw new BadRequestError("Killed timestamp is invalid");
+  }
+  if (killedDate.getTime() > Date.now()) {
+    throw new BadRequestError("A kill time cannot be in the future");
+  }
+
+  const guild = await prisma.guild.findUnique({
+    where: { id: guildId },
+    select: { factionId: true },
+  });
+  const factionId = guild?.factionId ?? null;
+  const factionGuildIds = (await getActiveFactionGuilds(factionId, guildId)).map((g) => g.id);
+
+  // The kill being corrected is the most recent one for this boss. A
+  // faction-unified schedule (guildId null) can be the killed row itself, and
+  // SQL `IN` never matches NULL — must OR it in explicitly, same as every
+  // other lookup in the kill path (see syncNextRotationSchedule).
+  const killed = await prisma.bossSchedule.findFirst({
+    where: {
+      bossName: bossName.trim(),
+      OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
+      status: BossEventStatus.KILLED,
+    },
+    orderBy: { killedAt: "desc" },
+  });
+
+  if (!killed) {
+    throw new NotFoundError(`No logged kill found for ${bossName}`);
+  }
+
+  const previousKilledAt = killed.killedAt;
+  const nextSpawnTime = getNextBossSpawnTime(killed.bossName, killedDate);
+
+  // Preserve whose turn it is — the live row already carries it, and this
+  // correction must not reassign the boss.
+  const liveSchedule = await prisma.bossSchedule.findFirst({
+    where: {
+      bossName: killed.bossName,
+      OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
+      status: { not: BossEventStatus.KILLED },
+    },
+    orderBy: { spawnTime: "asc" },
+    select: { guildTurn: true, guildTurnGuildId: true },
+  });
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedEvent = await tx.bossSchedule.update({
+      where: { id: killed.id },
+      data: { killedAt: killedDate },
+    });
+
+    if (factionId) {
+      await tx.bossRotation.updateMany({
+        where: { factionId, bossName: killed.bossName },
+        data: { nextSpawnTime, updatedById: actorId },
+      });
+    }
+
+    const nextSchedule = await syncNextRotationSchedule(
+      {
+        bossName: killed.bossName,
+        factionGuildIds,
+        fallbackGuildId: killed.guildId,
+        bossImageUrl: killed.bossImageUrl,
+        location: killed.location,
+        spawnTime: nextSpawnTime,
+        nextGuildName: liveSchedule?.guildTurn ?? null,
+        nextGuildId: liveSchedule?.guildTurnGuildId ?? null,
+        creatorId: actorId,
+      },
+      tx,
+    );
+
+    return { updatedEvent, nextSchedule };
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_KILL_TIME_EDITED",
+    target: "BossSchedule",
+    targetId: killed.id,
+    detail: {
+      bossName: killed.bossName,
+      previousKilledAt: previousKilledAt?.toISOString() ?? null,
+      killedAt: killedDate.toISOString(),
+      nextSpawnTime: nextSpawnTime.toISOString(),
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  await invalidateBossRotationCache(guildId);
+
+  return {
+    bossName: killed.bossName,
+    previousKilledAt,
+    killedAt: killedDate,
+    nextSpawnTime,
+    schedule: result.nextSchedule,
+  };
+}
+
+/**
+ * Force one or more bosses to be live RIGHT NOW.
+ *
+ * Distinct from `resetAllBossTimers`, which schedules each boss's *next* spawn
+ * from now (a future time). This makes them up immediately — the "GM spawned it
+ * early" / "our timer was wrong and it's actually up" case.
+ *
+ * Reuses `applyBossTimerReset` so force-spawning gets the same rotation-pointer
+ * update, faction scoping, audit log and cache invalidation as every other
+ * timer write. Passing SPAWNED (rather than letting the live-grace window imply
+ * it) keeps the boss up until someone logs a kill, instead of quietly reverting
+ * to "upcoming" once the one-hour grace lapses.
+ *
+ * `bossNames` empty ⇒ every FIXED_SCHEDULE boss in the registry (`!forcespawnall`).
+ */
+export async function forceSpawnBosses(
+  guildId: string,
+  actorId: string,
+  bossNames: string[],
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossRotationResetManager(actorId, guildId);
+
+  const registry = await getBossRegistryForRotation();
+
+  const targets =
+    bossNames.length > 0
+      ? registry.filter((boss) =>
+          bossNames.some((name) => name.toLowerCase() === boss.name.toLowerCase()),
+        )
+      : registry.filter((boss) => boss.type === "FIXED_SCHEDULE");
+
+  if (targets.length === 0) {
+    throw new BadRequestError(
+      bossNames.length > 0
+        ? "None of those bosses are in the registry"
+        : "No fixed-schedule bosses are configured",
+    );
+  }
+
+  const now = new Date();
+
+  return applyBossTimerReset(
+    guildId,
+    actorId,
+    targets,
+    () => now,
+    "BOSS_FORCE_SPAWNED",
+    { forcedAt: now.toISOString() },
+    ipAddress,
+    userAgent,
+    BossEventStatus.SPAWNED,
   );
 }
 

@@ -16,6 +16,7 @@ import * as auditLog from "./services/audit-log.service";
 import * as auth from "./services/auth.service";
 import * as customRole from "./services/customRole.service";
 import * as dashboard from "./services/dashboard.service";
+import * as discordLink from "./services/discordLink.service";
 import * as equipment from "./services/equipment.service";
 import * as faction from "./services/faction.service";
 import * as guild from "./services/guild.service";
@@ -43,6 +44,7 @@ export const services = {
   auth,
   customRole,
   dashboard,
+  discordLink,
   equipment,
   faction,
   guild,

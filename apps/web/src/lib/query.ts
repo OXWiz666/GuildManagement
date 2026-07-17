@@ -1,15 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 // Global cache store for frontend query results
-const globalQueryCache = new Map<string, { data: any; timestamp: number }>();
-const inFlightQueries = new Map<string, Promise<any>>();
-const listeners = new Map<string, Set<() => void>>();
+const globalQueryCache = new Map<string, { data: unknown; timestamp: number }>();
+const inFlightQueries = new Map<string, Promise<unknown>>();
+type QueryCacheEvent = "updated" | "invalidated";
+type QueryCacheListener = (event: QueryCacheEvent) => void;
+
+const listeners = new Map<string, Set<QueryCacheListener>>();
+
+function notifyQueryListeners(key: string, event: QueryCacheEvent) {
+  listeners.get(key)?.forEach((listener) => listener(event));
+}
 
 export interface QueryResult<T> {
   data: T | null;
   isLoading: boolean;
   isFetching: boolean;
-  error: any;
+  error: unknown;
   refetch: () => Promise<void>;
 }
 
@@ -33,7 +40,9 @@ export function useQuery<T>(
   // Store fetcher in a ref to avoid including it in dependency arrays
   // This prevents infinite re-render loops when callers pass inline arrow functions
   const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  }, [fetcher]);
 
   const getCached = useCallback(() => {
     // 1. Check memory cache
@@ -60,22 +69,12 @@ export function useQuery<T>(
     }
 
     return null;
-  }, [cacheKey, staleTime, persist, lsKey]);
+  }, [cacheKey, staleTime, persist, lsKey, key]);
 
-  const [data, setData] = useState<T | null>(getCached());
-  const [isLoading, setIsLoading] = useState(enabled && !getCached());
+  const [data, setData] = useState<T | null>(() => getCached());
+  const [isLoading, setIsLoading] = useState(() => enabled && getCached() === null);
   const [isFetching, setIsFetching] = useState(false);
-  const [error, setError] = useState<any>(null);
-
-  // Sync state when the key changes
-  const prevKeyRef = useRef(key);
-  if (prevKeyRef.current !== key) {
-    prevKeyRef.current = key;
-    const freshCached = getCached();
-    setData(freshCached);
-    setIsLoading(enabled && !freshCached);
-    setError(null);
-  }
+  const [error, setError] = useState<unknown>(null);
 
   const fetchData = useCallback(async (force = false) => {
     const cached = globalQueryCache.get(cacheKey);
@@ -86,7 +85,7 @@ export function useQuery<T>(
     }
 
     if (!force && cached && Date.now() - cached.timestamp < staleTime) {
-      setData(cached.data);
+      setData(cached.data as T);
       setIsLoading(false);
       return;
     }
@@ -146,27 +145,37 @@ export function useQuery<T>(
       setIsLoading(false);
       setIsFetching(false);
     }
-  }, [cacheKey, staleTime, persist, lsKey, enabled]);
+  }, [cacheKey, staleTime, persist, lsKey, enabled, key]);
 
   useEffect(() => {
     if (!enabled) {
-      setIsLoading(false);
-      setIsFetching(false);
       return;
     }
 
-    fetchData();
+    const refreshTimer = setTimeout(() => {
+      void fetchData();
+    }, 0);
 
     // Listen for query key invalidations
     if (!listeners.has(cacheKey)) {
       listeners.set(cacheKey, new Set());
     }
-    const handler = () => {
+    const handler: QueryCacheListener = (event) => {
+      if (event === "updated") {
+        const freshCached = getCached();
+        if (freshCached !== null) {
+          setData(freshCached);
+          setIsLoading(false);
+          setError(null);
+          return;
+        }
+      }
       fetchData(true);
     };
     listeners.get(cacheKey)!.add(handler);
 
     return () => {
+      clearTimeout(refreshTimer);
       const set = listeners.get(cacheKey);
       if (set) {
         set.delete(handler);
@@ -175,7 +184,7 @@ export function useQuery<T>(
         }
       }
     };
-  }, [cacheKey, fetchData, enabled]);
+  }, [cacheKey, fetchData, getCached, enabled]);
 
   const refetch = useCallback(() => {
     return fetchData(true);
@@ -183,8 +192,8 @@ export function useQuery<T>(
 
   return {
     data,
-    isLoading,
-    isFetching,
+    isLoading: enabled ? isLoading : false,
+    isFetching: enabled ? isFetching : false,
     error,
     refetch
   };
@@ -225,7 +234,7 @@ export function prefetchQuery<T>(
         // quiet fail
       }
     }
-    listeners.get(key)?.forEach((listener) => listener());
+    notifyQueryListeners(key, "updated");
     return result;
   });
 }
@@ -244,7 +253,7 @@ export const queryClient = {
       typeof updater === "function" ? (updater as (old: T | null) => T)(previousData) : updater;
 
     globalQueryCache.set(key, { data: nextData, timestamp: Date.now() });
-    listeners.get(key)?.forEach((listener) => listener());
+    notifyQueryListeners(key, "updated");
 
     return {
       rollback: () => {
@@ -253,7 +262,7 @@ export const queryClient = {
         } else {
           globalQueryCache.delete(key);
         }
-        listeners.get(key)?.forEach((listener) => listener());
+        notifyQueryListeners(key, "updated");
       },
     };
   },
@@ -271,7 +280,7 @@ export const queryClient = {
         inFlightQueries.delete(key);
         const set = listeners.get(key);
         if (set) {
-          set.forEach((listener) => listener());
+          set.forEach((listener) => listener("invalidated"));
         }
       }
     }

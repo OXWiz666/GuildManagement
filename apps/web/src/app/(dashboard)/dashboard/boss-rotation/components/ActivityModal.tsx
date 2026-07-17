@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
-import type { ActivityInput, ActivityType, ActivityStatus, ActivityResult, GuildActivityData } from "@/lib/api";
+import type { ActivityInput, ActivityType, ActivityStatus, ActivityResult, ActivityRepeatInterval, GuildActivityData } from "@/lib/api";
+
+const REPEAT_OPTIONS: Array<{ value: ActivityRepeatInterval | ""; label: string }> = [
+  { value: "", label: "Does not repeat" },
+  { value: "WEEKLY", label: "Weekly" },
+  { value: "BIWEEKLY", label: "Every 2 weeks" },
+  { value: "MONTHLY", label: "Monthly" },
+];
 
 function toLocalParts(iso: string): { date: string; time: string } {
   const d = new Date(iso);
@@ -44,11 +51,16 @@ export default function ActivityModal({
   const [result, setResult] = useState<ActivityResult | "">("");
   const [scoreFor, setScoreFor] = useState("");
   const [scoreAgainst, setScoreAgainst] = useState("");
+  const [repeatInterval, setRepeatInterval] = useState<ActivityRepeatInterval | "">("");
 
+  // Populates the form from `editing`/defaults whenever the modal opens —
+  // pre-existing pattern shared by every modal in this codebase (form state
+  // synced from props on open, not a subscription).
   useEffect(() => {
     if (!open) return;
     if (editing) {
       const { date: d, time: t } = toLocalParts(editing.scheduledAt);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setType(editing.type);
       setTitle(editing.title);
       setDate(d);
@@ -60,6 +72,7 @@ export default function ActivityModal({
       setResult(editing.result ?? "");
       setScoreFor(editing.scoreFor != null ? String(editing.scoreFor) : "");
       setScoreAgainst(editing.scoreAgainst != null ? String(editing.scoreAgainst) : "");
+      setRepeatInterval(editing.repeatInterval ?? "");
     } else {
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
@@ -74,6 +87,7 @@ export default function ActivityModal({
       setResult("");
       setScoreFor("");
       setScoreAgainst("");
+      setRepeatInterval("");
     }
   }, [open, editing, fallbackType, defaultDate]);
 
@@ -91,6 +105,7 @@ export default function ActivityModal({
       opponent: opponent.trim() || null,
       notes: notes.trim() || null,
       scheduledAt,
+      repeatInterval: repeatInterval || null,
     };
     if (editing) {
       payload.status = status;
@@ -167,6 +182,26 @@ export default function ActivityModal({
           <div>
             <span className={label}>Notes</span>
             <textarea className={`${field} resize-none`} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional details" />
+          </div>
+
+          <div>
+            <span className={label}>Repeat schedule</span>
+            <select
+              className={`${field} cursor-pointer`}
+              value={repeatInterval}
+              onChange={(e) => setRepeatInterval(e.target.value as ActivityRepeatInterval | "")}
+            >
+              {REPEAT_OPTIONS.map((opt) => (
+                <option key={opt.value || "none"} className="bg-[#0c0d12]" value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {repeatInterval && (
+              <p className="mt-1 text-[10px] text-white/35">
+                Marking this activity Completed will automatically schedule the next occurrence.
+              </p>
+            )}
           </div>
 
           {editing && (

@@ -76,7 +76,7 @@ export default function ActivityLogsView({
                   {/* Actor Avatar */}
                   <div className="h-9 w-9 rounded-full overflow-hidden border border-white/10 shrink-0 bg-amber-500/10 flex items-center justify-center text-amber-400 font-bold text-xs select-none">
                     {log.actor?.avatarUrl ? (
-                      <img src={log.actor.avatarUrl} alt={log.actor.displayName} className="h-full w-full object-cover" />
+                      <img src={log.actor.avatarUrl} alt={log.actor.displayName} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                     ) : (
                       log.actor?.displayName?.charAt(0).toUpperCase() || "A"
                     )}

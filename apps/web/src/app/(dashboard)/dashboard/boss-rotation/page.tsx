@@ -6,8 +6,10 @@ import { useAuth } from "@/lib/auth-context";
 import {
   dashboardApi,
   guildApi,
+  activityApi,
   type AuditLogEntry,
   type BossDropDisplay,
+  type BossKilledHistoryDay,
   type BossKilledHistoryEntry,
   type BossKilledHistoryResponse,
   type BossCommitmentData,
@@ -15,6 +17,9 @@ import {
   type BossRotationResponse,
   type BossScheduleData,
   type FactionGuildData,
+  type LowBossRotationResponse,
+  type GuildActivitiesResponse,
+  type ActivityPointRulesData,
 } from "@/lib/api";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useToast } from "@/components/ui/Toast";
@@ -25,8 +30,13 @@ import { ModuleHeader } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
 import { getGuildColor } from "./utils/helpers";
 import MasterListTab from "./components/MasterListTab";
+import HistoryLedgerGrid from "./components/HistoryLedgerGrid";
 import BossDropsPicker, { type SelectedDrop, rarityStyle } from "./components/BossDropsPicker";
 import BossCommitButton from "./components/BossCommitButton";
+import ActivitiesTab from "./components/ActivitiesTab";
+import WeeklyCalendar from "./components/WeeklyCalendar";
+import { buildWeeklyChips, buildGuildOfDayResolver } from "./utils/calendarChips";
+import { buildActivityTypeMeta } from "@/lib/activityTypeMeta";
 
 // Modals are only ever needed after a user action (opening the maintenance
 // reset dialog, closing out a boss-kill sale) — code-split them out of the
@@ -35,10 +45,13 @@ const MaintenanceResetModal = dynamic(() => import("./components/MaintenanceRese
 const BossKillSaleModal = dynamic(() => import("./components/BossKillSaleModal"));
 import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, getBossCycleCategory, getRealtimeBossTimer } from "@guild/shared";
 
-type RotationTab = "LIVE" | "UPCOMING" | "MASTER" | "ACTIVITY" | "HISTORY";
+type RotationTab = "LIVE" | "UPCOMING" | "ACTIVITIES" | "MASTER" | "HISTORY";
 type CycleFilter = "ALL" | "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE";
 type SortMode = "TIME" | "GUILD";
 type ViewMode = "GRID" | "TIMELINE" | "CALENDAR";
+type HistoryView = "TIMELINE" | "LEDGER";
+type HistoryCategory = "FIXED_HOUR" | "FIXED_SCHEDULE";
+type HistoryRange = "LAST_7D" | "LAST_MONTH" | "CUSTOM";
 
 // Normalized shape both the LIVE (rotation) and UPCOMING (schedule) tabs
 // reduce down to, so Timeline/Calendar views only need to know one shape.
@@ -72,6 +85,48 @@ const SORT_OPTIONS: Array<{ id: SortMode; label: string }> = [
   { id: "GUILD", label: "Sort: By guild" },
 ];
 
+const HISTORY_VIEWS: Array<{ id: HistoryView; label: string }> = [
+  { id: "TIMELINE", label: "Timeline" },
+  { id: "LEDGER", label: "Ledger" },
+];
+
+const HISTORY_CATEGORIES: Array<{ id: HistoryCategory; label: string }> = [
+  { id: "FIXED_HOUR", label: "Fixed-Hour Bosses" },
+  { id: "FIXED_SCHEDULE", label: "Fixed-Schedule Bosses" },
+];
+
+const HISTORY_RANGES: Array<{ id: HistoryRange; label: string }> = [
+  { id: "LAST_7D", label: "Last 7d" },
+  { id: "LAST_MONTH", label: "Last Month" },
+  { id: "CUSTOM", label: "Custom" },
+];
+
+// Boss category columns for the Ledger grid, derived once from the static
+// catalog — "Fixed-Hour" = cooldown-based bosses (SHORT_CYCLE/LONG_CYCLE),
+// "Fixed-Schedule" = deterministic weekly-calendar bosses.
+const FIXED_HOUR_BOSS_NAMES = PREDEFINED_BOSSES.filter(
+  (boss) => getBossCycleCategory(boss.name, boss.type, boss.cooldownHours) !== "FIXED_SCHEDULE",
+).map((boss) => boss.name);
+const FIXED_SCHEDULE_BOSS_NAMES = PREDEFINED_BOSSES.filter(
+  (boss) => getBossCycleCategory(boss.name, boss.type, boss.cooldownHours) === "FIXED_SCHEDULE",
+).map((boss) => boss.name);
+
+function previousMonthKey() {
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() - 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Plain (non-hook) helper so the direct `Date.now()`/`new Date()` reads stay
+// out of the component body — calling this from a useMemo doesn't trip the
+// "impure call during render" purity check the way an inline call would.
+function rollingWeekBounds() {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const startKey = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  return { todayKey, startKey };
+}
+
 // Spawn times that are missing/never-taken sort to the end, not the front.
 function spawnSortValue(spawnTime: string | null | undefined) {
   return spawnTime ? new Date(spawnTime).getTime() : Number.POSITIVE_INFINITY;
@@ -99,15 +154,9 @@ function groupByGuild<T>(items: T[], getGuildName: (item: T) => string | null | 
   });
 }
 
-type AuditLogPage = {
-  logs: AuditLogEntry[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-};
-
 const CONFIRM_TAKEN_TIMEOUT_MS = 30000;
+const EMPTY_ACTIVITIES: GuildActivitiesResponse = { canManage: false, viewerRole: "MEMBER", activities: [] };
+const EMPTY_ACTIVITY_RULES: ActivityPointRulesData = { activities: [] };
 
 function toDateTimeInputValue(date: Date) {
   const offset = date.getTimezoneOffset();
@@ -172,15 +221,16 @@ export default function BossRotationPage() {
     activeGuild?.role === "ADMIN";
 
   const [activeTab, setActiveTab] = useState<RotationTab>("LIVE");
-  const [activityPage, setActivityPage] = useState(1);
   const [historyMonth, setHistoryMonth] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTakingGuildId, setSelectedTakingGuildId] = useState("ALL");
   const [selectedCycle, setSelectedCycle] = useState<CycleFilter>("ALL");
   const [sortMode, setSortMode] = useState<SortMode>("TIME");
   const [viewMode, setViewMode] = useState<ViewMode>("GRID");
-  const [activitySearch, setActivitySearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
+  const [historyView, setHistoryView] = useState<HistoryView>("LEDGER");
+  const [historyCategory, setHistoryCategory] = useState<HistoryCategory>("FIXED_HOUR");
+  const [historyRange, setHistoryRange] = useState<HistoryRange>("LAST_MONTH");
   const [now, setNow] = useState<number | null>(null);
   const [killTarget, setKillTarget] = useState<BossRotationItem | null>(null);
   const [killTime, setKillTime] = useState("");
@@ -240,51 +290,103 @@ export default function BossRotationPage() {
     { persist: true, staleTime: 15000, enabled: !!activeGuild },
   );
 
-  const {
-    data: auditLogsRaw,
-    isLoading: isLoadingLogs,
-    refetch: refetchAuditLogs,
-  } = useQuery<AuditLogPage>(
-    activeGuild ? `boss_rotation_audit:${activeGuild.guildId}:p${activityPage}` : "boss_rotation_audit_empty",
+  // Same cache key LowBossSchedule/ActivitiesTab use — feeds the "guild of
+  // the day" overlay on the Live/Upcoming weekly calendars, shared rather
+  // than re-fetched.
+  const { data: lowRotationRaw } = useQuery<LowBossRotationResponse | null>(
+    activeGuild ? `boss_low_rotation:${activeGuild.guildId}` : "boss_low_rotation_empty",
     async () => {
-      if (!activeGuild) return { logs: [], total: 0, page: 1, limit: 10, totalPages: 1 };
-      const result = await guildApi.getAuditLogs(activeGuild.guildId, "boss-rotation", activityPage, 10);
-      return result.success && result.data
-        ? result.data
-        : { logs: [], total: 0, page: activityPage, limit: 10, totalPages: 1 };
+      if (!activeGuild) return null;
+      const result = await dashboardApi.getLowBossRotation(activeGuild.guildId);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 15000, enabled: !!activeGuild },
+  );
+  const guildOfDay = useMemo(() => buildGuildOfDayResolver(lowRotationRaw), [lowRotationRaw]);
+
+  // Same cache key ActivitiesTab uses — the Live/Upcoming weekly calendars
+  // overlay guild activities alongside boss spawns, shared rather than
+  // re-fetched.
+  const { data: activitiesRaw } = useQuery<GuildActivitiesResponse>(
+    activeGuild ? `guild_activities:${activeGuild.guildId}` : "guild_activities_empty",
+    async () => {
+      if (!activeGuild) return EMPTY_ACTIVITIES;
+      const result = await activityApi.list(activeGuild.guildId);
+      return result.success && result.data ? result.data : EMPTY_ACTIVITIES;
+    },
+    { persist: true, staleTime: 10000, enabled: !!activeGuild },
+  );
+  const { data: activityRulesRaw } = useQuery<ActivityPointRulesData>(
+    activeGuild ? `activity_rules:${activeGuild.guildId}` : "activity_rules_empty",
+    async () => {
+      if (!activeGuild) return EMPTY_ACTIVITY_RULES;
+      const result = await guildApi.getActivityRules(activeGuild.guildId);
+      return result.success && result.data ? result.data.rules : EMPTY_ACTIVITY_RULES;
+    },
+    { persist: true, staleTime: 300000, enabled: !!activeGuild },
+  );
+  const calendarActivities = useMemo(() => activitiesRaw?.activities ?? [], [activitiesRaw]);
+  const calendarTypeMeta = useMemo(
+    () => buildActivityTypeMeta(activityRulesRaw?.activities ?? []),
+    [activityRulesRaw],
+  );
+
+  // Boss kills already appear in the day-grouped history below — this only
+  // pulls the one thing that history doesn't cover: Master List queue
+  // reorders. Folded into the History tab as a compact section instead of a
+  // separate "Activity" tab, which used to show the same kills twice.
+  const {
+    data: queueChangesRaw,
+    isLoading: isLoadingQueueChanges,
+  } = useQuery<AuditLogEntry[]>(
+    activeGuild ? `boss_rotation_queue_changes:${activeGuild.guildId}` : "boss_rotation_queue_changes_empty",
+    async () => {
+      if (!activeGuild) return [];
+      const result = await guildApi.getAuditLogs(activeGuild.guildId, "boss-rotation", 1, 15);
+      if (!result.success || !result.data) return [];
+      return result.data.logs.filter((log) => log.action === "BOSS_ROTATION_QUEUE_UPDATED");
     },
     { persist: true, staleTime: 30000, enabled: !!activeGuild },
   );
+
+  // "Last 7d"/"Last Month" always read the current month; only "Custom"
+  // hands the month picker's value to the query.
+  const effectiveHistoryMonth = historyRange === "CUSTOM" ? historyMonth : "";
 
   const {
     data: killedHistoryRaw,
     isLoading: isLoadingHistory,
-    refetch: refetchKilledHistory,
   } = useQuery<BossKilledHistoryResponse>(
-    activeGuild ? `boss_killed_history:${activeGuild.guildId}:${historyMonth || "current"}` : "boss_killed_history_empty",
+    activeGuild ? `boss_killed_history:${activeGuild.guildId}:${effectiveHistoryMonth || "current"}` : "boss_killed_history_empty",
     async () => {
       if (!activeGuild) return { month: "", total: 0, days: [] };
-      const result = await dashboardApi.getBossKilledHistory(activeGuild.guildId, historyMonth || undefined);
-      return result.success && result.data ? result.data : { month: historyMonth, total: 0, days: [] };
+      const result = await dashboardApi.getBossKilledHistory(activeGuild.guildId, effectiveHistoryMonth || undefined);
+      return result.success && result.data ? result.data : { month: effectiveHistoryMonth, total: 0, days: [] };
     },
     { persist: true, staleTime: 30000, enabled: !!activeGuild },
   );
 
-  useEffect(() => {
-    if (activeTab === "ACTIVITY") {
-      refetchAuditLogs();
-    }
-    if (activeTab === "HISTORY") {
-      refetchKilledHistory();
-    }
-  }, [activeTab, refetchAuditLogs, refetchKilledHistory]);
+  // "Last 7d" can span a month boundary (e.g. today is the 3rd) — pull the
+  // previous month too, only when that range is active, and merge below.
+  const prevMonthKey = useMemo(() => previousMonthKey(), []);
+  const { data: prevMonthHistoryRaw } = useQuery<BossKilledHistoryResponse>(
+    activeGuild && historyRange === "LAST_7D"
+      ? `boss_killed_history:${activeGuild.guildId}:${prevMonthKey}`
+      : "boss_killed_history_prev_empty",
+    async () => {
+      if (!activeGuild) return { month: prevMonthKey, total: 0, days: [] };
+      const result = await dashboardApi.getBossKilledHistory(activeGuild.guildId, prevMonthKey);
+      return result.success && result.data ? result.data : { month: prevMonthKey, total: 0, days: [] };
+    },
+    { persist: true, staleTime: 30000, enabled: !!activeGuild && historyRange === "LAST_7D" },
+  );
 
   useEffect(() => {
     if (!socket || !activeGuild) return;
     const handleRotationUpdate = () => {
       queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
       queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
-      queryClient.invalidateQueries(`boss_rotation_audit:${activeGuild.guildId}`);
+      queryClient.invalidateQueries(`boss_rotation_queue_changes:${activeGuild.guildId}`);
       queryClient.invalidateQueries(`boss_killed_history:${activeGuild.guildId}`);
     };
     socket.on("boss_rotation_updated", handleRotationUpdate);
@@ -298,44 +400,65 @@ export default function BossRotationPage() {
   const serverNow = now ?? new Date(rotationData?.serverTime || 0).getTime();
   const canManage = rotationData?.canManage || false;
   const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
-  const auditLogPage = auditLogsRaw || { logs: [], total: 0, page: activityPage, limit: 10, totalPages: 1 };
-  const auditLogs = auditLogPage.logs;
-  const killedHistory = killedHistoryRaw || { month: historyMonth, total: 0, days: [] };
+  const killedHistory = killedHistoryRaw || { month: effectiveHistoryMonth, total: 0, days: [] };
+  const queueChanges = queueChangesRaw || [];
 
-  // Client-side search over the currently loaded activity page (boss name, action, or guild names)
-  const filteredAuditLogs = useMemo(() => {
-    const needle = activitySearch.trim().toLowerCase();
-    if (!needle) return auditLogs;
-    return auditLogs.filter((log) => {
-      const bossName = typeof log.detail?.bossName === "string" ? log.detail.bossName : "";
-      const takenGuildName = typeof log.detail?.takenGuildName === "string" ? log.detail.takenGuildName : "";
-      const nextGuildName = typeof log.detail?.nextGuildName === "string" ? log.detail.nextGuildName : "";
-      return (
-        log.action.toLowerCase().includes(needle) ||
-        bossName.toLowerCase().includes(needle) ||
-        takenGuildName.toLowerCase().includes(needle) ||
-        nextGuildName.toLowerCase().includes(needle) ||
-        log.actor.displayName.toLowerCase().includes(needle)
-      );
-    });
-  }, [auditLogs, activitySearch]);
+  // "Last 7d" merges the current + previous month's day buckets (dedup by
+  // date, since a re-fetch could return the same date from both) and clips to
+  // the actual rolling 7-day window; the other two ranges are already exactly
+  // what the server returned for the selected month.
+  const rangeFilteredDays = useMemo<BossKilledHistoryDay[]>(() => {
+    if (historyRange !== "LAST_7D") return killedHistory.days;
+    const merged = new Map<string, BossKilledHistoryDay>();
+    for (const day of [...(prevMonthHistoryRaw?.days || []), ...killedHistory.days]) {
+      merged.set(day.date, day);
+    }
+    const { todayKey, startKey } = rollingWeekBounds();
+    return Array.from(merged.values())
+      .filter((day) => day.date >= startKey && day.date <= todayKey)
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [killedHistory.days, prevMonthHistoryRaw, historyRange]);
 
-  // Client-side search over the killed-history month (boss name or recorder), keeping day
-  // groupings but dropping days left with no matching kills.
+  // Client-side search (boss name or recorder) + the selected boss category
+  // (Fixed-Hour vs Fixed-Schedule), keeping day groupings but dropping days
+  // left with no matching kills.
+  const categoryBossNames = historyCategory === "FIXED_HOUR" ? FIXED_HOUR_BOSS_NAMES : FIXED_SCHEDULE_BOSS_NAMES;
   const filteredHistoryDays = useMemo(() => {
     const needle = historySearch.trim().toLowerCase();
-    if (!needle) return killedHistory.days;
-    return killedHistory.days
+    const categorySet = new Set(categoryBossNames.map((name) => name.toLowerCase()));
+    return rangeFilteredDays
       .map((day) => ({
         ...day,
         kills: day.kills.filter(
           (kill) =>
-            kill.bossName.toLowerCase().includes(needle) ||
-            kill.recordedBy.displayName.toLowerCase().includes(needle),
+            categorySet.has(kill.bossName.toLowerCase()) &&
+            (!needle ||
+              kill.bossName.toLowerCase().includes(needle) ||
+              kill.recordedBy.displayName.toLowerCase().includes(needle)),
         ),
       }))
       .filter((day) => day.kills.length > 0);
-  }, [killedHistory.days, historySearch]);
+  }, [rangeFilteredDays, historySearch, categoryBossNames]);
+
+  // Ledger view — one row per kill, newest first, instead of grouped-by-day
+  // cards. `filteredHistoryDays` (and its underlying `days`) are already
+  // ordered newest-day-first with each day's kills newest-first, so a
+  // straight flatMap preserves that order.
+  const historyRows = useMemo(
+    () => filteredHistoryDays.flatMap((day) => day.kills.map((kill) => ({ ...kill, date: day.date }))),
+    [filteredHistoryDays],
+  );
+
+  // Same search box also narrows the Queue Changes section, so one field
+  // filters everything the History tab shows.
+  const filteredQueueChanges = useMemo(() => {
+    const needle = historySearch.trim().toLowerCase();
+    if (!needle) return queueChanges;
+    return queueChanges.filter((log) => {
+      const bossName = typeof log.detail?.bossName === "string" ? log.detail.bossName : "";
+      return bossName.toLowerCase().includes(needle) || log.actor.displayName.toLowerCase().includes(needle);
+    });
+  }, [queueChanges, historySearch]);
 
   const fallbackGuilds = useMemo<FactionGuildData[]>(() => {
     const guildMap = new Map<string, FactionGuildData>();
@@ -586,6 +709,39 @@ export default function BossRotationPage() {
     [takingGuilds],
   );
 
+  // react-hooks/refs can't see into buildWeeklyChips: it only ever *stores*
+  // the onBossClick closure on each chip (invoked later, on an actual user
+  // click) and never calls it while building the map, so openKillModal's
+  // internal isKillingRef access never happens during render. Safe to
+  // silence — the lint rule is guarding against a call pattern this isn't.
+  /* eslint-disable react-hooks/refs */
+  const liveCalendarChips = useMemo(
+    () =>
+      buildWeeklyChips({
+        bossEntries: filteredRotations.map((rotation) => rotationToViewEntry(rotation, serverNow)),
+        onBossClick: canManage
+          ? (id) => {
+              const rotation = filteredRotations.find((r) => r.id === id);
+              if (rotation) openKillModal(rotation);
+            }
+          : undefined,
+        activities: calendarActivities,
+        typeMeta: calendarTypeMeta,
+      }),
+    [filteredRotations, serverNow, canManage, openKillModal, calendarActivities, calendarTypeMeta],
+  );
+  /* eslint-enable react-hooks/refs */
+
+  const upcomingCalendarChips = useMemo(
+    () =>
+      buildWeeklyChips({
+        bossEntries: upcomingBosses.map((schedule) => scheduleToViewEntry(schedule, serverNow)),
+        activities: calendarActivities,
+        typeMeta: calendarTypeMeta,
+      }),
+    [upcomingBosses, serverNow, calendarActivities, calendarTypeMeta],
+  );
+
   async function confirmKill() {
     if (isKillingRef.current || !activeGuild || !killTarget || !killTime || !selectedTakenGuild) return;
     isKillingRef.current = true;
@@ -707,11 +863,11 @@ export default function BossRotationPage() {
   }
 
   const tabs: Array<{ id: RotationTab; label: string; count?: number; hidden?: boolean }> = [
-    { id: "LIVE", label: "Boss Rotation", count: filteredRotations.length },
+    { id: "LIVE", label: "Guild Rotation", count: filteredRotations.length },
     { id: "UPCOMING", label: "Upcoming", count: upcomingBosses.length },
+    { id: "ACTIVITIES", label: "Guild Event" },
     { id: "MASTER", label: "Faction Schedule", hidden: !isOfficer },
-    { id: "ACTIVITY", label: "Activity", count: auditLogPage.total },
-    { id: "HISTORY", label: "Killed History", count: killedHistory.total },
+    { id: "HISTORY", label: "Activity", count: killedHistory.total },
   ];
 
   return (
@@ -892,14 +1048,7 @@ export default function BossRotationPage() {
               }}
             />
           ) : viewMode === "CALENDAR" ? (
-            <CalendarView
-              entries={filteredRotations.map((rotation) => rotationToViewEntry(rotation, serverNow))}
-              canManage={canManage}
-              onTaken={(id) => {
-                const rotation = filteredRotations.find((r) => r.id === id);
-                if (rotation) openKillModal(rotation);
-              }}
-            />
+            <WeeklyCalendar chipsByDate={liveCalendarChips} guildOfDay={guildOfDay} />
           ) : sortMode === "GUILD" ? (
             <div className="space-y-7">
               {groupByGuild(filteredRotations, (rotation) => rotation.currentGuild?.name).map(([guildName, guildRotations]) => (
@@ -942,7 +1091,7 @@ export default function BossRotationPage() {
             ) : viewMode === "TIMELINE" ? (
               <TimelineView entries={upcomingBosses.map((schedule) => scheduleToViewEntry(schedule, serverNow))} />
             ) : viewMode === "CALENDAR" ? (
-              <CalendarView entries={upcomingBosses.map((schedule) => scheduleToViewEntry(schedule, serverNow))} />
+              <WeeklyCalendar chipsByDate={upcomingCalendarChips} guildOfDay={guildOfDay} />
             ) : sortMode === "GUILD" ? (
               <div className="space-y-7">
                 {groupByGuild(upcomingBosses, (schedule) => schedule.guildTurnGuildName || schedule.guildTurn).map(([guildName, guildSchedules]) => (
@@ -988,163 +1137,212 @@ export default function BossRotationPage() {
           </div>
         )}
 
+        {activeTab === "ACTIVITIES" && <ActivitiesTab guildId={activeGuild.guildId} />}
+
         {activeTab === "MASTER" && <MasterListTab guildId={activeGuild.guildId} />}
-
-        {activeTab === "ACTIVITY" && (
-          <div className="space-y-3">
-            <label className="relative block w-full sm:w-64">
-              <span className="sr-only">Search activity</span>
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <path d="M21 21l-4.35-4.35" />
-              </svg>
-              <input
-                value={activitySearch}
-                onChange={(event) => setActivitySearch(event.target.value)}
-                placeholder="Search boss, guild, or action..."
-                className="w-full h-[38px] pl-10 pr-4 rounded-xl bg-[var(--obsidian-elevated)]/50 border border-[var(--metal-border)] text-[13px] text-white/90 placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/35 transition-colors"
-              />
-            </label>
-
-          {isLoadingLogs ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((item) => <Skeleton key={item} className="h-16 rounded-xl" />)}
-            </div>
-          ) : filteredAuditLogs.length === 0 ? (
-            <EmptyState title="No rotation activity" body="Kill confirmations and queue edits will appear here." />
-          ) : (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                {filteredAuditLogs.map((log) => {
-                  const takenGuildName = typeof log.detail?.takenGuildName === "string" ? log.detail.takenGuildName : null;
-                  const nextGuildName = typeof log.detail?.nextGuildName === "string" ? log.detail.nextGuildName : null;
-                  const takenColor = getGuildColor(takenGuildName || "");
-                  const nextColor = getGuildColor(nextGuildName || "");
-                  return (
-                    <div key={log.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex flex-col md:flex-row md:items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white">{log.action.replaceAll("_", " ")}</p>
-                        <p className="text-xs text-white/45 mt-1 truncate">
-                          {typeof log.detail?.bossName === "string" ? log.detail.bossName : log.target || "Boss Rotation"}
-                        </p>
-                        {(takenGuildName || nextGuildName) && (
-                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                            {takenGuildName && (
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] font-semibold ${takenColor.border} ${takenColor.bg} ${takenColor.text}`}>
-                                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: takenColor.dot }} />
-                                Taken by {takenGuildName}
-                              </span>
-                            )}
-                            {nextGuildName && (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-white/35">
-                                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-                                <span className={`font-semibold ${nextColor.text}`}>{nextGuildName}</span>
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        <p className="text-[11px] text-white/35 mt-2">
-                          Recorded by <span className="text-white/65 font-semibold">{log.actor.displayName}</span>
-                        </p>
-                      </div>
-                      <span className="text-[11px] text-white/35 shrink-0 font-mono">
-                        {new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <PaginationControls
-                page={auditLogPage.page}
-                totalPages={Math.max(1, auditLogPage.totalPages)}
-                total={auditLogPage.total}
-                onPrevious={() => setActivityPage((page) => Math.max(1, page - 1))}
-                onNext={() => setActivityPage((page) => Math.min(Math.max(1, auditLogPage.totalPages), page + 1))}
-              />
-            </div>
-          )}
-          </div>
-        )}
 
         {activeTab === "HISTORY" && (
           <div className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-white">Boss Killed History</p>
-                <p className="text-xs text-white/45 mt-1">Daily kill record by month, including the user who recorded each kill.</p>
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                  <svg className="h-4 w-4 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 3" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Boss Killed History</p>
+                  <p className="text-xs text-white/45">Per-boss kill ledger and chronological timeline, plus recent queue changes.</p>
+                </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
-                <label className="w-full sm:w-48">
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center bg-[var(--obsidian-elevated)]/40 backdrop-blur-md border border-[var(--metal-border)] rounded-lg p-1 gap-1">
+                  {HISTORY_VIEWS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setHistoryView(option.id)}
+                      className={`px-3.5 py-1.5 text-[12px] font-semibold rounded-md transition-all cursor-pointer focus-ring ${
+                        historyView === option.id
+                          ? "bg-white text-[#0c0d12]"
+                          : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="relative block w-full sm:w-56">
                   <span className="sr-only">Search boss history</span>
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
                   <input
                     value={historySearch}
                     onChange={(event) => setHistorySearch(event.target.value)}
-                    placeholder="Search boss or recorder..."
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/40"
-                  />
-                </label>
-                <label className="w-full sm:w-[180px]">
-                  <span className="sr-only">History month</span>
-                  <input
-                    type="month"
-                    value={historyMonth || killedHistory.month}
-                    onChange={(event) => setHistoryMonth(event.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40"
+                    placeholder="Search boss name..."
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/35 focus:outline-none focus:border-[var(--forge-gold)]/40"
                   />
                 </label>
               </div>
             </div>
 
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] p-1.5">
+              <div className="inline-flex flex-wrap items-center gap-1">
+                {HISTORY_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setHistoryCategory(cat.id)}
+                    className={`px-3.5 py-2 text-[12.5px] font-semibold rounded-lg transition-all cursor-pointer ${
+                      historyCategory === cat.id
+                        ? "bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)]"
+                        : "text-white/45 hover:text-white/75 border border-transparent hover:bg-white/[0.03]"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pr-1">
+                {HISTORY_RANGES.map((range) => (
+                  <button
+                    key={range.id}
+                    type="button"
+                    onClick={() => setHistoryRange(range.id)}
+                    className={`px-3 py-1.5 text-[12px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                      historyRange === range.id
+                        ? "bg-white text-[#0c0d12] border-white"
+                        : "text-white/50 border-white/[0.08] hover:text-white/80 hover:border-white/20"
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+                {historyRange === "CUSTOM" && (
+                  <label className="block">
+                    <span className="sr-only">Custom history month</span>
+                    <input
+                      type="month"
+                      value={historyMonth || killedHistory.month}
+                      onChange={(event) => setHistoryMonth(event.target.value)}
+                      className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40"
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+
+            {!isLoadingQueueChanges && filteredQueueChanges.length > 0 && (
+              <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] px-4 py-3">
+                  <h3 className="text-sm font-semibold text-white">Queue Changes</h3>
+                  <span className="text-[11px] text-white/35">{filteredQueueChanges.length} recent</span>
+                </div>
+                <div className="divide-y divide-white/[0.05]">
+                  {filteredQueueChanges.map((log) => {
+                    const bossName = typeof log.detail?.bossName === "string" ? log.detail.bossName : log.target || "Boss Rotation";
+                    const nextGuildName = typeof log.detail?.nextGuildName === "string" ? log.detail.nextGuildName : null;
+                    const nextColor = getGuildColor(nextGuildName || "");
+                    return (
+                      <div key={log.id} className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <p className="text-[12px] text-white/70 truncate">
+                          <span className="font-semibold text-white/90">{log.actor.displayName}</span> reordered{" "}
+                          <span className="font-semibold text-white/90">{bossName}</span>&apos;s queue
+                          {nextGuildName && (
+                            <>
+                              {" "}— next up:{" "}
+                              <span className={`font-semibold ${nextColor.text}`}>{nextGuildName}</span>
+                            </>
+                          )}
+                        </p>
+                        <span className="text-[11px] text-white/35 shrink-0 font-mono">
+                          {new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
             {isLoadingHistory ? (
               <div className="space-y-2">
-                {[1, 2, 3].map((item) => <Skeleton key={item} className="h-24 rounded-xl" />)}
+                {[1, 2, 3].map((item) => <Skeleton key={item} className="h-14 rounded-lg" />)}
               </div>
-            ) : filteredHistoryDays.length === 0 ? (
-              <EmptyState title="No kills recorded for this month" body="Confirmed boss kills will be grouped here by day." />
+            ) : historyRows.length === 0 && filteredQueueChanges.length === 0 ? (
+              <EmptyState
+                title="No kills recorded for this range"
+                body={`No ${historyCategory === "FIXED_HOUR" ? "Fixed-Hour" : "Fixed-Schedule"} boss kills found. Try a different range or category.`}
+              />
+            ) : historyRows.length === 0 ? null : historyView === "LEDGER" ? (
+              <HistoryLedgerGrid days={filteredHistoryDays} bossNames={categoryBossNames} onSelectKill={setSaleModalKill} />
             ) : (
-              <div className="space-y-3">
-                {filteredHistoryDays.map((day) => (
-                  <section key={day.date} className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-                    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] px-4 py-3">
-                      <h3 className="text-sm font-semibold text-white">
-                        {new Date(`${day.date}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                      </h3>
-                      <span className="text-[11px] px-2 py-1 rounded-md border border-emerald-400/20 bg-emerald-400/10 text-emerald-300 font-semibold">
-                        {day.total} killed
-                      </span>
-                    </div>
-                    <div className="divide-y divide-white/[0.05]">
-                      {day.kills.map((kill) => (
-                        <div key={kill.id} className="px-4 py-3 space-y-3">
-                          <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px_180px_180px] gap-2 lg:gap-4 items-center">
-                            <div className="min-w-0 flex items-center gap-3">
-                              <BossAvatar src={kill.bossImageUrl} name={kill.bossName} />
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-white truncate">{kill.bossName}</p>
-                                <p className="text-[11px] text-white/40 mt-1">
-                                  {kill.action.replaceAll("_", " ")}
-                                </p>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] border-collapse text-left">
+                    <thead>
+                      <tr className="border-b border-white/[0.06] bg-white/[0.03]">
+                        <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Date</th>
+                        <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Time</th>
+                        <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Boss</th>
+                        <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Taken by</th>
+                        <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Recorded by</th>
+                        <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Drops</th>
+                        <th className="px-4 py-2.5" aria-hidden="true" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05]">
+                      {historyRows.map((kill) => {
+                        const takenColor = getGuildColor(kill.takenGuildName || "");
+                        return (
+                          <tr key={kill.id} className="hover:bg-white/[0.02] transition-colors align-middle">
+                            <td className="px-4 py-3 text-[12px] font-mono text-white/55 whitespace-nowrap">
+                              {new Date(`${kill.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </td>
+                            <td className="px-4 py-3 text-[12px] font-mono text-white/55 whitespace-nowrap">
+                              {new Date(kill.killedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                            <td className="px-4 py-3 min-w-0">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <BossAvatar src={kill.bossImageUrl} name={kill.bossName} />
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-semibold text-white truncate">{kill.bossName}</p>
+                                  <p className="text-[10px] text-white/35 truncate">{kill.action.replaceAll("_", " ")}</p>
+                                </div>
                               </div>
-                            </div>
-                            <HistoryMeta label="Killed" value={new Date(kill.killedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} />
-                            <HistoryMeta label="Recorded by" value={kill.recordedBy.displayName} />
-                            <HistoryMeta label="Next guild" value={kill.nextGuildName || "Unassigned"} tone="amber" />
-                          </div>
-                          {kill.drops.length > 0 && <KillDrops drops={kill.drops} />}
-                          <div className="flex flex-wrap items-center gap-3 pt-0.5">
-                            <button
-                              type="button"
-                              onClick={() => setSaleModalKill(kill)}
-                              className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
-                            >
-                              🛒 {isOfficer ? "Log / view sold items" : "View sold items"}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ))}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {kill.takenGuildName ? (
+                                <span className={`text-[12px] font-semibold ${takenColor.text}`}>{kill.takenGuildName}</span>
+                              ) : (
+                                <span className="text-[12px] text-white/30">Unrecorded</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-[12px] text-white/60 whitespace-nowrap">{kill.recordedBy.displayName}</td>
+                            <td className="px-4 py-3 text-[12px] text-white/45 whitespace-nowrap">
+                              {kill.drops.length > 0 ? `${kill.drops.length} item${kill.drops.length > 1 ? "s" : ""}` : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => setSaleModalKill(kill)}
+                                className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
+                              >
+                                🛒 {isOfficer ? "Log / view" : "View"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
@@ -1386,55 +1584,32 @@ const RotationCard = memo(function RotationCard({
       ? [...rotation.queue.slice(currentQueueIndex), ...rotation.queue.slice(0, currentQueueIndex)]
       : rotation.queue;
 
+  // With only one guild queued, "Current Holder" / "Up Next" / "Queue" would
+  // all repeat the same name — collapse to a single queue block instead of
+  // three redundant readouts of the same guild.
+  const showHandoff = displayQueue.length > 1;
+
   return (
     <article
-      className={`group relative min-h-[300px] rounded-[1.75rem] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] hover:-translate-y-1 hover:scale-[1.02] animate-[fadeInUp_0.8s_ease-out_forwards] ${
-      tick.expired
-        ? "hover:border-emerald-500/45 hover:shadow-[0_0_40px_rgba(16,185,129,0.15),0_20px_40px_rgba(0,0,0,0.5)]"
-        : tick.warning
-          ? "hover:border-[var(--forge-gold)]/50 hover:shadow-[0_0_40px_rgba(212,168,83,0.18),0_20px_40px_rgba(0,0,0,0.5)]"
-          : "hover:border-white/20 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
-    }`}
-      style={{
-        animationDelay: `${index * 75}ms`,
-      }}
-    >
-      {/* Top indicator bar matching state with animated gradient */}
-      <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-[1.75rem] bg-gradient-to-r transition-all duration-700 ${
+      className={`group relative rounded-2xl border bg-[var(--obsidian-elevated)]/40 flex flex-col transition-colors duration-300 animate-[fadeInUp_0.5s_ease-out_forwards] ${
         tick.expired
-          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50 animate-[shimmer_2s_ease-in-out_infinite]"
+          ? "border-emerald-500/25 hover:border-emerald-500/45"
           : tick.warning
-            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50 animate-[shimmer_2.5s_ease-in-out_infinite]"
-            : "from-white/5 via-white/15 to-white/5"
-      }`} />
-
-      {/* Ambient glow behind card for live/warning states */}
-      {(tick.expired || tick.warning) && (
-        <div className={`absolute -inset-0.5 -z-10 rounded-[1.85rem] opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl ${
-          tick.expired ? "bg-emerald-500/20" : "bg-[var(--forge-gold)]/15"
-        }`} />
-      )}
-
-      <div className="p-4 space-y-3.5">
-        {/* Boss info & badge with double-bezel */}
+            ? "border-[var(--forge-gold)]/20 hover:border-[var(--forge-gold)]/40"
+            : "border-[var(--metal-border)] hover:border-white/15"
+      }`}
+      style={{ animationDelay: `${index * 40}ms` }}
+    >
+      <div className="p-4 flex flex-col gap-3 flex-1">
+        {/* Boss info */}
         <div className="flex items-start gap-3">
-          {/* Double-bezel outer shell */}
-          <div className={`relative p-1 rounded-2xl border transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-105 ${
-            tick.expired
-              ? "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
-              : tick.warning
-                ? "border-[var(--forge-gold)]/40 bg-[var(--forge-gold)]/5 shadow-[0_0_20px_rgba(212,168,83,0.2)]"
-                : "border-white/10 bg-white/[0.02]"
-          }`}>
-            {/* Inner core */}
-            <div className="rounded-[calc(1rem-0.25rem)] overflow-hidden">
-              <BossAvatar src={rotation.bossImageUrl || getBossImageUrl(rotation.bossName)} name={rotation.bossName} />
-            </div>
+          <div className="relative h-11 w-11 shrink-0 rounded-xl overflow-hidden ring-1 ring-white/10">
+            <BossAvatar src={rotation.bossImageUrl || getBossImageUrl(rotation.bossName)} name={rotation.bossName} />
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-white truncate">{rotation.bossName}</h3>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] font-fantasy shrink-0">
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/[0.06] text-white/55 shrink-0">
                 Lvl {rotation.level}
               </span>
             </div>
@@ -1446,194 +1621,122 @@ const RotationCard = memo(function RotationCard({
               <span className="text-[11px] truncate">{rotation.location}</span>
             </div>
           </div>
-          <StatusDot expired={tick.expired} warning={tick.warning} guildColor={currentColor.dot} />
+          <span
+            className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${
+              tick.expired ? "bg-emerald-400 animate-pulse" : tick.warning ? "bg-[var(--forge-gold)]" : "bg-white/15"
+            }`}
+            aria-hidden="true"
+          />
         </div>
 
-        {/* Timer Box with enhanced double-bezel and fluid animations */}
-        <div className={`relative overflow-hidden rounded-2xl border p-1 transition-all duration-700 ${
-          tick.expired
-            ? "border-emerald-500/30 bg-emerald-500/5"
-            : tick.warning
-              ? "border-[var(--forge-gold)]/25 bg-[var(--forge-gold)]/5"
-              : "border-white/[0.06] bg-white/[0.02]"
-        }`}>
-          {/* Inner timer container */}
-          <div className={`relative overflow-hidden rounded-[calc(1rem-0.25rem)] p-3 transition-all duration-700 ${
-            tick.expired
-              ? "bg-emerald-950/20 shadow-[inset_0_0_20px_rgba(16,185,129,0.12)]"
-              : tick.warning
-                ? "bg-[var(--forge-glow)]/50 shadow-[inset_0_0_20px_rgba(212,168,83,0.08)]"
-                : "bg-white/[0.015]"
-          }`}>
-            {/* Animated background gradient for active states */}
-            {(tick.expired || tick.warning) && (
-              <>
-                <div className={`absolute inset-0 opacity-10 bg-gradient-to-r animate-[pulse_3s_ease-in-out_infinite] ${
-                  tick.expired ? "from-emerald-500 via-transparent to-emerald-500" : "from-[var(--forge-gold)] via-transparent to-[var(--forge-gold)]"
-                }`} />
-                <div className={`absolute inset-0 opacity-5 bg-gradient-to-br ${
-                  tick.expired ? "from-emerald-400/50 to-transparent" : "from-[var(--forge-gold)]/50 to-transparent"
-                } animate-[spin_20s_linear_infinite]`} style={{ backgroundSize: "200% 200%" }} />
-              </>
-            )}
-
-            <div className="relative z-10 flex items-center justify-between">
-              <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30 transition-all duration-500">Rotation Timer</span>
-              <span className={`text-[9px] font-bold uppercase tracking-[0.14em] inline-flex items-center gap-1.5 transition-all duration-500 ${
-                tick.expired ? "text-emerald-400" : tick.warning ? "text-[var(--forge-gold)]" : "text-white/45"
-              }`}>
-                {tick.expired ? (
-                  <>
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-                    </span>
-                    Live
-                  </>
-                ) : tick.warning ? (
-                  <>
-                    <span className="h-2 w-2 rounded-full bg-[var(--forge-gold)] animate-pulse shadow-[0_0_8px_var(--forge-gold)]" />
-                    Soon
-                  </>
-                ) : (
-                  "Next Spawn"
-                )}
-              </span>
-            </div>
-            <p className={`relative z-10 mt-2 font-mono text-xl font-bold leading-none tracking-wider transition-all duration-500 ${
-              tick.expired
-                ? "text-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.5)]"
-                : tick.warning
-                  ? "text-[var(--forge-gold-bright)] drop-shadow-[0_0_12px_rgba(212,168,83,0.5)]"
-                  : "text-white"
-            }`}>
-              {tick.text}
-            </p>
-            <div className="relative z-10 mt-3 flex items-center gap-1.5 text-[10px] text-white/35 border-t border-white/[0.06] pt-2.5 transition-colors duration-500">
-              <svg className="h-3.5 w-3.5 shrink-0 transition-transform duration-500 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              <span className="transition-colors duration-500 group-hover:text-white/50">Est. Spawn: {spawnLabel}</span>
-            </div>
+        {/* Timer — one flat block, one state color, no nested bezels */}
+        <div
+          className={`rounded-xl px-3 py-2.5 ${
+            tick.expired ? "bg-emerald-500/[0.07]" : tick.warning ? "bg-[var(--forge-gold)]/[0.07]" : "bg-white/[0.025]"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-white/30">
+              {tick.expired ? "Live now" : tick.warning ? "Spawning soon" : "Next spawn"}
+            </span>
+            <span className="text-[9px] text-white/30 font-mono">{spawnLabel}</span>
           </div>
+          <p
+            className={`mt-1 font-mono text-lg font-bold leading-none tracking-wide ${
+              tick.expired ? "text-emerald-400" : tick.warning ? "text-[var(--forge-gold-bright)]" : "text-white/85"
+            }`}
+          >
+            {tick.text}
+          </p>
         </div>
 
-        {/* Current & Next progress with fluid transition */}
-        <div className="relative flex items-center justify-between gap-2 rounded-2xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/30 p-2.5 transition-all duration-700 group-hover:border-[var(--metal-border)]/60">
-          <div className="min-w-0 flex-1">
-            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1.5 transition-colors duration-500">Current Holder</span>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full shrink-0 transition-transform duration-500 group-hover:scale-125 shadow-[0_0_6px_currentColor]" style={{ backgroundColor: currentColor.dot, color: currentColor.dot }} />
-              <p className={`text-[12px] font-bold truncate transition-all duration-500 ${currentColor.text}`}>{rotation.currentGuild?.name || "Unassigned"}</p>
-            </div>
-          </div>
-          <div className="shrink-0 flex items-center justify-center px-1">
-            <svg className="h-4 w-4 text-white/20 transition-all duration-700 group-hover:translate-x-1 group-hover:text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        {/* Handoff — only shown when there's an actual handoff to show */}
+        {showHandoff && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className={`font-semibold truncate ${currentColor.text}`}>{rotation.currentGuild?.name || "Unassigned"}</span>
+            <svg className="h-3 w-3 text-white/20 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
+            <span className={`font-semibold truncate ${nextColor.text}`}>{rotation.nextGuild?.name || "Unassigned"}</span>
           </div>
-          <div className="min-w-0 flex-1 text-right">
-            <span className="block text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1.5 transition-colors duration-500">Up Next</span>
-            <div className="flex items-center gap-1.5 justify-end">
-              <p className={`text-[12px] font-bold truncate transition-all duration-500 ${nextColor.text}`}>{rotation.nextGuild?.name || "Unassigned"}</p>
-              <span className="h-2.5 w-2.5 rounded-full shrink-0 transition-transform duration-500 group-hover:scale-125 shadow-[0_0_6px_currentColor]" style={{ backgroundColor: nextColor.dot, color: nextColor.dot }} />
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Queue Flow with staggered entry animations */}
-        <div className="rounded-2xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/20 p-3 min-h-[66px] transition-all duration-700 group-hover:bg-[var(--obsidian-elevated)]/30">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30 transition-colors duration-500 group-hover:text-white/40">Queue Flow</span>
-            <span className="text-[9px] text-white/35 font-mono px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-500 group-hover:bg-white/[0.05]">{displayQueue.length} Guilds</span>
+        {/* Queue */}
+        <div className="rounded-xl bg-white/[0.02] px-3 py-2.5 flex-1">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-white/30">
+              {showHandoff ? "Queue" : "Holder"}
+            </span>
+            {showHandoff && <span className="text-[9px] text-white/30 font-mono">{displayQueue.length} guilds</span>}
           </div>
           {displayQueue.length === 0 ? (
-            <div className="flex items-center justify-center py-2">
-              <p className="text-[10px] text-white/30 italic">No guilds in queue</p>
-            </div>
+            <p className="text-[10px] text-white/25 italic">No guilds queued</p>
           ) : (
-            <div className="flex items-center flex-wrap gap-1.5">
-              {displayQueue.map((guild, index) => {
+            <div className="flex flex-wrap items-center gap-1.5">
+              {displayQueue.map((guild, i) => {
                 const color = getGuildColor(guild.name);
                 const isCurrent = rotation.currentGuild?.id === guild.id;
-
                 return (
-                  <div key={guild.id} className="flex items-center gap-1.5" style={{ animationDelay: `${index * 50}ms` }}>
+                  <span
+                    key={guild.id}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-semibold ${
+                      isCurrent
+                        ? "border-[var(--forge-gold)]/40 bg-[var(--forge-glow)] text-[var(--forge-gold-bright)]"
+                        : `${color.border} ${color.bg} ${color.text}`
+                    }`}
+                  >
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[10px] font-semibold transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:scale-105 ${
-                        isCurrent
-                          ? "border-[var(--forge-gold)]/50 bg-[var(--forge-glow)] text-[var(--forge-gold-bright)] shadow-[0_0_12px_rgba(212,168,83,0.2)]"
-                          : `${color.border} ${color.bg} ${color.text} hover:brightness-110`
-                      }`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full transition-all duration-500 ${isCurrent ? "animate-pulse shadow-[0_0_6px_var(--forge-gold)]" : ""}`} style={{ backgroundColor: isCurrent ? "var(--forge-gold)" : color.dot }} />
-                      <span className="font-mono text-[9px] opacity-65">{index + 1}.</span>
-                      <span className="truncate max-w-[80px]">{guild.name}</span>
-                    </span>
-                    {index < displayQueue.length - 1 && (
-                      <span className="text-white/15 text-[8px] font-bold shrink-0 transition-all duration-500 group-hover:text-white/25">
-                        •
-                      </span>
-                    )}
-                  </div>
+                      className="h-1.5 w-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: isCurrent ? "var(--forge-gold)" : color.dot }}
+                    />
+                    {showHandoff && <span className="font-mono text-[9px] opacity-60">{i + 1}</span>}
+                    <span className="truncate max-w-[100px]">{guild.name}</span>
+                  </span>
                 );
               })}
             </div>
           )}
         </div>
 
-        {/* War-planning headcount for this boss's current live spawn */}
-        {rotation.activeSchedule && (
-          <BossCommitButton
-            guildId={guildId}
-            scheduleId={rotation.activeSchedule.id}
-            initialData={commitmentsBatch?.[rotation.activeSchedule.id]}
-          />
-        )}
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between gap-3 border-t border-white/[0.04] pt-3">
-          <div className="flex items-center gap-1.5 text-[10px] text-white/45">
-            <span className={`h-2 w-2 rounded-full ${
-              rotation.activeSchedule
-                ? "bg-emerald-400"
-                : rotation.type === "FIXED_SCHEDULE"
-                  ? "bg-emerald-400"
-                  : "bg-amber-400"
-            }`} />
-            <span>{
-              rotation.activeSchedule
-                ? "Active schedule"
-                : rotation.type === "FIXED_SCHEDULE"
-                  ? "Fixed schedule"
-                  : "Import needed"
-            }</span>
+        {/* Footer — status left; commit headcount + Taken action grouped on the right */}
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] pt-3 mt-auto">
+          <div className="flex items-center gap-1.5 text-[10px] text-white/40 min-w-0">
+            <span
+              className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                rotation.activeSchedule || rotation.type === "FIXED_SCHEDULE" ? "bg-emerald-400" : "bg-amber-400"
+              }`}
+            />
+            <span className="truncate">
+              {rotation.activeSchedule ? "Active" : rotation.type === "FIXED_SCHEDULE" ? "Fixed schedule" : "Import needed"}
+            </span>
           </div>
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => onKilled(rotation)}
-              disabled={!canKill}
-              aria-label={`Mark ${rotation.bossName} taken`}
-              title={rotation.activeSchedule ? "Taken" : "Import killed time"}
-              className="group/btn relative h-9 px-5 inline-flex items-center justify-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer shadow-[0_0_16px_rgba(16,185,129,0.08)] hover:shadow-[0_0_24px_rgba(16,185,129,0.2)] active:scale-95 overflow-hidden focus-ring"
-            >
-              {/* Animated gradient background on hover */}
-              <span className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/20 to-emerald-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000 ease-out" />
-
-              {/* Icon with nested button-in-button pattern */}
-              <span className="relative flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 transition-all duration-700 group-hover/btn:bg-emerald-500/20 group-hover/btn:scale-110 group-hover/btn:rotate-12">
-                <svg className="h-3 w-3 shrink-0 transition-transform duration-700 group-hover/btn:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <div className="flex items-center gap-2 shrink-0">
+            {rotation.activeSchedule && (
+              <BossCommitButton
+                variant="inline"
+                guildId={guildId}
+                scheduleId={rotation.activeSchedule.id}
+                bossName={rotation.bossName}
+                initialData={commitmentsBatch?.[rotation.activeSchedule.id]}
+              />
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => onKilled(rotation)}
+                disabled={!canKill}
+                aria-label={`Mark ${rotation.bossName} taken`}
+                title={rotation.activeSchedule ? "Taken" : "Import killed time"}
+                className="h-8 px-4 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-400 hover:bg-emerald-500/20 hover:text-white transition-colors disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer focus-ring"
+              >
+                <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                   <path d="M22 4L12 14.01l-3-3" />
                 </svg>
-              </span>
-              <span className="relative">Taken</span>
-            </button>
-          )}
+                Taken
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </article>
@@ -1670,46 +1773,19 @@ const UpcomingCard = memo(function UpcomingCard({
 
   return (
     <article
-      className={`group relative min-h-[220px] rounded-[1.75rem] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] bg-[var(--obsidian-elevated)]/40 border border-[var(--metal-border)] hover:-translate-y-1 hover:scale-[1.02] animate-[fadeInUp_0.8s_ease-out_forwards] ${
-      isLive
-        ? "hover:border-emerald-500/45 hover:shadow-[0_0_40px_rgba(16,185,129,0.15),0_20px_40px_rgba(0,0,0,0.5)]"
-        : tick.warning
-          ? "hover:border-[var(--forge-gold)]/50 hover:shadow-[0_0_40px_rgba(212,168,83,0.18),0_20px_40px_rgba(0,0,0,0.5)]"
-          : "hover:border-white/20 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
-    }`}
-      style={{
-        animationDelay: `${index * 75}ms`,
-      }}
-    >
-      {/* Top indicator bar with animated gradient */}
-      <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-[1.75rem] bg-gradient-to-r transition-all duration-700 ${
+      className={`group relative rounded-2xl border bg-[var(--obsidian-elevated)]/40 flex flex-col transition-colors duration-300 animate-[fadeInUp_0.5s_ease-out_forwards] ${
         isLive
-          ? "from-emerald-500/50 via-emerald-400 to-emerald-500/50 animate-[shimmer_2s_ease-in-out_infinite]"
+          ? "border-emerald-500/25 hover:border-emerald-500/45"
           : tick.warning
-            ? "from-[var(--forge-gold)]/50 via-[var(--forge-gold)] to-[var(--forge-gold)]/50 animate-[shimmer_2.5s_ease-in-out_infinite]"
-            : "from-white/5 via-white/15 to-white/5"
-      }`} />
-
-      {/* Ambient glow for live/warning states */}
-      {(isLive || tick.warning) && (
-        <div className={`absolute -inset-0.5 -z-10 rounded-[1.85rem] opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl ${
-          isLive ? "bg-emerald-500/20" : "bg-[var(--forge-gold)]/15"
-        }`} />
-      )}
-
-      <div className="p-4 space-y-3.5">
+            ? "border-[var(--forge-gold)]/20 hover:border-[var(--forge-gold)]/40"
+            : "border-[var(--metal-border)] hover:border-white/15"
+      }`}
+      style={{ animationDelay: `${index * 40}ms` }}
+    >
+      <div className="p-4 flex flex-col gap-3 flex-1">
         <div className="flex items-start gap-3">
-          {/* Double-bezel avatar */}
-          <div className={`relative p-1 rounded-2xl border transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-105 ${
-            isLive
-              ? "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
-              : tick.warning
-                ? "border-[var(--forge-gold)]/40 bg-[var(--forge-gold)]/5 shadow-[0_0_20px_rgba(212,168,83,0.2)]"
-                : "border-white/10 bg-white/[0.02]"
-          }`}>
-            <div className="rounded-[calc(1rem-0.25rem)] overflow-hidden">
-              <BossAvatar src={schedule.bossImageUrl || getBossImageUrl(schedule.bossName)} name={schedule.bossName} />
-            </div>
+          <div className="relative h-11 w-11 shrink-0 rounded-xl overflow-hidden ring-1 ring-white/10">
+            <BossAvatar src={schedule.bossImageUrl || getBossImageUrl(schedule.bossName)} name={schedule.bossName} />
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-center gap-1.5">
@@ -1728,216 +1804,59 @@ const UpcomingCard = memo(function UpcomingCard({
               <span className="text-[11px] truncate">{schedule.location}</span>
             </div>
           </div>
-          <StatusDot expired={isLive} warning={tick.warning} guildColor={color.dot} />
+          <span
+            className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${
+              isLive ? "bg-emerald-400 animate-pulse" : tick.warning ? "bg-[var(--forge-gold)]" : "bg-white/15"
+            }`}
+            aria-hidden="true"
+          />
         </div>
 
-        <div className={`relative overflow-hidden rounded-xl border p-3 ${
-          isLive
-            ? "border-emerald-500/25 bg-emerald-950/15 shadow-[inset_0_0_12px_rgba(16,185,129,0.08)]" 
-            : tick.warning 
-              ? "border-[var(--forge-gold)]/20 bg-[var(--forge-glow)]/40 shadow-[inset_0_0_12px_rgba(212,168,83,0.05)]" 
-              : "border-white/[0.05] bg-white/[0.01]"
-        }`}>
-          {(isLive || tick.warning) && (
-            <div className={`absolute inset-0 opacity-10 bg-gradient-to-r ${
-              isLive ? "from-emerald-500 via-transparent to-emerald-500 animate-pulse-soft" : "from-[var(--forge-gold)] via-transparent to-[var(--forge-gold)] animate-pulse-soft"
-            }`} />
-          )}
-
-          <div className="relative z-10 flex items-center justify-between">
-            <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/30">Timer</span>
-            <span className={`text-[9px] font-semibold uppercase tracking-[0.14em] ${isLive ? "text-emerald-300" : tick.warning ? "text-[var(--forge-gold)]" : "text-white/45"}`}>
-              {isLive ? "Live" : tick.warning ? "Soon" : "Upcoming"}
+        {/* Timer — one flat block, matching Guild Rotation's card */}
+        <div
+          className={`rounded-xl px-3 py-2.5 ${
+            isLive ? "bg-emerald-500/[0.07]" : tick.warning ? "bg-[var(--forge-gold)]/[0.07]" : "bg-white/[0.025]"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-white/30">
+              {isLive ? "Live now" : tick.warning ? "Spawning soon" : "Upcoming"}
             </span>
+            <span className="text-[9px] text-white/30 font-mono">{spawnLabel}</span>
           </div>
-          <p className={`relative z-10 mt-1.5 font-mono text-lg font-bold leading-none ${isLive ? "text-emerald-300" : tick.warning ? "text-[var(--forge-gold-bright)] text-gold-gradient-light" : "text-white"}`}>
+          <p
+            className={`mt-1 font-mono text-lg font-bold leading-none tracking-wide ${
+              isLive ? "text-emerald-400" : tick.warning ? "text-[var(--forge-gold-bright)]" : "text-white/85"
+            }`}
+          >
             {isLive ? "LIVE" : tick.text}
           </p>
-          <div className="relative z-10 mt-2 flex items-center gap-1 text-[10px] text-white/35 border-t border-white/[0.04] pt-2">
-            <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <span>Spawn: {spawnLabel}</span>
-          </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-white/[0.04] pt-3">
-          <div className="min-w-0">
-            <p className="text-[8px] uppercase tracking-[0.16em] text-white/30 font-bold mb-1">Taking Guild</p>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
-              <p className={`text-[12px] font-bold truncate ${color.text}`}>
-                {schedule.guildTurnGuildName || schedule.guildTurn || "Unassigned"}
-              </p>
-            </div>
-          </div>
-          <span className={`h-6 px-2.5 inline-flex items-center justify-center rounded-lg border text-[10px] font-bold uppercase tracking-wider ${color.border} ${color.bg} ${color.text}`}>
-            {schedule.status}
+        {/* Taking guild + status */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 min-w-0 text-[11px]">
+            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
+            <span className={`font-semibold truncate ${color.text}`}>
+              {schedule.guildTurnGuildName || schedule.guildTurn || "Unassigned"}
+            </span>
           </span>
+          <span className="text-[9px] font-bold uppercase tracking-wider text-white/35 shrink-0">{schedule.status}</span>
         </div>
 
         {/* War-planning headcount for this specific upcoming spawn */}
-        <BossCommitButton
-          guildId={guildId}
-          scheduleId={schedule.id}
-          initialData={commitmentsBatch?.[schedule.id]}
-        />
+        <div className="mt-auto">
+          <BossCommitButton
+            guildId={guildId}
+            scheduleId={schedule.id}
+            bossName={schedule.bossName}
+            initialData={commitmentsBatch?.[schedule.id]}
+          />
+        </div>
       </div>
     </article>
   );
 });
-
-function StatusDot({ expired, warning, guildColor }: { expired: boolean; warning: boolean; guildColor?: string }) {
-  // Determine the dot color - use guild color primarily, with state overlays
-  const dotColor = guildColor || 'rgba(255, 255, 255, 0.3)';
-  const isActive = expired || warning;
-
-  return (
-    <span className="relative mt-1 shrink-0 flex items-center justify-center w-10 h-10" aria-hidden="true">
-      {/* Smooth pulsing outer aura - always visible with guild color */}
-      <span
-        className="absolute inline-flex h-10 w-10 rounded-full transition-all duration-1000 ease-out animate-[pulse_4s_ease-in-out_infinite]"
-        style={{
-          backgroundColor: dotColor,
-          opacity: isActive ? 0.15 : 0.08,
-          boxShadow: `0 0 30px ${dotColor}60, 0 0 50px ${dotColor}30`,
-        }}
-      />
-
-      {/* Middle glow ring */}
-      <span
-        className="absolute inline-flex h-6 w-6 rounded-full transition-all duration-700 ease-out"
-        style={{
-          backgroundColor: dotColor,
-          opacity: isActive ? 0.25 : 0.15,
-          boxShadow: `0 0 16px ${dotColor}80, 0 0 24px ${dotColor}40`,
-          transform: isActive ? 'scale(1)' : 'scale(0.9)',
-        }}
-      />
-
-      {/* Animated ping for active states */}
-      {isActive && (
-        <span
-          className="absolute inline-flex h-4 w-4 rounded-full animate-ping"
-          style={{
-            backgroundColor: expired ? '#10b981' : '#f59e0b',
-            opacity: 0.6,
-          }}
-        />
-      )}
-
-      {/* Core status dot - uses guild color with state indication overlay */}
-      <span
-        className="relative inline-flex h-4 w-4 rounded-full transition-all duration-700 ease-out"
-        style={{
-          backgroundColor: dotColor,
-          boxShadow: isActive
-            ? `0 0 12px ${dotColor}ff, 0 0 20px ${dotColor}80, 0 0 30px ${dotColor}40, inset 0 1px 2px rgba(255,255,255,0.3)`
-            : `0 0 8px ${dotColor}cc, 0 0 12px ${dotColor}60, inset 0 1px 2px rgba(255,255,255,0.2)`,
-          transform: isActive ? 'scale(1)' : 'scale(0.85)',
-        }}
-      >
-        {/* State indicator overlay - subtle rim light */}
-        {isActive && (
-          <span
-            className="absolute inset-0 rounded-full animate-pulse"
-            style={{
-              background: expired
-                ? 'radial-gradient(circle at 30% 30%, rgba(16, 185, 129, 0.4), transparent 60%)'
-                : 'radial-gradient(circle at 30% 30%, rgba(245, 158, 11, 0.4), transparent 60%)',
-              mixBlendMode: 'overlay',
-            }}
-          />
-        )}
-      </span>
-    </span>
-  );
-}
-
-function PaginationControls({
-  page,
-  totalPages,
-  total,
-  onPrevious,
-  onNext,
-}: {
-  page: number;
-  totalPages: number;
-  total: number;
-  onPrevious: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-      <p className="text-[11px] text-white/40">
-        Showing page <span className="text-white/70 font-semibold">{page}</span> of{" "}
-        <span className="text-white/70 font-semibold">{totalPages}</span> for {total} records
-      </p>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onPrevious}
-          disabled={page <= 1}
-          aria-label="Previous activity page"
-          className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 disabled:opacity-35 disabled:cursor-not-allowed transition-colors focus-ring"
-        >
-          <ChevronLeftIcon />
-        </button>
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={page >= totalPages}
-          aria-label="Next activity page"
-          className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 disabled:opacity-35 disabled:cursor-not-allowed transition-colors focus-ring"
-        >
-          <ChevronRightIcon />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function KillDrops({ drops }: { drops: BossDropDisplay[] }) {
-  return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] px-3 py-2.5">
-      <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-2 flex items-center gap-1.5">
-        <svg className="h-3 w-3 text-[var(--forge-gold)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M20 12v10H4V12" /><path d="M2 7h20v5H2z" /><path d="M12 22V7" />
-          <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
-        </svg>
-        Drops · {drops.length}
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {drops.map((d, i) => {
-          const rs = rarityStyle(d.rarity);
-          return (
-            <span
-              key={`${d.itemName}-${i}`}
-              title={`${d.itemName}${d.rarity ? ` · ${d.rarity}` : ""}${d.quantity > 1 ? ` ×${d.quantity}` : ""}`}
-              className={`inline-flex items-center gap-1.5 rounded-md border ${rs.border} ${rs.bg} pl-1 pr-1.5 py-0.5`}
-            >
-              <img src={d.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-4 w-4 rounded object-cover" />
-              <span className="text-[10px] font-semibold text-white/85 max-w-[130px] truncate">{d.itemName}</span>
-              {d.quantity > 1 && <span className="text-[9px] font-mono text-white/50">×{d.quantity}</span>}
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function HistoryMeta({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "amber" }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[9px] uppercase tracking-[0.16em] text-white/35">{label}</p>
-      <p className={`text-[12px] font-semibold truncate mt-1 ${tone === "amber" ? "text-amber-300" : "text-white/75"}`}>{value}</p>
-    </div>
-  );
-}
 
 function BossAvatar({ src, name }: { src: string; name: string }) {
   return (
@@ -2078,198 +1997,6 @@ function TimelineRow({
   );
 }
 
-function CalendarView({
-  entries,
-  canManage,
-  onTaken,
-}: {
-  entries: ViewEntry[];
-  canManage?: boolean;
-  onTaken?: (id: string) => void;
-}) {
-  const [monthCursor, setMonthCursor] = useState(() => {
-    const date = new Date();
-    date.setDate(1);
-    date.setHours(0, 0, 0, 0);
-    return date;
-  });
-  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
-
-  const dayMap = useMemo(() => {
-    const map = new Map<string, ViewEntry[]>();
-    for (const entry of entries) {
-      if (!entry.spawnTime) continue;
-      const key = new Date(entry.spawnTime).toDateString();
-      const bucket = map.get(key);
-      if (bucket) bucket.push(entry);
-      else map.set(key, [entry]);
-    }
-    for (const bucket of map.values()) {
-      bucket.sort((a, b) => spawnSortValue(a.spawnTime) - spawnSortValue(b.spawnTime));
-    }
-    return map;
-  }, [entries]);
-
-  const monthLabel = monthCursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const firstWeekday = monthCursor.getDay();
-  const daysInMonth = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
-  const todayKey = new Date().toDateString();
-
-  const cells: Array<Date | null> = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(monthCursor.getFullYear(), monthCursor.getMonth(), day));
-
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] p-4 animate-scale-in">
-      <div className="flex items-center justify-between mb-4">
-        <button
-          type="button"
-          onClick={() => setMonthCursor((month) => { const next = new Date(month); next.setMonth(next.getMonth() - 1); return next; })}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 transition-colors cursor-pointer focus-ring"
-          aria-label="Previous month"
-        >
-          <ChevronLeftIcon />
-        </button>
-        <h3 className="text-sm font-bold text-white">{monthLabel}</h3>
-        <button
-          type="button"
-          onClick={() => setMonthCursor((month) => { const next = new Date(month); next.setMonth(next.getMonth() + 1); return next; })}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white hover:border-amber-500/25 transition-colors cursor-pointer focus-ring"
-          aria-label="Next month"
-        >
-          <ChevronRightIcon />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-1.5 mb-1.5">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-          <div key={day} className="text-center text-[10px] uppercase tracking-wider text-white/30 font-bold py-1">{day}</div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-1.5">
-        {cells.map((date, index) => {
-          if (!date) return <div key={`empty-${index}`} className="min-h-[86px]" />;
-          const key = date.toDateString();
-          const dayEntries = dayMap.get(key) || [];
-          const isToday = key === todayKey;
-          const hasEntries = dayEntries.length > 0;
-          return (
-            <div
-              key={key}
-              role={hasEntries ? "button" : undefined}
-              tabIndex={hasEntries ? 0 : undefined}
-              onClick={() => hasEntries && setSelectedDayKey(key)}
-              onKeyDown={(e) => {
-                if (hasEntries && (e.key === "Enter" || e.key === " ")) setSelectedDayKey(key);
-              }}
-              className={`min-h-[86px] rounded-lg border p-1.5 transition-colors ${
-                isToday ? "border-[var(--forge-gold)]/40 bg-[var(--forge-glow)]/20" : "border-white/[0.05] bg-white/[0.01]"
-              } ${hasEntries ? "cursor-pointer hover:border-white/20 hover:bg-white/[0.04] focus-ring" : ""}`}
-            >
-              <span className={`text-[10px] font-mono ${isToday ? "text-[var(--forge-gold-bright)] font-bold" : "text-white/35"}`}>{date.getDate()}</span>
-              <div className="mt-1 space-y-1">
-                {dayEntries.slice(0, 3).map((entry) => {
-                  const color = getGuildColor(entry.guildName === "Unassigned" ? "" : entry.guildName);
-                  return (
-                    <div
-                      key={entry.id}
-                      title={`${entry.bossName} · ${entry.guildName}`}
-                      className={`truncate text-[9px] font-semibold px-1 py-0.5 rounded border ${color.border} ${color.bg} ${color.text}`}
-                    >
-                      {entry.spawnTime && new Date(entry.spawnTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} {entry.bossName}
-                    </div>
-                  );
-                })}
-                {dayEntries.length > 3 && (
-                  <div className="text-[9px] text-white/35 px-1">+{dayEntries.length - 3} more</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Day detail modal — click a date to see its bosses and mark taken,
-          instead of a cramped per-entry button inside the tiny day cell. */}
-      {selectedDayKey && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setSelectedDayKey(null)}
-        >
-          <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
-          <div
-            className="relative w-full max-w-md glass-strong rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden z-50 animate-scale-in max-h-[80vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 border-b border-white/[0.06] flex items-center justify-between gap-3 shrink-0">
-              <div>
-                <p className="text-[10px] text-white/40 uppercase tracking-wider">Boss Spawns</p>
-                <h3 className="text-base font-bold text-white">
-                  {new Date(selectedDayKey).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedDayKey(null)}
-                className="text-white/40 hover:text-white/80 cursor-pointer shrink-0"
-                aria-label="Close"
-              >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-3 space-y-2 overflow-y-auto">
-              {(dayMap.get(selectedDayKey) || []).map((entry) => {
-                const color = getGuildColor(entry.guildName === "Unassigned" ? "" : entry.guildName);
-                return (
-                  <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-                    <BossAvatar src={entry.bossImageUrl} name={entry.bossName} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white truncate">{entry.bossName}</p>
-                      <p className="text-[11px] text-white/40 truncate">{entry.location}</p>
-                      <span className={`inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md border text-[10px] font-bold ${color.border} ${color.bg} ${color.text}`}>
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color.dot }} />
-                        {entry.guildName}
-                      </span>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={`font-mono text-xs font-bold ${entry.timerLive ? "text-emerald-400" : entry.timerWarning ? "text-[var(--forge-gold-bright)]" : "text-white/60"}`}>
-                        {entry.timerText}
-                      </p>
-                      {entry.spawnTime && (
-                        <p className="text-[10px] text-white/35 mt-0.5">
-                          {new Date(entry.spawnTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                        </p>
-                      )}
-                    </div>
-                    {canManage && onTaken && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onTaken(entry.id);
-                          setSelectedDayKey(null);
-                        }}
-                        className="shrink-0 h-8 px-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-white transition-all cursor-pointer"
-                      >
-                        <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                          <path d="M22 4L12 14.01l-3-3" />
-                        </svg>
-                        Taken
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ViewModeIcon({ mode }: { mode: ViewMode }) {
   if (mode === "TIMELINE") {
     return (
@@ -2349,21 +2076,5 @@ function ModalLine({ label, value, tone = "neutral" }: { label: string; value: s
       <span className="text-[11px] text-white/40">{label}</span>
       <span className={`text-[12px] font-semibold text-right ${toneClass}`}>{value}</span>
     </div>
-  );
-}
-
-function ChevronLeftIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18l6-6-6-6" />
-    </svg>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
 import { guildApi, dashboardApi, type GuildMemberData, type JoinRequestData, type CustomRoleData } from "@/lib/api";
@@ -23,15 +24,18 @@ import {
 import MemberRow from "./components/MemberRow";
 import ApplicationsTab from "./components/ApplicationsTab";
 import InviteTab from "./components/InviteTab";
-import RoleConfirmModal from "./components/RoleConfirmModal";
-import StalkProfileModal, { type MemberWithFinance } from "./components/StalkProfileModal";
+import type { MemberWithFinance } from "./components/StalkProfileModal";
+import MembersStatisticsTab from "./components/MembersStatisticsTab";
+
+const RoleConfirmModal = dynamic(() => import("./components/RoleConfirmModal"));
+const StalkProfileModal = dynamic(() => import("./components/StalkProfileModal"));
 
 type SortMode = "NAME" | "RANKING" | "GUILD_POINTS" | "BALANCE" | "CLASS" | "CP" | "JOINED";
 
 export default function MembersPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const { socket } = useSocket();
+  const { socket, onlineUserIds } = useSocket();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [sortBy, setSortBy] = useState<SortMode>("NAME");
@@ -46,7 +50,7 @@ export default function MembersPage() {
   const [selectedStalkMemberId, setSelectedStalkMemberId] = useState<string | null>(null);
 
   // New admin flow state variables
-  const [activeTab, setActiveTab] = useState<"members" | "applications" | "invites">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "statistics" | "applications" | "invites">("members");
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
   const [isReviewingId, setIsReviewingId] = useState<string | null>(null);
 
@@ -86,13 +90,15 @@ export default function MembersPage() {
   );
 
   const currencySymbol = accounting?.treasury?.primary?.currencySymbol || "₱";
-  const balancesByMemberId = new Map<string, { balance: number; dkp: number }>(
-    (accounting?.memberBalances || []).map((b: any) => [b.memberId, { balance: b.balance, dkp: b.dkp }]),
-  );
-  const enrichedMembers: MemberWithFinance[] = members.map((m) => {
-    const fin = balancesByMemberId.get(m.id);
-    return { ...m, balance: fin?.balance ?? 0, guildPoints: fin?.dkp ?? 0, currencySymbol };
-  });
+  const enrichedMembers: MemberWithFinance[] = useMemo(() => {
+    const balancesByMemberId = new Map<string, { balance: number; dkp: number }>(
+      (accounting?.memberBalances || []).map((b: any) => [b.memberId, { balance: b.balance, dkp: b.dkp }]),
+    );
+    return (membersRaw || []).map((m) => {
+      const fin = balancesByMemberId.get(m.id);
+      return { ...m, balance: fin?.balance ?? 0, guildPoints: fin?.dkp ?? 0, currencySymbol };
+    });
+  }, [membersRaw, accounting, currencySymbol]);
 
   // Derived (not a snapshot) so edits made inside the card — avatar, banner,
   // IGN, etc. — appear immediately once the roster query refetches, without
@@ -190,27 +196,29 @@ export default function MembersPage() {
   }, [socket, activeGuild, isOfficer]);
 
   // Filter & sort members
-  const filteredMembers = enrichedMembers
-    .filter((m) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        m.user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (m.ign && m.ign.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (m.memberCode && m.memberCode.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesRole = roleFilter === "ALL" || m.role === roleFilter;
-      return matchesSearch && matchesRole;
-    })
-    .sort((a, b) => {
-      if (sortBy === "RANKING") {
-        return GUILD_ROLES.indexOf(b.role as GuildRoleType) - GUILD_ROLES.indexOf(a.role as GuildRoleType);
-      }
-      if (sortBy === "GUILD_POINTS") return b.guildPoints - a.guildPoints;
-      if (sortBy === "BALANCE") return b.balance - a.balance;
-      if (sortBy === "CLASS") return (a.class || "").localeCompare(b.class || "");
-      if (sortBy === "CP") return (b.cp ?? 0) - (a.cp ?? 0);
-      if (sortBy === "JOINED") return new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime();
-      return (a.ign || a.user.displayName).localeCompare(b.ign || b.user.displayName);
-    });
+  const filteredMembers = useMemo(() => {
+    return enrichedMembers
+      .filter((m) => {
+        const matchesSearch =
+          searchQuery === "" ||
+          m.user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (m.ign && m.ign.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (m.memberCode && m.memberCode.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesRole = roleFilter === "ALL" || m.role === roleFilter;
+        return matchesSearch && matchesRole;
+      })
+      .sort((a, b) => {
+        if (sortBy === "RANKING") {
+          return GUILD_ROLES.indexOf(b.role as GuildRoleType) - GUILD_ROLES.indexOf(a.role as GuildRoleType);
+        }
+        if (sortBy === "GUILD_POINTS") return b.guildPoints - a.guildPoints;
+        if (sortBy === "BALANCE") return b.balance - a.balance;
+        if (sortBy === "CLASS") return (a.class || "").localeCompare(b.class || "");
+        if (sortBy === "CP") return (b.cp ?? 0) - (a.cp ?? 0);
+        if (sortBy === "JOINED") return new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime();
+        return (a.ign || a.user.displayName).localeCompare(b.ign || b.user.displayName);
+      });
+  }, [enrichedMembers, searchQuery, roleFilter, sortBy]);
 
   async function handleRoleChange(
     memberId: string,
@@ -314,9 +322,12 @@ export default function MembersPage() {
     );
   }
 
-  const tabs: Array<{ value: "members" | "applications" | "invites"; label: string; count?: number }> = [
+  const tabs: Array<{ value: "members" | "statistics" | "applications" | "invites"; label: string; count?: number }> = [
     { value: "members", label: "Active members", count: members.length },
-    { value: "applications", label: "Pending applications", count: applications.length },
+    { value: "statistics", label: "Member Statistics" },
+    ...(isOfficer
+      ? [{ value: "applications" as const, label: "Pending applications", count: applications.length }]
+      : []),
     ...(isGuildLeader
       ? [{ value: "invites" as const, label: "Invite code" }]
       : []),
@@ -334,20 +345,22 @@ export default function MembersPage() {
             <span className="inline-flex items-center gap-1.5">
               <LiveDot tone="emerald" size={5} />
               {members.length} members in {activeGuild.guildName}
+              <span className="text-white/25">·</span>
+              <span className="text-emerald-400/90">
+                {members.filter((m) => onlineUserIds.has(m.userId)).length} online
+              </span>
             </span>
           }
         />
 
         {/* Tabs */}
-        {isOfficer && (
-          <Reveal delay={80}>
-            <ModuleTabs
-              tabs={tabs}
-              active={activeTab}
-              onChange={(v) => setActiveTab(v)}
-            />
-          </Reveal>
-        )}
+        <Reveal delay={80}>
+          <ModuleTabs
+            tabs={tabs}
+            active={activeTab}
+            onChange={(v) => setActiveTab(v)}
+          />
+        </Reveal>
 
         {/* Members Tab Content */}
         {activeTab === "members" && (
@@ -467,6 +480,7 @@ export default function MembersPage() {
                     index={index}
                     isGuildLeader={isGuildLeader}
                     currentUserId={user.id}
+                    isOnline={onlineUserIds.has(member.userId)}
                     onSelect={() => setSelectedStalkMemberId(member.id)}
                     onRoleChange={(newRole) =>
                       handleRoleChange(member.id, member.user.displayName, member.role, newRole)
@@ -480,8 +494,11 @@ export default function MembersPage() {
           </>
         )}
 
+        {/* Member Statistics Tab Content */}
+        {activeTab === "statistics" && <MembersStatisticsTab guildId={activeGuild.guildId} />}
+
         {/* Applications Tab Content */}
-        {activeTab === "applications" && (
+        {activeTab === "applications" && isOfficer && (
           <ApplicationsTab
             applications={applications}
             isLoadingApps={isLoadingApps}
@@ -519,6 +536,7 @@ export default function MembersPage() {
           activeGuildName={activeGuild.guildName}
           guildId={activeGuild.guildId}
           currentUserId={user.id}
+          isOnline={!!selectedStalkMember && onlineUserIds.has(selectedStalkMember.userId)}
           onClose={() => setSelectedStalkMemberId(null)}
         />
 

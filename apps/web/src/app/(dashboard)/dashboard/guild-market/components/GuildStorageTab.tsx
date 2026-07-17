@@ -146,7 +146,7 @@ function StorageBoard({
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-xl">
                 {item.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.imageUrl} alt="" className="h-full w-full rounded-xl object-cover" />
+                  <img src={item.imageUrl} alt="" className="h-full w-full rounded-xl object-cover" loading="lazy" decoding="async" />
                 ) : (
                   <span aria-hidden>{CATEGORY_ICONS[item.category] || "📦"}</span>
                 )}

@@ -82,6 +82,7 @@ export const guilds = new Hono<AppEnv>()
     }
     const { ipAddress, userAgent } = getClientInfo(c);
     const result = await services.application.handleApplicationAction(guildId, requestId, action, user.userId, ipAddress, userAgent);
+    if (action === "ACCEPT") await cache.delete(`guild-members:${guildId}`);
     broadcastToGuild(guildId, "join_request_processed", { requestId, action, memberCode: result.memberCode });
     return ok(c, result);
   })
@@ -205,7 +206,13 @@ export const guilds = new Hono<AppEnv>()
 
   // ─── Members ─────────────────────────────────────────────────
   .get("/:guildId/members", requireGuildRole("MEMBER"), async (c) => {
-    return ok(c, { members: await services.guild.getGuildMembers(c.req.param("guildId")) });
+    const guildId = c.req.param("guildId");
+    const cacheKey = `guild-members:${guildId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { members: cached });
+    const members = await services.guild.getGuildMembers(guildId);
+    await cache.set(cacheKey, members, 30);
+    return ok(c, { members });
   })
   .patch("/:guildId/members/:memberId/role", requireGuildRole("GUILD_LEADER"), async (c) => {
     const guildId = c.req.param("guildId");
@@ -217,6 +224,7 @@ export const guilds = new Hono<AppEnv>()
     }
     const { ipAddress, userAgent } = getClientInfo(c);
     const updated = await services.guild.updateMemberRole(guildId, memberId, { role: role as GuildRoleType | undefined, customRoleId }, user.userId, ipAddress, userAgent);
+    await cache.delete(`guild-members:${guildId}`);
     broadcastToGuild(guildId, "member_role_updated", updated);
     return ok(c, { member: updated });
   })

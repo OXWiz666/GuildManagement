@@ -11,6 +11,8 @@ import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { useQuery, queryClient } from "@/lib/query";
 import {
   ModuleHeader,
+  ModuleTabs,
+  Reveal,
   Magnetic,
 } from "@/components/dashboard/DashboardHelpers";
 
@@ -43,6 +45,8 @@ export default function BossAttendancePage() {
   const { socket } = useSocket();
 
   const [currentTime, setCurrentTime] = useState(Date.now());
+
+  const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
@@ -204,9 +208,15 @@ export default function BossAttendancePage() {
   const getUserRecordStatus = useCallback((item: BossScheduleData) => {
     if (!user) return { status: "NONE", label: "No Session", color: "text-white/40 bg-white/[0.015] border-white/[0.03]", dotColor: "bg-zinc-650" };
     if (!item.attendanceSessions || item.attendanceSessions.length === 0) {
-      return item.status === "KILLED"
-        ? { status: "EXPIRED_NO_SESSION", label: "No Session Run", color: "text-white/40 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-700" }
-        : { status: "NONE", label: "Scheduled Spawn", color: "text-white/55 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-650" };
+      if (item.status === "KILLED") {
+        return { status: "EXPIRED_NO_SESSION", label: "No Session Run", color: "text-white/40 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-700" };
+      }
+      // No officer-opened window yet, but it's this guild's rotation turn —
+      // members can stake their attendance early (see checkInToBoss).
+      if (activeGuild && item.guildTurnGuildId === activeGuild.guildId) {
+        return { status: "ADVANCE_ELIGIBLE", label: "Your Guild's Turn", color: "text-violet-300 bg-violet-500/5 border-violet-500/20", dotColor: "bg-violet-500 border border-violet-400/20" };
+      }
+      return { status: "NONE", label: "Scheduled Spawn", color: "text-white/55 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-650" };
     }
 
     const session = item.attendanceSessions[0];
@@ -225,7 +235,7 @@ export default function BossAttendancePage() {
     }
 
     return { status: "MISSED", label: "Missed", color: "text-rose-400 bg-rose-500/5 border-rose-500/10", dotColor: "bg-rose-500" };
-  }, [user, currentTime]);
+  }, [user, currentTime, activeGuild]);
 
   // Countdown formatter for active attendance session windows
   const getCountdownText = useCallback((expiresAtStr: string) => {
@@ -241,6 +251,18 @@ export default function BossAttendancePage() {
 
     return { expired: false, text, warning };
   }, [currentTime]);
+
+  // Same eligibility rule AdvanceCheckInBanner applies internally — mirrored
+  // here just for the tab's count badge.
+  const advanceEligibleCount = useMemo(() => {
+    if (!activeGuild) return 0;
+    return schedules.filter(
+      (s) =>
+        s.status !== "KILLED" &&
+        s.guildTurnGuildId === activeGuild.guildId &&
+        (!s.attendanceSessions || s.attendanceSessions.length === 0),
+    ).length;
+  }, [schedules, activeGuild]);
 
   const selectedSession = useMemo(
     () => sessions.find((s) => s.id === selectedSessionId) || null,
@@ -308,6 +330,20 @@ export default function BossAttendancePage() {
           }
         />
 
+        <Reveal delay={80}>
+          <ModuleTabs
+            tabs={[
+              { value: "overview", label: "Overview" },
+              { value: "history", label: "Attendance History", count: stats?.history?.length ?? 0 },
+              { value: "advance", label: "Advance Turn-In", count: advanceEligibleCount },
+            ]}
+            active={activeTab}
+            onChange={setActiveTab}
+          />
+        </Reveal>
+
+        {activeTab === "overview" && (
+        <>
         {/* SMART INLINE CHECK-IN ALERT (one-click, no codes) — self-ticking,
             see CheckInAlertBanner: keeps the per-second countdown isolated
             instead of re-rendering this whole page every second. */}
@@ -323,7 +359,7 @@ export default function BossAttendancePage() {
           <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 shadow-sm flex items-start gap-3">
             <span className="text-rose-400 text-sm mt-0.5">▪</span>
             <div>
-              <h4 className="font-bold text-rose-400 text-xs uppercase tracking-wider">Missed Raids Alert</h4>
+              <h4 className="font-bold text-rose-400 text-xs uppercase tracking-wider">Missed Boss Alert</h4>
               <p className="text-xs text-white/55 leading-relaxed mt-1">
                 You did not check in for: <strong className="text-white/70 font-semibold">{stats.missedAlerts.map(a => a.title).join(", ")}</strong>. Please contact an officer if you were present to claim retrospective points.
               </p>
@@ -393,7 +429,7 @@ export default function BossAttendancePage() {
             <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Activity Points</p>
             <div className="flex items-baseline gap-2 mt-2">
               <h3 className="text-2xl font-bold tracking-tight text-cyan-400">
-                {stats ? `${stats.totalPoints} ₱` : "--"}
+                {stats ? `${stats.totalPoints} ` : "--"}
               </h3>
               <span className="text-[10px] text-zinc-650">guild share</span>
             </div>
@@ -401,7 +437,7 @@ export default function BossAttendancePage() {
 
           {/* Total event participation */}
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 shadow-sm">
-            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Raid Participation</p>
+            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Boss Participation</p>
             <div className="flex items-baseline gap-2 mt-2">
               <h3 className="text-2xl font-bold tracking-tight text-emerald-400">
                 {stats ? `${stats.participationCount} / ${stats.participationCount + (stats.missedAlerts?.length || 0)}` : "--"}
@@ -418,9 +454,25 @@ export default function BossAttendancePage() {
           isLoading={isLoadingSessions}
           onSelect={(session) => setSelectedSessionId(session.id)}
         />
+        </>
+        )}
 
-        {/* Personal attendance history */}
-        <AttendanceHistoryList history={stats?.history || []} />
+        {activeTab === "history" && (
+          /* Personal attendance history */
+          <AttendanceHistoryList history={stats?.history || []} />
+        )}
+
+        {activeTab === "advance" && (
+          /* Advance check-in: bosses that haven't been fought yet but are
+             currently this guild's rotation turn — stake attendance early,
+             officer verifies once the boss actually dies. */
+          <AdvanceCheckInBanner
+            schedules={schedules}
+            myGuildId={activeGuild.guildId}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+          />
+        )}
 
         {/* Modal: attendance session detail — your status + check-in
             action, and (officers/leaders) verification, roster, and
@@ -546,6 +598,95 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
       >
         {checkingInId === activeSessionEvent.id ? "Checking in…" : "Check In Now"}
       </button>
+    </div>
+  );
+});
+
+// ─── Advance Check-In Banner ───
+// Bosses that haven't been fought yet (no attendance session exists at all)
+// but are currently this guild's rotation turn — checkInToBoss on the server
+// opens the session on demand and logs a PENDING record; the officer still
+// verifies it the normal way once the boss actually dies.
+const AdvanceCheckInBanner = memo(function AdvanceCheckInBanner({
+  schedules,
+  myGuildId,
+  checkingInId,
+  onCheckIn,
+}: {
+  schedules: BossScheduleData[];
+  myGuildId: string;
+  checkingInId: string | null;
+  onCheckIn: (item: BossScheduleData) => void;
+}) {
+  const eligible = useMemo(
+    () =>
+      schedules
+        .filter(
+          (s) =>
+            s.status !== "KILLED" &&
+            s.guildTurnGuildId === myGuildId &&
+            (!s.attendanceSessions || s.attendanceSessions.length === 0),
+        )
+        .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime()),
+    [schedules, myGuildId],
+  );
+
+  return (
+    <div className="rounded-2xl border border-violet-500/20 bg-violet-950/5 p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3 mb-3.5">
+        <div className="flex items-start gap-3">
+          <div className="h-9 w-9 rounded-xl bg-violet-500/10 border border-violet-500/25 flex items-center justify-center text-violet-300 text-sm shrink-0">
+            ✦
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-violet-300 uppercase tracking-widest block">
+              Your Guild&apos;s Turn
+            </span>
+            <p className="text-[12px] text-white/55 mt-0.5 leading-relaxed">
+              These bosses haven&apos;t been fought yet, but it&apos;s your guild&apos;s turn — check in early to stake
+              your attendance. An officer still verifies once the boss dies.
+            </p>
+          </div>
+        </div>
+        {eligible.length > 0 && (
+          <span className="shrink-0 text-[11px] font-mono text-violet-300/70 mt-0.5">{eligible.length}</span>
+        )}
+      </div>
+
+      {eligible.length === 0 ? (
+        <p className="text-[12px] text-white/35 italic px-1">
+          Nothing to check in early for right now — this fills in as soon as a boss becomes your guild&apos;s turn.
+        </p>
+      ) : (
+      /* Contained scroll instead of an unbounded grid — a big rotation
+          queue (many bosses simultaneously eligible) shouldn't push the
+          rest of the page off screen. */
+      <div className="max-h-72 overflow-y-auto custom-scrollbar pr-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+          {eligible.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-semibold text-white truncate">{item.bossName}</p>
+                <p className="text-[10px] text-white/40 truncate">
+                  {new Date(item.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onCheckIn(item)}
+                disabled={checkingInId === item.id}
+                className="shrink-0 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 active:scale-95 disabled:opacity-50 text-[11px] font-bold text-white rounded-lg transition-all cursor-pointer"
+              >
+                {checkingInId === item.id ? "Checking in…" : "Check In Early"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      )}
     </div>
   );
 });

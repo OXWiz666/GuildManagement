@@ -379,15 +379,17 @@ export async function createDistribution(
 ) {
   await requireOfficer(guildId, actorId);
 
-  const target = await prisma.guildMember.findUnique({
-    where: { id: payload.memberId },
-    include: { user: { select: { displayName: true } } },
-  });
+  const [target, rules] = await Promise.all([
+    prisma.guildMember.findUnique({
+      where: { id: payload.memberId },
+      include: { user: { select: { displayName: true } } },
+    }),
+    getEffectiveMarketRules(guildId),
+  ]);
   if (!target || target.guildId !== guildId || !target.isActive) {
     throw new NotFoundError("Target member not found in this guild");
   }
 
-  const rules = await getEffectiveMarketRules(guildId);
   const tier = resolveDistributionTier(target, rules);
 
   // Keep only known slot keys for the chosen form
@@ -944,22 +946,23 @@ export async function getWishlistMasterList(
 }
 
 async function getWishlistMasterRowsUncached(guildId: string): Promise<WishlistMasterRow[]> {
-  const rules = await getEffectiveMarketRules(guildId);
-  const mountIds = await activeMountIds(guildId);
-  const mounts = prisma.guildMount
-    ? await prisma.guildMount
-        .findMany({ where: { guildId }, select: { id: true, name: true } })
-        .catch((err) => {
-          if (isMissingMountTable(err)) return [] as { id: string; name: string }[];
-          throw err;
-        })
-    : [];
+  const [rules, mountIds, mounts, members] = await Promise.all([
+    getEffectiveMarketRules(guildId),
+    activeMountIds(guildId),
+    prisma.guildMount
+      ? prisma.guildMount
+          .findMany({ where: { guildId }, select: { id: true, name: true } })
+          .catch((err) => {
+            if (isMissingMountTable(err)) return [] as { id: string; name: string }[];
+            throw err;
+          })
+      : Promise.resolve([] as { id: string; name: string }[]),
+    prisma.guildMember.findMany({
+      where: { guildId, isActive: true },
+      include: { user: { select: { displayName: true } } },
+    }),
+  ]);
   const mountNames = new Map(mounts.map((m) => [m.id, m.name]));
-
-  const members = await prisma.guildMember.findMany({
-    where: { guildId, isActive: true },
-    include: { user: { select: { displayName: true } } },
-  });
 
   const rows: WishlistMasterRow[] = [];
   for (const m of members) {

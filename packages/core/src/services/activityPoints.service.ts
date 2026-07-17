@@ -53,6 +53,7 @@ export function mergeActivityPointRules(raw: unknown): ActivityPointRules {
     label: typeof a?.label === "string" && a.label.trim() ? a.label.trim() : "Activity",
     basePoints: typeof a?.basePoints === "number" && Number.isFinite(a.basePoints) ? a.basePoints : 0,
     multipliers: { ...defaultMultipliers(), ...(a?.multipliers && typeof a.multipliers === "object" ? a.multipliers : {}) },
+    color: typeof a?.color === "string" && a.color.trim() ? a.color.trim().slice(0, 20) : undefined,
   }));
   return { activities };
 }

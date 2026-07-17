@@ -19,6 +19,7 @@ export interface StalkProfileModalProps {
   activeGuildName: string;
   guildId: string;
   currentUserId: string;
+  isOnline: boolean;
   onClose: () => void;
 }
 
@@ -53,6 +54,7 @@ export default function StalkProfileModal({
   activeGuildName,
   guildId,
   currentUserId,
+  isOnline,
   onClose,
 }: StalkProfileModalProps) {
   const { refreshUser } = useAuth();
@@ -222,8 +224,12 @@ export default function StalkProfileModal({
                 <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
               </div>
             )}
-            {/* Status Dot */}
-            <span className="absolute bottom-1 right-1 h-5.5 w-5.5 rounded-full bg-emerald-500 border-4 border-[#111214]" />
+            {/* Status Dot — reflects live presence on the guild's realtime channel */}
+            <span
+              className={`absolute bottom-1 right-1 h-5.5 w-5.5 rounded-full border-4 border-[#111214] ${
+                isOnline ? "bg-emerald-500" : "bg-white/25"
+              }`}
+            />
             <input
               ref={avatarInputRef}
               type="file"
@@ -263,7 +269,13 @@ export default function StalkProfileModal({
                 {m.memberCode && <span className="text-[12px] text-zinc-500 font-normal shrink-0">#{m.memberCode.slice(-4)}</span>}
               </h3>
             )}
-            <p className="text-[12px] text-zinc-500 mt-0.5 truncate">{m.user.displayName}</p>
+            <p className="text-[12px] text-zinc-500 mt-0.5 truncate flex items-center gap-1.5">
+              {m.user.displayName}
+              <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${isOnline ? "text-emerald-400" : "text-zinc-600"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-zinc-600"}`} />
+                {isOnline ? "Online" : "Offline"}
+              </span>
+            </p>
           </div>
 
           {/* Divider */}

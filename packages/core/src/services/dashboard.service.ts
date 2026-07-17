@@ -9,7 +9,7 @@ import { writeAuditLog } from "./audit.service";
 import { createLedgerEntry } from "./ledger.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import * as crypto from "crypto";
-import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime } from "@guild/shared";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, SHORT_CYCLE_MAX_HOURS } from "@guild/shared";
 import { broadcastToUser } from "../lib/socket";
 import { getDropCatalogMap } from "./equipment.service";
 import { getGuildMemberByUser } from "./guild.service";
@@ -37,6 +37,11 @@ const SCHEDULE_CREATOR_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN", "OFFI
 
 // How long the self check-in window stays open after a boss kill is logged.
 const CHECK_IN_WINDOW_MINUTES = 30;
+
+// How long an advance check-in's auto-opened session stays open while
+// waiting for the boss to actually die — generous, since the real kill (and
+// the standard short CHECK_IN_WINDOW_MINUTES window) reopens/extends it.
+const ADVANCE_CHECK_IN_WINDOW_HOURS = 12;
 
 // Process-level guard so we reconcile the boss registry at most once per server boot.
 let registrySynced = false;
@@ -243,9 +248,14 @@ async function invalidateBossRotationCache(guildId: string): Promise<void> {
 // pending queue are always cleared (both are guild-wide summaries); the
 // specific session's detail key is cleared too whenever the mutation names
 // one (almost always, except session creation).
-async function invalidateAttendanceCache(guildId: string, sessionId?: string): Promise<void> {
+async function invalidateAttendanceCache(guildId: string, sessionId?: string, userId?: string): Promise<void> {
   const keys = [cacheKeys.attendSessions(guildId), cacheKeys.attendPending(guildId)];
   if (sessionId) keys.push(cacheKeys.attendSessionDetail(guildId, sessionId));
+  // A record mutation (check-in, confirm, mark-present, revoke) changes that
+  // member's presenceRate/streak/participation/history — attendStats is
+  // otherwise TTL-only with no active invalidation, so without this the
+  // member's stats cache silently serves a stale snapshot for up to 60s.
+  if (userId) keys.push(cacheKeys.attendStats(guildId, userId));
   await redisCache.delMany(keys);
 }
 
@@ -253,8 +263,8 @@ async function invalidateAttendanceCache(guildId: string, sessionId?: string): P
 // feeds both the dashboard's guild-wide aggregate and page 1 of the
 // accounting ledger — clear those alongside the attendance keys so the
 // awarded/reversed points show up immediately instead of waiting on TTL.
-async function invalidateAttendanceAndFinanceCache(guildId: string, sessionId?: string): Promise<void> {
-  await invalidateAttendanceCache(guildId, sessionId);
+async function invalidateAttendanceAndFinanceCache(guildId: string, sessionId?: string, userId?: string): Promise<void> {
+  await invalidateAttendanceCache(guildId, sessionId, userId);
   await redisCache.delMany([
     cacheKeys.dashboardStats(guildId),
     cacheKeys.acctBalance(guildId),
@@ -627,12 +637,35 @@ async function syncNextRotationSchedule(
  * Members claim attendance via `checkInToBoss` (no code typing); officers verify
  * through the existing `confirmAttendanceRecord` flow. A `code` is still stored
  * internally to satisfy the unique constraint but is never surfaced.
+ *
+ * `expiresAt` defaults to the standard short post-kill window, but
+ * `checkInToBoss`'s advance check-in path (see below) passes a longer one
+ * when opening a session ahead of the actual kill.
  */
 async function openBossCheckInSession(
   guildId: string,
   bossScheduleId: string,
   bossName: string,
+  expiresAt: Date = new Date(Date.now() + CHECK_IN_WINDOW_MINUTES * 60 * 1000),
 ) {
+  // An advance check-in (see checkInToBoss) may have already opened this
+  // exact boss's session for this guild — reuse + extend it instead of
+  // creating a duplicate, so those early PENDING records carry into the
+  // real post-kill verification window instead of being orphaned. The
+  // "single active session per guild" invariant below means this can only
+  // be the guild's own still-open session if it's still active.
+  const existing = await prisma.attendanceSession.findFirst({
+    where: { guildId, bossScheduleId, isActive: true },
+  });
+  if (existing) {
+    const reopened = await prisma.attendanceSession.update({
+      where: { id: existing.id },
+      data: { expiresAt },
+    });
+    await invalidateAttendanceCache(guildId);
+    return reopened;
+  }
+
   await prisma.attendanceSession.updateMany({
     where: { guildId, isActive: true },
     data: { isActive: false },
@@ -640,7 +673,6 @@ async function openBossCheckInSession(
 
   const randomPin = crypto.randomBytes(3).toString("hex").toUpperCase();
   const code = `ATT-${randomPin.substring(0, 4)}`;
-  const expiresAt = new Date(Date.now() + CHECK_IN_WINDOW_MINUTES * 60 * 1000);
 
   const created = await prisma.attendanceSession.create({
     data: {
@@ -806,7 +838,7 @@ export async function submitAttendanceCode(userId: string, code: string) {
     },
   });
 
-  await invalidateAttendanceCache(session.guildId, session.id);
+  await invalidateAttendanceCache(session.guildId, session.id, userId);
 
   return {
     success: true,
@@ -818,10 +850,16 @@ export async function submitAttendanceCode(userId: string, code: string) {
 }
 
 /**
- * Code-free self check-in for a specific killed boss. Resolves the active,
+ * Code-free self check-in for a specific boss. Resolves the active,
  * non-expired check-in window attached to that boss schedule and records the
  * member as PENDING for officer verification. Mirrors `submitAttendanceCode`
  * without the code-entry / anti-spam machinery (the boss id is the key).
+ *
+ * Also covers "advance" check-in: if no officer has opened a window yet but
+ * the boss hasn't been fought and it's currently this guild's rotation turn,
+ * a member can stake their attendance early — the session is opened on
+ * demand and officers still verify the record the normal way once the boss
+ * actually dies (see openBossCheckInSession's reuse-on-kill behavior).
  */
 export async function checkInToBoss(userId: string, guildId: string, bossScheduleId: string) {
   const now = new Date();
@@ -831,7 +869,7 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
     throw new ForbiddenError("You must be an active member of the guild to check in");
   }
 
-  const session = await prisma.attendanceSession.findFirst({
+  let session = await prisma.attendanceSession.findFirst({
     where: {
       bossScheduleId,
       isActive: true,
@@ -840,6 +878,22 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
     select: { id: true, title: true, guildId: true, guild: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
+
+  if (!session) {
+    const schedule = await prisma.bossSchedule.findUnique({ where: { id: bossScheduleId } });
+    const isAdvanceEligible =
+      schedule && schedule.status !== BossEventStatus.KILLED && schedule.guildTurnGuildId === guildId;
+    if (isAdvanceEligible) {
+      const advanceExpiresAt = new Date(
+        Math.max(schedule.spawnTime.getTime(), now.getTime()) + ADVANCE_CHECK_IN_WINDOW_HOURS * 60 * 60 * 1000,
+      );
+      const opened = await openBossCheckInSession(guildId, bossScheduleId, schedule.bossName, advanceExpiresAt);
+      session = await prisma.attendanceSession.findUnique({
+        where: { id: opened.id },
+        select: { id: true, title: true, guildId: true, guild: { select: { name: true } } },
+      });
+    }
+  }
 
   if (!session) {
     throw new BadRequestError("Check-in is closed for this boss");
@@ -866,7 +920,7 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
     },
   });
 
-  await invalidateAttendanceCache(session.guildId, session.id);
+  await invalidateAttendanceCache(session.guildId, session.id, userId);
 
   return {
     success: true,
@@ -1144,7 +1198,7 @@ export async function markMemberPresent(
     userAgent,
   });
 
-  await invalidateAttendanceAndFinanceCache(guildId, sessionId);
+  await invalidateAttendanceAndFinanceCache(guildId, sessionId, userId);
   return { success: true, record: result.record, points: attendancePoints };
 }
 
@@ -1212,7 +1266,7 @@ export async function revokeMemberAttendance(
     userAgent,
   });
 
-  await invalidateAttendanceAndFinanceCache(guildId, record.sessionId);
+  await invalidateAttendanceAndFinanceCache(guildId, record.sessionId, record.userId);
   return { success: true };
 }
 
@@ -1317,7 +1371,7 @@ export async function confirmAttendanceRecord(
     userAgent,
   });
 
-  await invalidateAttendanceAndFinanceCache(guildId, record.sessionId);
+  await invalidateAttendanceAndFinanceCache(guildId, record.sessionId, record.userId);
   return { success: true, record: result.updatedRecord, points: attendancePoints };
 }
 
@@ -2089,6 +2143,32 @@ export async function markBossRotationKilledByName(
     console.error("[Boss Rotation]: Failed to auto-vault drops to guild storage", error);
   }
 
+  // This is the very first time the faction has ever taken this boss, so
+  // there's no existing BossSchedule row to flip to KILLED (unlike the
+  // markBossRotationKilled path). Create one to represent the kill itself —
+  // same shape finishSoloBossKill uses — so there's something concrete to
+  // open a boss check-in/attendance session against below.
+  const killedSchedule = await prisma.bossSchedule.create({
+    data: {
+      guildId: takenGuild.id,
+      bossName: registryBoss.name,
+      bossImageUrl: getBossImageUrl(registryBoss.name),
+      spawnTime: killedDate,
+      location: registryBoss.location,
+      status: BossEventStatus.KILLED,
+      killedAt: killedDate,
+      guildTurn: takenGuild.name,
+      guildTurnGuildId: takenGuild.id,
+      creatorId: actorId,
+    },
+  });
+
+  // Auto-open a code-free check-in window for the guild that just took this
+  // boss, same as every other kill-confirmation path — this branch was the
+  // one case that skipped it, leaving members with no way to claim
+  // attendance for a boss's first-ever kill.
+  const checkInSession = await openBossCheckInSession(takenGuild.id, killedSchedule.id, registryBoss.name);
+
   const queueGuildIds = resolveQueue(existingRotation, activeGuildIds);
   const takenIndex = queueGuildIds.indexOf(takenGuildId);
   const nextIndex = queueGuildIds.length ? ((takenIndex >= 0 ? takenIndex : 0) + 1) % queueGuildIds.length : 0;
@@ -2155,7 +2235,8 @@ export async function markBossRotationKilledByName(
           nextGuildId,
           nextGuildName: nextGuild?.name || null,
           nextScheduleId: nextSchedule?.id ?? null,
-          scheduleId: null,
+          scheduleId: killedSchedule.id,
+          checkInSessionId: checkInSession.id,
           drops: storedDrops,
         },
         ipAddress,
@@ -2219,7 +2300,7 @@ export async function markBossRotationKilledByName(
   await redisCache.del(cacheKeys.bossKilledHistory(guildId, parseBossHistoryMonth().key));
 
   return {
-    schedule: null,
+    schedule: serializeBossScheduleForApi(killedSchedule),
     nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
     factionId,
@@ -2476,10 +2557,13 @@ export async function updateBossMasterList(
 
 // ─── Low-boss day rotation (faction-leader owned) ──────────────
 // A single-row config: whichever guild is assigned to a day takes ALL flagged
-// "low" bosses that day. Supports a repeating WEEKLY pattern (weekday → guild)
-// and a MONTHLY calendar (date → guild).
+// "low" bosses that day. Supports a repeating WEEKLY pattern (weekday → guild),
+// a MONTHLY calendar (date → guild), and an auto-computed DAILY cadence
+// (guild-of-the-day cycles automatically — see getDailyRotationIndex) for
+// bosses with a sub-24h cooldown, since those can spawn more than once a day
+// and don't suit a hand-filled calendar.
 
-const LOW_ROTATION_MODES = ["WEEKLY", "MONTHLY"] as const;
+const LOW_ROTATION_MODES = ["WEEKLY", "MONTHLY", "DAILY"] as const;
 
 function parseStringMap(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -2524,13 +2608,19 @@ export async function getLowBossRotation(guildId: string, actorId: string) {
     canManage: isFactionLevelRole(membership.role),
     viewerRole: membership.role,
     factionId,
-    mode: config?.mode === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+    mode: resolveLowRotationMode(config?.mode),
     lowBossNames,
     weekly: cleanWeekly,
     days: cleanDays,
     guilds,
-    bosses: bosses.map((b) => ({ bossName: b.name, level: b.level, type: b.type, location: b.location })),
+    bosses: bosses.map((b) => ({ bossName: b.name, level: b.level, type: b.type, location: b.location, cooldownHours: b.cooldownHours ?? null })),
   };
+}
+
+function resolveLowRotationMode(mode: string | undefined | null): (typeof LOW_ROTATION_MODES)[number] {
+  return LOW_ROTATION_MODES.includes(mode as (typeof LOW_ROTATION_MODES)[number])
+    ? (mode as (typeof LOW_ROTATION_MODES)[number])
+    : "MONTHLY";
 }
 
 export async function updateLowBossRotation(
@@ -2558,13 +2648,14 @@ export async function updateLowBossRotation(
   ]);
   const activeIds = new Set(guilds.map((g) => g.id));
   const bossByLower = new Map(bosses.map((b) => [b.name.toLowerCase(), b.name]));
+  const cooldownByCanonName = new Map(bosses.map((b) => [b.name, b.cooldownHours ?? null]));
 
-  let mode = existing?.mode === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+  let mode = resolveLowRotationMode(existing?.mode);
   if (payload.mode !== undefined) {
     if (!LOW_ROTATION_MODES.includes(payload.mode as (typeof LOW_ROTATION_MODES)[number])) {
-      throw new BadRequestError("Mode must be WEEKLY or MONTHLY");
+      throw new BadRequestError("Mode must be WEEKLY, MONTHLY, or DAILY");
     }
-    mode = payload.mode;
+    mode = payload.mode as (typeof LOW_ROTATION_MODES)[number];
   }
 
   let lowBossNames = parseStringArray(existing?.lowBossNames);
@@ -2578,6 +2669,17 @@ export async function updateLowBossRotation(
         lowBossNames.push(canon);
       }
     }
+  }
+
+  // Daily is exclusive to bosses that can spawn more than once in a day —
+  // silently drop anything with no cooldown or a cooldown of 24h+ rather than
+  // rejecting the whole save (the picker UI already filters these out, so
+  // this only ever trims stale selections left over from a prior mode).
+  if (mode === "DAILY") {
+    lowBossNames = lowBossNames.filter((name) => {
+      const cooldown = cooldownByCanonName.get(name);
+      return cooldown !== null && cooldown !== undefined && cooldown < SHORT_CYCLE_MAX_HOURS;
+    });
   }
 
   // Weekly is a full replace (only 7 possible keys).
@@ -2673,6 +2775,7 @@ async function getBossKilledHistoryUncached(guildId: string, month?: string) {
         displayName: string;
         avatarUrl: string | null;
       };
+      takenGuildName: string | null;
       nextGuildName: string | null;
       nextSpawnTime: string | null;
       bossScheduleId: string | null;
@@ -2730,6 +2833,7 @@ async function getBossKilledHistoryUncached(guildId: string, month?: string) {
         displayName: log.actor.displayName,
         avatarUrl: log.actor.avatarUrl,
       },
+      takenGuildName: getDetailString(detail, "takenGuildName"),
       nextGuildName: getDetailString(detail, "nextGuildName") || getDetailString(detail, "nextGuildTurn"),
       nextSpawnTime: getDetailString(detail, "nextSpawnTime"),
       bossScheduleId: getDetailString(detail, "scheduleId"),
@@ -2765,7 +2869,7 @@ export async function getBossDropsForBoss(actorId: string, guildId: string, boss
   }> };
 
   const logs = await prisma.auditLog.findMany({
-    where: { action: { in: BOSS_KILL_AUDIT_ACTIONS } },
+    where: { guildId, action: { in: BOSS_KILL_AUDIT_ACTIONS } },
     orderBy: { createdAt: "desc" },
     take: 300,
   });
@@ -2939,6 +3043,10 @@ export async function logBossKill(
     detail: {
       bossName: schedule.bossName,
       killedAt,
+      // The guild whose turn this schedule was set for is the guild that
+      // took the kill — same convention as the rotation-queue flow's
+      // takenGuildName, so the killed-history ledger can show it either way.
+      takenGuildName: schedule.guildTurn || null,
       nextSpawnTime: nextSpawnTime.toISOString(),
       nextScheduleId: nextSchedule.id,
       checkInSessionId: checkInSession.id,
@@ -3230,9 +3338,13 @@ async function getMemberAttendanceStatsUncached(guildId: string, userId: string)
     }
   }
 
-  // Attendance metrics
+  // Attendance metrics — confirmedSessions must be the same denominator
+  // population as totalSessions (expired only), otherwise a confirmed record
+  // on a still-open session inflates the rate past 100%.
   const totalSessions = sessions.filter(s => new Date(s.expiresAt).getTime() < Date.now()).length;
-  const confirmedSessions = sessions.filter(s => s.records[0]?.status === AttendanceRecordStatus.CONFIRMED).length;
+  const confirmedSessions = sessions.filter(
+    s => new Date(s.expiresAt).getTime() < Date.now() && s.records[0]?.status === AttendanceRecordStatus.CONFIRMED,
+  ).length;
   const presenceRate = totalSessions > 0 ? Math.round((confirmedSessions / totalSessions) * 100) : 100;
   const participationCount = confirmedSessions;
   const totalPoints = Number(ledgerSum._sum.amount || 0);
@@ -3294,6 +3406,161 @@ async function getMemberAttendanceStatsUncached(guildId: string, userId: string)
     totalPoints,
     missedAlerts,
     history
+  };
+}
+
+const CP_GROWTH_WINDOW_DAYS = 30;
+
+// CP has no dedicated history table — "growth" is derived from the
+// MEMBER_CP_UPDATED audit trail that updateCharacterProfile writes on every
+// CP change. Shared by the single-member card and the roster-wide board so
+// both measure growth the same way.
+async function getMemberCpGrowth(guildId: string, targetUserId: string, currentCp: number | null) {
+  const windowStart = new Date(Date.now() - CP_GROWTH_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+  const cpChanges = await prisma.auditLog.findMany({
+    where: {
+      guildId,
+      actorId: targetUserId,
+      action: "MEMBER_CP_UPDATED",
+      createdAt: { gte: windowStart },
+    },
+    orderBy: { createdAt: "asc" },
+    take: 1,
+    select: { detail: true },
+  });
+
+  // The oldest change inside the window carries the CP value from just
+  // before that change — i.e. the member's CP at (or just before) the start
+  // of the window, which is exactly the baseline "growth" is measured from.
+  const earliestDetail = cpChanges[0]?.detail as { oldCp?: number | null } | null | undefined;
+  const baselineCp = typeof earliestDetail?.oldCp === "number" ? earliestDetail.oldCp : null;
+  return baselineCp !== null && currentCp !== null ? currentCp - baselineCp : null;
+}
+
+// Roster-facing stat card for the Members tab (any active guildmate can view
+// any other member's card — same audience that already sees their CP/class/
+// weapon on the roster). Combines the existing self-only attendance stats
+// (now reused for an arbitrary target) with CP growth.
+export async function getMemberStatsCard(guildId: string, targetUserId: string, viewerId: string) {
+  await requireActiveGuildMember(viewerId, guildId);
+
+  const targetMember = await getGuildMemberByUser(targetUserId, guildId);
+  if (!targetMember || !targetMember.isActive) {
+    throw new NotFoundError("That member is not an active member of this guild");
+  }
+
+  const currentCp = targetMember.cp ?? null;
+  const [attendance, cpGrowth] = await Promise.all([
+    getMemberAttendanceStats(guildId, targetUserId),
+    getMemberCpGrowth(guildId, targetUserId, currentCp),
+  ]);
+
+  return {
+    cp: currentCp,
+    cpGrowth,
+    cpGrowthWindowDays: CP_GROWTH_WINDOW_DAYS,
+    presenceRate: attendance.presenceRate,
+    currentStreak: attendance.currentStreak,
+    participationCount: attendance.participationCount,
+    totalPoints: attendance.totalPoints,
+  };
+}
+
+// Roster-wide version of the stat card above, for the Members tab's
+// Statistics view — every active member's numbers in one call instead of
+// one profile card at a time. Each member's attendance stats are still
+// individually Redis-cached (see getMemberAttendanceStats), so this fans out
+// in parallel rather than serializing N DB round trips.
+export async function getGuildMemberStatsBoard(guildId: string, viewerId: string) {
+  await requireActiveGuildMember(viewerId, guildId);
+
+  const members = await prisma.guildMember.findMany({
+    where: { guildId, isActive: true },
+    select: {
+      userId: true,
+      ign: true,
+      cp: true,
+      user: { select: { id: true, displayName: true, avatarUrl: true } },
+    },
+  });
+
+  const rows = await Promise.all(
+    members.map(async (member) => {
+      const currentCp = member.cp ?? null;
+      const [attendance, cpGrowth] = await Promise.all([
+        getMemberAttendanceStats(guildId, member.userId),
+        getMemberCpGrowth(guildId, member.userId, currentCp),
+      ]);
+      return {
+        userId: member.userId,
+        displayName: member.ign || member.user.displayName,
+        avatarUrl: member.user.avatarUrl,
+        cp: currentCp,
+        cpGrowth,
+        cpGrowthWindowDays: CP_GROWTH_WINDOW_DAYS,
+        presenceRate: attendance.presenceRate,
+        currentStreak: attendance.currentStreak,
+        participationCount: attendance.participationCount,
+        totalPoints: attendance.totalPoints,
+      };
+    }),
+  );
+
+  return { members: rows };
+}
+
+const STATS_SUMMARY_WINDOW_DAYS = 30;
+
+// Guild-wide KPI summary for the Members tab's Statistics header cards —
+// current-30-days vs previous-30-days, so the UI can show a real "vs last
+// period" delta instead of a fabricated one. Deliberately only covers the
+// three metrics that have a genuine period-over-period reading (points
+// awarded, check-ins confirmed, attendance rate); CP growth and streak
+// counts are already exactly derivable client-side from
+// getGuildMemberStatsBoard's per-member rows, so there's no need to
+// duplicate that math here.
+export async function getGuildStatsSummary(guildId: string, viewerId: string) {
+  await requireActiveGuildMember(viewerId, guildId);
+
+  const now = new Date();
+  const periodStart = new Date(now.getTime() - STATS_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const prevPeriodStart = new Date(now.getTime() - 2 * STATS_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+  const [activeMemberCount, pointsThis, pointsPrev, confirmedThis, confirmedPrev, sessionsThis, sessionsPrev] =
+    await Promise.all([
+      prisma.guildMember.count({ where: { guildId, isActive: true } }),
+      prisma.ledgerEntry.aggregate({
+        where: { guildId, accountType: "MEMBER", referenceType: "ATTENDANCE", entryType: "CREDIT", createdAt: { gte: periodStart, lt: now } },
+        _sum: { amount: true },
+      }),
+      prisma.ledgerEntry.aggregate({
+        where: { guildId, accountType: "MEMBER", referenceType: "ATTENDANCE", entryType: "CREDIT", createdAt: { gte: prevPeriodStart, lt: periodStart } },
+        _sum: { amount: true },
+      }),
+      prisma.attendanceRecord.count({
+        where: { status: AttendanceRecordStatus.CONFIRMED, session: { guildId }, joinedAt: { gte: periodStart, lt: now } },
+      }),
+      prisma.attendanceRecord.count({
+        where: { status: AttendanceRecordStatus.CONFIRMED, session: { guildId }, joinedAt: { gte: prevPeriodStart, lt: periodStart } },
+      }),
+      prisma.attendanceSession.count({ where: { guildId, expiresAt: { gte: periodStart, lt: now } } }),
+      prisma.attendanceSession.count({ where: { guildId, expiresAt: { gte: prevPeriodStart, lt: periodStart } } }),
+    ]);
+
+  // "What fraction of the guild showed up" — sessionCount × current active
+  // roster size approximates the pool of possible check-ins each period.
+  // Using today's roster size for the prior period too is a known
+  // simplification (we don't track historical roster size), acceptable for
+  // a directional trend indicator.
+  const rateThis = sessionsThis > 0 && activeMemberCount > 0 ? Math.round((confirmedThis / (sessionsThis * activeMemberCount)) * 100) : 0;
+  const ratePrev = sessionsPrev > 0 && activeMemberCount > 0 ? Math.round((confirmedPrev / (sessionsPrev * activeMemberCount)) * 100) : 0;
+
+  return {
+    windowDays: STATS_SUMMARY_WINDOW_DAYS,
+    attendanceRate: { current: rateThis, previous: ratePrev },
+    activityPoints: { current: Number(pointsThis._sum.amount || 0), previous: Number(pointsPrev._sum.amount || 0) },
+    raidParticipation: { current: confirmedThis, previous: confirmedPrev },
   };
 }
 

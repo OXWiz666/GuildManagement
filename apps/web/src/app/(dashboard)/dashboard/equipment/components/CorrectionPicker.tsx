@@ -202,7 +202,7 @@ export default function CorrectionPicker({
                     style={{ borderColor: `${rarityColor(it.rarity)}99` }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={it.iconUrl} alt={it.itemName} className="h-full w-full object-cover" />
+                    <img src={it.iconUrl} alt={it.itemName} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                   </div>
                   <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded bg-black/80 px-1 font-mono text-[8px] text-emerald-300">
                     {Math.round(score * 100)}%

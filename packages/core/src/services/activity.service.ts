@@ -15,6 +15,21 @@ const ACTIVITY_STATUSES = ["UPCOMING", "COMPLETED", "CANCELLED"] as const;
 const ACTIVITY_RESULTS = ["WIN", "LOSS", "DRAW"] as const;
 const OFFICER_ROLES = ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
 
+const REPEAT_INTERVALS = ["WEEKLY", "BIWEEKLY", "MONTHLY"] as const;
+type RepeatInterval = (typeof REPEAT_INTERVALS)[number];
+
+const REPEAT_INTERVAL_DAYS: Record<RepeatInterval, number> = {
+  WEEKLY: 7,
+  BIWEEKLY: 14,
+  MONTHLY: 30,
+};
+
+function validRepeatInterval(value: unknown): RepeatInterval | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (!REPEAT_INTERVALS.includes(value as RepeatInterval)) throw new BadRequestError("Invalid repeat interval");
+  return value as RepeatInterval;
+}
+
 async function validateActivityType(guildId: string, type: unknown): Promise<string> {
   if (typeof type !== "string" || !type.trim()) throw new BadRequestError("Activity type is required");
   const rules = await getEffectiveActivityPointRules(guildId);
@@ -64,6 +79,7 @@ function serializeActivity(
     result: string | null;
     scoreFor: number | null;
     scoreAgainst: number | null;
+    repeatInterval: string | null;
     creatorId: string;
     createdAt: Date;
     attendees: Array<{ userId: string; status: string }>;
@@ -90,6 +106,7 @@ function serializeActivity(
     result: activity.result,
     scoreFor: activity.scoreFor,
     scoreAgainst: activity.scoreAgainst,
+    repeatInterval: activity.repeatInterval,
     creatorId: activity.creatorId,
     creatorName: userMap.get(activity.creatorId)?.displayName ?? "Unknown",
     createdAt: activity.createdAt.toISOString(),
@@ -152,6 +169,7 @@ interface ActivityInput {
   result?: string | null;
   scoreFor?: number | null;
   scoreAgainst?: number | null;
+  repeatInterval?: string | null;
 }
 
 export async function createActivity(
@@ -167,6 +185,7 @@ export async function createActivity(
   const title = validText(payload.title, "Title");
   const scheduled = new Date(payload.scheduledAt ?? "");
   if (Number.isNaN(scheduled.getTime())) throw new BadRequestError("A valid date & time is required");
+  const repeatInterval = validRepeatInterval(payload.repeatInterval);
 
   const activity = await prisma.guildActivity.create({
     data: {
@@ -177,6 +196,7 @@ export async function createActivity(
       opponent: optText(payload.opponent, 120),
       notes: optText(payload.notes, 1000),
       scheduledAt: scheduled,
+      repeatInterval,
       creatorId: actorId,
     },
   });
@@ -242,8 +262,33 @@ export async function updateActivity(
   if (payload.scoreAgainst !== undefined) {
     data["scoreAgainst"] = payload.scoreAgainst === null ? null : Math.max(0, Math.trunc(Number(payload.scoreAgainst) || 0));
   }
+  if (payload.repeatInterval !== undefined) {
+    data["repeatInterval"] = validRepeatInterval(payload.repeatInterval);
+  }
 
-  await prisma.guildActivity.update({ where: { id: activityId }, data });
+  const updated = await prisma.guildActivity.update({ where: { id: activityId }, data });
+
+  // Completing an activity with a repeat interval set queues the next
+  // occurrence, offset by that interval — carries the interval forward so it
+  // keeps repeating, like a recurring alarm, without a background job.
+  const justCompleted = data["status"] === "COMPLETED" && existing.status !== "COMPLETED";
+  if (justCompleted && updated.repeatInterval) {
+    const days = REPEAT_INTERVAL_DAYS[updated.repeatInterval as RepeatInterval];
+    const nextScheduledAt = new Date(updated.scheduledAt.getTime() + days * 24 * 60 * 60 * 1000);
+    await prisma.guildActivity.create({
+      data: {
+        guildId,
+        type: updated.type,
+        title: updated.title,
+        location: updated.location,
+        opponent: updated.opponent,
+        notes: updated.notes,
+        scheduledAt: nextScheduledAt,
+        repeatInterval: updated.repeatInterval,
+        creatorId: actorId,
+      },
+    });
+  }
 
   await writeAuditLog({
     actorId,

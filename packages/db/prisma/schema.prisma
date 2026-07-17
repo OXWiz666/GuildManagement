@@ -153,6 +153,7 @@ model Session {
 
   @@index([userId])
   @@index([lastActive])
+  @@index([userId, lastActive])
   @@map("sessions")
 }
 
@@ -401,6 +402,7 @@ model GuildMember {
 
   @@unique([userId, guildId])
   @@index([guildId])
+  @@index([guildId, isActive])
   @@index([userId])
   @@index([customRoleId])
   @@map("guild_members")
@@ -1068,23 +1070,27 @@ model BossLowRotation {
  * A simple calendar entry with optional opponent, result, and member attendance.
  */
 model GuildActivity {
-  id           String                  @id @default(cuid())
-  guildId      String                  @map("guild_id")
-  guild        Guild                   @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  type         String // GUILD_BOSS | GUILD_WAR | PK_WAR
-  title        String
-  location     String?
-  opponent     String? // enemy / rival guild
-  notes        String?
-  scheduledAt  DateTime                @map("scheduled_at")
-  status       String                  @default("UPCOMING") // UPCOMING | COMPLETED | CANCELLED
-  result       String? // WIN | LOSS | DRAW
-  scoreFor     Int?                    @map("score_for")
-  scoreAgainst Int?                    @map("score_against")
-  creatorId    String                  @map("creator_id")
-  createdAt    DateTime                @default(now()) @map("created_at")
-  updatedAt    DateTime                @updatedAt @map("updated_at")
-  attendees    GuildActivityAttendee[]
+  id             String                  @id @default(cuid())
+  guildId        String                  @map("guild_id")
+  guild          Guild                   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  type           String // GUILD_BOSS | GUILD_WAR | PK_WAR
+  title          String
+  location       String?
+  opponent       String? // enemy / rival guild
+  notes          String?
+  scheduledAt    DateTime                @map("scheduled_at")
+  status         String                  @default("UPCOMING") // UPCOMING | COMPLETED | CANCELLED
+  result         String? // WIN | LOSS | DRAW
+  scoreFor       Int?                    @map("score_for")
+  scoreAgainst   Int?                    @map("score_against")
+  // When set (WEEKLY | BIWEEKLY | MONTHLY), completing this activity
+  // auto-creates the next occurrence offset by the interval, carrying the
+  // same interval forward so it keeps repeating like a recurring alarm.
+  repeatInterval String?                 @map("repeat_interval")
+  creatorId      String                  @map("creator_id")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  attendees      GuildActivityAttendee[]
 
   @@index([guildId, scheduledAt])
   @@index([guildId, type, status])

@@ -1,14 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { dashboardApi, type LowBossRotationResponse } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  dashboardApi,
+  activityApi,
+  guildApi,
+  type LowBossRotationResponse,
+  type FactionGuildData,
+  type BossScheduleData,
+  type GuildActivitiesResponse,
+  type ActivityPointRulesData,
+} from "@/lib/api";
 import { useQuery, queryClient } from "@/lib/query";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getGuildColor } from "../utils/helpers";
+import { getDailyRotationIndex, SHORT_CYCLE_MAX_HOURS } from "@guild/shared";
+import { buildActivityTypeMeta } from "@/lib/activityTypeMeta";
+import WeeklyCalendar from "./WeeklyCalendar";
+import { buildWeeklyChips, type CalendarBossEntry } from "../utils/calendarChips";
 
-type Mode = "WEEKLY" | "MONTHLY";
+type Mode = "WEEKLY" | "MONTHLY" | "DAILY";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const EMPTY: LowBossRotationResponse = {
@@ -25,17 +38,20 @@ const EMPTY: LowBossRotationResponse = {
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
-function monthKeyOf(d: Date) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-}
 function dateKey(year: number, month0: number, day: number) {
   return `${year}-${pad2(month0 + 1)}-${pad2(day)}`;
 }
 
+const EMPTY_SCHEDULES: BossScheduleData[] = [];
+const EMPTY_ACTIVITIES: GuildActivitiesResponse = { canManage: false, viewerRole: "MEMBER", activities: [] };
+const EMPTY_ACTIVITY_RULES: ActivityPointRulesData = { activities: [] };
+
 /**
  * Day-based low-boss rotation: the guild assigned to a day takes ALL flagged
- * "low" bosses that day. Faction leaders flag the low bosses, choose a WEEKLY or
- * MONTHLY cadence, auto-rotate the guild order, and override any day.
+ * "low" bosses that day. Faction leaders flag the low bosses and choose a
+ * cadence — WEEKLY or MONTHLY are hand-filled calendars; DAILY is exclusive
+ * to sub-24h-cooldown bosses (they can spawn more than once a day) and
+ * auto-rotates the guild order with nothing to fill in.
  */
 export default function LowBossSchedule({ guildId }: { guildId: string }) {
   const { addToast } = useToast();
@@ -55,11 +71,41 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
   const bosses = useMemo(() => data?.bosses ?? [], [data]);
   const guildMap = useMemo(() => new Map(guilds.map((g) => [g.id, g])), [guilds]);
 
+  // Same cache keys the rest of Boss Rotation uses — the Monthly view's
+  // WeeklyCalendar overlays boss spawns + guild activities alongside the
+  // guild-of-day assignment, at no extra cost when those tabs already loaded.
+  const { data: overlaySchedulesRaw } = useQuery<BossScheduleData[]>(
+    `boss_schedules:${guildId}`,
+    async () => {
+      const res = await dashboardApi.getBossSchedules(guildId);
+      return res.success && res.data?.schedules ? res.data.schedules : EMPTY_SCHEDULES;
+    },
+    { persist: true, staleTime: 15000, enabled: !!guildId },
+  );
+  const { data: overlayActivitiesRaw } = useQuery<GuildActivitiesResponse>(
+    `guild_activities:${guildId}`,
+    async () => {
+      const res = await activityApi.list(guildId);
+      return res.success && res.data ? res.data : EMPTY_ACTIVITIES;
+    },
+    { persist: true, staleTime: 10000, enabled: !!guildId },
+  );
+  const { data: overlayRulesRaw } = useQuery<ActivityPointRulesData>(
+    `activity_rules:${guildId}`,
+    async () => {
+      const res = await guildApi.getActivityRules(guildId);
+      return res.success && res.data ? res.data.rules : EMPTY_ACTIVITY_RULES;
+    },
+    { persist: true, staleTime: 300000, enabled: !!guildId },
+  );
+  const overlaySchedules = useMemo(() => overlaySchedulesRaw ?? [], [overlaySchedulesRaw]);
+  const overlayActivities = useMemo(() => overlayActivitiesRaw?.activities ?? [], [overlayActivitiesRaw]);
+  const overlayTypeMeta = useMemo(() => buildActivityTypeMeta(overlayRulesRaw?.activities ?? []), [overlayRulesRaw]);
+
   const [mode, setMode] = useState<Mode>("MONTHLY");
   const [lowBossNames, setLowBossNames] = useState<string[]>([]);
   const [weekly, setWeekly] = useState<Record<string, string>>({});
   const [days, setDays] = useState<Record<string, string>>({});
-  const [monthCursor, setMonthCursor] = useState<Date>(() => new Date());
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -69,6 +115,44 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
     setWeekly({ ...data.weekly });
     setDays({ ...data.days });
   }, [data]);
+
+  // Daily is exclusive to bosses that can spawn more than once a day — prune
+  // any longer-cooldown boss left flagged from a prior mode.
+  const dailyEligibleBosses = useMemo(
+    () => bosses.filter((b) => b.cooldownHours != null && b.cooldownHours < SHORT_CYCLE_MAX_HOURS),
+    [bosses],
+  );
+  useEffect(() => {
+    if (mode !== "DAILY") return;
+    const allowed = new Set(dailyEligibleBosses.map((b) => b.bossName));
+    setLowBossNames((prev) => prev.filter((n) => allowed.has(n)));
+  }, [mode, dailyEligibleBosses]);
+
+  const pickerBosses = mode === "DAILY" ? dailyEligibleBosses : bosses;
+
+  // Read-only 7-day preview of the auto-rotating guild order — nothing to
+  // save here, it's a pure function of guild count + date.
+  const dailyPreview = useMemo(() => {
+    const order = guilds.map((g) => g.id);
+    const today = new Date();
+    const out: Array<{ key: string; label: string; guild: FactionGuildData | null }> = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today.getTime() + i * 86400000);
+      const idx = getDailyRotationIndex(order.length, d);
+      const gid = idx >= 0 ? order[idx] : undefined;
+      out.push({
+        key: d.toISOString().slice(0, 10),
+        label:
+          i === 0
+            ? "Today"
+            : i === 1
+              ? "Tomorrow"
+              : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+        guild: gid ? (guildMap.get(gid) ?? null) : null,
+      });
+    }
+    return out;
+  }, [guilds, guildMap]);
 
   const baseline = data ?? EMPTY;
 
@@ -125,8 +209,9 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
       for (let wd = 0; wd < 7; wd++) next[String(wd)] = order[wd % order.length]!;
       setWeekly(next);
     } else {
-      const year = monthCursor.getFullYear();
-      const month0 = monthCursor.getMonth();
+      const now = new Date();
+      const year = now.getFullYear();
+      const month0 = now.getMonth();
       const daysInMonth = new Date(year, month0 + 1, 0).getDate();
       setDays((prev) => {
         const next = { ...prev };
@@ -140,8 +225,9 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
 
   function clearMonth() {
     if (!canManage) return;
-    const year = monthCursor.getFullYear();
-    const month0 = monthCursor.getMonth();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month0 = now.getMonth();
     const daysInMonth = new Date(year, month0 + 1, 0).getDate();
     setDays((prev) => {
       const next = { ...prev };
@@ -186,22 +272,39 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
     }
   }
 
-  // Monthly grid metadata
-  const grid = useMemo(() => {
-    const year = monthCursor.getFullYear();
-    const month0 = monthCursor.getMonth();
-    const firstWeekday = new Date(year, month0, 1).getDay();
-    const daysInMonth = new Date(year, month0 + 1, 0).getDate();
-    const cells: Array<{ day: number; key: string } | null> = [];
-    for (let i = 0; i < firstWeekday; i++) cells.push(null);
-    for (let day = 1; day <= daysInMonth; day++) cells.push({ day, key: dateKey(year, month0, day) });
-    return { year, month0, cells };
-  }, [monthCursor]);
+  // Monthly mode's assignment overlay for WeeklyCalendar — reflects the live
+  // draft (`days`), not the saved baseline, so an officer sees their pending
+  // edits immediately.
+  const monthlyGuildOfDay = useCallback(
+    (dateKeyStr: string) => {
+      const gId = days[dateKeyStr];
+      const g = gId ? guildMap.get(gId) : null;
+      if (!g) return null;
+      const color = getGuildColor(g.name);
+      return { name: g.name, badgeClass: `${color.border} ${color.bg} ${color.text}`, dot: color.dot };
+    },
+    [days, guildMap],
+  );
 
-  const monthLabel = monthCursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const todayKey = monthKeyOf(new Date()) === monthKeyOf(monthCursor)
-    ? dateKey(monthCursor.getFullYear(), monthCursor.getMonth(), new Date().getDate())
-    : "";
+  const bossEntries: CalendarBossEntry[] = useMemo(
+    () =>
+      overlaySchedules
+        .filter((s) => s.status !== "KILLED")
+        .map((s) => ({
+          id: s.id,
+          bossName: s.bossName,
+          bossImageUrl: s.bossImageUrl,
+          location: s.location,
+          spawnTime: s.spawnTime,
+          guildName: s.guildTurnGuildName || s.guildTurn || "Unassigned",
+        })),
+    [overlaySchedules],
+  );
+
+  const monthlyChips = useMemo(
+    () => buildWeeklyChips({ bossEntries, activities: overlayActivities, typeMeta: overlayTypeMeta }),
+    [bossEntries, overlayActivities, overlayTypeMeta],
+  );
 
   if (isLoading) {
     return (
@@ -227,7 +330,7 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="inline-flex items-center bg-[var(--obsidian-elevated)]/60 border border-[var(--metal-border)] rounded-lg p-1 gap-1">
-            {(["MONTHLY", "WEEKLY"] as Mode[]).map((m) => (
+            {(["MONTHLY", "WEEKLY", "DAILY"] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => canManage && setMode(m)}
@@ -238,18 +341,22 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
                     : "text-white/45 hover:text-white/75 border border-transparent"
                 }`}
               >
-                {m === "MONTHLY" ? "Monthly" : "Weekly"}
+                {m === "MONTHLY" ? "Monthly" : m === "WEEKLY" ? "Weekly" : "Daily"}
               </button>
             ))}
           </div>
           <p className="hidden sm:block text-[11px] text-white/40 max-w-[22rem]">
-            The guild assigned to a day takes <span className="text-white/70">all low bosses</span> that day.
+            {mode === "DAILY" ? (
+              <>Guild-of-the-day <span className="text-white/70">auto-rotates every day</span> — for bosses that can spawn more than once in a day.</>
+            ) : (
+              <>The guild assigned to a day takes <span className="text-white/70">all low bosses</span> that day.</>
+            )}
             {!canManage && " Read-only — only faction leaders can edit."}
           </p>
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={autoFill}>Auto-fill</Button>
+            {mode !== "DAILY" && <Button variant="ghost" size="sm" onClick={autoFill}>Auto-fill</Button>}
             <Button variant="ghost" size="sm" onClick={reset} disabled={!dirty || saving}>Reset</Button>
             <Button variant="accent" size="sm" onClick={save} isLoading={saving} disabled={!dirty}>Save</Button>
           </div>
@@ -260,14 +367,18 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
       <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
         <div className="flex items-center justify-between mb-2.5">
           <span className="text-[10px] uppercase tracking-[0.18em] font-bold text-white/40">
-            Low bosses <span className="text-white/25">({lowBossNames.length} selected)</span>
+            {mode === "DAILY" ? "Low bosses (sub-24h cooldown only)" : "Low bosses"}{" "}
+            <span className="text-white/25">({lowBossNames.length} selected)</span>
           </span>
         </div>
         {lowBossNames.length === 0 && (
           <p className="text-[11px] text-amber-300/70 mb-2">Flag which bosses this day rotation covers.</p>
         )}
+        {mode === "DAILY" && pickerBosses.length === 0 && (
+          <p className="text-[11px] text-white/35 mb-2">No registered bosses have a cooldown under 24 hours yet.</p>
+        )}
         <div className="flex flex-wrap gap-1.5">
-          {bosses.map((b) => {
+          {pickerBosses.map((b) => {
             const on = lowBossNames.includes(b.bossName);
             return (
               <button
@@ -287,6 +398,39 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
           })}
         </div>
       </div>
+
+      {/* Daily view — auto-computed, nothing to click or fill in */}
+      {mode === "DAILY" && (
+        <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
+          <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-white/40 mb-3">
+            Auto-rotating order — cycles daily, no manual assignment needed
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+            {dailyPreview.map((entry) => {
+              const color = getGuildColor(entry.guild?.name || "");
+              const isToday = entry.label === "Today";
+              return (
+                <div
+                  key={entry.key}
+                  className={`min-h-[62px] rounded-lg border p-1.5 flex flex-col items-start justify-start text-left ${
+                    entry.guild ? `${color.border} ${color.bg}` : "border-white/[0.06] bg-white/[0.015]"
+                  } ${isToday ? "ring-1 ring-[var(--forge-gold)]/50" : ""}`}
+                >
+                  <span className={`text-[11px] font-bold ${isToday ? "text-[var(--forge-gold-bright)]" : "text-white/55"}`}>
+                    {entry.label}
+                  </span>
+                  {entry.guild && (
+                    <span className="mt-1 flex items-center gap-1 min-w-0 w-full">
+                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
+                      <span className={`text-[10px] font-semibold truncate ${color.text}`}>{entry.guild.name}</span>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Weekly view */}
       {mode === "WEEKLY" && (
@@ -321,66 +465,24 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
         </div>
       )}
 
-      {/* Monthly view */}
+      {/* Monthly view — bigger, single-week WeeklyCalendar instead of a full
+          month grid; still click-to-cycle editable (onGuildStripClick), now
+          also overlaying boss spawns + guild activities for the week. */}
       {mode === "MONTHLY" && (
-        <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-                className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white cursor-pointer"
-                aria-label="Previous month"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 18l-6-6 6-6" /></svg>
-              </button>
-              <span className="text-sm font-semibold text-white min-w-[140px] text-center">{monthLabel}</span>
-              <button
-                onClick={() => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-                className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 hover:text-white cursor-pointer"
-                aria-label="Next month"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 18l6-6-6-6" /></svg>
+        <div className="space-y-2">
+          {canManage && (
+            <div className="flex items-center justify-between gap-3 px-1">
+              <p className="text-[10px] text-white/35">Click a day&apos;s guild strip to cycle its assignment.</p>
+              <button onClick={clearMonth} className="text-[10px] uppercase tracking-wide text-white/40 hover:text-white/70 cursor-pointer">
+                Clear this month
               </button>
             </div>
-            {canManage && (
-              <button onClick={clearMonth} className="text-[10px] uppercase tracking-wide text-white/40 hover:text-white/70 cursor-pointer">Clear month</button>
-            )}
-          </div>
-
-          {canManage && (
-            <p className="text-[10px] text-white/35 mb-2">Click a day to cycle its assigned guild.</p>
           )}
-
-          <div className="grid grid-cols-7 gap-1">
-            {WEEKDAYS.map((w) => (
-              <div key={w} className="text-center text-[10px] font-bold uppercase tracking-wide text-white/30 py-1">{w}</div>
-            ))}
-            {grid.cells.map((cell, i) => {
-              if (!cell) return <div key={`b${i}`} />;
-              const gId = days[cell.key];
-              const g = gId ? guildMap.get(gId) : null;
-              const color = getGuildColor(g?.name || "");
-              const isToday = cell.key === todayKey;
-              return (
-                <button
-                  key={cell.key}
-                  onClick={() => cycleDay(cell.key)}
-                  disabled={!canManage}
-                  className={`min-h-[62px] rounded-lg border p-1.5 flex flex-col items-start justify-start text-left transition-all ${
-                    g ? `${color.border} ${color.bg}` : "border-white/[0.06] bg-white/[0.015]"
-                  } ${canManage ? "cursor-pointer hover:border-[var(--forge-gold)]/30" : "cursor-default"} ${isToday ? "ring-1 ring-[var(--forge-gold)]/50" : ""}`}
-                >
-                  <span className={`text-[11px] font-bold ${isToday ? "text-[var(--forge-gold-bright)]" : "text-white/55"}`}>{cell.day}</span>
-                  {g && (
-                    <span className="mt-1 flex items-center gap-1 min-w-0 w-full">
-                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
-                      <span className={`text-[10px] font-semibold truncate ${color.text}`}>{g.name}</span>
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <WeeklyCalendar
+            chipsByDate={monthlyChips}
+            guildOfDay={monthlyGuildOfDay}
+            onGuildStripClick={canManage ? cycleDay : undefined}
+          />
         </div>
       )}
     </div>

@@ -75,12 +75,10 @@ export function prefetchForRoute(href: string, guildId: string | undefined) {
         const r = await dashboardApi.getBossSchedules(guildId);
         return r.success && r.data?.schedules ? r.data.schedules : [];
       }, 15000);
-      break;
-
-    case "/dashboard/boss-schedule":
+      // Guild Activities is now a tab on this same page, not its own route.
       run(`guild_activities:${guildId}`, async () => {
         const r = await activityApi.list(guildId);
-        return r.success && r.data ? r.data : { activities: [] };
+        return r.success && r.data ? r.data : { canManage: false, viewerRole: "MEMBER", activities: [] };
       }, 10000);
       break;
 
@@ -145,7 +143,6 @@ const ALL_PREFETCHABLE_ROUTES = [
   "/dashboard/faction",
   "/dashboard/equipment",
   "/dashboard/boss-rotation",
-  "/dashboard/boss-schedule",
   "/dashboard/boss-attendance",
   "/dashboard/members",
   "/dashboard/guild-market",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   CORE_SLOTS,
@@ -232,7 +232,7 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
     },
     { staleTime: 15000 },
   );
-  const queue = (data || []) as PriorityQueueEntry[];
+  const queue = useMemo(() => (data || []) as PriorityQueueEntry[], [data]);
   const refresh = () => {
     queryClient.invalidateQueries(key);
     queryClient.invalidateQueries(`market_distributions:${guildId}`);
@@ -240,13 +240,15 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
     queryClient.invalidateQueries(`market_wishlist:${guildId}`);
   };
 
-  const searched = queue.filter((m) => {
-    if (!search.trim()) return true;
-    const s = search.toLowerCase();
-    return m.ign.toLowerCase().includes(s) || m.role.toLowerCase().includes(s) || m.tier.toLowerCase().includes(s);
-  });
-  const tierFiltered = tierFilter === "ALL" ? searched : searched.filter((m) => m.tier === tierFilter);
-  const visibleQueue = sortQueue(tierFiltered, sortBy);
+  const visibleQueue = useMemo(() => {
+    const searched = queue.filter((m) => {
+      if (!search.trim()) return true;
+      const s = search.toLowerCase();
+      return m.ign.toLowerCase().includes(s) || m.role.toLowerCase().includes(s) || m.tier.toLowerCase().includes(s);
+    });
+    const tierFiltered = tierFilter === "ALL" ? searched : searched.filter((m) => m.tier === tierFilter);
+    return sortQueue(tierFiltered, sortBy);
+  }, [queue, search, tierFilter, sortBy]);
 
   return (
     <div className="space-y-4">

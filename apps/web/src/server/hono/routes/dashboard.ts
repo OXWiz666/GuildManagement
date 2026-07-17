@@ -369,6 +369,16 @@ export const dashboard = new Hono<AppEnv>()
   })
 
   // ═══ Boss schedule ══════════════════════════════════════════
+  .post("/boss-schedule/:guildId/commitments/batch", requireGuildRole("MEMBER"), async (c) => {
+    const user = c.get("user");
+    const { scheduleIds } = await readJson<{ scheduleIds: string[] }>(c);
+    const result = await services.bossCommitment.getBossCommitmentsBatch(
+      c.req.param("guildId"),
+      user.userId,
+      Array.isArray(scheduleIds) ? scheduleIds : [],
+    );
+    return ok(c, result);
+  })
   .get("/boss-schedule/:guildId/:scheduleId/commitments", requireGuildRole("MEMBER"), async (c) => {
     const user = c.get("user");
     const result = await services.bossCommitment.getBossCommitments(c.req.param("guildId"), user.userId, c.req.param("scheduleId"));

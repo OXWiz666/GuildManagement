@@ -46,6 +46,46 @@ export async function getBossCommitments(guildId: string, actorId: string, sched
   };
 }
 
+/** Same shape as `getBossCommitments`, for many schedules in one round trip —
+ *  used by the boss-rotation grid, which otherwise fires one request per
+ *  visible card. Skips the per-schedule existence check `getBossCommitments`
+ *  does (a stale/foreign scheduleId just comes back with the zero-state
+ *  instead of a 404, which is fine for a bulk read). */
+export async function getBossCommitmentsBatch(
+  guildId: string,
+  actorId: string,
+  scheduleIds: string[],
+): Promise<Record<string, { count: number; committed: boolean; members: Array<{ id: string; ign: string | null; role: string; rankName: string | null }> }>> {
+  await requireActiveMember(guildId, actorId);
+
+  const result: Record<string, { count: number; committed: boolean; members: Array<{ id: string; ign: string | null; role: string; rankName: string | null }> }> = {};
+  for (const id of scheduleIds) {
+    result[id] = { count: 0, committed: false, members: [] };
+  }
+  if (scheduleIds.length === 0) return result;
+
+  const rows = await prisma.bossCommitment.findMany({
+    where: { guildId, scheduleId: { in: scheduleIds } },
+    include: { member: { select: MEMBER_SELECT } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  for (const row of rows) {
+    const bucket = result[row.scheduleId];
+    if (!bucket) continue;
+    bucket.count += 1;
+    if (row.member.userId === actorId) bucket.committed = true;
+    bucket.members.push({
+      id: row.member.id,
+      ign: row.member.ign,
+      role: row.member.role,
+      rankName: row.member.rankName,
+    });
+  }
+
+  return result;
+}
+
 /** Toggle the caller's own commitment for a specific boss spawn. Idempotent —
  *  committing twice is a no-op, uncommitting when not committed is a no-op. */
 export async function setBossCommitment(

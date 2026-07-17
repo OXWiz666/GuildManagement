@@ -1,5 +1,7 @@
-import { prisma } from "@guild/db";
+import { prisma, Prisma } from "@guild/db";
 import { getGuildMemberByUser } from "./guild.service";
+
+type DbClient = typeof prisma | Prisma.TransactionClient;
 import { writeAuditLog } from "./audit.service";
 import { createNotifications } from "./notification.service";
 import { broadcastToGuild } from "../lib/socket";
@@ -426,23 +428,34 @@ export async function createDistribution(
     _sum: { amount: true },
   });
 
-  const distribution = await prisma.itemDistribution.create({
-    data: {
-      guildId,
-      memberId: target.id,
-      formType: payload.formType,
-      rankTier: tier,
-      ignSnapshot: target.ign || target.user.displayName,
-      classSnapshot: target.class,
-      cpSnapshot: target.cp,
-      pointsSnapshot: dkpForMember(dkpRows, target.userId),
-      prioritySeq: target.marketPrioritySeq,
-      items,
-      note: payload.note?.trim() || null,
-      distributedById: actorId,
-      overridden,
-      overrideReason: overridden ? payload.overrideReason!.trim() : null,
-    },
+  // The distribution row and the wishlist auto-match flip must land together —
+  // otherwise a failure between the two leaves the wishlist showing an item
+  // as pending that was already handed out (or vice versa on retry).
+  const { distribution, wishlistFulfillment } = await prisma.$transaction(async (tx) => {
+    const created = await tx.itemDistribution.create({
+      data: {
+        guildId,
+        memberId: target.id,
+        formType: payload.formType,
+        rankTier: tier,
+        ignSnapshot: target.ign || target.user.displayName,
+        classSnapshot: target.class,
+        cpSnapshot: target.cp,
+        pointsSnapshot: dkpForMember(dkpRows, target.userId),
+        prioritySeq: target.marketPrioritySeq,
+        items,
+        note: payload.note?.trim() || null,
+        distributedById: actorId,
+        overridden,
+        overrideReason: overridden ? payload.overrideReason!.trim() : null,
+      },
+    });
+
+    // Auto-match: flip any of the member's wished items that this distribution
+    // covers to DISTRIBUTED so the wishlist master list reflects reality.
+    const wishlistFulfillment = await markWishlistFulfilled(guildId, target, items, actorId, tx);
+
+    return { distribution: created, wishlistFulfillment };
   });
 
   await writeAuditLog({
@@ -463,10 +476,18 @@ export async function createDistribution(
       detail: { ign: distribution.ignSnapshot, tier, breaches, reason: payload.overrideReason },
     });
   }
-
-  // Auto-match: flip any of the member's wished items that this distribution covers
-  // to DISTRIBUTED so the wishlist master list reflects reality.
-  await markWishlistFulfilled(guildId, target, items, actorId);
+  if (wishlistFulfillment) {
+    await writeAuditLog({
+      actorId,
+      guildId,
+      action: AUDIT_ACTIONS.WISHLIST_ITEM_DISTRIBUTED,
+      target: "GuildMember",
+      targetId: target.id,
+      detail: { ign: target.ign, items: wishlistFulfillment.fulfilled },
+    });
+    await redisCache.del(cacheKeys.marketWishlistMaster(guildId));
+    void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: target.id });
+  }
 
   await redisCache.delMany([
     cacheKeys.marketDistributions(guildId),
@@ -478,18 +499,22 @@ export async function createDistribution(
 
 /**
  * Flip a member's pending wishlist entries to DISTRIBUTED when a distribution
- * (item map) covers them. Writes an audit entry listing the fulfilled items.
+ * (item map) covers them. Only performs the write (via `db`, so it can share
+ * a transaction with the caller's own write) — the caller is responsible for
+ * the audit log / cache invalidation / broadcast side effects once the
+ * transaction has actually committed.
  */
 async function markWishlistFulfilled(
   guildId: string,
   target: { id: string; marketWishlist: unknown; role: string; cp: number | null; ign?: string | null },
   distItems: Record<string, number | boolean | string>,
   actorId: string,
-) {
+  db: DbClient = prisma,
+): Promise<{ fulfilled: string[] } | null> {
   const [rules, mountIds] = await Promise.all([getEffectiveMarketRules(guildId), activeMountIds(guildId)]);
   const tier = resolveDistributionTier(target, rules);
   const wishlist = normalizeWishlist(target.marketWishlist, rules, tier, mountIds);
-  if (wishlist.length === 0) return;
+  if (wishlist.length === 0) return null;
 
   const now = new Date().toISOString();
   const fulfilled: string[] = [];
@@ -500,22 +525,13 @@ async function markWishlistFulfilled(
     }
     return item;
   });
-  if (fulfilled.length === 0) return;
+  if (fulfilled.length === 0) return null;
 
-  await prisma.guildMember.update({
+  await db.guildMember.update({
     where: { id: target.id },
     data: { marketWishlist: next as object },
   });
-  await writeAuditLog({
-    actorId,
-    guildId,
-    action: AUDIT_ACTIONS.WISHLIST_ITEM_DISTRIBUTED,
-    target: "GuildMember",
-    targetId: target.id,
-    detail: { ign: target.ign, items: fulfilled },
-  });
-  await redisCache.del(cacheKeys.marketWishlistMaster(guildId));
-  void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: target.id });
+  return { fulfilled };
 }
 
 export async function getDistributions(

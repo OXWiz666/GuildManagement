@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, memo } from "react";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import {
   dashboardApi,
@@ -57,9 +58,6 @@ export default function BaseGuildDashboard({
 
   const activeGuild = user?.guilds?.[0];
 
-  // ─── Ticker State ────────────────
-  const [currentTime, setCurrentTime] = useState(Date.now());
-
   // ─── "Taken" shortcut modal state (mirrors Boss Rotation's confirm-taken flow) ───
   const [takenTarget, setTakenTarget] = useState<BossScheduleData | null>(null);
   const [takenGuildId, setTakenGuildId] = useState("");
@@ -68,26 +66,14 @@ export default function BaseGuildDashboard({
   const [takenDrops, setTakenDrops] = useState<SelectedDrop[]>([]);
   const [showTakenDropsPicker, setShowTakenDropsPicker] = useState(false);
 
-  // ─── Next-spawn carousel state ───
-  const [slideIndex, setSlideIndex] = useState(0);
-  const slideDirRef = useRef<1 | -1>(1);
-  const [carouselPaused, setCarouselPaused] = useState(false);
-  // Card-swipe drag state (pointer/touch).
-  const [dragOffset, setDragOffset] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const isDraggingRef = useRef(false);
-  const dragStartXRef = useRef(0);
-  const trackWrapRef = useRef<HTMLDivElement>(null);
-
   // ─── Upcoming list auto-scroll ───
   const upcomingScrollRef = useRef<HTMLDivElement>(null);
   const [upcomingPaused, setUpcomingPaused] = useState(false);
 
-  // Real-time ticker
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // The 1s countdown ticker used to live here, re-rendering this entire
+  // dashboard (Welcome header, Your Guilds, Upcoming list, etc.) every
+  // second for the sake of two small ticking widgets. Both now own their
+  // tick internally — see BossRow and NextBossSpawnCard below.
 
   // ─── Queries (SWR Cache + Local Storage Persistence) ───
 
@@ -284,39 +270,6 @@ export default function BaseGuildDashboard({
     }
   }
 
-  // Real-time respawn timer for a specific boss. An overdue spawn rolls forward
-  // to the boss's next real respawn instead of freezing on "LIVE" forever.
-  function getTickingCountdown(boss: BossScheduleData) {
-    const t = getRealtimeBossTimer(boss.bossName, boss.spawnTime, currentTime, { status: boss.status });
-    return { expired: t.live, live: t.live, warning: t.warning, text: t.text, liveText: t.liveElapsedText };
-  }
-
-  // Keep the carousel index valid whenever the slide set changes.
-  useEffect(() => {
-    setSlideIndex((prev) => (prev > dateSlides.length - 1 ? 0 : prev));
-  }, [dateSlides.length]);
-
-  // Auto-advance the carousel with a back-and-forth (ping-pong) motion.
-  useEffect(() => {
-    if (carouselPaused || dateSlides.length <= 1) return;
-    const id = setInterval(() => {
-      setSlideIndex((prev) => {
-        let dir = slideDirRef.current;
-        let next = prev + dir;
-        if (next > dateSlides.length - 1) {
-          next = dateSlides.length - 2;
-          dir = -1;
-        } else if (next < 0) {
-          next = 1;
-          dir = 1;
-        }
-        slideDirRef.current = dir;
-        return next;
-      });
-    }, 4200);
-    return () => clearInterval(id);
-  }, [carouselPaused, dateSlides.length]);
-
   // Gentle auto-scroll of the Upcoming list, reversing at each end; pauses on hover.
   useEffect(() => {
     const el = upcomingScrollRef.current;
@@ -332,45 +285,8 @@ export default function BaseGuildDashboard({
     return () => clearInterval(id);
   }, [upcomingPaused, upcomingList.length]);
 
-  function goToSlide(target: number, dir: 1 | -1) {
-    if (dateSlides.length === 0) return;
-    const clamped = Math.max(0, Math.min(dateSlides.length - 1, target));
-    slideDirRef.current = dir;
-    setSlideIndex(clamped);
-  }
-
-  // ─── Card-swipe pointer handlers ───
-  function onCarouselPointerDown(e: React.PointerEvent) {
-    if (dateSlides.length <= 1) return;
-    isDraggingRef.current = true;
-    setIsDragging(true);
-    setCarouselPaused(true);
-    dragStartXRef.current = e.clientX;
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  }
-  function onCarouselPointerMove(e: React.PointerEvent) {
-    if (!isDraggingRef.current) return;
-    setDragOffset(e.clientX - dragStartXRef.current);
-  }
-  function onCarouselPointerUp() {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    setIsDragging(false);
-    const width = trackWrapRef.current?.clientWidth || 1;
-    const threshold = Math.min(80, width * 0.22);
-    const off = dragOffset;
-    setDragOffset(0);
-    if (off <= -threshold) goToSlide(slideIndex + 1, 1);
-    else if (off >= threshold) goToSlide(slideIndex - 1, -1);
-    setCarouselPaused(false);
-  }
-
   if (!user || !activeGuild) return null;
 
-  // Carousel: only the next spawn per date; fall back to the earliest spawn.
-  const slideBoss = dateSlides[slideIndex] || dateSlides[0] || null;
-  const nextBoss = slideBoss;
-  const nextBossCountdown = nextBoss ? getTickingCountdown(nextBoss) : null;
   const canManageBossRotations =
     activeGuild.role === "GUILD_LEADER" ||
     activeGuild.role === "FACTION_LEADER" ||
@@ -558,7 +474,6 @@ export default function BaseGuildDashboard({
                           <BossRow
                             key={boss.id}
                             boss={boss}
-                            tick={getTickingCountdown(boss)}
                             canLogKill={canManageBossRotations}
                             onTaken={() => openTakenModal(boss)}
                           />
@@ -632,204 +547,14 @@ export default function BaseGuildDashboard({
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Next Boss Spawn — auto-cycling carousel (one boss per date) */}
-            {nextBoss && nextBossCountdown && (
-              <Reveal from="right">
-                <section
-                  className={`relative card-obsidian rounded-2xl p-5 overflow-hidden transition-all duration-500 ${
-                    nextBossCountdown.warning || nextBossCountdown.expired
-                      ? "border-[var(--forge-gold)]/25"
-                      : ""
-                  }`}
-                  style={
-                    nextBossCountdown.warning || nextBossCountdown.expired
-                      ? { animation: "glow-pulse 3s ease-in-out infinite" }
-                      : undefined
-                  }
-                  onMouseEnter={() => setCarouselPaused(true)}
-                  onMouseLeave={() => setCarouselPaused(false)}
-                >
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.22em] font-medium">
-                      Next boss spawn
-                    </span>
-                    <span className="text-[9px] text-white/25 uppercase tracking-[0.14em]">· your guild</span>
-                    <span className="h-px flex-1 bg-gradient-to-r from-[var(--forge-gold)]/20 to-transparent" />
-                    {dateSlides.length > 1 && (
-                      <span className="text-[10px] font-mono text-white/35 tabular-nums">
-                        {slideIndex + 1}/{dateSlides.length}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Swipeable card track — each slide translates in/out like a card swipe */}
-                  <div
-                    ref={trackWrapRef}
-                    className="overflow-hidden touch-pan-y select-none"
-                    style={{ cursor: dateSlides.length > 1 ? (isDragging ? "grabbing" : "grab") : "default" }}
-                    onPointerDown={onCarouselPointerDown}
-                    onPointerMove={onCarouselPointerMove}
-                    onPointerUp={onCarouselPointerUp}
-                    onPointerCancel={onCarouselPointerUp}
-                  >
-                    <div
-                      className="flex items-stretch"
-                      style={{
-                        transform: `translateX(calc(${-slideIndex * 100}% + ${dragOffset}px))`,
-                        transition: isDragging ? "none" : "transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)",
-                      }}
-                    >
-                      {dateSlides.map((slide) => {
-                        const cd = getTickingCountdown(slide);
-                        return (
-                          <div key={slide.id} className="w-full shrink-0 min-h-[196px]">
-                            {/* Date badge */}
-                            <div className="mb-3">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--forge-glow)] border border-[var(--metal-border)] text-[10px] font-semibold text-[var(--forge-gold-bright)] uppercase tracking-[0.14em]">
-                                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                  <line x1="16" y1="2" x2="16" y2="6" />
-                                  <line x1="8" y1="2" x2="8" y2="6" />
-                                  <line x1="3" y1="10" x2="21" y2="10" />
-                                </svg>
-                                {new Date(slide.spawnTime).toLocaleDateString("en-US", {
-                                  weekday: "short",
-                                  month: "short",
-                                  day: "numeric",
-                                })}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                              <div className="h-16 w-16 rounded-xl bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_12px_rgba(212,168,83,0.08)]">
-                                {slide.bossImageUrl ? (
-                                  <img
-                                    src={slide.bossImageUrl}
-                                    alt={slide.bossName}
-                                    draggable={false}
-                                    className="h-full w-full object-cover pointer-events-none"
-                                  />
-                                ) : (
-                                  <svg className="h-7 w-7 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                    <path d="M2 17l10 5 10-5" />
-                                    <path d="M2 12l10 5 10-5" />
-                                  </svg>
-                                )}
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[15px] font-semibold text-white truncate">
-                                  {slide.bossName}
-                                </p>
-                                <p className="text-[11px] text-white/40 truncate mt-0.5">
-                                  {slide.location}
-                                </p>
-                                {(slide.guildTurnGuildName || slide.guildTurn) && (
-                                  <p className="text-[10px] text-[var(--forge-gold-dim)] mt-1 truncate">
-                                    Turn: {slide.guildTurnGuildName || slide.guildTurn}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Countdown */}
-                            <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                              <p
-                                className={`text-center text-[28px] font-mono font-bold tracking-tight tabular-nums ${
-                                  cd.live
-                                    ? "text-red-400"
-                                    : cd.warning
-                                      ? "text-[var(--forge-gold-bright)]"
-                                      : "text-[var(--forge-gold)]"
-                                }`}
-                              >
-                                {cd.live ? cd.liveText : cd.text}
-                              </p>
-                              <p className="text-center text-[10px] text-white/30 uppercase tracking-[0.2em] mt-1">
-                                {cd.live ? "Live · up time" : "Until spawn"}
-                              </p>
-                            </div>
-
-                            {/* Status badge */}
-                            <div className="mt-3 flex justify-center">
-                              <BossStatusBadge
-                                expired={cd.live}
-                                warning={cd.warning}
-                                status={slide.status}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Taken — mark the boss taken by a guild straight from the widget */}
-                  {canManageBossRotations && (
-                    <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                      <Magnetic strength={4}>
-                        <Button
-                          variant="accent"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => openTakenModal(nextBoss)}
-                        >
-                          <span className="inline-flex items-center gap-1.5">
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                              <path d="M22 4L12 14.01l-3-3" />
-                            </svg>
-                            Taken
-                          </span>
-                        </Button>
-                      </Magnetic>
-                    </div>
-                  )}
-
-                  {/* Carousel controls */}
-                  {dateSlides.length > 1 && (
-                    <div className="mt-4 flex items-center justify-between">
-                      <button
-                        type="button"
-                        aria-label="Previous spawn"
-                        onClick={() => goToSlide(slideIndex - 1, -1)}
-                        className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
-                        disabled={slideIndex <= 0}
-                      >
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
-                      </button>
-
-                      <div className="flex items-center gap-1.5">
-                        {dateSlides.map((slide, i) => (
-                          <button
-                            key={slide.id}
-                            type="button"
-                            aria-label={`Go to spawn ${i + 1}`}
-                            onClick={() => goToSlide(i, i > slideIndex ? 1 : -1)}
-                            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                              i === slideIndex
-                                ? "w-5 bg-[var(--forge-gold)]"
-                                : "w-1.5 bg-white/20 hover:bg-white/40"
-                            }`}
-                          />
-                        ))}
-                      </div>
-
-                      <button
-                        type="button"
-                        aria-label="Next spawn"
-                        onClick={() => goToSlide(slideIndex + 1, 1)}
-                        className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
-                        disabled={slideIndex >= dateSlides.length - 1}
-                      >
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
-                      </button>
-                    </div>
-                  )}
-                </section>
-              </Reveal>
-            )}
+            {/* Next Boss Spawn — auto-cycling carousel (one boss per date).
+                Owns its own tick/slide/drag state entirely internally so it's
+                the only thing re-rendering every second, not this whole page. */}
+            <NextBossSpawnCard
+              dateSlides={dateSlides}
+              canManageBossRotations={canManageBossRotations}
+              onTaken={openTakenModal}
+            />
 
             {/* Logs priority sequence — member wishlist ranking carousel */}
             <WishlistPriorityCarousel guildId={activeGuild.guildId} />
@@ -1191,18 +916,329 @@ function StatCard({
   );
 }
 
+// ─── Next Boss Spawn Card ───
+// Owns the countdown tick + carousel/drag state entirely on its own. This
+// used to live in BaseGuildDashboard itself, whose 1s ticker re-rendered the
+// whole dashboard (Welcome header, Your Guilds, Upcoming list, etc.) just to
+// update this one card's countdown text.
+const NextBossSpawnCard = memo(function NextBossSpawnCard({
+  dateSlides,
+  canManageBossRotations,
+  onTaken,
+}: {
+  dateSlides: BossScheduleData[];
+  canManageBossRotations: boolean;
+  onTaken: (boss: BossScheduleData) => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const [slideIndex, setSlideIndex] = useState(0);
+  const slideDirRef = useRef<1 | -1>(1);
+  const [carouselPaused, setCarouselPaused] = useState(false);
+  // Card-swipe drag state (pointer/touch).
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const trackWrapRef = useRef<HTMLDivElement>(null);
+
+  // Keep the carousel index valid whenever the slide set changes.
+  useEffect(() => {
+    setSlideIndex((prev) => (prev > dateSlides.length - 1 ? 0 : prev));
+  }, [dateSlides.length]);
+
+  // Auto-advance the carousel with a back-and-forth (ping-pong) motion.
+  useEffect(() => {
+    if (carouselPaused || dateSlides.length <= 1) return;
+    const id = setInterval(() => {
+      setSlideIndex((prev) => {
+        let dir = slideDirRef.current;
+        let next = prev + dir;
+        if (next > dateSlides.length - 1) {
+          next = dateSlides.length - 2;
+          dir = -1;
+        } else if (next < 0) {
+          next = 1;
+          dir = 1;
+        }
+        slideDirRef.current = dir;
+        return next;
+      });
+    }, 4200);
+    return () => clearInterval(id);
+  }, [carouselPaused, dateSlides.length]);
+
+  function goToSlide(target: number, dir: 1 | -1) {
+    if (dateSlides.length === 0) return;
+    const clamped = Math.max(0, Math.min(dateSlides.length - 1, target));
+    slideDirRef.current = dir;
+    setSlideIndex(clamped);
+  }
+
+  // ─── Card-swipe pointer handlers ───
+  function onCarouselPointerDown(e: React.PointerEvent) {
+    if (dateSlides.length <= 1) return;
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    setCarouselPaused(true);
+    dragStartXRef.current = e.clientX;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function onCarouselPointerMove(e: React.PointerEvent) {
+    if (!isDraggingRef.current) return;
+    setDragOffset(e.clientX - dragStartXRef.current);
+  }
+  function onCarouselPointerUp() {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    const width = trackWrapRef.current?.clientWidth || 1;
+    const threshold = Math.min(80, width * 0.22);
+    const off = dragOffset;
+    setDragOffset(0);
+    if (off <= -threshold) goToSlide(slideIndex + 1, 1);
+    else if (off >= threshold) goToSlide(slideIndex - 1, -1);
+    setCarouselPaused(false);
+  }
+
+  // Real-time respawn timer for a specific boss. An overdue spawn rolls
+  // forward to the boss's next real respawn instead of freezing on "LIVE".
+  function tickFor(boss: BossScheduleData) {
+    const t = getRealtimeBossTimer(boss.bossName, boss.spawnTime, now, { status: boss.status });
+    return { expired: t.live, live: t.live, warning: t.warning, text: t.text, liveText: t.liveElapsedText };
+  }
+
+  const nextBoss = dateSlides[slideIndex] || dateSlides[0] || null;
+  if (!nextBoss) return null;
+  const nextBossCountdown = tickFor(nextBoss);
+
+  return (
+    <Reveal from="right">
+      <section
+        className={`relative card-obsidian rounded-2xl p-5 overflow-hidden transition-all duration-500 ${
+          nextBossCountdown.warning || nextBossCountdown.expired
+            ? "border-[var(--forge-gold)]/25"
+            : ""
+        }`}
+        style={
+          nextBossCountdown.warning || nextBossCountdown.expired
+            ? { animation: "glow-pulse 3s ease-in-out infinite" }
+            : undefined
+        }
+        onMouseEnter={() => setCarouselPaused(true)}
+        onMouseLeave={() => setCarouselPaused(false)}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[10px] text-[var(--forge-gold-dim)] uppercase tracking-[0.22em] font-medium">
+            Next boss spawn
+          </span>
+          <span className="text-[9px] text-white/25 uppercase tracking-[0.14em]">· your guild</span>
+          <span className="h-px flex-1 bg-gradient-to-r from-[var(--forge-gold)]/20 to-transparent" />
+          {dateSlides.length > 1 && (
+            <span className="text-[10px] font-mono text-white/35 tabular-nums">
+              {slideIndex + 1}/{dateSlides.length}
+            </span>
+          )}
+        </div>
+
+        {/* Swipeable card track — each slide translates in/out like a card swipe */}
+        <div
+          ref={trackWrapRef}
+          className="overflow-hidden touch-pan-y select-none"
+          style={{ cursor: dateSlides.length > 1 ? (isDragging ? "grabbing" : "grab") : "default" }}
+          onPointerDown={onCarouselPointerDown}
+          onPointerMove={onCarouselPointerMove}
+          onPointerUp={onCarouselPointerUp}
+          onPointerCancel={onCarouselPointerUp}
+        >
+          <div
+            className="flex items-stretch"
+            style={{
+              transform: `translateX(calc(${-slideIndex * 100}% + ${dragOffset}px))`,
+              transition: isDragging ? "none" : "transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          >
+            {dateSlides.map((slide) => {
+              const cd = tickFor(slide);
+              return (
+                <div key={slide.id} className="w-full shrink-0 min-h-[196px]">
+                  {/* Date badge */}
+                  <div className="mb-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--forge-glow)] border border-[var(--metal-border)] text-[10px] font-semibold text-[var(--forge-gold-bright)] uppercase tracking-[0.14em]">
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                      {new Date(slide.spawnTime).toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="relative h-16 w-16 rounded-xl bg-[var(--obsidian-deep)] border border-[var(--metal-border)] flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_12px_rgba(212,168,83,0.08)]">
+                      {slide.bossImageUrl ? (
+                        <Image
+                          src={slide.bossImageUrl}
+                          alt={slide.bossName}
+                          fill
+                          sizes="64px"
+                          draggable={false}
+                          className="object-cover pointer-events-none"
+                        />
+                      ) : (
+                        <svg className="h-7 w-7 text-[var(--forge-gold-dim)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                          <path d="M2 17l10 5 10-5" />
+                          <path d="M2 12l10 5 10-5" />
+                        </svg>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-semibold text-white truncate">
+                        {slide.bossName}
+                      </p>
+                      <p className="text-[11px] text-white/40 truncate mt-0.5">
+                        {slide.location}
+                      </p>
+                      {(slide.guildTurnGuildName || slide.guildTurn) && (
+                        <p className="text-[10px] text-[var(--forge-gold-dim)] mt-1 truncate">
+                          Turn: {slide.guildTurnGuildName || slide.guildTurn}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Countdown */}
+                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                    <p
+                      className={`text-center text-[28px] font-mono font-bold tracking-tight tabular-nums ${
+                        cd.live
+                          ? "text-red-400"
+                          : cd.warning
+                            ? "text-[var(--forge-gold-bright)]"
+                            : "text-[var(--forge-gold)]"
+                      }`}
+                    >
+                      {cd.live ? cd.liveText : cd.text}
+                    </p>
+                    <p className="text-center text-[10px] text-white/30 uppercase tracking-[0.2em] mt-1">
+                      {cd.live ? "Live · up time" : "Until spawn"}
+                    </p>
+                  </div>
+
+                  {/* Status badge */}
+                  <div className="mt-3 flex justify-center">
+                    <BossStatusBadge
+                      expired={cd.live}
+                      warning={cd.warning}
+                      status={slide.status}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Taken — mark the boss taken by a guild straight from the widget */}
+        {canManageBossRotations && (
+          <div className="mt-4 pt-4 border-t border-white/[0.06]">
+            <Magnetic strength={4}>
+              <Button
+                variant="accent"
+                size="sm"
+                className="w-full"
+                onClick={() => onTaken(nextBoss)}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                    <path d="M22 4L12 14.01l-3-3" />
+                  </svg>
+                  Taken
+                </span>
+              </Button>
+            </Magnetic>
+          </div>
+        )}
+
+        {/* Carousel controls */}
+        {dateSlides.length > 1 && (
+          <div className="mt-4 flex items-center justify-between">
+            <button
+              type="button"
+              aria-label="Previous spawn"
+              onClick={() => goToSlide(slideIndex - 1, -1)}
+              className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
+              disabled={slideIndex <= 0}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+            </button>
+
+            <div className="flex items-center gap-1.5">
+              {dateSlides.map((slide, i) => (
+                <button
+                  key={slide.id}
+                  type="button"
+                  aria-label={`Go to spawn ${i + 1}`}
+                  onClick={() => goToSlide(i, i > slideIndex ? 1 : -1)}
+                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                    i === slideIndex
+                      ? "w-5 bg-[var(--forge-gold)]"
+                      : "w-1.5 bg-white/20 hover:bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="button"
+              aria-label="Next spawn"
+              onClick={() => goToSlide(slideIndex + 1, 1)}
+              className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
+              disabled={slideIndex >= dateSlides.length - 1}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          </div>
+        )}
+      </section>
+    </Reveal>
+  );
+});
+
 // ─── Boss Row Component ───
-function BossRow({
+const BossRow = memo(function BossRow({
   boss,
-  tick,
   canLogKill,
   onTaken,
 }: {
   boss: BossScheduleData;
-  tick: { expired: boolean; live: boolean; text: string; warning: boolean; liveText: string };
   canLogKill: boolean;
   onTaken: () => void;
 }) {
+  // Ticks on its own so opening a modal, typing a search, or any other
+  // unrelated state change up in BaseGuildDashboard doesn't force every row
+  // in the Upcoming list to re-render along with it.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const t = getRealtimeBossTimer(boss.bossName, boss.spawnTime, now, { status: boss.status });
+  const tick = { expired: t.live, live: t.live, warning: t.warning, text: t.text, liveText: t.liveElapsedText };
+
   const borderTone = tick.expired
     ? "border-red-500/20 bg-red-500/[0.04]"
     : tick.warning
@@ -1292,7 +1328,7 @@ function BossRow({
       </div>
     </div>
   );
-}
+});
 
 // ─── Skeletons ───
 function StatCardSkeleton() {

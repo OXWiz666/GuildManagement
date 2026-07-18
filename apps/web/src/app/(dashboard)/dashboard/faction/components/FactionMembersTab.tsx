@@ -41,6 +41,12 @@ function guildColor(guildId: string) {
 }
 
 const ROLE_ORDER = ["FACTION_LEADER", "ADMIN", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"];
+const MEMBER_PAGE_SIZE = 10;
+const GUILD_PAGE_SIZE = 6;
+
+function pageCount(total: number, size: number) {
+  return Math.max(1, Math.ceil(total / size));
+}
 
 /**
  * Faction Members — the flat, cross-guild roster. Only Faction Leaders/Admins
@@ -53,6 +59,8 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
   const [guildFilter, setGuildFilter] = useState<string>("ALL");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [removingGuildId, setRemovingGuildId] = useState<string | null>(null);
+  const [memberPage, setMemberPage] = useState(1);
+  const [guildPage, setGuildPage] = useState(1);
 
   const { data: membersRaw, isLoading } = useQuery<FactionMemberData[]>(
     canManage ? "faction_members" : "faction_members_locked",
@@ -95,6 +103,13 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
       );
     });
   }, [members, search, guildFilter, roleFilter]);
+
+  const memberPages = pageCount(filtered.length, MEMBER_PAGE_SIZE);
+  const guildPages = pageCount(guilds.length, GUILD_PAGE_SIZE);
+  const safeMemberPage = Math.min(memberPage, memberPages);
+  const safeGuildPage = Math.min(guildPage, guildPages);
+  const pagedMembers = filtered.slice((safeMemberPage - 1) * MEMBER_PAGE_SIZE, safeMemberPage * MEMBER_PAGE_SIZE);
+  const pagedGuilds = guilds.slice((safeGuildPage - 1) * GUILD_PAGE_SIZE, safeGuildPage * GUILD_PAGE_SIZE);
 
   async function removeGuild(guildId: string, name: string) {
     if (!confirm(`Remove ${name} from the faction? This clears it from every boss rotation queue.`)) return;
@@ -141,7 +156,7 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setGuildFilter("ALL")}
+            onClick={() => { setGuildFilter("ALL"); setMemberPage(1); }}
             className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer ${
               guildFilter === "ALL"
                 ? "border-white/25 bg-white/[0.08] text-white"
@@ -157,7 +172,7 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
               <button
                 key={guild.id}
                 type="button"
-                onClick={() => setGuildFilter(active ? "ALL" : guild.id)}
+                onClick={() => { setGuildFilter(active ? "ALL" : guild.id); setMemberPage(1); }}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer ${
                   active ? `${color.border} ${color.bg} ${color.text}` : "border-white/[0.08] bg-white/[0.02] text-white/45 hover:text-white/75"
                 }`}
@@ -180,14 +195,14 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
           </svg>
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setMemberPage(1); }}
             placeholder="Search by IGN, name, or guild…"
             className="w-full h-10 pl-10 pr-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500/35 transition-colors"
           />
         </div>
         <select
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
+          onChange={(e) => { setRoleFilter(e.target.value); setMemberPage(1); }}
           className="h-10 px-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-amber-500/35 cursor-pointer"
         >
           <option className="bg-[#101014]" value="ALL">All roles</option>
@@ -200,7 +215,7 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
         {hasActiveFilters && (
           <button
             type="button"
-            onClick={() => { setSearch(""); setGuildFilter("ALL"); setRoleFilter("ALL"); }}
+            onClick={() => { setSearch(""); setGuildFilter("ALL"); setRoleFilter("ALL"); setMemberPage(1); }}
             className="h-10 px-3.5 rounded-xl border border-white/[0.08] text-[12px] font-semibold text-white/50 hover:text-white/85 hover:border-white/20 transition-colors cursor-pointer shrink-0"
           >
             Clear filters
@@ -220,7 +235,7 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((member) => {
+          {pagedMembers.map((member) => {
             const color = member.guild?.id ? guildColor(member.guild.id) : null;
             return (
               <div
@@ -241,6 +256,14 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
               </div>
             );
           })}
+          <Pagination
+            page={safeMemberPage}
+            totalPages={memberPages}
+            totalItems={filtered.length}
+            pageSize={MEMBER_PAGE_SIZE}
+            label="members"
+            onPageChange={setMemberPage}
+          />
         </div>
       )}
 
@@ -248,7 +271,7 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
       {guilds.length > 0 && (
         <section className="space-y-2 pt-2 border-t border-white/[0.06]">
           <h3 className="text-sm font-semibold text-white/80 px-1">Manage guilds</h3>
-          {guilds.map((guild) => {
+          {pagedGuilds.map((guild) => {
             const color = guildColor(guild.id);
             return (
               <div key={guild.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 flex items-center justify-between gap-4">
@@ -271,8 +294,55 @@ export default function FactionMembersTab({ canManage }: { canManage: boolean })
               </div>
             );
           })}
+          <Pagination
+            page={safeGuildPage}
+            totalPages={guildPages}
+            totalItems={guilds.length}
+            pageSize={GUILD_PAGE_SIZE}
+            label="guilds"
+            onPageChange={setGuildPage}
+          />
         </section>
       )}
+    </div>
+  );
+}
+
+function Pagination({
+  page,
+  totalPages,
+  totalItems,
+  pageSize,
+  label,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  label: string;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalItems <= pageSize) return null;
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(totalItems, page * pageSize);
+
+  return (
+    <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-[11px] text-white/35">
+        Showing {start}-{end} of {totalItems} {label}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          Previous
+        </Button>
+        <span className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] font-semibold text-white/55">
+          {page} / {totalPages}
+        </span>
+        <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          Next
+        </Button>
+      </div>
     </div>
   );
 }

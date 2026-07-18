@@ -120,3 +120,19 @@ export function canManageRole(
   const targetIndex = GUILD_ROLES.indexOf(targetRole);
   return actorIndex > targetIndex;
 }
+
+// ─── Faction Capability Roles ────────────────────────────────────
+// Orthogonal to the GuildRole ladder above — a member keeps their existing
+// guild rank and can additionally hold zero or more of these, granted by a
+// Faction Leader. Faction Leader itself is NOT one of these; it stays
+// derived from Faction.leaderUserId.
+
+export const FACTION_ROLES = ["OFFICER", "TREASURER", "INVENTORY_MANAGER"] as const;
+
+export type FactionRoleType = (typeof FACTION_ROLES)[number];
+
+export const FACTION_ROLE_DISPLAY_NAMES: Record<FactionRoleType, string> = {
+  OFFICER: "Faction Officer",
+  TREASURER: "Faction Treasurer",
+  INVENTORY_MANAGER: "Faction Inventory Manager",
+};

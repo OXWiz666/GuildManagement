@@ -27,8 +27,10 @@ export {
   getManageableRoles,
   canManageRole,
   resolveRoleDisplayName,
+  FACTION_ROLES,
+  FACTION_ROLE_DISPLAY_NAMES,
 } from "./types/roles";
-export type { GuildRoleType, CustomizableRoleType } from "./types/roles";
+export type { GuildRoleType, CustomizableRoleType, FactionRoleType } from "./types/roles";
 
 // Platform (SaaS-level) roles
 export {
@@ -215,6 +217,22 @@ export type {
   PaymentInput,
   CouponInput,
 } from "./validators/platform";
+
+// Factionwide System (Phase 1: Foundation) validators
+export {
+  updateFactionProfileSchema,
+  updateFactionStatusSchema,
+  updateFactionGuildMembershipSchema,
+  assignFactionRoleSchema,
+  listFactionAuditLogsQuerySchema,
+} from "./validators/faction";
+export type {
+  UpdateFactionProfileInput,
+  UpdateFactionStatusInput,
+  UpdateFactionGuildMembershipInput,
+  AssignFactionRoleInput,
+  ListFactionAuditLogsQueryInput,
+} from "./validators/faction";
 
 // Equipment validators (Item Screenshot Update)
 export {

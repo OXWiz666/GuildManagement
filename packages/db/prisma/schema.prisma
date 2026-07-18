@@ -75,6 +75,7 @@ model User {
   cpUpdatesMade        CombatPowerHistory[]  @relation("CpUpdateActor")
   cpHistory            CombatPowerHistory[]  @relation("CpUpdateSubject")
   cpFieldsUpdated      GuildMember[]         @relation("CpUpdatedBy")
+  factionAuditLogsAsActor FactionAuditLog[]  @relation("FactionAuditActor")
 
   @@map("users")
 }
@@ -193,10 +194,20 @@ model Faction {
   id           String   @id @default(cuid())
   name         String
   slug         String   @unique
+  nameChangeCount Int   @default(0) @map("name_change_count")
   description  String?
   avatarUrl    String?  @map("avatar_url")
+  // Short display tag, distinct from the URL-style `slug` (e.g. "ABC").
+  code         String?  @unique @map("faction_code")
+  bannerUrl    String?  @map("banner_url")
+  server       String?
+  region       String?
+  game         String?
+  status       FactionStatus @default(ACTIVE)
   leaderUserId String   @map("leader_user_id")
   leader       User     @relation("FactionLeader", fields: [leaderUserId], references: [id], onDelete: Cascade)
+  // Kept in sync with `status` by the service layer (ACTIVE => true, else false)
+  // rather than replaced outright, so existing isActive-based reads don't break.
   isActive     Boolean  @default(true) @map("is_active")
   // Redeemable code a Guild Leader uses to request joining this faction (Multi-Guild).
   inviteCode   String   @unique @map("invite_code")
@@ -207,9 +218,19 @@ model Faction {
   bossRotations      BossRotation[]
   bossLowRotation    BossLowRotation?
   joinRequests       FactionJoinRequest[]
+  guildMemberships   FactionGuildMembership[]
+  roleAssignments    FactionRoleAssignment[]
+  auditLogs          FactionAuditLog[]
 
   @@index([leaderUserId])
   @@map("factions")
+}
+
+enum FactionStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  ARCHIVED
 }
 
 enum FactionJoinDirection {
@@ -244,6 +265,93 @@ model FactionJoinRequest {
   @@map("faction_join_requests")
 }
 
+// Richer faction<->guild relationship record, alongside the fast-path
+// `Guild.factionId` FK (which stays the "current faction" pointer used
+// everywhere else — boss rotation, market, etc. — untouched). Multiple rows
+// per guild are expected over time (LEFT_FACTION / REMOVED history);
+// exactly one PENDING/ACTIVE/SUSPENDED row is enforced by the service layer.
+model FactionGuildMembership {
+  id                      String             @id @default(cuid())
+  factionId               String             @map("faction_id")
+  faction                 Faction            @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  guildId                 String             @map("guild_id")
+  guild                   Guild              @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  status                  FactionGuildStatus @default(ACTIVE)
+  joinedAt                DateTime           @default(now()) @map("joined_at")
+  contributionRequirement String?            @map("contribution_requirement")
+  // Free-text label, e.g. "Core Guild" — not a permission grant.
+  assignedFactionRole     String?            @map("assigned_faction_role")
+  approvedByUserId        String?            @map("approved_by_user_id")
+  notes                   String?
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+
+  @@index([guildId])
+  @@index([factionId, status])
+  @@map("faction_guild_memberships")
+}
+
+enum FactionGuildStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REMOVED
+  LEFT_FACTION
+}
+
+// Faction-specific capability grants (Officer / Treasurer / Inventory
+// Manager), orthogonal to the GuildRole hierarchy — a member keeps their
+// existing guild rank and can additionally hold zero or more of these.
+// Faction Leader itself is NOT stored here; it stays derived from
+// `Faction.leaderUserId`.
+model FactionRoleAssignment {
+  id              String          @id @default(cuid())
+  factionId       String          @map("faction_id")
+  faction         Faction         @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  guildMemberId   String          @map("guild_member_id")
+  guildMember     GuildMember     @relation(fields: [guildMemberId], references: [id], onDelete: Cascade)
+  role            FactionRoleType
+  grantedByUserId String          @map("granted_by_user_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  @@unique([guildMemberId, factionId, role])
+  @@index([factionId, role])
+  @@index([factionId, createdAt])
+  @@map("faction_role_assignments")
+}
+
+enum FactionRoleType {
+  OFFICER
+  TREASURER
+  INVENTORY_MANAGER
+}
+
+// Dedicated append-only faction-scoped audit trail (distinct from the
+// existing guild-scoped AuditLog). Never updated or deleted from any service.
+model FactionAuditLog {
+  id            String   @id @default(cuid())
+  factionId     String   @map("faction_id")
+  faction       Faction  @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  actorId       String   @map("actor_id")
+  actor         User     @relation("FactionAuditActor", fields: [actorId], references: [id])
+  // Role snapshot at time of action (guild role, not a faction capability role).
+  actorRole     String   @map("actor_role")
+  action        String
+  entityType    String?  @map("entity_type")
+  entityId      String?  @map("entity_id")
+  previousValue Json?    @map("previous_value")
+  newValue      Json?    @map("new_value")
+  reason        String?
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([factionId, createdAt])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@map("faction_audit_logs")
+}
+
 // ═══════════════════════════════════════════════════
 // GUILDS
 // ═══════════════════════════════════════════════════
@@ -267,6 +375,7 @@ model Guild {
   deletedAt   DateTime? @map("deleted_at")
 
   inviteCode String? @unique @map("invite_code")
+  nameChangeCount Int @default(0) @map("name_change_count")
 
   settings           GuildSettings?
   members            GuildMember[]
@@ -294,6 +403,7 @@ model Guild {
   cpHistory           CombatPowerHistory[]
   cpSnapshots         GuildCpSnapshot[]
   notificationHistory NotificationHistory[]
+  factionGuildMemberships FactionGuildMembership[]
 
   @@index([factionId])
   @@map("guilds")
@@ -325,6 +435,12 @@ model GuildSettings {
   id      String @id @default(cuid())
   guildId String @unique @map("guild_id")
   guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  // General guild metadata used by website scheduling and Discord-facing labels.
+  serverName String? @map("server_name")
+  timezone   String  @default("Asia/Singapore")
+  region     String?
+  language   String  @default("en")
 
   // Currency config — never hard-coded
   currencyCode            String  @default("PHP") @map("currency_code")
@@ -430,6 +546,7 @@ model GuildMember {
   storageReceipts    GuildStorageItem[]         @relation("StorageRecipient")
   bossCommitments    BossCommitment[]
   cpHistory          CombatPowerHistory[]
+  factionRoleAssignments FactionRoleAssignment[]
 
   @@unique([userId, guildId])
   @@index([guildId])

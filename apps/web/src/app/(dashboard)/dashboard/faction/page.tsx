@@ -17,8 +17,11 @@ import { useQuery, queryClient } from "@/lib/query";
 import FactionOverviewTab from "./components/FactionOverviewTab";
 import FactionMembersTab from "./components/FactionMembersTab";
 import JoinFactionTab from "./components/JoinFactionTab";
+import FactionGuildsTab from "./components/FactionGuildsTab";
+import FactionAuditLogTab from "./components/FactionAuditLogTab";
+import FactionSettingsTab from "./components/FactionSettingsTab";
 
-type FactionTab = "OVERVIEW" | "ANNOUNCEMENTS" | "EVENTS" | "MEMBERS" | "JOIN_FACTION";
+type FactionTab = "OVERVIEW" | "ANNOUNCEMENTS" | "EVENTS" | "GUILD_MEMBERS" | "JOIN_FACTION" | "AUDIT_LOG" | "SETTINGS";
 
 export default function FactionPage() {
   const { user } = useAuth();
@@ -132,9 +135,11 @@ export default function FactionPage() {
 
   const tabs: Array<{ id: FactionTab; label: string; count?: number }> = [
     { id: "OVERVIEW", label: "Overview" },
-    { id: "ANNOUNCEMENTS", label: "Announcements", count: announcements.length },
+    { id: "ANNOUNCEMENTS", label: "Announcement", count: announcements.length },
     { id: "EVENTS", label: "Events", count: events.length },
-    ...(canManage ? [{ id: "MEMBERS" as FactionTab, label: "Members", count: members.length }] : []),
+    ...(canManage ? [{ id: "GUILD_MEMBERS" as FactionTab, label: "Guild Members", count: members.length }] : []),
+    ...(canManage ? [{ id: "AUDIT_LOG" as FactionTab, label: "Audit Log" }] : []),
+    ...(canManage ? [{ id: "SETTINGS" as FactionTab, label: "Settings" }] : []),
     ...(isGuildLeader ? [{ id: "JOIN_FACTION" as FactionTab, label: "Join a Faction" }] : []),
   ];
 
@@ -256,7 +261,16 @@ export default function FactionPage() {
           </div>
         )}
 
-        {activeTab === "MEMBERS" && <FactionMembersTab canManage={canManage} />}
+        {activeTab === "GUILD_MEMBERS" && (
+          <div className="space-y-6">
+            <FactionMembersTab canManage={canManage} />
+            <FactionGuildsTab canManage={canManage} />
+          </div>
+        )}
+
+        {activeTab === "AUDIT_LOG" && <FactionAuditLogTab canView={canManage} />}
+
+        {activeTab === "SETTINGS" && <FactionSettingsTab canManage={canManage} />}
 
         {activeTab === "JOIN_FACTION" && activeGuild && <JoinFactionTab guildId={activeGuild.guildId} />}
       </div>

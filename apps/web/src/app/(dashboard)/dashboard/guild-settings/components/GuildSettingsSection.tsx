@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import SettingsCard from "../../settings/components/SettingsCard";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { guildApi } from "@/lib/api";
+import { guildApi, type GuildProfileData, type GuildSettingsData } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import { useToast } from "@/components/ui/Toast";
 import { Magnetic } from "@/components/dashboard/DashboardHelpers";
@@ -14,12 +15,43 @@ export interface GuildSettingsSectionProps {
   guildId: string;
 }
 
+const TIMEZONE_OPTIONS = [
+  "Asia/Singapore",
+  "Asia/Manila",
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Asia/Hong_Kong",
+  "Asia/Bangkok",
+  "Asia/Jakarta",
+  "Australia/Sydney",
+  "Europe/London",
+  "America/Los_Angeles",
+  "America/New_York",
+  "UTC",
+] as const;
+
+const REGION_OPTIONS = ["SEA", "PH", "SG", "JP", "KR", "NA", "EU", "OCE", "Global"] as const;
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "fil", label: "Filipino" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" },
+  { value: "zh", label: "Chinese" },
+] as const;
+
 export default function GuildSettingsSection({ guildId }: GuildSettingsSectionProps) {
   const { addToast } = useToast();
+  const { user, refreshUser } = useAuth();
   const { resolveRoleName } = useRoleDisplayNames();
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false);
 
   // Form states
+  const [guildName, setGuildName] = useState("");
+  const [serverName, setServerName] = useState("");
+  const [timezone, setTimezone] = useState("Asia/Singapore");
+  const [region, setRegion] = useState("");
+  const [language, setLanguage] = useState("en");
   const [taxRatePercent, setTaxRatePercent] = useState("10");
   const [activeShareModel, setActiveShareModel] = useState("EQUAL");
   const [currencyCode, setCurrencyCode] = useState("PHP");
@@ -40,18 +72,34 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
   const {
     data: guildSettings,
     isLoading: isLoadingSettings,
-  } = useQuery<any | null>(
+  } = useQuery<GuildSettingsData | null>(
     `guild_settings:${guildId}`,
     async () => {
       const result = await guildApi.getSettings(guildId);
-      return result.success ? result.data : null;
+      return result.success && result.data ? result.data : null;
     },
     { persist: true, staleTime: 300000 }
+  );
+
+  const {
+    data: guildProfile,
+    isLoading: isLoadingProfile,
+  } = useQuery<GuildProfileData | null>(
+    `guild_profile:${guildId}`,
+    async () => {
+      const result = await guildApi.getProfile(guildId);
+      return result.success && result.data ? result.data : null;
+    },
+    { persist: true, staleTime: 60000 }
   );
 
   // Sync settings states
   useEffect(() => {
     if (guildSettings) {
+      setServerName(guildSettings.serverName || "");
+      setTimezone(guildSettings.timezone || "Asia/Singapore");
+      setRegion(guildSettings.region || "");
+      setLanguage(guildSettings.language || "en");
       setTaxRatePercent(guildSettings.taxRatePercent.toString());
       setActiveShareModel(guildSettings.activeShareModel);
       setCurrencyCode(guildSettings.currencyCode);
@@ -68,6 +116,62 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
       setMultMember((mult.MEMBER ?? 1.0).toString());
     }
   }, [guildSettings]);
+
+  useEffect(() => {
+    if (guildProfile) {
+      setGuildName(guildProfile.name);
+    }
+  }, [guildProfile]);
+
+  const activeMembership = user?.guilds.find((guild) => guild.guildId === guildId);
+  const canRenameGuild = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"].includes(activeMembership?.role ?? "");
+  const isGuildNameDirty = guildName.trim().length > 0 && guildName.trim() !== guildProfile?.name;
+  const isGeneralDirty =
+    isGuildNameDirty ||
+    serverName.trim() !== (guildSettings?.serverName || "") ||
+    timezone !== (guildSettings?.timezone || "Asia/Singapore") ||
+    region !== (guildSettings?.region || "") ||
+    language !== (guildSettings?.language || "en");
+
+  const handleGeneralSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nextName = guildName.trim();
+    if (!isGeneralDirty) return;
+
+    setIsSavingGeneral(true);
+    try {
+      if (isGuildNameDirty) {
+        if (!canRenameGuild) {
+          addToast("error", "Only Guild Leaders can rename the guild");
+          return;
+        }
+        const renameResult = await guildApi.updateProfile(guildId, { name: nextName });
+        if (!renameResult.success) {
+          addToast("error", renameResult.error?.message || "Failed to rename guild");
+          return;
+        }
+        queryClient.invalidateQueries(`guild_profile:${guildId}`);
+        await refreshUser();
+      }
+
+      const settingsResult = await guildApi.updateSettings(guildId, {
+        serverName: serverName.trim() || null,
+        timezone,
+        region: region.trim() || null,
+        language,
+      });
+      if (settingsResult.success) {
+        addToast("success", "General guild settings saved");
+        queryClient.invalidateQueries(`guild_settings:${guildId}`);
+      } else {
+        addToast("error", settingsResult.error?.message || "Failed to save general settings");
+      }
+    } catch (err: unknown) {
+      addToast("error", err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsSavingGeneral(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +207,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
     }
   };
 
-  if (isLoadingSettings) {
+  if (isLoadingSettings || isLoadingProfile) {
     return (
       <div className="glass rounded-2xl p-6 border border-white/[0.06] animate-pulse h-96 flex items-center justify-center">
         <span className="text-white/40 text-sm font-semibold tracking-wider animate-pulse">Loading Guild Settings Configurations...</span>
@@ -113,6 +217,129 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
 
   return (
     <div className="space-y-6">
+      <SettingsCard
+        eyebrow="General Settings"
+        title="Guild identity & locale"
+        description="Control the guild name, server label, timezone, region, and default language used across the website and Discord workflows."
+      >
+        <form onSubmit={handleGeneralSubmit} className="space-y-4">
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="min-w-0">
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
+                  Guild name
+                </label>
+                <input
+                  value={guildName}
+                  onChange={(e) => setGuildName(e.target.value)}
+                  disabled={!canRenameGuild || !guildProfile?.canRename || isSavingGeneral}
+                  maxLength={48}
+                  placeholder="Enter guild name"
+                  className="w-full rounded-lg border border-white/[0.08] bg-black/20 px-3.5 py-2.5 text-[13px] font-semibold text-white placeholder:text-white/25 transition-colors focus:border-white/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45"
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
+                  Server name
+                </label>
+                <input
+                  value={serverName}
+                  onChange={(e) => setServerName(e.target.value)}
+                  maxLength={80}
+                  placeholder="e.g. Vengeance SEA 1"
+                  className="w-full rounded-lg border border-white/[0.08] bg-black/20 px-3.5 py-2.5 text-[13px] font-semibold text-white placeholder:text-white/25 transition-colors focus:border-white/20 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
+                  Timezone
+                </label>
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="w-full rounded-lg border border-white/[0.08] bg-black/20 px-3.5 py-2.5 text-[13px] font-semibold text-white transition-colors focus:border-white/20 focus:outline-none"
+                >
+                  {TIMEZONE_OPTIONS.map((option) => (
+                    <option key={option} className="bg-[#0b0c10]" value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
+                    Region
+                  </label>
+                  <select
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                    className="w-full rounded-lg border border-white/[0.08] bg-black/20 px-3.5 py-2.5 text-[13px] font-semibold text-white transition-colors focus:border-white/20 focus:outline-none"
+                  >
+                    <option className="bg-[#0b0c10]" value="">Not set</option>
+                    {REGION_OPTIONS.map((option) => (
+                      <option key={option} className="bg-[#0b0c10]" value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
+                    Language
+                  </label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full rounded-lg border border-white/[0.08] bg-black/20 px-3.5 py-2.5 text-[13px] font-semibold text-white transition-colors focus:border-white/20 focus:outline-none"
+                  >
+                    {LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.value} className="bg-[#0b0c10]" value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-col gap-3 border-t border-white/[0.06] pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 font-mono text-white/50">
+                  /{guildProfile?.slug}
+                </span>
+                {guildProfile?.isSubscribed ? (
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 font-bold text-emerald-300">
+                    Subscribed / unlimited renames
+                  </span>
+                ) : (
+                  <span
+                    className={`rounded-full border px-2.5 py-1 font-bold ${
+                      guildProfile?.canRename
+                        ? "border-amber-400/20 bg-amber-500/10 text-amber-300"
+                        : "border-rose-400/20 bg-rose-500/10 text-rose-300"
+                    }`}
+                  >
+                    Free plan / {guildProfile?.remainingNameChanges ?? 0} rename left
+                  </span>
+                )}
+              </div>
+              <Magnetic strength={3}>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  size="sm"
+                  isLoading={isSavingGeneral}
+                  disabled={!isGeneralDirty || (isGuildNameDirty && (!canRenameGuild || !guildProfile?.canRename))}
+                  className="border border-violet-400/20 text-violet-100"
+                >
+                  Save general settings
+                </Button>
+              </Magnetic>
+            </div>
+          </div>
+        </form>
+      </SettingsCard>
+
       <SettingsCard
         eyebrow="Guild Settings"
         title="Guild point system & configurations"

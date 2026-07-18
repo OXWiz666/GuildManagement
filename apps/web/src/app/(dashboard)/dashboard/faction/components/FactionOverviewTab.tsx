@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   factionApi,
@@ -77,24 +77,13 @@ export default function FactionOverviewTab({
 
   return (
     <div className="space-y-6">
-      {/* Faction identity + stats */}
-      <div className="rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.06] to-transparent p-5 sm:p-6">
-        <div className="flex items-start gap-4">
-          <Avatar name={faction.name} src={faction.avatarUrl} size="lg" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-amber-400/80 font-semibold">Faction</p>
-            <h2 className="text-lg sm:text-xl font-bold text-white truncate">{faction.name}</h2>
-            {faction.description && (
-              <p className="text-[13px] text-white/55 leading-relaxed mt-1 line-clamp-2">{faction.description}</p>
-            )}
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-3 mt-5">
-          <StatTile label="Guilds" value={totalGuilds} />
-          <StatTile label="Members" value={totalMembers} />
-          <StatTile label="Since" value={new Date(faction.createdAt).getFullYear().toString()} />
-        </div>
-      </div>
+      <FactionIdentityPanel
+        faction={faction}
+        canManage={canManage}
+        totalGuilds={totalGuilds}
+        totalMembers={totalMembers}
+        onRenamed={refreshUser}
+      />
 
       {/* Guilds in the faction */}
       <section className="space-y-2">
@@ -128,6 +117,106 @@ export default function FactionOverviewTab({
           <AddGuildTab />
         </section>
       )}
+    </div>
+  );
+}
+
+type FactionSummary = NonNullable<FactionOverviewData["faction"]>;
+
+function FactionIdentityPanel({
+  faction,
+  canManage,
+  totalGuilds,
+  totalMembers,
+  onRenamed,
+}: {
+  faction: FactionSummary;
+  canManage: boolean;
+  totalGuilds: number;
+  totalMembers: number;
+  onRenamed: () => Promise<unknown>;
+}) {
+  const { addToast } = useToast();
+  const [name, setName] = useState(faction.name);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(faction.name);
+  }, [faction.name]);
+
+  const trimmedName = name.trim();
+  const isDirty = trimmedName.length > 0 && trimmedName !== faction.name;
+  const quotaText = faction.isSubscribed
+    ? `Unlimited renames${faction.planName ? ` on ${faction.planName}` : ""}`
+    : `${faction.remainingNameChanges ?? 0}/${faction.nameChangeLimit ?? 2} free renames left`;
+  const canSubmit = canManage && faction.canRename && isDirty && !saving;
+
+  async function saveName() {
+    if (!canSubmit) return;
+    setSaving(true);
+    try {
+      const result = await factionApi.updateProfile({ name: trimmedName });
+      if (result.success) {
+        addToast("success", "Faction name updated");
+        queryClient.invalidateQueries("faction_overview");
+        await onRenamed();
+      } else {
+        addToast("error", result.error?.message || "Failed to update faction name");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.06] to-transparent p-5 sm:p-6">
+      <div className="flex items-start gap-4">
+        <Avatar name={faction.name} src={faction.avatarUrl} size="lg" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-amber-400/80 font-semibold">Faction</p>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-white/45">
+              {quotaText}
+            </span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-white truncate">{faction.name}</h2>
+          {faction.description && (
+            <p className="text-[13px] text-white/55 leading-relaxed mt-1 line-clamp-2">{faction.description}</p>
+          )}
+        </div>
+      </div>
+
+      {canManage && (
+        <div className="mt-5 rounded-xl border border-white/[0.06] bg-black/20 p-3">
+          <label className="text-[10px] uppercase tracking-[0.14em] text-white/40 font-semibold" htmlFor="faction-name">
+            Faction name
+          </label>
+          <div className="mt-2 flex flex-col sm:flex-row gap-2">
+            <input
+              id="faction-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              disabled={!faction.canRename || saving}
+              maxLength={48}
+              className="min-h-10 flex-1 rounded-lg border border-white/[0.08] bg-black/30 px-3 text-sm font-semibold text-white outline-none transition focus:border-amber-400/50 disabled:cursor-not-allowed disabled:opacity-45"
+            />
+            <Button size="sm" variant="accent" onClick={saveName} isLoading={saving} disabled={!canSubmit}>
+              Save name
+            </Button>
+          </div>
+          {!faction.canRename && (
+            <p className="mt-2 text-[11px] text-red-300/80">
+              Free faction rename limit reached. Premium factions can rename without a limit.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-3 mt-5">
+        <StatTile label="Guilds" value={totalGuilds} />
+        <StatTile label="Members" value={totalMembers} />
+        <StatTile label="Since" value={new Date(faction.createdAt).getFullYear().toString()} />
+      </div>
     </div>
   );
 }

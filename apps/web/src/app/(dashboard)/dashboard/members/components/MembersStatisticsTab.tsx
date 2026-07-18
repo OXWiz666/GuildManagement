@@ -5,9 +5,11 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type PaginationState,
   type SortingState,
 } from "@tanstack/react-table";
 import { dashboardApi, type GuildStatsSummary, type MemberStatsBoardRow } from "@/lib/api";
@@ -265,6 +267,7 @@ const ICONS = {
 export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabProps) {
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "totalPoints", desc: true }]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
 
   const { data: board, isLoading: isLoadingBoard } = useQuery<MemberStatsBoardRow[]>(
     guildId ? `member_stats_board:${guildId}` : "member_stats_board_empty",
@@ -344,9 +347,11 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
     columns,
     state: {
       globalFilter: search,
+      pagination,
       sorting,
     },
     onGlobalFilterChange: setSearch,
+    onPaginationChange: setPagination,
     onSortingChange: setSorting,
     globalFilterFn: (row, _columnId, filterValue) => {
       const needle = String(filterValue).trim().toLowerCase();
@@ -363,9 +368,11 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
   const filteredRows = table.getFilteredRowModel().rows;
+  const pagedRows = table.getRowModel().rows;
 
   if (isLoading) {
     return (
@@ -468,7 +475,10 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
           </div>
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              table.setPageIndex(0);
+            }}
             placeholder="Search member or metric..."
             className="w-full lg:w-64 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] text-white placeholder:text-white/35 focus:outline-none focus:border-white/25"
           />
@@ -508,7 +518,7 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row) => (
+                pagedRows.map((row) => (
                   <tr key={row.id} className="hover:bg-white/[0.025] transition-colors">
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-2.5 text-[12px] whitespace-nowrap">
@@ -520,6 +530,44 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-col gap-3 border-t border-white/[0.06] bg-white/[0.015] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[11px] text-white/35">
+            Showing {filteredRows.length === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1}-
+            {Math.min(filteredRows.length, (pagination.pageIndex + 1) * pagination.pageSize)} of {filteredRows.length.toLocaleString()} rows
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={pagination.pageSize}
+              onChange={(e) => table.setPageSize(Number(e.target.value))}
+              className="h-8 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 text-[11px] font-semibold text-white/55 focus:outline-none focus:border-white/25"
+            >
+              {[10, 20, 50].map((size) => (
+                <option key={size} className="bg-[#101014]" value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
+              className="h-8 rounded-lg border border-white/[0.08] px-3 text-[11px] font-semibold text-white/55 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Previous
+            </button>
+            <span className="h-8 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-semibold text-white/55">
+              {table.getState().pagination.pageIndex + 1} / {Math.max(1, table.getPageCount())}
+            </span>
+            <button
+              type="button"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
+              className="h-8 rounded-lg border border-white/[0.08] px-3 text-[11px] font-semibold text-white/55 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

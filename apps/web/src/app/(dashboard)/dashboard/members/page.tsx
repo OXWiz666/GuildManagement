@@ -65,16 +65,22 @@ export default function MembersPage() {
   const {
     data: membersRaw,
     isLoading,
+    error: membersError,
   } = useQuery<GuildMemberData[]>(
     activeGuild ? `guild_members:${activeGuild.guildId}` : "guild_members_empty",
     async () => {
       if (!activeGuild) return [];
       const result = await guildApi.getMembers(activeGuild.guildId);
-      return result.success && result.data?.members ? result.data.members : [];
+      if (!result.success) {
+        throw new Error(result.error?.message || "Failed to fetch guild members");
+      }
+      return result.data?.members ?? [];
     },
     { persist: true, staleTime: 30000 }
   );
   const members = membersRaw || [];
+  const membersErrorMessage =
+    membersError instanceof Error ? membersError.message : membersError ? "Failed to fetch guild members" : null;
 
   // 1b. Accounting Query — sources Balance + Guild Points for the roster.
   // Member enrichment only needs balances, so it requests one ledger row and
@@ -452,6 +458,26 @@ export default function MembersPage() {
                   </div>
                 ))}
               </div>
+            ) : membersErrorMessage ? (
+              <Card>
+                <div className="text-center py-12">
+                  <svg className="h-12 w-12 text-rose-300/70 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 8v5" />
+                    <path d="M12 16h.01" />
+                  </svg>
+                  <p className="text-white/70 text-sm font-semibold">Members could not be loaded</p>
+                  <p className="mt-1 text-white/40 text-xs">{membersErrorMessage}</p>
+                  <Button
+                    className="mt-4"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`)}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              </Card>
             ) : filteredMembers.length === 0 ? (
               <Card>
                 <div className="text-center py-12">

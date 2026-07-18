@@ -1,9 +1,16 @@
 import { Hono } from "hono";
 import { services, cache, BadRequestError } from "@guild/core";
+import {
+  updateFactionProfileSchema,
+  updateFactionStatusSchema,
+  updateFactionGuildMembershipSchema,
+  assignFactionRoleSchema,
+} from "@guild/shared";
 import type { AppEnv } from "../env";
 import { ok } from "../respond";
 import { getClientInfo, readJson } from "../request";
-import { requireAuth } from "../middleware/auth";
+import { zBody } from "../validation";
+import { requireAuth, requirePlatformAdmin } from "../middleware/auth";
 
 /**
  * Faction domain — Hono port of apps/web/src/app/api/faction/**. All routes
@@ -12,6 +19,23 @@ import { requireAuth } from "../middleware/auth";
  * regenerate) take precedence over param routes in Hono.
  */
 export const faction = new Hono<AppEnv>()
+  // ─── Profile & status (Phase 1: Foundation) ───────────────────
+  // Profile fields are Faction Leader/Admin (service-layer gated via
+  // requireManagedFaction); status lifecycle is Super Admin only, gated here
+  // at the route layer like every other platform-admin mutation (see admin.ts).
+  .patch("/profile", requireAuth, zBody(updateFactionProfileSchema), async (c) => {
+    const userId = c.get("user").userId;
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.faction.updateFactionProfile(userId, c.req.valid("json"), ipAddress, userAgent);
+    await cache.invalidatePattern("faction-overview:*");
+    return ok(c, result);
+  })
+  .post("/status", requirePlatformAdmin("ADMIN"), zBody(updateFactionStatusSchema), async (c) => {
+    const { factionId, status, reason } = c.req.valid("json");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    return ok(c, await services.faction.updateFactionStatus(c.get("user").userId, factionId, status, reason, ipAddress, userAgent));
+  })
+
   // ─── Announcements ───────────────────────────────────────────
   .get("/announcements", requireAuth, async (c) => {
     return ok(c, { announcements: await services.faction.listAnnouncements(c.get("user").userId) });
@@ -66,6 +90,80 @@ export const faction = new Hono<AppEnv>()
   .post("/guilds/:guildId/remove", requireAuth, async (c) => {
     const { ipAddress, userAgent } = getClientInfo(c);
     return ok(c, await services.faction.removeGuildFromFaction(c.get("user").userId, c.req.param("guildId"), ipAddress, userAgent));
+  })
+
+  // ─── Guild memberships (contribution requirement / assigned role / notes) ─
+  // Cached like /members and /overview below, but WITH explicit invalidation
+  // on the mutation — unlike those two, this list is edited directly from the
+  // same tab that displays it, so a stale read would undo the UI's own
+  // optimistic-refresh UX for up to the TTL.
+  .get("/guild-memberships", requireAuth, async (c) => {
+    const userId = c.get("user").userId;
+    const cacheKey = `faction-guild-memberships:${userId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { memberships: cached });
+    const memberships = await services.faction.listFactionGuildMemberships(userId);
+    await cache.set(cacheKey, memberships, 20);
+    return ok(c, { memberships });
+  })
+  .patch("/guild-memberships/:guildId", requireAuth, zBody(updateFactionGuildMembershipSchema), async (c) => {
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const membership = await services.faction.updateFactionGuildMembership(
+      c.get("user").userId,
+      c.req.param("guildId"),
+      c.req.valid("json"),
+      ipAddress,
+      userAgent,
+    );
+    await cache.invalidatePattern("faction-guild-memberships:*");
+    return ok(c, { membership });
+  })
+
+  // ─── Faction capability roles (Officer / Treasurer / Inventory Manager) ───
+  .get("/roles", requireAuth, async (c) => {
+    const userId = c.get("user").userId;
+    const cacheKey = `faction-roles:${userId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { assignments: cached });
+    const assignments = await services.faction.listFactionRoleAssignments(userId);
+    await cache.set(cacheKey, assignments, 20);
+    return ok(c, { assignments });
+  })
+  .post("/roles", requireAuth, zBody(assignFactionRoleSchema), async (c) => {
+    const { guildMemberId, role } = c.req.valid("json");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const assignment = await services.faction.assignFactionRole(c.get("user").userId, guildMemberId, role, ipAddress, userAgent);
+    await cache.invalidatePattern("faction-roles:*");
+    return ok(c, { assignment }, 201);
+  })
+  .delete("/roles/:assignmentId", requireAuth, async (c) => {
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.faction.revokeFactionRole(c.get("user").userId, c.req.param("assignmentId"), ipAddress, userAgent);
+    await cache.invalidatePattern("faction-roles:*");
+    return ok(c, result);
+  })
+
+  // ─── Audit log ───────────────────────────────────────────────
+  // Short TTL, no explicit invalidation — same tradeoff as /members and
+  // /overview below: this is a historical log, not an editable list, so a
+  // few seconds of staleness after another action lands is an acceptable
+  // cost for not wiring cache-busting into every audited mutation site.
+  .get("/audit-logs", requireAuth, async (c) => {
+    const userId = c.get("user").userId;
+    const query = {
+      from: c.req.query("from") || undefined,
+      to: c.req.query("to") || undefined,
+      action: c.req.query("action") || undefined,
+      entityType: c.req.query("entityType") || undefined,
+      page: c.req.query("page") ? Number(c.req.query("page")) : undefined,
+      pageSize: c.req.query("pageSize") ? Number(c.req.query("pageSize")) : undefined,
+    };
+    const cacheKey = `faction-audit-logs:${userId}:${JSON.stringify(query)}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const result = await services.factionAudit.listFactionAuditLogs(userId, query);
+    await cache.set(cacheKey, result, 15);
+    return ok(c, result);
   })
 
   // ─── Invite code ─────────────────────────────────────────────

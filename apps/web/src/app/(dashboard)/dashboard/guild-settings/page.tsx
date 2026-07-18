@@ -12,8 +12,9 @@ import RegisterActivitySection from "./components/RegisterActivitySection";
 import RoleManagementSection from "./components/RoleManagementSection";
 import DistributionRulesSection from "./components/DistributionRulesSection";
 import MountWishlistSection from "./components/MountWishlistSection";
+import DiscordIntegrationSection from "./components/DiscordIntegrationSection";
 
-const LEADER_TABS: GuildSettingsTab[] = ["points", "activities", "roles", "distribution", "mounts"];
+const LEADER_TABS: GuildSettingsTab[] = ["points", "activities", "roles", "distribution", "mounts", "discord"];
 
 export default function GuildSettingsPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -84,6 +85,7 @@ export default function GuildSettingsPage() {
           {activeTab === "roles" && <RoleManagementSection guildId={activeGuild.guildId} />}
           {activeTab === "distribution" && <DistributionRulesSection guildId={activeGuild.guildId} />}
           {activeTab === "mounts" && <MountWishlistSection guildId={activeGuild.guildId} />}
+          {activeTab === "discord" && <DiscordIntegrationSection guildId={activeGuild.guildId} />}
         </Reveal>
       </div>
     </div>

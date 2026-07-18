@@ -240,3 +240,15 @@ export {
   SHORT_CYCLE_MAX_HOURS,
 } from "./types/bosses";
 export type { PredefinedBoss, RealtimeBossTimer, BossCycleCategory } from "./types/bosses";
+
+// CP screenshot parsing (shared by the web scanner and the Discord bot —
+// same interpretation regardless of which OCR engine produced the text)
+export {
+  parseCombatPower,
+  verifyName,
+  detectClass,
+  assessCpChange,
+  similarity,
+  levenshtein,
+} from "./types/cpScan";
+export type { NameVerification, ClassDetection, CpPlausibility } from "./types/cpScan";

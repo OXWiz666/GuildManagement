@@ -8,6 +8,7 @@ export interface IGuildRepository {
   getMembers(guildId: string): Promise<any[]>;
   getMemberByUser(userId: string, guildId: string): Promise<GuildMember | null>;
   getMemberById(memberId: string): Promise<any | null>;
+  deactivateMember(memberId: string): Promise<GuildMember>;
   updateMemberRole(
     memberId: string,
     role: GuildRoleType,
@@ -90,6 +91,13 @@ export class PrismaGuildRepository implements IGuildRepository {
         },
         customRole: { select: CUSTOM_ROLE_SELECT },
       },
+    });
+  }
+
+  async deactivateMember(memberId: string): Promise<GuildMember> {
+    return prisma.guildMember.update({
+      where: { id: memberId },
+      data: { isActive: false },
     });
   }
 

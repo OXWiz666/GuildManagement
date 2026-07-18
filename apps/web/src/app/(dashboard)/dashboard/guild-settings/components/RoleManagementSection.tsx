@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SettingsCard from "../../settings/components/SettingsCard";
 import { guildApi, type CustomRoleData, type GuildMemberData } from "@/lib/api";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
@@ -30,7 +30,28 @@ export default function RoleManagementSection({ guildId }: RoleManagementSection
     },
     { persist: true, staleTime: 30000 },
   );
-  const customRoles = customRolesRaw || [];
+
+  // Bridges the gap between "role created" and the invalidated query actually
+  // refetching (this cache is eventually-consistent, not synchronous — see
+  // lib/query.ts). Without this, selecting the just-created role before its
+  // real data arrives leaves RoleEditorPanel with a selection pointing at a
+  // role `customRoles` doesn't have yet — which used to crash reading
+  // `existingCustom!.band`. Cleared once the real list catches up.
+  const [pendingRole, setPendingRole] = useState<CustomRoleData | null>(null);
+
+  const customRoles = useMemo(() => {
+    const base = customRolesRaw || [];
+    if (pendingRole && !base.some((r) => r.id === pendingRole.id)) {
+      return [...base, pendingRole];
+    }
+    return base;
+  }, [customRolesRaw, pendingRole]);
+
+  useEffect(() => {
+    if (pendingRole && customRolesRaw?.some((r) => r.id === pendingRole.id)) {
+      setPendingRole(null);
+    }
+  }, [customRolesRaw, pendingRole]);
 
   const { data: membersRaw } = useQuery<GuildMemberData[]>(
     `guild_members:${guildId}`,
@@ -111,7 +132,10 @@ export default function RoleManagementSection({ guildId }: RoleManagementSection
           members={members}
           onSaved={() => {}}
           onDeleted={() => setSelection({ kind: "band", band: "OFFICER" })}
-          onCreated={(roleId) => setSelection({ kind: "custom", id: roleId })}
+          onCreated={(role) => {
+            setPendingRole(role);
+            setSelection({ kind: "custom", id: role.id });
+          }}
           onCancelNew={() => setSelection({ kind: "band", band: "OFFICER" })}
         />
       </div>

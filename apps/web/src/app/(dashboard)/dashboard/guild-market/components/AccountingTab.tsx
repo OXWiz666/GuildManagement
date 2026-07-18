@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -15,10 +16,22 @@ interface AccountingTabProps {
   memberRoleFilter: string;
   onRoleFilterChange: (value: string) => void;
   ledgerPage: number;
+  ledgerLimit: number;
   onPageChange: (page: number) => void;
 }
 
 const ROLE_FILTER_VALUES = ["ALL", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"] as const;
+
+type PaginationPage = number | "ellipsis-left" | "ellipsis-right";
+
+function getPaginationWindow(page: number, totalPages: number): PaginationPage[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+  if (page <= 4) return [1, 2, 3, 4, 5, "ellipsis-right", totalPages];
+  if (page >= totalPages - 3) {
+    return [1, "ellipsis-left", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "ellipsis-left", page - 1, page, page + 1, "ellipsis-right", totalPages];
+}
 
 export default function AccountingTab({
   accounting,
@@ -29,9 +42,26 @@ export default function AccountingTab({
   memberRoleFilter,
   onRoleFilterChange,
   ledgerPage,
+  ledgerLimit,
   onPageChange,
 }: AccountingTabProps) {
   const { resolveRoleName } = useRoleDisplayNames();
+  const ledgerPagination = accounting?.pagination;
+  const ledgerTotal = Number(ledgerPagination?.total ?? accounting?.transactions?.length ?? 0);
+  const ledgerTotalPages = Math.max(1, Number(ledgerPagination?.totalPages ?? 1));
+  const ledgerCurrentPage = Math.min(Math.max(1, Number(ledgerPagination?.page ?? ledgerPage)), ledgerTotalPages);
+  const ledgerPageSize = Number(ledgerPagination?.limit ?? ledgerLimit);
+  const ledgerStart = ledgerTotal === 0 ? 0 : (ledgerCurrentPage - 1) * ledgerPageSize + 1;
+  const ledgerEnd = Math.min(ledgerStart + (accounting?.transactions?.length ?? 0) - 1, ledgerTotal);
+  const pageWindow = useMemo(
+    () => getPaginationWindow(ledgerCurrentPage, ledgerTotalPages),
+    [ledgerCurrentPage, ledgerTotalPages],
+  );
+  const goToLedgerPage = (page: number) => {
+    const nextPage = Math.min(Math.max(1, page), ledgerTotalPages);
+    if (nextPage !== ledgerCurrentPage) onPageChange(nextPage);
+  };
+
   return (
     <div className="space-y-6">
       {/* Treasury statistics */}
@@ -243,35 +273,81 @@ export default function AccountingTab({
               </table>
             </div>
 
-            {/* Pagination Footer */}
-            {accounting.pagination && accounting.pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-white/[0.04] pt-4 mt-2">
-                <p className="text-[10px] text-zinc-500">
-                  Showing page {accounting.pagination.page} of {accounting.pagination.totalPages} ({accounting.pagination.total} total logs)
+            <div className="flex flex-col gap-3 border-t border-white/[0.04] pt-4 mt-2 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/35">
+                  Treasury log page {ledgerCurrentPage} of {ledgerTotalPages}
                 </p>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onPageChange(accounting.pagination.page - 1)}
-                    disabled={accounting.pagination.page <= 1}
-                  >
-                    ◀ Previous
-                  </Button>
-                  <span className="px-3 py-1 text-xs rounded bg-white/[0.04] text-white font-mono">
-                    {accounting.pagination.page}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onPageChange(accounting.pagination.page + 1)}
-                    disabled={accounting.pagination.page >= accounting.pagination.totalPages}
-                  >
-                    Next ▶
-                  </Button>
-                </div>
+                <p className="text-[11px] text-zinc-500">
+                  Showing {ledgerStart.toLocaleString()}-{ledgerEnd.toLocaleString()} of{" "}
+                  {ledgerTotal.toLocaleString()} records <span className="text-white/25">/ {ledgerPageSize} per page</span>
+                </p>
               </div>
-            )}
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => goToLedgerPage(1)}
+                  disabled={ledgerCurrentPage <= 1}
+                  className="border border-white/[0.05]"
+                >
+                  First
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => goToLedgerPage(ledgerCurrentPage - 1)}
+                  disabled={ledgerCurrentPage <= 1}
+                  className="border border-white/[0.05]"
+                >
+                  Prev
+                </Button>
+
+                <div className="flex items-center gap-1 rounded-lg border border-white/[0.06] bg-white/[0.025] p-1">
+                  {pageWindow.map((item) =>
+                    typeof item === "number" ? (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => goToLedgerPage(item)}
+                        aria-current={item === ledgerCurrentPage ? "page" : undefined}
+                        className={`h-7 min-w-7 rounded-md px-2 text-[11px] font-bold transition-colors ${
+                          item === ledgerCurrentPage
+                            ? "bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/25"
+                            : "text-white/45 hover:bg-white/[0.06] hover:text-white/80"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    ) : (
+                      <span key={item} className="px-1.5 text-[11px] font-bold text-white/25">
+                        ...
+                      </span>
+                    ),
+                  )}
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => goToLedgerPage(ledgerCurrentPage + 1)}
+                  disabled={ledgerCurrentPage >= ledgerTotalPages}
+                  className="border border-white/[0.05]"
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => goToLedgerPage(ledgerTotalPages)}
+                  disabled={ledgerCurrentPage >= ledgerTotalPages}
+                  className="border border-white/[0.05]"
+                >
+                  Last
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </Card>

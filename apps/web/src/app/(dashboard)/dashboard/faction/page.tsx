@@ -31,6 +31,10 @@ export default function FactionPage() {
 
   const canManage = activeGuild?.role === "FACTION_LEADER" || activeGuild?.role === "ADMIN";
   const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
+  const canLeaveFaction =
+    activeGuild?.role === "GUILD_LEADER" ||
+    activeGuild?.role === "FACTION_LEADER" ||
+    activeGuild?.role === "ADMIN";
 
   const { data: announcementsRaw, isLoading: isLoadingAnnouncements } = useQuery<FactionAnnouncementData[]>(
     "faction_announcements",
@@ -165,7 +169,9 @@ export default function FactionPage() {
           ))}
         </div>
 
-        {activeTab === "OVERVIEW" && <FactionOverviewTab canManage={canManage} />}
+        {activeTab === "OVERVIEW" && (
+          <FactionOverviewTab canManage={canManage} canLeaveFaction={canLeaveFaction} />
+        )}
 
         {activeTab === "ANNOUNCEMENTS" && (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">

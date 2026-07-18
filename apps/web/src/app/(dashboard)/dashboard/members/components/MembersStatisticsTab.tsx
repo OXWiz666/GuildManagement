@@ -1,6 +1,15 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { dashboardApi, type GuildStatsSummary, type MemberStatsBoardRow } from "@/lib/api";
 import { useQuery } from "@/lib/query";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -38,7 +47,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   const height = 40;
 
   if (values.length < 2) {
-    return <div style={{ height }} />;
+    return <div className="rounded-lg border border-white/[0.04] bg-white/[0.015]" style={{ height }} />;
   }
 
   const min = Math.min(...values, 0);
@@ -62,6 +71,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
+      <path d="M0 31H100" stroke="rgba(255,255,255,0.08)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
       <path d={areaPath} fill={`url(#${gradId})`} stroke="none" />
       <path
         d={linePath}
@@ -76,6 +86,11 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
+function clampPercent(value: number, max: number) {
+  if (max <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+}
+
 function Badge({ tone, children }: { tone: "up" | "down" | "flat"; children: React.ReactNode }) {
   const cls =
     tone === "up"
@@ -84,7 +99,7 @@ function Badge({ tone, children }: { tone: "up" | "down" | "flat"; children: Rea
         ? "text-rose-400 bg-rose-500/10 border-rose-500/20"
         : "text-white/50 bg-white/[0.05] border-white/10";
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${cls}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${cls}`}>
       {children}
     </span>
   );
@@ -98,16 +113,44 @@ interface StatCardProps {
   badge: React.ReactNode;
   sparklineValues: number[];
   color: string;
+  meterValue: number;
+  meterMax: number;
+  meterLabel: string;
+  meterDetail: string;
 }
 
-function StatCard({ icon, label, sublabel, bigValue, badge, sparklineValues, color }: StatCardProps) {
+function StatCard({
+  icon,
+  label,
+  sublabel,
+  bigValue,
+  badge,
+  sparklineValues,
+  color,
+  meterValue,
+  meterMax,
+  meterLabel,
+  meterDetail,
+}: StatCardProps) {
+  const meterPercent = clampPercent(meterValue, meterMax);
+
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex flex-col overflow-hidden">
-      <div className="flex items-start justify-between gap-2 mb-1">
+    <div
+      className="group relative min-h-[164px] rounded-2xl border border-white/[0.07] bg-[#0f1015] p-4 flex flex-col overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:border-white/[0.12]"
+      style={{
+        backgroundImage: `linear-gradient(135deg, ${color}14, rgba(255,255,255,0.015) 38%, rgba(0,0,0,0) 72%)`,
+      }}
+    >
+      <div
+        className="pointer-events-none absolute -right-12 -top-20 h-40 w-40 rounded-full blur-3xl opacity-0 transition-opacity duration-300 group-hover:opacity-60"
+        style={{ backgroundColor: `${color}24` }}
+      />
+
+      <div className="relative flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span
-            className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
-            style={{ backgroundColor: `${color}1f`, color }}
+            className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border border-white/[0.06]"
+            style={{ backgroundColor: `${color}20`, color }}
           >
             {icon}
           </span>
@@ -119,10 +162,28 @@ function StatCard({ icon, label, sublabel, bigValue, badge, sparklineValues, col
         {badge}
       </div>
 
-      <p className="text-[26px] font-bold tracking-tight text-white mt-2 mb-1">{bigValue}</p>
+      <div className="relative mt-4 flex items-end justify-between gap-3">
+        <p className="text-[30px] leading-none font-black tracking-tight text-white">{bigValue}</p>
+        <div className="w-28 max-w-[44%] opacity-90">
+          <Sparkline values={sparklineValues} color={color} />
+        </div>
+      </div>
 
-      <div className="mt-auto -mx-1">
-        <Sparkline values={sparklineValues} color={color} />
+      <div className="relative mt-auto pt-4 space-y-1.5">
+        <div className="flex items-center justify-between gap-2 text-[10px]">
+          <span className="font-semibold uppercase tracking-[0.14em] text-white/35">{meterLabel}</span>
+          <span className="font-mono font-bold text-white/55">{meterDetail}</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+          <div
+            className="h-full rounded-full transition-[width] duration-500"
+            style={{
+              width: `${meterPercent}%`,
+              backgroundColor: color,
+              boxShadow: `0 0 18px ${color}66`,
+            }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -142,6 +203,28 @@ function ChangeBadge({ current, previous }: { current: number; previous: number 
     return <Badge tone="flat">0%</Badge>;
   }
   return <Badge tone={change > 0 ? "up" : "down"}>{change > 0 ? "+" : ""}{change}%</Badge>;
+}
+
+function cpGrowthClass(value: number | null) {
+  if (value === null) return "text-white/30";
+  if (value > 0) return "text-emerald-400";
+  if (value < 0) return "text-rose-400";
+  return "text-white/60";
+}
+
+function formatSigned(value: number | null) {
+  if (value === null) return "--";
+  return `${value > 0 ? "+" : ""}${value.toLocaleString()}`;
+}
+
+function MetricCell({ value, tone }: { value: string; tone: "sky" | "amber" | "violet" | "gold" }) {
+  const cls = {
+    sky: "text-sky-400",
+    amber: "text-amber-400",
+    violet: "text-violet-400",
+    gold: "text-[var(--forge-gold-bright,#f5c451)]",
+  }[tone];
+  return <span className={`font-mono font-semibold ${cls}`}>{value}</span>;
 }
 
 const ICONS = {
@@ -181,6 +264,7 @@ const ICONS = {
  *  Full sortable table underneath for exact per-member figures. */
 export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabProps) {
   const [search, setSearch] = useState("");
+  const [sorting, setSorting] = useState<SortingState>([{ id: "totalPoints", desc: true }]);
 
   const { data: board, isLoading: isLoadingBoard } = useQuery<MemberStatsBoardRow[]>(
     guildId ? `member_stats_board:${guildId}` : "member_stats_board_empty",
@@ -203,15 +287,85 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
   const members = useMemo(() => board || [], [board]);
   const isLoading = isLoadingBoard || isLoadingSummary;
 
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return members;
-    return members.filter((m) => m.displayName.toLowerCase().includes(needle));
-  }, [members, search]);
-
   const cpGrowthTotal = useMemo(() => members.reduce((sum, m) => sum + (m.cpGrowth ?? 0), 0), [members]);
   const cpGrowingCount = useMemo(() => members.filter((m) => (m.cpGrowth ?? 0) > 0).length, [members]);
   const activeStreakCount = useMemo(() => members.filter((m) => m.currentStreak > 0).length, [members]);
+  const columns = useMemo<ColumnDef<MemberStatsBoardRow>[]>(
+    () => [
+      {
+        accessorKey: "displayName",
+        header: "Member",
+        cell: ({ row }) => {
+          const member = row.original;
+          return (
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Avatar name={member.displayName} src={member.avatarUrl} size="sm" />
+              <span className="text-[13px] font-semibold text-white truncate">{member.displayName}</span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "cpGrowth",
+        header: "CP Growth (30d)",
+        sortingFn: (a, b, id) => (a.getValue<number | null>(id) ?? Number.NEGATIVE_INFINITY) - (b.getValue<number | null>(id) ?? Number.NEGATIVE_INFINITY),
+        cell: ({ getValue }) => {
+          const value = getValue<number | null>();
+          return <span className={`font-mono font-semibold ${cpGrowthClass(value)}`}>{formatSigned(value)}</span>;
+        },
+      },
+      {
+        accessorKey: "presenceRate",
+        header: "Attendance Rate",
+        cell: ({ getValue }) => <MetricCell value={`${getValue<number>()}%`} tone="sky" />,
+      },
+      {
+        accessorKey: "currentStreak",
+        header: "Current Streak",
+        cell: ({ getValue }) => <MetricCell value={getValue<number>().toLocaleString()} tone="amber" />,
+      },
+      {
+        accessorKey: "participationCount",
+        header: "Raid Participation",
+        cell: ({ getValue }) => <MetricCell value={getValue<number>().toLocaleString()} tone="violet" />,
+      },
+      {
+        accessorKey: "totalPoints",
+        header: "Activity Points",
+        cell: ({ getValue }) => <MetricCell value={getValue<number>().toLocaleString()} tone="gold" />,
+      },
+    ],
+    [],
+  );
+  // TanStack Table intentionally returns table functions; keep this hook local to the table surface.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data: members,
+    columns,
+    state: {
+      globalFilter: search,
+      sorting,
+    },
+    onGlobalFilterChange: setSearch,
+    onSortingChange: setSorting,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const needle = String(filterValue).trim().toLowerCase();
+      if (!needle) return true;
+      const member = row.original;
+      return [
+        member.displayName,
+        member.cpGrowth === null ? "" : String(member.cpGrowth),
+        String(member.presenceRate),
+        String(member.currentStreak),
+        String(member.participationCount),
+        String(member.totalPoints),
+      ].some((value) => value.toLowerCase().includes(needle));
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+  const filteredRows = table.getFilteredRowModel().rows;
 
   if (isLoading) {
     return (
@@ -244,6 +398,10 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
           badge={<ChangeBadge current={summary?.attendanceRate.current ?? 0} previous={summary?.attendanceRate.previous ?? 0} />}
           sparklineValues={members.map((m) => m.presenceRate)}
           color="#38bdf8"
+          meterValue={summary?.attendanceRate.current ?? 0}
+          meterMax={100}
+          meterLabel="Guild average"
+          meterDetail={`${summary?.attendanceRate.previous ?? 0}% previous`}
         />
         <StatCard
           icon={ICONS.coin}
@@ -253,6 +411,10 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
           badge={<ChangeBadge current={summary?.activityPoints.current ?? 0} previous={summary?.activityPoints.previous ?? 0} />}
           sparklineValues={members.map((m) => m.totalPoints)}
           color="#f5c451"
+          meterValue={summary?.activityPoints.current ?? 0}
+          meterMax={Math.max(summary?.activityPoints.current ?? 0, summary?.activityPoints.previous ?? 0, 1)}
+          meterLabel="Window total"
+          meterDetail={`${(summary?.activityPoints.previous ?? 0).toLocaleString()} previous`}
         />
         <StatCard
           icon={ICONS.trending}
@@ -262,6 +424,10 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
           badge={<Badge tone={cpGrowingCount > 0 ? "up" : "flat"}>{cpGrowingCount}/{members.length} growing</Badge>}
           sparklineValues={members.map((m) => m.cpGrowth ?? 0)}
           color="#34d399"
+          meterValue={cpGrowingCount}
+          meterMax={members.length}
+          meterLabel="Growing members"
+          meterDetail={`${cpGrowingCount} of ${members.length}`}
         />
         <StatCard
           icon={ICONS.swords}
@@ -271,6 +437,10 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
           badge={<ChangeBadge current={summary?.raidParticipation.current ?? 0} previous={summary?.raidParticipation.previous ?? 0} />}
           sparklineValues={members.map((m) => m.participationCount)}
           color="#a78bfa"
+          meterValue={summary?.raidParticipation.current ?? 0}
+          meterMax={Math.max(summary?.raidParticipation.current ?? 0, summary?.raidParticipation.previous ?? 0, 1)}
+          meterLabel="Raid count"
+          meterDetail={`${(summary?.raidParticipation.previous ?? 0).toLocaleString()} previous`}
         />
         <StatCard
           icon={ICONS.flame}
@@ -280,73 +450,71 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
           badge={<Badge tone={activeStreakCount > 0 ? "up" : "flat"}>of {members.length}</Badge>}
           sparklineValues={members.map((m) => m.currentStreak)}
           color="#fb923c"
+          meterValue={activeStreakCount}
+          meterMax={members.length}
+          meterLabel="Active streak"
+          meterDetail={`${activeStreakCount} of ${members.length}`}
         />
       </div>
 
       {/* Full table */}
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] bg-white/[0.025] px-4 py-3">
-          <h3 className="text-sm font-semibold text-white">All members</h3>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] px-4 py-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">All members</h3>
+            <p className="text-[11px] text-white/35 mt-0.5">
+              {filteredRows.length.toLocaleString()} of {members.length.toLocaleString()} shown
+            </p>
+          </div>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search member..."
-            className="w-full sm:w-48 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] text-white placeholder:text-white/35 focus:outline-none focus:border-white/25"
+            placeholder="Search member or metric..."
+            className="w-full lg:w-64 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] text-white placeholder:text-white/35 focus:outline-none focus:border-white/25"
           />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse text-left">
             <thead>
-              <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-                <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Member</th>
-                <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">CP Growth (30d)</th>
-                <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Attendance Rate</th>
-                <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Current Streak</th>
-                <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Raid Participation</th>
-                <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Activity Points</th>
-              </tr>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id} className="border-b border-white/[0.06] bg-white/[0.02]">
+                  {headerGroup.headers.map((header) => {
+                    const sort = header.column.getIsSorted();
+                    return (
+                      <th key={header.id} className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+                        {header.isPlaceholder ? null : (
+                          <button
+                            type="button"
+                            onClick={header.column.getToggleSortingHandler()}
+                            className="inline-flex items-center gap-1.5 text-left hover:text-white/70 transition-colors cursor-pointer"
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            <span className="w-3 text-[9px] text-white/30">
+                              {sort === "asc" ? "Asc" : sort === "desc" ? "Desc" : ""}
+                            </span>
+                          </button>
+                        )}
+                      </th>
+                    );
+                  })}
+                </tr>
+              ))}
             </thead>
             <tbody className="divide-y divide-white/[0.05]">
-              {filtered.length === 0 ? (
+              {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-[12px] text-white/35 italic">
                     No members match &quot;{search}&quot;.
                   </td>
                 </tr>
               ) : (
-                filtered.map((m) => (
-                  <tr key={m.userId} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Avatar name={m.displayName} src={m.avatarUrl} size="sm" />
-                        <span className="text-[13px] font-semibold text-white truncate">{m.displayName}</span>
-                      </div>
-                    </td>
-                    <td
-                      className={`px-4 py-2.5 text-[12px] font-mono font-semibold whitespace-nowrap ${
-                        m.cpGrowth === null
-                          ? "text-white/30"
-                          : m.cpGrowth > 0
-                            ? "text-emerald-400"
-                            : m.cpGrowth < 0
-                              ? "text-rose-400"
-                              : "text-white/60"
-                      }`}
-                    >
-                      {m.cpGrowth === null ? "—" : `${m.cpGrowth > 0 ? "+" : ""}${m.cpGrowth.toLocaleString()}`}
-                    </td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono font-semibold text-sky-400 whitespace-nowrap">
-                      {m.presenceRate}%
-                    </td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono font-semibold text-amber-400 whitespace-nowrap">
-                      {m.currentStreak}
-                    </td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono font-semibold text-violet-400 whitespace-nowrap">
-                      {m.participationCount}
-                    </td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono font-semibold text-[var(--forge-gold-bright,#f5c451)] whitespace-nowrap">
-                      {m.totalPoints.toLocaleString()}
-                    </td>
+                filteredRows.map((row) => (
+                  <tr key={row.id} className="hover:bg-white/[0.025] transition-colors">
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 py-2.5 text-[12px] whitespace-nowrap">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}

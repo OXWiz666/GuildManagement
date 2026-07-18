@@ -25,6 +25,8 @@ const GuildStorageTab = dynamic(() => import("./components/GuildStorageTab"));
 const AuctionHallTab = dynamic(() => import("./components/AuctionHallTab"));
 import { useQuery, queryClient } from "@/lib/query";
 
+const TREASURY_LEDGER_PAGE_SIZE = 10;
+
 export default function GuildMarketPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -120,10 +122,12 @@ export default function GuildMarketPage() {
     data: accounting,
     isLoading: isLoadingAccounting,
   } = useQuery<any | null>(
-    activeGuild ? `accounting_dashboard:${activeGuild.guildId}:${ledgerPage}` : "accounting_dashboard_empty",
+    activeGuild
+      ? `accounting_dashboard:${activeGuild.guildId}:${ledgerPage}:${TREASURY_LEDGER_PAGE_SIZE}`
+      : "accounting_dashboard_empty",
     async () => {
       if (!activeGuild) return null;
-      const result = await dashboardApi.getAccountingDashboard(activeGuild.guildId, ledgerPage, 15);
+      const result = await dashboardApi.getAccountingDashboard(activeGuild.guildId, ledgerPage, TREASURY_LEDGER_PAGE_SIZE);
       return result.success && result.data ? result.data : null;
     },
     { persist: true, staleTime: 15000, enabled: !!activeGuild }
@@ -466,6 +470,7 @@ export default function GuildMarketPage() {
                 memberRoleFilter={memberRoleFilter}
                 onRoleFilterChange={setMemberRoleFilter}
                 ledgerPage={ledgerPage}
+                ledgerLimit={TREASURY_LEDGER_PAGE_SIZE}
                 onPageChange={setLedgerPage}
               />
             )}

@@ -69,7 +69,7 @@ export default function EditSessionModal({
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Ancient Dragon Raid Attendance"
+              placeholder="e.g. Lady Dalia Raid Attendance"
               className="w-full px-4 py-2 rounded-xl bg-[#0f0f16] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-white/20"
             />
           </div>

@@ -8,6 +8,7 @@ import {
 } from "@guild/shared";
 import { BadRequestError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
 import { cache } from "../lib/cache";
+import { broadcastToGuild } from "../lib/socket";
 import { IGuildRepository, PrismaGuildRepository } from "../repositories/guild.repository";
 import { IAuditRepository, PrismaAuditRepository } from "../repositories/audit.repository";
 
@@ -19,6 +20,7 @@ import { IAuditRepository, PrismaAuditRepository } from "../repositories/audit.r
 const MEMBERSHIP_CACHE_TTL = 15; // seconds
 const membershipCacheKey = (guildId: string, userId: string) =>
   `membership:${guildId}:${userId}`;
+const SELF_LEAVE_BLOCKED_ROLES = new Set(["GUILD_LEADER", "FACTION_LEADER"]);
 
 // ─── Member Types ───────────────────────────────
 
@@ -272,6 +274,17 @@ export class GuildService {
     // Invalidate the target's cached membership so the new role takes effect now.
     await cache.delete(membershipCacheKey(guildId, targetMember.userId));
 
+    // Announce the change to realtime subscribers. The Discord bot caches
+    // (discordId, guildId) → role and has no other way to learn a role changed
+    // here, so without this its permission gate stays stale until its TTL
+    // lapses. Fire-and-forget: broadcastToGuild swallows its own errors, and a
+    // realtime hiccup must never fail a promotion.
+    await broadcastToGuild(guildId, "member_role_updated", {
+      userId: targetMember.userId,
+      oldRole,
+      newRole,
+    });
+
     return {
       id: updated.id,
       userId: updated.userId,
@@ -289,6 +302,48 @@ export class GuildService {
         : null,
       user: updated.user,
     };
+  }
+
+  /**
+   * Let an active member leave a guild without deleting historical records.
+   * Leadership transfer is required first so the guild is never orphaned.
+   */
+  async leaveGuild(
+    guildId: string,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ success: true; guildId: string }> {
+    const membership = await this.guildRepo.getMemberByUser(actorId, guildId);
+
+    if (!membership || !membership.isActive) {
+      throw new ForbiddenError("You are not an active member of this guild");
+    }
+
+    if (SELF_LEAVE_BLOCKED_ROLES.has(membership.role)) {
+      throw new BadRequestError("Transfer guild leadership before leaving this guild");
+    }
+
+    await this.guildRepo.deactivateMember(membership.id);
+
+    await this.auditRepo.create({
+      actorId,
+      guildId,
+      action: "GUILD_MEMBER_LEFT",
+      target: "GuildMember",
+      targetId: membership.id,
+      detail: {
+        userId: actorId,
+        role: membership.role,
+        rankName: membership.rankName,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    await cache.delete(membershipCacheKey(guildId, actorId));
+
+    return { success: true, guildId };
   }
 
   /**
@@ -418,6 +473,14 @@ export const updateMemberRole = (
   userAgent?: string,
 ): Promise<GuildMemberWithUser> =>
   guildService.updateMemberRole(guildId, memberId, input, actorId, ipAddress, userAgent);
+
+export const leaveGuild = (
+  guildId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+): Promise<{ success: true; guildId: string }> =>
+  guildService.leaveGuild(guildId, actorId, ipAddress, userAgent);
 
 export const getGuildSettings = (guildId: string): Promise<GuildSettings> =>
   guildService.getGuildSettings(guildId);

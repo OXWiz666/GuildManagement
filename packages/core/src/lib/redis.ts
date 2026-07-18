@@ -13,6 +13,8 @@ const redis =
     ? new Redis({ url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN })
     : null;
 
+const inFlightLoads = new Map<string, Promise<unknown>>();
+
 if (!redis) {
   console.warn(
     "[Redis] UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN not set — falling back to the in-memory cache. " +
@@ -39,13 +41,36 @@ export const cache = {
     await redis.set(key, value, { ex: ttlSeconds });
   },
 
+  /**
+   * Claim a key only when it does not already exist.
+   *
+   * Used by the Discord bot to dedupe gateway events. With Upstash this is a
+   * Redis SET NX, so two bot processes cannot both claim the same message id.
+   */
+  async setIfAbsent<T>(key: string, value: T, ttlSeconds: number): Promise<boolean> {
+    if (!redis) return memoryCache.setIfAbsent(key, value, ttlSeconds);
+    const result = await redis.set(key, value, { ex: ttlSeconds, nx: true });
+    return result === "OK";
+  },
+
   /** Read-through: return the cached value, or run `loader`, cache it, and return it. */
   async getOrSet<T>(key: string, ttlSeconds: number, loader: () => Promise<T>): Promise<T> {
     const cached = await this.get<T>(key);
     if (cached !== null) return cached;
-    const value = await loader();
-    await this.set(key, value, ttlSeconds);
-    return value;
+
+    const inFlight = inFlightLoads.get(key) as Promise<T> | undefined;
+    if (inFlight) return inFlight;
+
+    const load = (async () => {
+      const value = await loader();
+      await this.set(key, value, ttlSeconds);
+      return value;
+    })().finally(() => {
+      inFlightLoads.delete(key);
+    });
+
+    inFlightLoads.set(key, load);
+    return load;
   },
 
   /** Delete one exact key. */

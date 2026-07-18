@@ -36,7 +36,11 @@ interface Props {
   members: GuildMemberData[];
   onSaved: () => void;
   onDeleted: () => void;
-  onCreated: (roleId: string) => void;
+  // Passes the full created role, not just its id — the parent seeds it into
+  // its optimistic `customRoles` list synchronously (see
+  // RoleManagementSection), so selecting it doesn't hit the gap before the
+  // invalidated query actually refetches.
+  onCreated: (role: CustomRoleData) => void;
   onCancelNew: () => void;
 }
 
@@ -150,7 +154,7 @@ export default function RoleEditorPanel({
       if (result.success && result.data?.role) {
         addToast("success", "Role created");
         refresh();
-        onCreated(result.data.role.id);
+        onCreated(result.data.role);
       } else {
         addToast("error", result.error?.message || "Failed to create role");
       }
@@ -159,22 +163,33 @@ export default function RoleEditorPanel({
     }
   }
 
-  async function deleteRole() {
+  function deleteRole() {
     if (!existingCustom) return;
-    if (!confirm(`Delete the "${existingCustom.name}" role? Members holding it revert to the plain ${resolveRoleName(existingCustom.band)} rank.`)) return;
-    setDeleting(true);
-    try {
-      const result = await guildApi.deleteCustomRole(guildId, existingCustom.id);
-      if (result.success) {
-        addToast("success", "Role deleted");
-        refresh();
-        onDeleted();
-      } else {
-        addToast("error", result.error?.message || "Failed to delete role");
-      }
-    } finally {
-      setDeleting(false);
-    }
+    const role = existingCustom;
+    addToast(
+      "warning",
+      `Delete the "${role.name}" role? Members holding it revert to the plain ${resolveRoleName(role.band)} rank.`,
+      0,
+      {
+        label: "Delete",
+        variant: "danger",
+        onClick: async () => {
+          setDeleting(true);
+          try {
+            const result = await guildApi.deleteCustomRole(guildId, role.id);
+            if (result.success) {
+              addToast("success", "Role deleted");
+              refresh();
+              onDeleted();
+            } else {
+              addToast("error", result.error?.message || "Failed to delete role");
+            }
+          } finally {
+            setDeleting(false);
+          }
+        },
+      },
+    );
   }
 
   const previewRole = bandValue ?? band;
@@ -264,13 +279,22 @@ export default function RoleEditorPanel({
                         </button>
                       ))}
                     </div>
-                  ) : (
+                  ) : existingCustom ? (
                     <>
                       <span className="inline-flex px-2.5 py-1.5 rounded-lg text-xs border bg-white/[0.03] border-white/[0.08] text-white/70">
-                        {resolveRoleName(existingCustom!.band)}
+                        {resolveRoleName(existingCustom.band)}
                       </span>
                       <p className="text-[10px] text-white/30 mt-1.5">Permission level can&apos;t be changed after creation — delete and recreate instead.</p>
                     </>
+                  ) : (
+                    // `selection` can point at a custom role id that isn't in
+                    // `customRoles` yet — right after creating one (parent's
+                    // query hasn't refetched) or right after another officer
+                    // deletes the one currently open. Render a neutral
+                    // placeholder instead of crashing on a null read.
+                    <span className="inline-flex px-2.5 py-1.5 rounded-lg text-xs border bg-white/[0.03] border-white/[0.08] text-white/30 italic">
+                      Loading…
+                    </span>
                   )}
                 </div>
               </>

@@ -12,6 +12,7 @@ import { auth } from "./routes/auth";
 import { admin } from "./routes/admin";
 import { dashboard } from "./routes/dashboard";
 import { onboarding } from "./routes/onboarding";
+import { discord } from "./routes/discord";
 import { health } from "./routes/health";
 
 /**
@@ -41,6 +42,7 @@ const routes = app
   .route("/admin", admin)
   .route("/dashboard", dashboard)
   .route("/onboarding", onboarding)
+  .route("/discord", discord)
   .route("/health", health);
 
 export type AppType = typeof routes;
@@ -54,5 +56,6 @@ export type AuthType = typeof auth;
 export type AdminType = typeof admin;
 export type DashboardType = typeof dashboard;
 export type OnboardingType = typeof onboarding;
+export type DiscordType = typeof discord;
 export type HealthType = typeof health;
 export { app };

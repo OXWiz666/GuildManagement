@@ -148,8 +148,8 @@ export class BossService {
   }
 
   /**
-   * Split `!kill <boss> <item>`'s free-text tail into a boss name and an
-   * optional item-drop name.
+   * Split `!kill <boss> <item>[, <item>...]`'s free-text tail into a boss name
+   * and zero or more comma-separated item-drop names.
    *
    * Boss names/aliases are a small closed vocabulary — aliases are always a
    * single token (enforced at `!alias add`), and the longest registry name
@@ -160,7 +160,7 @@ export class BossService {
   async matchBossAndItem(
     tokens: string[],
     discordServerId: string,
-  ): Promise<{ bossName: string; itemDrop?: string }> {
+  ): Promise<{ bossName: string; itemDrops?: string[] }> {
     const aliases = await this.aliases.listForServer(discordServerId);
     const maxWords = Math.min(tokens.length, 2);
 
@@ -178,8 +178,12 @@ export class BossService {
 
       const resolved = exact ?? aliasTarget;
       if (resolved) {
-        const itemDrop = tokens.slice(n).join(" ").trim();
-        return { bossName: resolved.name, itemDrop: itemDrop || undefined };
+        const tail = tokens.slice(n).join(" ").trim();
+        const itemDrops = tail
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return { bossName: resolved.name, itemDrops: itemDrops.length ? itemDrops : undefined };
       }
     }
 
@@ -309,15 +313,29 @@ export class BossService {
     killedAt: Date;
     actorId: string;
     takenGuildId?: string;
-    // Freeform item text from `!kill <boss> <item>`. Matched against the
-    // drop catalog when possible; otherwise still vaulted as a plain entry
-    // (see the fallback below) rather than silently lost.
-    itemDrop?: string;
-  }): Promise<{ nextSpawn: KillNextSpawn | null; drop: { itemName: string; matched: boolean; iconUrl: string | null } | null }> {
+    // Freeform item names from `!kill <boss> <item>, <item>, ...`. Each is
+    // matched against the drop catalog independently; unmatched names still
+    // get vaulted as plain entries (see the fallback below) rather than
+    // silently lost. Order is preserved in the returned `drops` array so the
+    // embed lists them the way the officer typed them.
+    itemDrops?: string[];
+  }): Promise<{
+    nextSpawn: KillNextSpawn | null;
+    drops: Array<{ itemName: string; matched: boolean; iconUrl: string | null }>;
+  }> {
     // Which guild took the boss. Defaults to the actor's own guild — the
     // overwhelmingly common case for a kill reported from that guild's server.
     const takenGuildId = params.takenGuildId ?? params.guildId;
-    const matchedDrop = params.itemDrop ? await this.matchDropItem(params.itemDrop) : null;
+    const names = params.itemDrops ?? [];
+
+    // Match each typed name against the catalog independently — a kill can
+    // easily drop a mix of catalog items and one-off/event items in the same
+    // message, and one miss shouldn't affect the others.
+    const matches = await Promise.all(names.map((name) => this.matchDropItem(name)));
+
+    const catalogDrops = matches
+      .map((m) => (m ? { bucket: m.bucket, path: m.path, quantity: 1 } : null))
+      .filter((d): d is { bucket: string; path: string; quantity: number } => d !== null);
 
     const result = await core.dashboard.markBossRotationKilledByName(
       params.guildId,
@@ -330,32 +348,37 @@ export class BossService {
       // a plausible-looking IP.
       undefined,
       "discord-bot",
-      matchedDrop ? [{ bucket: matchedDrop.bucket, path: matchedDrop.path, quantity: 1 }] : undefined,
+      catalogDrops.length ? catalogDrops : undefined,
     );
 
-    // Typed item text didn't match any catalog icon — vault it as a plain
-    // entry anyway (best-effort, same as the catalog path above) instead of
-    // silently losing the drop the officer just reported.
-    if (params.itemDrop && !matchedDrop) {
+    // Typed item text that didn't match any catalog icon — vault each anyway
+    // (best-effort, same as the catalog path above) instead of silently
+    // losing the drops the officer just reported.
+    const unmatchedNames = names.filter((_, i) => !matches[i]);
+    if (unmatchedNames.length) {
       try {
-        await core.storage.addDropsToStorage(takenGuildId, params.actorId, params.bossName, [
-          { itemName: params.itemDrop, type: "Other", rarity: null, quantity: 1 },
-        ]);
+        await core.storage.addDropsToStorage(
+          takenGuildId,
+          params.actorId,
+          params.bossName,
+          unmatchedNames.map((itemName) => ({ itemName, type: "Other", rarity: null, quantity: 1 })),
+        );
       } catch (error) {
-        console.error("[bot] Failed to vault unmatched kill drop to guild storage", error);
+        console.error("[bot] Failed to vault unmatched kill drop(s) to guild storage", error);
       }
     }
 
-    const drop = params.itemDrop
-      ? {
-          itemName: matchedDrop?.itemName ?? params.itemDrop,
-          matched: !!matchedDrop,
-          iconUrl: matchedDrop?.iconUrl ?? null,
-        }
-      : null;
+    const drops = names.map((name, i) => {
+      const matched = matches[i];
+      return {
+        itemName: matched?.itemName ?? name,
+        matched: !!matched,
+        iconUrl: matched?.iconUrl ?? null,
+      };
+    });
 
     const next = result.nextSchedule;
-    if (!next) return { nextSpawn: null, drop };
+    if (!next) return { nextSpawn: null, drops };
 
     // Same live/countdown projection every other read uses — a freshly rolled
     // schedule can itself already be "live" (e.g. a fixed-schedule boss whose
@@ -372,7 +395,7 @@ export class BossService {
         guildTurn: next.guildTurnGuildName ?? next.guildTurn ?? null,
         live: timer.live,
       },
-      drop,
+      drops,
     };
   }
 

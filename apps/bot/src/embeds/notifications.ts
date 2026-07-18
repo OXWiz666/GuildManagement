@@ -57,7 +57,9 @@ export interface KillEmbedInput {
   killedBy: string;
   nextSpawn: Date | null;
   nextTurn: string | null;
-  dropItemName?: string | null;
+  // Zero or more item names dropped this kill (`!kill <boss> <item>, <item>`).
+  // Thumbnail always shows at most one icon, so it uses the first match.
+  dropItemNames?: string[];
   dropIconUrl?: string | null;
 }
 
@@ -70,8 +72,11 @@ export function killEmbed(input: KillEmbedInput): EmbedBuilder {
       { name: "Logged By", value: input.killedBy, inline: true },
     );
 
-  if (input.dropItemName) {
-    embed.addFields({ name: "Drop", value: `📦 **${input.dropItemName}** → Guild Storage` });
+  if (input.dropItemNames?.length) {
+    embed.addFields({
+      name: input.dropItemNames.length > 1 ? "Drops" : "Drop",
+      value: input.dropItemNames.map((name) => `📦 **${name}** → Guild Storage`).join("\n"),
+    });
   }
 
   if (input.nextSpawn) {

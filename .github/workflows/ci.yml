@@ -32,15 +32,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+      # pnpm/action-setup@v4 fails with "Multiple versions of pnpm specified"
+      # once package.json declares "packageManager" (which this repo does,
+      # pnpm@10.12.1) — the action can't tell its own default `version` input
+      # apart from an explicit one, so it always sees two sources. Corepack
+      # reads packageManager directly, giving pnpm a single source of truth.
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies

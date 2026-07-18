@@ -181,7 +181,7 @@ describe("matchBossAndItem", () => {
   it("splits an exact single-word boss name from a trailing item", async () => {
     const { service } = makeService();
     const result = await service.matchBossAndItem(["Livera", "Pernox", "Bow"], SERVER_ID);
-    expect(result).toEqual({ bossName: "Livera", itemDrop: "Pernox Bow" });
+    expect(result).toEqual({ bossName: "Livera", itemDrops: ["Pernox Bow"] });
   });
 
   it("splits a two-word boss name from a trailing item", async () => {
@@ -190,7 +190,7 @@ describe("matchBossAndItem", () => {
       ["Baron", "Baraudmore", "Pernox", "Bow"],
       SERVER_ID,
     );
-    expect(result).toEqual({ bossName: "Baron Baraudmore", itemDrop: "Pernox Bow" });
+    expect(result).toEqual({ bossName: "Baron Baraudmore", itemDrops: ["Pernox Bow"] });
   });
 
   it("splits on a configured alias", async () => {
@@ -198,13 +198,34 @@ describe("matchBossAndItem", () => {
       { alias: "baron", bossName: "Baron Baraudmore", discordServerId: null },
     ]);
     const result = await service.matchBossAndItem(["baron", "Pernox", "Bow"], SERVER_ID);
-    expect(result).toEqual({ bossName: "Baron Baraudmore", itemDrop: "Pernox Bow" });
+    expect(result).toEqual({ bossName: "Baron Baraudmore", itemDrops: ["Pernox Bow"] });
+  });
+
+  it("splits multiple comma-separated items into an array", async () => {
+    const { service } = makeService();
+    const result = await service.matchBossAndItem(
+      ["Livera", "Pernox", "Bow,", "Temporal", "Fragment", ",", "Iron", "Ore"],
+      SERVER_ID,
+    );
+    expect(result).toEqual({
+      bossName: "Livera",
+      itemDrops: ["Pernox Bow", "Temporal Fragment", "Iron Ore"],
+    });
+  });
+
+  it("trims whitespace and drops empty entries from a comma list", async () => {
+    const { service } = makeService();
+    const result = await service.matchBossAndItem(
+      ["Livera", "Pernox", "Bow", ",,", "Iron", "Ore", ","],
+      SERVER_ID,
+    );
+    expect(result).toEqual({ bossName: "Livera", itemDrops: ["Pernox Bow", "Iron Ore"] });
   });
 
   it("has no item when the boss name consumes every token", async () => {
     const { service } = makeService();
     const result = await service.matchBossAndItem(["Lady", "Dalia"], SERVER_ID);
-    expect(result).toEqual({ bossName: "Lady Dalia", itemDrop: undefined });
+    expect(result).toEqual({ bossName: "Lady Dalia", itemDrops: undefined });
   });
 
   it("falls back to fuzzy/prefix matching (boss-only) when no exact split is found", async () => {

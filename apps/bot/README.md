@@ -85,7 +85,7 @@ cache outage shouldn't become a bot outage.
    Without it the bot connects and silently ignores every command.
 3. Invite with scope `bot` and permissions: Send Messages, Embed Links,
    Read Message History, Manage Messages (used to delete `!link` codes from
-   public channels).
+   public channels), Manage Webhooks.
 4. `cp apps/bot/.env.example apps/bot/.env` and fill it in.
 5. `pnpm install && pnpm --filter @guild/db db:generate`
 6. `pnpm --filter @guild/bot dev`
@@ -95,6 +95,7 @@ cache outage shouldn't become a bot outage.
 ```
 !bindguild <invite-code>   # Guild Leader only — from ForgeKeep → Guild Settings
 !notifhere                 # where spawn/kill alerts go
+!webhookhere [name]        # creates a Discord webhook and DMs the URL
 !commands                  # everything available to you
 ```
 
@@ -117,6 +118,7 @@ cache outage shouldn't become a bot outage.
 | `!link <code>` / `!unlink` | Anyone | Account linking |
 | `!bindguild <invite>` | Guild Leader | Bind this server to a guild |
 | `!notifhere` / `!cmdhere` / `!threadhere` | Officers | Channel routing |
+| `!webhookhere [name]` | Officers | Create a channel webhook; URL is delivered by DM |
 | `!alias [add\|remove]` | Officers | Boss nicknames; also editable in Guild Settings |
 | `!commands [name]` | Anyone | Generated from the live registry |
 

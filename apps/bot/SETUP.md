@@ -76,11 +76,13 @@ Still on the **Bot** page → scroll to **Privileged Gateway Intents** → turn 
 | Read Message History | Reading commands |
 | Attach Files | Future notification images |
 | Manage Messages | Deletes `!link <code>` messages so codes don't sit in channel history |
+| Manage Webhooks | Lets officers create channel webhooks with `!webhookhere` |
 
 Copy the generated URL, open it, pick your server, **Authorize**.
 
 `Manage Messages` is optional — without it the bot still links accounts, it just
-can't tidy the code out of the channel afterwards.
+can't tidy the code out of the channel afterwards. `Manage Webhooks` is only
+needed if you want `!webhookhere` to create webhooks from Discord.
 
 ---
 
@@ -201,6 +203,7 @@ Then set where alerts go:
 !notifhere     # boss spawn/kill notifications post here
 !cmdhere       # optional: restrict commands to this channel
 !threadhere    # optional: boss threads get created here
+!webhookhere   # optional: create a webhook here; URL is sent by DM
 ```
 
 Binding and channels stay Discord-side commands because both need context the

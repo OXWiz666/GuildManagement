@@ -11,6 +11,7 @@ import { aliasCommand } from "./alias.command.js";
 import { commandsCommand } from "./commands.command.js";
 import { smartAttendanceCommand } from "./smartattendance.command.js";
 import { itemsCommand } from "./items.command.js";
+import { webhookHereCommand } from "./webhook.command.js";
 
 /**
  * The command table.
@@ -34,6 +35,7 @@ export const COMMANDS: Command[] = [
   notifHereCommand,
   cmdHereCommand,
   threadHereCommand,
+  webhookHereCommand,
   aliasCommand,
   commandsCommand,
 ];

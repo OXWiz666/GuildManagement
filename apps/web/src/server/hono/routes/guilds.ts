@@ -228,6 +228,15 @@ export const guilds = new Hono<AppEnv>()
     broadcastToGuild(guildId, "member_role_updated", updated);
     return ok(c, { member: updated });
   })
+  .delete("/:guildId/members/me", requireGuildRole("MEMBER"), async (c) => {
+    const guildId = c.req.param("guildId");
+    const user = c.get("user");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.guild.leaveGuild(guildId, user.userId, ipAddress, userAgent);
+    await cache.delete(`guild-members:${guildId}`);
+    broadcastToGuild(guildId, "member_left_guild", { guildId, userId: user.userId });
+    return ok(c, result);
+  })
 
   // ─── Settings ────────────────────────────────────────────────
   .get("/:guildId/settings", requireGuildRole("MEMBER"), async (c) => {

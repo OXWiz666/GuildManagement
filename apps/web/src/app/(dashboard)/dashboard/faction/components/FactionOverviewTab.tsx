@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 import {
   factionApi,
   type FactionOverviewData,
@@ -20,7 +21,14 @@ import AddGuildTab from "./AddGuildTab";
  * get the invite-code + invite-guild controls and can expand each guild to
  * see its members.
  */
-export default function FactionOverviewTab({ canManage }: { canManage: boolean }) {
+export default function FactionOverviewTab({
+  canManage,
+  canLeaveFaction,
+}: {
+  canManage: boolean;
+  canLeaveFaction: boolean;
+}) {
+  const { refreshUser } = useAuth();
   const { data, isLoading } = useQuery<FactionOverviewData | null>(
     "faction_overview",
     async () => {
@@ -100,7 +108,9 @@ export default function FactionOverviewTab({ canManage }: { canManage: boolean }
               key={guild.id}
               guild={guild}
               canManage={canManage}
+              canLeaveFaction={canLeaveFaction}
               members={members.filter((m) => m.guild?.id === guild.id)}
+              onOwnGuildLeft={refreshUser}
             />
           ))}
         </div>
@@ -134,27 +144,38 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
 function GuildCard({
   guild,
   canManage,
+  canLeaveFaction,
   members,
+  onOwnGuildLeft,
 }: {
   guild: FactionOverviewGuild;
   canManage: boolean;
+  canLeaveFaction: boolean;
   members: FactionMemberData[];
+  onOwnGuildLeft: () => Promise<unknown>;
 }) {
   const { addToast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [removing, setRemoving] = useState(false);
 
   async function remove() {
-    if (!confirm(`Remove ${guild.name} from the faction? This clears it from every boss rotation queue.`)) return;
+    const action = guild.isOwnGuild ? "leave" : "remove";
+    const message = guild.isOwnGuild
+      ? `Leave the faction with ${guild.name}? This clears your guild from every boss rotation queue.`
+      : `Remove ${guild.name} from the faction? This clears it from every boss rotation queue.`;
+    if (!confirm(message)) return;
     setRemoving(true);
     try {
       const result = await factionApi.removeGuildFromFaction(guild.id);
       if (result.success) {
-        addToast("success", `${guild.name} removed from the faction`);
+        addToast("success", guild.isOwnGuild ? `${guild.name} left the faction` : `${guild.name} removed from the faction`);
         queryClient.invalidateQueries("faction_overview");
         queryClient.invalidateQueries("faction_members");
+        if (guild.isOwnGuild) {
+          await onOwnGuildLeft();
+        }
       } else {
-        addToast("error", result.error?.message || "Failed to remove guild");
+        addToast("error", result.error?.message || `Failed to ${action} faction`);
       }
     } finally {
       setRemoving(false);
@@ -194,6 +215,16 @@ function GuildCard({
             >
               {expanded ? "Hide" : "View members"}
             </button>
+          )}
+          {guild.isOwnGuild && canLeaveFaction && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={remove}
+              isLoading={removing}
+            >
+              Leave Faction
+            </Button>
           )}
           {canManage && !guild.isOwnGuild && (
             <Button

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { authApi } from "@/lib/api";
+import { authApi, guildApi } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const { addToast } = useToast();
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [isLeavingGuild, setIsLeavingGuild] = useState(false);
 
   // Profile states
   const [displayName, setDisplayName] = useState(user?.displayName || "");
@@ -43,6 +44,9 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const activeGuild = user?.guilds?.[0] ?? null;
+  const isGuildLeadership =
+    activeGuild?.role === "GUILD_LEADER" || activeGuild?.role === "FACTION_LEADER";
 
   const loadSessions = useCallback(async () => {
     setIsLoadingSessions(true);
@@ -110,6 +114,41 @@ export default function SettingsPage() {
           window.location.href = "/login";
         },
       }
+    );
+  }
+
+  function handleLeaveGuild() {
+    if (!activeGuild) return;
+    if (isGuildLeadership) {
+      addToast("error", "Transfer guild leadership before leaving this guild");
+      return;
+    }
+
+    addToast(
+      "warning",
+      `Leave ${activeGuild.guildName}? You will lose access to this guild's dashboard until you are invited again.`,
+      0,
+      {
+        label: "Leave Guild",
+        variant: "danger",
+        onClick: async () => {
+          setIsLeavingGuild(true);
+          try {
+            const result = await guildApi.leaveGuild(activeGuild.guildId);
+            if (result.success) {
+              addToast("success", `You left ${activeGuild.guildName}`);
+              await refreshUser();
+              window.location.href = "/dashboard";
+            } else {
+              addToast("error", result.error?.message || "Failed to leave guild");
+            }
+          } catch (err: unknown) {
+            addToast("error", err instanceof Error ? err.message : "Failed to leave guild");
+          } finally {
+            setIsLeavingGuild(false);
+          }
+        },
+      },
     );
   }
 
@@ -314,6 +353,32 @@ export default function SettingsPage() {
             <p className="text-sm text-white/45 mb-4 leading-relaxed">
               These actions cannot be undone. Proceed with caution.
             </p>
+            {activeGuild && (
+              <div className="mb-4 rounded-xl border border-red-500/10 bg-red-500/[0.035] p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-white">
+                      Leave {activeGuild.guildName}
+                    </h3>
+                    <p className="text-xs text-white/45 mt-1 leading-relaxed">
+                      {isGuildLeadership
+                        ? "Guild leaders must transfer leadership before leaving."
+                        : "Your member record is kept for audit and ledger history, but your access is removed."}
+                    </p>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={handleLeaveGuild}
+                    isLoading={isLeavingGuild}
+                    disabled={isGuildLeadership}
+                    className="shrink-0"
+                  >
+                    Leave Guild
+                  </Button>
+                </div>
+              </div>
+            )}
             <Magnetic strength={4}>
               <Button
                 variant="danger"

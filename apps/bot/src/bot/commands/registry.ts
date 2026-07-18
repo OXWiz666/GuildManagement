@@ -10,6 +10,7 @@ import { cmdHereCommand, notifHereCommand, threadHereCommand } from "./config.co
 import { aliasCommand } from "./alias.command.js";
 import { commandsCommand } from "./commands.command.js";
 import { smartAttendanceCommand } from "./smartattendance.command.js";
+import { itemsCommand } from "./items.command.js";
 
 /**
  * The command table.
@@ -21,6 +22,7 @@ export const COMMANDS: Command[] = [
   spawnCommand,
   killCommand,
   editKillTimeCommand,
+  itemsCommand,
   forceSpawnCommand,
   forceSpawnAllCommand,
   partyCommand,

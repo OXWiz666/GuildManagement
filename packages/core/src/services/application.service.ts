@@ -383,42 +383,65 @@ export async function handleApplicationAction(
       data: { status: JoinRequestStatus.ACCEPTED },
     });
 
-    // 2. Count existing members in guild
-    const currentMemberCount = await tx.guildMember.count({
-      where: { guildId },
+    // 2. Reactivate former members instead of creating a duplicate row. The
+    // unique (userId, guildId) constraint preserves history across leave/rejoin.
+    const existingMember = await tx.guildMember.findUnique({
+      where: { userId_guildId: { userId: request.userId, guildId } },
     });
 
-    // 3. Generate dynamic Member Code (sequential suffix padded)
-    const prefix = getGuildAbbreviation(request.guild.name);
-    let checkIndex = currentMemberCount + 1;
-    let memberCode = `${prefix}-${String(checkIndex).padStart(3, "0")}`;
-
-    // Loop check for uniqueness constraint safety
-    while (true) {
-      const conflicting = await tx.guildMember.findUnique({
-        where: { memberCode },
+    // 3. Generate dynamic Member Code (sequential suffix padded) only when a
+    // returning member does not already have one.
+    let memberCode = existingMember?.memberCode ?? null;
+    if (!memberCode) {
+      const currentMemberCount = await tx.guildMember.count({
+        where: { guildId },
       });
-      if (!conflicting) break;
-      checkIndex++;
+      const prefix = getGuildAbbreviation(request.guild.name);
+      let checkIndex = currentMemberCount + 1;
       memberCode = `${prefix}-${String(checkIndex).padStart(3, "0")}`;
+
+      // Loop check for uniqueness constraint safety
+      while (true) {
+        const conflicting = await tx.guildMember.findUnique({
+          where: { memberCode },
+        });
+        if (!conflicting) break;
+        checkIndex++;
+        memberCode = `${prefix}-${String(checkIndex).padStart(3, "0")}`;
+      }
     }
 
-    // 4. Create actual GuildMember record
+    // 4. Create or reactivate actual GuildMember record.
     // Default Role = MEMBER, Default RankName = "Member"
-    const newMember = await tx.guildMember.create({
-      data: {
-        userId: request.userId,
-        guildId,
-        role: GuildRole.MEMBER,
-        rankName: "Member",
-        ign: request.ign,
-        cp: request.cp,
-        class: request.class,
-        weapon: request.weapon,
-        memberCode,
-        isActive: true,
-      },
-    });
+    const newMember = existingMember
+      ? await tx.guildMember.update({
+          where: { id: existingMember.id },
+          data: {
+            role: GuildRole.MEMBER,
+            rankName: "Member",
+            customRoleId: null,
+            ign: request.ign,
+            cp: request.cp,
+            class: request.class,
+            weapon: request.weapon,
+            memberCode,
+            isActive: true,
+          },
+        })
+      : await tx.guildMember.create({
+          data: {
+            userId: request.userId,
+            guildId,
+            role: GuildRole.MEMBER,
+            rankName: "Member",
+            ign: request.ign,
+            cp: request.cp,
+            class: request.class,
+            weapon: request.weapon,
+            memberCode,
+            isActive: true,
+          },
+        });
 
     return { newMember, memberCode };
   });

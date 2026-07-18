@@ -77,10 +77,10 @@ export default function MembersPage() {
   const members = membersRaw || [];
 
   // 1b. Accounting Query — sources Balance + Guild Points for the roster.
-  // Shares the `accounting_dashboard:${guildId}:1` cache key with Guild
-  // Market's Accounting tab (page 1), so visiting both costs one fetch.
+  // Member enrichment only needs balances, so it requests one ledger row and
+  // keeps its query key separate from Guild Market's paginated ledger pages.
   const { data: accounting } = useQuery<any | null>(
-    activeGuild ? `accounting_dashboard:${activeGuild.guildId}:1` : "accounting_dashboard_empty",
+    activeGuild ? `accounting_dashboard:${activeGuild.guildId}:1:1` : "accounting_dashboard_empty",
     async () => {
       if (!activeGuild) return null;
       const result = await dashboardApi.getAccountingDashboard(activeGuild.guildId, 1, 1);

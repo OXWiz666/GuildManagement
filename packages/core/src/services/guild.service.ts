@@ -20,6 +20,7 @@ import { IAuditRepository, PrismaAuditRepository } from "../repositories/audit.r
 const MEMBERSHIP_CACHE_TTL = 15; // seconds
 const membershipCacheKey = (guildId: string, userId: string) =>
   `membership:${guildId}:${userId}`;
+const SELF_LEAVE_BLOCKED_ROLES = new Set(["GUILD_LEADER", "FACTION_LEADER"]);
 
 // ─── Member Types ───────────────────────────────
 
@@ -304,6 +305,48 @@ export class GuildService {
   }
 
   /**
+   * Let an active member leave a guild without deleting historical records.
+   * Leadership transfer is required first so the guild is never orphaned.
+   */
+  async leaveGuild(
+    guildId: string,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ success: true; guildId: string }> {
+    const membership = await this.guildRepo.getMemberByUser(actorId, guildId);
+
+    if (!membership || !membership.isActive) {
+      throw new ForbiddenError("You are not an active member of this guild");
+    }
+
+    if (SELF_LEAVE_BLOCKED_ROLES.has(membership.role)) {
+      throw new BadRequestError("Transfer guild leadership before leaving this guild");
+    }
+
+    await this.guildRepo.deactivateMember(membership.id);
+
+    await this.auditRepo.create({
+      actorId,
+      guildId,
+      action: "GUILD_MEMBER_LEFT",
+      target: "GuildMember",
+      targetId: membership.id,
+      detail: {
+        userId: actorId,
+        role: membership.role,
+        rankName: membership.rankName,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    await cache.delete(membershipCacheKey(guildId, actorId));
+
+    return { success: true, guildId };
+  }
+
+  /**
    * Get guild settings.
    */
   async getGuildSettings(guildId: string): Promise<GuildSettings> {
@@ -430,6 +473,14 @@ export const updateMemberRole = (
   userAgent?: string,
 ): Promise<GuildMemberWithUser> =>
   guildService.updateMemberRole(guildId, memberId, input, actorId, ipAddress, userAgent);
+
+export const leaveGuild = (
+  guildId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+): Promise<{ success: true; guildId: string }> =>
+  guildService.leaveGuild(guildId, actorId, ipAddress, userAgent);
 
 export const getGuildSettings = (guildId: string): Promise<GuildSettings> =>
   guildService.getGuildSettings(guildId);

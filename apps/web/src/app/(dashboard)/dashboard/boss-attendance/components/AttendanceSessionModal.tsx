@@ -137,6 +137,9 @@ export default function AttendanceSessionModal({
   const handleRevoke = (recordId: string) =>
     runAction(recordId, () => dashboardApi.revokeAttendance(recordId, guildId), "Attendance revoked.", "Failed to revoke attendance");
 
+  const handleMarkPending = (recordId: string) =>
+    runAction(recordId, () => dashboardApi.markAttendancePending(recordId, guildId), "Marked pending.", "Failed to mark pending");
+
   async function handleVerifySelected() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -324,18 +327,18 @@ export default function AttendanceSessionModal({
               <div className="flex items-center justify-between gap-3">
                 <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/50">Officer Tools</h4>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onEditSession(session);
+                    }}
+                    className="text-violet-400 hover:text-violet-300 transition-colors font-bold text-[10px] bg-violet-500/5 hover:bg-violet-500/10 px-2 py-1 rounded cursor-pointer"
+                  >
+                    Edit
+                  </button>
                   {session.isActive ? (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onEditSession(session);
-                        }}
-                        className="text-violet-400 hover:text-violet-300 transition-colors font-bold text-[10px] bg-violet-500/5 hover:bg-violet-500/10 px-2 py-1 rounded cursor-pointer"
-                      >
-                        ✏️ Edit
-                      </button>
                       <button
                         type="button"
                         onClick={handleClose}
@@ -494,7 +497,7 @@ export default function AttendanceSessionModal({
                                     Confirmed
                                   </span>
                                 )}
-                                {isPendingRec && (
+                                {isPendingRec ? (
                                   <button
                                     type="button"
                                     onClick={() => handleConfirm(rec.id)}
@@ -502,6 +505,15 @@ export default function AttendanceSessionModal({
                                     className="px-2.5 py-1.25 bg-white/[0.10] hover:bg-white/[0.14] disabled:bg-white/[0.18] text-[11px] font-semibold text-white rounded-md transition-all cursor-pointer"
                                   >
                                     Confirm
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMarkPending(rec.id)}
+                                    disabled={actionId === rec.id}
+                                    className="px-2.5 py-1.25 bg-amber-500/10 hover:bg-amber-500/20 disabled:bg-white/[0.08] text-[11px] font-semibold text-amber-300 rounded-md transition-all cursor-pointer"
+                                  >
+                                    Set Pending
                                   </button>
                                 )}
                                 <button

@@ -118,7 +118,7 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
             <div className="grid grid-cols-2 gap-3">
               <Input
                 label="Specific name (optional)"
-                placeholder="e.g. Ancient Log"
+                placeholder="e.g. Life Core"
                 value={itemName}
                 onChange={(e) => setItemName(e.target.value)}
               />

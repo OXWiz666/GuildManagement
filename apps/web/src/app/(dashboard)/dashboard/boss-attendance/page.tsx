@@ -607,6 +607,44 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
 // but are currently this guild's rotation turn — checkInToBoss on the server
 // opens the session on demand and logs a PENDING record; the officer still
 // verifies it the normal way once the boss actually dies.
+type AdvanceTimelineGroup = {
+  key: string;
+  label: string;
+  subtitle: string;
+  items: BossScheduleData[];
+};
+
+function buildAdvanceTimelineGroups(items: BossScheduleData[]): AdvanceTimelineGroup[] {
+  const groups = new Map<string, AdvanceTimelineGroup>();
+
+  for (const item of items) {
+    const spawn = new Date(item.spawnTime);
+    const key = `${spawn.getFullYear()}-${String(spawn.getMonth() + 1).padStart(2, "0")}-${String(spawn.getDate()).padStart(2, "0")}`;
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+
+    groups.set(key, {
+      key,
+      label: spawn.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }),
+      subtitle: spawn.toLocaleDateString("en-US", { year: "numeric" }),
+      items: [item],
+    });
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    items: group.items.sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime()),
+  }));
+}
+
+function formatTimelineTime(value: string) {
+  return new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 const AdvanceCheckInBanner = memo(function AdvanceCheckInBanner({
   schedules,
   myGuildId,
@@ -630,62 +668,83 @@ const AdvanceCheckInBanner = memo(function AdvanceCheckInBanner({
         .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime()),
     [schedules, myGuildId],
   );
+  const timelineGroups = useMemo(() => buildAdvanceTimelineGroups(eligible), [eligible]);
 
   return (
-    <div className="rounded-2xl border border-violet-500/20 bg-violet-950/5 p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3 mb-3.5">
+    <div className="rounded-2xl border border-violet-500/20 bg-[#09090d]/70 p-5 shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-white/[0.06] pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="h-9 w-9 rounded-xl bg-violet-500/10 border border-violet-500/25 flex items-center justify-center text-violet-300 text-sm shrink-0">
-            ✦
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/25 bg-violet-500/10">
+            <span className="h-2.5 w-2.5 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.45)]" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-violet-300 uppercase tracking-widest block">
-              Your Guild&apos;s Turn
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-violet-300">
+              Advance Turn-In Timeline
             </span>
-            <p className="text-[12px] text-white/55 mt-0.5 leading-relaxed">
-              These bosses haven&apos;t been fought yet, but it&apos;s your guild&apos;s turn — check in early to stake
-              your attendance. An officer still verifies once the boss dies.
+            <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-white/55">
+              These bosses have not been fought yet, but it is your guild&apos;s turn. Check in early to stake your attendance;
+              officers still verify once the boss dies.
             </p>
           </div>
         </div>
         {eligible.length > 0 && (
-          <span className="shrink-0 text-[11px] font-mono text-violet-300/70 mt-0.5">{eligible.length}</span>
+          <div className="rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1 text-[11px] font-bold text-violet-200">
+            {eligible.length} pending turn-in{eligible.length === 1 ? "" : "s"}
+          </div>
         )}
       </div>
 
       {eligible.length === 0 ? (
-        <p className="text-[12px] text-white/35 italic px-1">
-          Nothing to check in early for right now — this fills in as soon as a boss becomes your guild&apos;s turn.
+        <p className="px-1 py-8 text-center text-[12px] italic text-white/35">
+          Nothing to check in early for right now. This timeline fills in as soon as a boss becomes your guild&apos;s turn.
         </p>
       ) : (
-      /* Contained scroll instead of an unbounded grid — a big rotation
-          queue (many bosses simultaneously eligible) shouldn't push the
-          rest of the page off screen. */
-      <div className="max-h-72 overflow-y-auto custom-scrollbar pr-1">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
-          {eligible.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
-            >
-              <div className="min-w-0">
-                <p className="text-[12.5px] font-semibold text-white truncate">{item.bossName}</p>
-                <p className="text-[10px] text-white/40 truncate">
-                  {new Date(item.spawnTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onCheckIn(item)}
-                disabled={checkingInId === item.id}
-                className="shrink-0 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 active:scale-95 disabled:opacity-50 text-[11px] font-bold text-white rounded-lg transition-all cursor-pointer"
-              >
-                {checkingInId === item.id ? "Checking in…" : "Check In Early"}
-              </button>
-            </div>
-          ))}
+        <div className="max-h-[520px] overflow-y-auto pr-1 pt-5 custom-scrollbar">
+          <div className="space-y-6">
+            {timelineGroups.map((group) => (
+              <section key={group.key} className="relative grid gap-3 md:grid-cols-[150px_minmax(0,1fr)]">
+                <div className="md:sticky md:top-0 md:self-start">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/45">{group.label}</p>
+                  <p className="mt-1 text-[10px] font-mono text-violet-300/65">
+                    {group.subtitle} / {group.items.length} boss{group.items.length === 1 ? "" : "es"}
+                  </p>
+                </div>
+
+                <div className="relative space-y-2.5 border-l border-violet-400/15 pl-5">
+                  {group.items.map((item, index) => (
+                    <div key={item.id} className="relative">
+                      <span
+                        className={`absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full border border-violet-200/40 bg-violet-500 ${
+                          index === 0 ? "shadow-[0_0_16px_rgba(139,92,246,0.55)]" : ""
+                        }`}
+                      />
+                      <div className="flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-3 transition-colors hover:border-violet-400/25 hover:bg-violet-500/[0.035] sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-16 shrink-0 flex-col items-center justify-center rounded-lg border border-white/[0.06] bg-black/20 font-mono">
+                            <span className="text-[11px] font-bold text-white/80">{formatTimelineTime(item.spawnTime)}</span>
+                            <span className="mt-0.5 text-[8px] uppercase tracking-wider text-white/30">Spawn</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-bold text-white">{item.bossName}</p>
+                            <p className="mt-0.5 text-[10px] text-white/40">Awaiting kill verification</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onCheckIn(item)}
+                          disabled={checkingInId === item.id}
+                          className="shrink-0 rounded-lg bg-violet-600 px-3.5 py-2 text-[11px] font-bold text-white transition-all hover:bg-violet-700 active:scale-95 disabled:opacity-50 cursor-pointer"
+                        >
+                          {checkingInId === item.id ? "Checking in..." : "Check In Early"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
-      </div>
       )}
     </div>
   );

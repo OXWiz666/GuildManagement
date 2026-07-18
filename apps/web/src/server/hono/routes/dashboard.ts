@@ -29,8 +29,10 @@ export const dashboard = new Hono<AppEnv>()
     const user = c.get("user");
     dashboardLimit(c, user.userId);
     const guildId = c.req.param("guildId");
-    const page = c.req.query("page") ? parseInt(c.req.query("page")!, 10) : 1;
-    const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : 25;
+    const requestedPage = c.req.query("page") ? parseInt(c.req.query("page")!, 10) : 1;
+    const requestedLimit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : 25;
+    const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, requestedLimit)) : 25;
     const cacheKey = `accounting:${guildId}:p${page}:l${limit}`;
     const cached = await cache.get<unknown>(cacheKey);
     if (cached) return ok(c, cached);
@@ -172,6 +174,27 @@ export const dashboard = new Hono<AppEnv>()
     ]);
     broadcastToGuild(guildId, "attendance_record_revoked", { recordId });
     return ok(c, result);
+  })
+  .patch("/attendance/pending/:recordId", requireAuth, async (c) => {
+    const user = c.get("user");
+    const recordId = c.req.param("recordId");
+    const { guildId } = await readJson<{ guildId?: string }>(c);
+    if (!guildId) throw new BadRequestError("guildId is required");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.dashboard.markAttendancePending(guildId, recordId, user.userId, ipAddress, userAgent);
+    await Promise.all([
+      cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+      cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+      cache.invalidatePattern(`attendance:sessions:${guildId}*`),
+      cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+      cache.invalidatePattern(`stats:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-card:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
+    ]);
+    const serializedRecord = { ...result.record, joinedAt: result.record.joinedAt.toISOString() };
+    const payload = { ...result, record: serializedRecord };
+    broadcastToGuild(guildId, "attendance_record_updated", payload);
+    return ok(c, payload);
   })
   .post("/attendance/session/:guildId/:sessionId/reopen", requireAuth, async (c) => {
     const user = c.get("user");

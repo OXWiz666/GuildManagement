@@ -103,7 +103,7 @@ cache outage shouldn't become a bot outage.
 | Command | Who | Notes |
 |---|---|---|
 | `!spawn [boss]` | Members | Grouped Today / Tomorrow / Future |
-| `!kill <boss> [HH:MM]` | Officers | `HH:MM` is wall-clock in the server's timezone |
+| `!kill <boss> [item drop] [HH:MM]` | Officers | `HH:MM` is wall-clock in the server's timezone; a matched/unmatched item drop is auto-vaulted to Guild Storage |
 | `!editkilltime <boss> <HH:MM>` | Officers | Corrects a kill time; does NOT re-advance the queue |
 | `!forcespawn <boss>` | Officers | Marks a boss live now; stays live until killed |
 | `!forcespawnall` | Guild Leader | Every fixed-schedule boss live — stricter by design |
@@ -122,7 +122,12 @@ cache outage shouldn't become a bot outage.
 
 Boss names accept aliases (`discord_aliases`) and unique prefixes — `!kill ven`
 resolves to Venatus, while `!kill la` is rejected as ambiguous rather than
-guessed.
+guessed. An item drop after the boss (`!kill Livera Ancient Boots`) only
+splits out when the boss is given by its full name or a configured alias —
+prefix shorthand like `!kill ven` still works, but only for a boss-only kill.
+The item text is matched against the live drop catalog for a real icon/rarity;
+if nothing matches closely enough it's still added to Guild Storage as a plain
+entry rather than lost.
 
 ## Website surfaces
 

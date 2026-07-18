@@ -3,6 +3,15 @@ import { BossService } from "./boss.service.js";
 import type { AliasRepository, AliasRow } from "../repositories/alias.repository.js";
 import type { BossRepository } from "../repositories/boss.repository.js";
 import { UnknownBossError } from "../utils/errors.js";
+import { services as core } from "@guild/core";
+
+vi.mock("@guild/core", () => ({
+  services: {
+    dashboard: { markBossRotationKilledByName: vi.fn() },
+    equipment: { getDropsCatalog: vi.fn().mockResolvedValue({ items: [] }) },
+    storage: { addDropsToStorage: vi.fn() },
+  },
+}));
 
 const SERVER_ID = "srv1";
 
@@ -165,5 +174,194 @@ describe("listUpcoming", () => {
 
     expect(spawn?.live).toBe(false);
     expect(spawn?.timerText).toBe("02:00:00");
+  });
+});
+
+describe("matchBossAndItem", () => {
+  it("splits an exact single-word boss name from a trailing item", async () => {
+    const { service } = makeService();
+    const result = await service.matchBossAndItem(["Livera", "Pernox", "Bow"], SERVER_ID);
+    expect(result).toEqual({ bossName: "Livera", itemDrop: "Pernox Bow" });
+  });
+
+  it("splits a two-word boss name from a trailing item", async () => {
+    const { service } = makeService();
+    const result = await service.matchBossAndItem(
+      ["Baron", "Baraudmore", "Pernox", "Bow"],
+      SERVER_ID,
+    );
+    expect(result).toEqual({ bossName: "Baron Baraudmore", itemDrop: "Pernox Bow" });
+  });
+
+  it("splits on a configured alias", async () => {
+    const { service } = makeService([
+      { alias: "baron", bossName: "Baron Baraudmore", discordServerId: null },
+    ]);
+    const result = await service.matchBossAndItem(["baron", "Pernox", "Bow"], SERVER_ID);
+    expect(result).toEqual({ bossName: "Baron Baraudmore", itemDrop: "Pernox Bow" });
+  });
+
+  it("has no item when the boss name consumes every token", async () => {
+    const { service } = makeService();
+    const result = await service.matchBossAndItem(["Lady", "Dalia"], SERVER_ID);
+    expect(result).toEqual({ bossName: "Lady Dalia", itemDrop: undefined });
+  });
+
+  it("falls back to fuzzy/prefix matching (boss-only) when no exact split is found", async () => {
+    const { service } = makeService();
+    // "vio" is not an exact/alias match at any split point, so this can only
+    // resolve via resolveBossName's unique-prefix fallback — no item.
+    const result = await service.matchBossAndItem(["vio"], SERVER_ID);
+    expect(result).toEqual({ bossName: "Viorent" });
+  });
+});
+
+describe("matchDropItem", () => {
+  const catalogItem = {
+    type: "Weapon",
+    slotType: "weapon",
+    category: "Sword",
+    rarity: "LEGEND",
+    itemName: "Pernox Bow",
+    bucket: "drops",
+    path: "weapon/pernox-bow.png",
+    iconUrl: "https://example.test/pernox-bow.png",
+  };
+
+  it("matches an exact (case-insensitive) catalog item", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({ items: [catalogItem] });
+    const { service } = makeService();
+
+    const match = await service.matchDropItem("pernox bow");
+    expect(match).toEqual({
+      bucket: "drops",
+      path: "weapon/pernox-bow.png",
+      itemName: "Pernox Bow",
+      iconUrl: "https://example.test/pernox-bow.png",
+    });
+  });
+
+  it("matches a full weapon name so the stored drop keeps its catalog icon", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({
+      items: [
+        {
+          type: "Weapon",
+          slotType: "weapon",
+          category: "Bow",
+          rarity: "LEGEND",
+          itemName: "Innis Bow",
+          bucket: "WeapBow",
+          path: "Legend/Innis.png",
+          iconUrl: "https://example.test/innis-bow.png",
+        },
+      ],
+    });
+    const { service } = makeService();
+
+    const match = await service.matchDropItem("Innis Bow");
+    expect(match).toEqual({
+      bucket: "WeapBow",
+      path: "Legend/Innis.png",
+      itemName: "Innis Bow",
+      iconUrl: "https://example.test/innis-bow.png",
+    });
+  });
+
+  it("accepts legacy compact filename aliases but returns the full catalog name", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({
+      items: [
+        {
+          type: "Weapon",
+          slotType: "weapon",
+          category: "Greatsword",
+          rarity: "LEGEND",
+          itemName: "Illiana Greatsword",
+          bucket: "WeapGS",
+          path: "Legend/IllianaGS.png",
+          iconUrl: "https://example.test/illiana-greatsword.png",
+        },
+      ],
+    });
+    const { service } = makeService();
+
+    const match = await service.matchDropItem("IllianaGS");
+    expect(match).toEqual({
+      bucket: "WeapGS",
+      path: "Legend/IllianaGS.png",
+      itemName: "Illiana Greatsword",
+      iconUrl: "https://example.test/illiana-greatsword.png",
+    });
+  });
+
+  it("does not match a generic weapon type without the item family name", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({
+      items: [
+        {
+          type: "Weapon",
+          slotType: "weapon",
+          category: "Bow",
+          rarity: "LEGEND",
+          itemName: "Innis Bow",
+          bucket: "WeapBow",
+          path: "Legend/Innis.png",
+          iconUrl: "https://example.test/innis-bow.png",
+        },
+      ],
+    });
+    const { service } = makeService();
+
+    await expect(service.matchDropItem("Bow")).resolves.toBeNull();
+  });
+
+  it("returns null when nothing in the catalog is close enough", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({ items: [catalogItem] });
+    const { service } = makeService();
+
+    const match = await service.matchDropItem("completely unrelated gizmo");
+    expect(match).toBeNull();
+  });
+});
+
+describe("listDropItemNames", () => {
+  const catalog = [
+    {
+      type: "Weapon",
+      slotType: "weapon",
+      category: "Greatsword",
+      rarity: "LEGEND",
+      itemName: "Serus Greatsword",
+      bucket: "drops",
+      path: "weapon/serus-greatsword.png",
+      iconUrl: "https://example.test/serus-greatsword.png",
+    },
+    {
+      type: "Armor",
+      slotType: "armor",
+      category: "Plate",
+      rarity: "EPIC",
+      itemName: "Ancient Boots",
+      bucket: "drops",
+      path: "armor/ancient-boots.png",
+      iconUrl: "https://example.test/ancient-boots.png",
+    },
+  ];
+
+  it("returns sorted item names with display metadata", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({ items: catalog });
+    const { service } = makeService();
+
+    await expect(service.listDropItemNames()).resolves.toEqual([
+      { itemName: "Ancient Boots", type: "Armor", category: "Plate", rarity: "EPIC" },
+      { itemName: "Serus Greatsword", type: "Weapon", category: "Greatsword", rarity: "LEGEND" },
+    ]);
+  });
+
+  it("filters by item name, type, category, or rarity", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({ items: catalog });
+    const { service } = makeService();
+
+    await expect(service.listDropItemNames("legend")).resolves.toEqual([
+      { itemName: "Serus Greatsword", type: "Weapon", category: "Greatsword", rarity: "LEGEND" },
+    ]);
   });
 });

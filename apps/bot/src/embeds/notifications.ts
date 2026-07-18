@@ -57,16 +57,22 @@ export interface KillEmbedInput {
   killedBy: string;
   nextSpawn: Date | null;
   nextTurn: string | null;
+  dropItemName?: string | null;
+  dropIconUrl?: string | null;
 }
 
 export function killEmbed(input: KillEmbedInput): EmbedBuilder {
   const embed = brandedEmbed(BrandColor.RED)
     .setTitle(`💀 ${input.bossName} — Killed`)
-    .setThumbnail(getBossImageUrl(input.bossName))
+    .setThumbnail(input.dropIconUrl ?? getBossImageUrl(input.bossName))
     .addFields(
       { name: "Killed", value: discordTimestamp(input.killedAt, "R"), inline: true },
       { name: "Logged By", value: input.killedBy, inline: true },
     );
+
+  if (input.dropItemName) {
+    embed.addFields({ name: "Drop", value: `📦 **${input.dropItemName}** → Guild Storage` });
+  }
 
   if (input.nextSpawn) {
     embed.addFields(

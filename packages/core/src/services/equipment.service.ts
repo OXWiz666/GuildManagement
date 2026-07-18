@@ -197,6 +197,67 @@ function humanizeLeaf(name: string): string {
   return name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
 }
 
+const WEAPON_VARIANT_SUFFIXES: Record<string, string[]> = {
+  Greatsword: ["GS", "Greatsword"],
+  "Sword & Shield": ["SnS", "SwordShield", "SwordAndShield", "Sword Shield"],
+  Bow: ["Bow"],
+  Staff: ["Staff"],
+  "Dual Dagger": ["DD", "DualDagger", "Dual Dagger"],
+  Crossbow: ["CB", "Xbow", "CrossBow", "Crossbow", "Cross Bow"],
+  Gauntlet: ["Gauntlet"],
+  "Battle Staff": ["BStaff", "BattleStaff", "Battle Staff"],
+  "Battle Shield": ["BShield", "BattleShield", "Battle Shield"],
+};
+
+function compactName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function trimAlnumSuffix(value: string, suffixLength: number): string {
+  let remaining = suffixLength;
+  let cutIndex = value.length;
+
+  for (let i = value.length - 1; i >= 0; i--) {
+    if (!/[a-z0-9]/i.test(value[i]!)) continue;
+    remaining--;
+    if (remaining === 0) {
+      cutIndex = i;
+      break;
+    }
+  }
+
+  return value.slice(0, cutIndex).replace(/[\s_-]+$/g, "").trim();
+}
+
+function stripWeaponVariantSuffix(itemName: string, variant: string): string {
+  const compactItem = compactName(itemName);
+  const suffixes = [...(WEAPON_VARIANT_SUFFIXES[variant] ?? []), variant]
+    .map((suffix) => compactName(suffix))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  for (const suffix of suffixes) {
+    if (compactItem.length <= suffix.length || !compactItem.endsWith(suffix)) continue;
+    const stripped = trimAlnumSuffix(itemName, suffix.length);
+    if (stripped) return stripped;
+  }
+
+  return itemName;
+}
+
+function formatWeaponDropItemName(itemName: string, variant: string | null): string {
+  if (!variant) return humanizeLeaf(itemName);
+  const base = humanizeLeaf(stripWeaponVariantSuffix(itemName, variant));
+  const normalizedBase = compactName(base);
+  const normalizedVariant = compactName(variant);
+
+  if (!base || normalizedBase === normalizedVariant || normalizedBase.endsWith(normalizedVariant)) {
+    return humanizeLeaf(itemName);
+  }
+
+  return `${base} ${variant}`;
+}
+
 /** Classify a `Consumable` storage object into a drop item, or null. */
 function classifyConsumable(path: string): Omit<DropCatalogItem, "iconUrl"> | null {
   const parts = path.split("/").filter(Boolean);
@@ -251,7 +312,7 @@ export async function getDropsCatalog(): Promise<{ items: DropCatalogItem[] }> {
     slotType: it.slotType,
     category: it.variant,
     rarity: it.rarity,
-    itemName: it.itemName,
+    itemName: it.slotType === "weapon" ? formatWeaponDropItemName(it.itemName, it.variant) : it.itemName,
     bucket: it.bucket,
     path: it.path,
     iconUrl: publicUrl(it.bucket, it.path),

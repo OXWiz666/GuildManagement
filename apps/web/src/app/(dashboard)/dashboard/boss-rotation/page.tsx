@@ -8,7 +8,6 @@ import {
   guildApi,
   activityApi,
   type AuditLogEntry,
-  type BossDropDisplay,
   type BossKilledHistoryDay,
   type BossKilledHistoryEntry,
   type BossKilledHistoryResponse,
@@ -400,8 +399,11 @@ export default function BossRotationPage() {
   const serverNow = now ?? new Date(rotationData?.serverTime || 0).getTime();
   const canManage = rotationData?.canManage || false;
   const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
-  const killedHistory = killedHistoryRaw || { month: effectiveHistoryMonth, total: 0, days: [] };
-  const queueChanges = queueChangesRaw || [];
+  const killedHistory = useMemo<BossKilledHistoryResponse>(
+    () => killedHistoryRaw || { month: effectiveHistoryMonth, total: 0, days: [] },
+    [killedHistoryRaw, effectiveHistoryMonth],
+  );
+  const queueChanges = useMemo(() => queueChangesRaw || [], [queueChangesRaw]);
 
   // "Last 7d" merges the current + previous month's day buckets (dedup by
   // date, since a re-fetch could return the same date from both) and clips to
@@ -1313,7 +1315,6 @@ export default function BossRotationPage() {
                                 <BossAvatar src={kill.bossImageUrl} name={kill.bossName} />
                                 <div className="min-w-0">
                                   <p className="text-[13px] font-semibold text-white truncate">{kill.bossName}</p>
-                                  <p className="text-[10px] text-white/35 truncate">{kill.action.replaceAll("_", " ")}</p>
                                 </div>
                               </div>
                             </td>
@@ -1325,8 +1326,31 @@ export default function BossRotationPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-[12px] text-white/60 whitespace-nowrap">{kill.recordedBy.displayName}</td>
-                            <td className="px-4 py-3 text-[12px] text-white/45 whitespace-nowrap">
-                              {kill.drops.length > 0 ? `${kill.drops.length} item${kill.drops.length > 1 ? "s" : ""}` : "—"}
+                            <td className="px-4 py-3 text-[12px] text-white/55 min-w-[220px]">
+                              {kill.drops.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {kill.drops.map((drop, index) => (
+                                    <span
+                                      key={`${drop.itemName}-${index}`}
+                                      title={[drop.itemName, drop.rarity, drop.type].filter(Boolean).join(" - ")}
+                                      className="inline-flex max-w-[220px] items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.035] px-2 py-1 text-[11px] text-white/70"
+                                    >
+                                      {drop.iconUrl && (
+                                        <img
+                                          src={drop.iconUrl}
+                                          alt=""
+                                          loading="lazy"
+                                          className="h-4 w-4 rounded object-cover border border-white/10"
+                                        />
+                                      )}
+                                      <span className="truncate">{drop.itemName}</span>
+                                      {drop.quantity > 1 && <span className="text-white/35">x{drop.quantity}</span>}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-white/25">No drops recorded</span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right whitespace-nowrap">
                               <button
@@ -1334,7 +1358,7 @@ export default function BossRotationPage() {
                                 onClick={() => setSaleModalKill(kill)}
                                 className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
                               >
-                                🛒 {isOfficer ? "Log / view" : "View"}
+                                Details
                               </button>
                             </td>
                           </tr>
@@ -1513,7 +1537,7 @@ export default function BossRotationPage() {
                     <h3 className="text-[16px] font-bold text-white">Reset All Boss Timers</h3>
                     <p className="text-[12px] text-white/45 mt-1 leading-relaxed">
                       Restart <span className="text-emerald-400 font-semibold">every boss</span> timer from
-                      now. Each boss's next spawn will be recalculated as if it were just taken at this moment.
+                      now. Each boss&apos;s next spawn will be recalculated as if it were just taken at this moment.
                     </p>
                   </div>
                 </div>

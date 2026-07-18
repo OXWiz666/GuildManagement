@@ -263,12 +263,18 @@ async function invalidateAttendanceCache(guildId: string, sessionId?: string, us
 // feeds both the dashboard's guild-wide aggregate and page 1 of the
 // accounting ledger — clear those alongside the attendance keys so the
 // awarded/reversed points show up immediately instead of waiting on TTL.
+const ACCOUNTING_LEDGER_FIRST_PAGE_LIMITS = [1, 10, 15, 25] as const;
+
+function accountingLedgerFirstPageCacheKeys(guildId: string): string[] {
+  return ACCOUNTING_LEDGER_FIRST_PAGE_LIMITS.map((limit) => cacheKeys.acctLedgerPage(guildId, 1, limit));
+}
+
 async function invalidateAttendanceAndFinanceCache(guildId: string, sessionId?: string, userId?: string): Promise<void> {
   await invalidateAttendanceCache(guildId, sessionId, userId);
   await redisCache.delMany([
     cacheKeys.dashboardStats(guildId),
     cacheKeys.acctBalance(guildId),
-    cacheKeys.acctLedgerPage(guildId, 1, 25),
+    ...accountingLedgerFirstPageCacheKeys(guildId),
   ]);
 }
 
@@ -1287,6 +1293,91 @@ export async function revokeMemberAttendance(
 
   await invalidateAttendanceAndFinanceCache(guildId, record.sessionId, record.userId);
   return { success: true };
+}
+
+export async function markAttendancePending(
+  guildId: string,
+  recordId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await assertAttendanceOfficer(guildId, actorId, "mark attendance pending");
+
+  const record = await prisma.attendanceRecord.findUnique({
+    where: { id: recordId },
+    include: {
+      user: { select: { displayName: true } },
+      session: true,
+    },
+  });
+
+  if (!record || record.session.guildId !== guildId) {
+    throw new NotFoundError("Attendance record not found in this guild");
+  }
+  if (record.status === AttendanceRecordStatus.PENDING) {
+    return { success: true, record, reversed: false };
+  }
+
+  const existingCredit = await prisma.ledgerEntry.findFirst({
+    where: {
+      guildId,
+      accountType: "MEMBER",
+      accountId: record.userId,
+      entryType: "CREDIT",
+      referenceType: "ATTENDANCE",
+      referenceId: recordId,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.attendanceRecord.delete({ where: { id: recordId } });
+    return tx.attendanceRecord.create({
+      data: {
+        sessionId: record.sessionId,
+        userId: record.userId,
+        status: AttendanceRecordStatus.PENDING,
+        joinedAt: record.joinedAt,
+      },
+    });
+  });
+
+  if (existingCredit) {
+    await createLedgerEntry({
+      guildId,
+      accountType: "MEMBER",
+      accountId: record.userId,
+      currency: existingCredit.currency,
+      amount: existingCredit.amount,
+      entryType: "DEBIT",
+      referenceType: "ATTENDANCE_STATUS_PENDING",
+      referenceId: recordId,
+      idempotencyKey: `ATT-PENDING-${recordId}`,
+      actorId,
+      description: `Reversed attendance credit; set back to pending in session: ${record.session.title}`,
+    });
+  }
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "MEMBER_ATTENDANCE_MARKED_PENDING",
+    target: "AttendanceRecord",
+    targetId: updated.id,
+    detail: {
+      previousRecordId: recordId,
+      userId: record.userId,
+      displayName: record.user.displayName,
+      sessionTitle: record.session.title,
+      reversedCredit: Boolean(existingCredit),
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  await invalidateAttendanceAndFinanceCache(guildId, record.sessionId, record.userId);
+  return { success: true, record: updated, reversed: Boolean(existingCredit) };
 }
 
 export async function confirmAttendanceRecord(
@@ -4184,6 +4275,9 @@ export function getGuildPointsCutoff(pointsResetCycle?: string | null): Date | n
 }
 
 export async function getAccountingDashboard(guildId: string, actorId: string, page: number = 1, limit: number = 25) {
+  const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
+  const safeLimit = Number.isFinite(limit) ? Math.min(100, Math.max(1, Math.floor(limit))) : 25;
+
   // Validate actor is Guild Leader, Officer, or Faction Leader — always
   // checked fresh, cache or no cache, before any cached data is returned.
   const actorMembership = await getGuildMemberByUser(actorId, guildId);
@@ -4197,9 +4291,9 @@ export async function getAccountingDashboard(guildId: string, actorId: string, p
   // actively invalidated (createTreasuryAdjustment / loot sales) — later
   // pages rely on TTL expiry since they can never change once written.
   return redisCache.getOrSet(
-    cacheKeys.acctLedgerPage(guildId, page, limit),
-    page === 1 ? cacheTtl.acctLedgerPage1 : cacheTtl.acctLedgerOtherPages,
-    async () => getAccountingDashboardUncached(guildId, page, limit),
+    cacheKeys.acctLedgerPage(guildId, safePage, safeLimit),
+    safePage === 1 ? cacheTtl.acctLedgerPage1 : cacheTtl.acctLedgerOtherPages,
+    async () => getAccountingDashboardUncached(guildId, safePage, safeLimit),
   );
 }
 
@@ -4477,7 +4571,7 @@ export async function createTreasuryAdjustment(
   await redisCache.delMany([
     cacheKeys.dashboardStats(guildId),
     cacheKeys.acctBalance(guildId),
-    cacheKeys.acctLedgerPage(guildId, 1, 25),
+    ...accountingLedgerFirstPageCacheKeys(guildId),
   ]);
 
   return entry;

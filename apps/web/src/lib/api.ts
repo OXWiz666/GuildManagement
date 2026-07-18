@@ -651,6 +651,10 @@ export const guildApi = {
       totalPages: number;
     }>(`/guilds/${guildId}/audit-logs?${params.toString()}`);
   },
+
+  async leaveGuild(guildId: string) {
+    return api.delete<{ success: boolean; guildId: string }>(`/guilds/${guildId}/members/me`);
+  },
 };
 
 // ─── Dashboard-specific API calls (Attendance & Boss Timers) ────
@@ -1105,6 +1109,13 @@ export const dashboardApi = {
   async revokeAttendance(recordId: string, guildId: string) {
     return api.post<{ success: boolean }>(
       `/dashboard/attendance/revoke/${recordId}`,
+      { guildId },
+    );
+  },
+
+  async markAttendancePending(recordId: string, guildId: string) {
+    return api.patch<{ success: boolean; record: AttendanceRecordData; reversed: boolean }>(
+      `/dashboard/attendance/pending/${recordId}`,
       { guildId },
     );
   },

@@ -25,6 +25,69 @@ export interface KillNextSpawn {
   live: boolean;
 }
 
+/** Result of matching freeform `!kill <boss> <item>` text against the live drop catalog. */
+export interface MatchedDropItem {
+  bucket: string;
+  path: string;
+  itemName: string;
+  iconUrl: string;
+}
+
+export interface DropCatalogNameItem {
+  itemName: string;
+  type: string;
+  category: string | null;
+  rarity: string | null;
+}
+
+// Catalog item names are short, clean, human-typed text (unlike OCR'd rally
+// screenshots), so a plain normalized-Levenshtein ratio is enough — no need
+// for the pixel/confidence signals smartAttendance.service.ts's word matcher uses.
+const MIN_DROP_MATCH_SCORE = 0.72;
+
+function normalizeItemText(input: string): string {
+  return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function stripExt(name: string): string {
+  return name.replace(/\.(png|jpe?g|webp)$/i, "");
+}
+
+function pathLeaf(path: string): string {
+  return stripExt(path.split("/").filter(Boolean).pop() ?? "");
+}
+
+function catalogNameCandidates(item: { itemName: string; path: string }): string[] {
+  return Array.from(new Set([item.itemName, pathLeaf(item.path)].filter(Boolean)));
+}
+
+function itemNameScore(a: string, b: string): number {
+  if (a === b) return 1;
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 0;
+  if (a.length >= 4 && b.includes(a)) return a.length / b.length;
+  if (b.length >= 4 && a.includes(b)) return b.length / a.length;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+function levenshtein(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const curr = Array.from({ length: b.length + 1 }, () => 0);
+
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      curr[j] =
+        a[i - 1] === b[j - 1]
+          ? prev[j - 1]!
+          : Math.min(prev[j - 1]!, prev[j]!, curr[j - 1]!) + 1;
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j]!;
+  }
+
+  return prev[b.length]!;
+}
+
 /**
  * Boss reads + the kill write path.
  *
@@ -85,6 +148,110 @@ export class BossService {
   }
 
   /**
+   * Split `!kill <boss> <item>`'s free-text tail into a boss name and an
+   * optional item-drop name.
+   *
+   * Boss names/aliases are a small closed vocabulary — aliases are always a
+   * single token (enforced at `!alias add`), and the longest registry name
+   * is two words — so trying only EXACT (case-insensitive) matches at each
+   * prefix length is safe. Unlike `resolveBossName`'s unique-prefix fuzzy
+   * matching, it can never accidentally swallow the start of an item name.
+   */
+  async matchBossAndItem(
+    tokens: string[],
+    discordServerId: string,
+  ): Promise<{ bossName: string; itemDrop?: string }> {
+    const aliases = await this.aliases.listForServer(discordServerId);
+    const maxWords = Math.min(tokens.length, 2);
+
+    for (let n = maxWords; n >= 1; n--) {
+      const candidate = tokens.slice(0, n).join(" ");
+      const query = candidate.toLowerCase();
+
+      const exact = PREDEFINED_BOSSES.find((b) => b.name.toLowerCase() === query);
+      const scoped = aliases.find((a) => a.alias === query && a.discordServerId !== null);
+      const global = aliases.find((a) => a.alias === query && a.discordServerId === null);
+      const aliasTarget = (scoped ?? global) &&
+        PREDEFINED_BOSSES.find(
+          (b) => b.name.toLowerCase() === (scoped ?? global)!.bossName.toLowerCase(),
+        );
+
+      const resolved = exact ?? aliasTarget;
+      if (resolved) {
+        const itemDrop = tokens.slice(n).join(" ").trim();
+        return { bossName: resolved.name, itemDrop: itemDrop || undefined };
+      }
+    }
+
+    // No exact/alias hit at any split point — fall back to the full fuzzy
+    // resolver (unique-prefix shorthand like `!kill l`). No item in this
+    // path: fuzzy-matching a boss out of leftover freeform text would be
+    // unreliable, so a kill typed this way is boss-only.
+    const bossName = await this.resolveBossName(tokens.join(" "), discordServerId);
+    return { bossName };
+  }
+
+  /**
+   * Fuzzy-match freeform item text against the live drop catalog (the same
+   * icon-backed list the website's kill-drop picker uses), so a drop typed
+   * from Discord gets a real icon/rarity when the name is close enough to a
+   * known item instead of always falling back to a bare string.
+   */
+  async matchDropItem(query: string): Promise<MatchedDropItem | null> {
+    const normalized = normalizeItemText(query);
+    if (!normalized) return null;
+
+    const { items } = await core.equipment.getDropsCatalog();
+
+    let best: { itemName: string; bucket: string; path: string; iconUrl: string; score: number } | null = null;
+    for (const item of items) {
+      const score = Math.max(
+        ...catalogNameCandidates(item).map((candidate) => itemNameScore(normalized, normalizeItemText(candidate))),
+      );
+      if (!best || score > best.score) {
+        best = { itemName: item.itemName, bucket: item.bucket, path: item.path, iconUrl: item.iconUrl, score };
+      }
+    }
+
+    if (!best || best.score < MIN_DROP_MATCH_SCORE) return null;
+    return { bucket: best.bucket, path: best.path, itemName: best.itemName, iconUrl: best.iconUrl };
+  }
+
+  /** Human-readable item catalog for Discord (`!items`) and operator audits. */
+  async listDropItemNames(query?: string): Promise<DropCatalogNameItem[]> {
+    const needle = normalizeItemText(query ?? "");
+    const { items } = await core.equipment.getDropsCatalog();
+    const seen = new Set<string>();
+    const out: DropCatalogNameItem[] = [];
+
+    for (const item of items) {
+      if (needle) {
+        const haystack = normalizeItemText(
+          [item.itemName, item.type, item.category, item.rarity].filter(Boolean).join(" "),
+        );
+        if (!haystack.includes(needle)) continue;
+      }
+
+      const key = [item.itemName, item.type, item.category ?? "", item.rarity ?? ""].join("\u0000").toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        itemName: item.itemName,
+        type: item.type,
+        category: item.category,
+        rarity: item.rarity,
+      });
+    }
+
+    return out.sort(
+      (a, b) =>
+        a.type.localeCompare(b.type) ||
+        (a.rarity ?? "").localeCompare(b.rarity ?? "") ||
+        a.itemName.localeCompare(b.itemName),
+    );
+  }
+
+  /**
    * Upcoming spawns for a guild, enriched with live/countdown state computed by
    * the same @guild/shared helper the website's boss cards use.
    */
@@ -142,24 +309,53 @@ export class BossService {
     killedAt: Date;
     actorId: string;
     takenGuildId?: string;
-  }): Promise<{ nextSpawn: KillNextSpawn | null }> {
+    // Freeform item text from `!kill <boss> <item>`. Matched against the
+    // drop catalog when possible; otherwise still vaulted as a plain entry
+    // (see the fallback below) rather than silently lost.
+    itemDrop?: string;
+  }): Promise<{ nextSpawn: KillNextSpawn | null; drop: { itemName: string; matched: boolean; iconUrl: string | null } | null }> {
+    // Which guild took the boss. Defaults to the actor's own guild — the
+    // overwhelmingly common case for a kill reported from that guild's server.
+    const takenGuildId = params.takenGuildId ?? params.guildId;
+    const matchedDrop = params.itemDrop ? await this.matchDropItem(params.itemDrop) : null;
+
     const result = await core.dashboard.markBossRotationKilledByName(
       params.guildId,
       params.bossName,
       params.killedAt.toISOString(),
-      // Which guild took the boss. Defaults to the actor's own guild — the
-      // overwhelmingly common case for a kill reported from that guild's server.
-      params.takenGuildId ?? params.guildId,
+      takenGuildId,
       params.actorId,
       // ipAddress/userAgent: the audit log's request-provenance fields. A
       // Discord message has neither, so mark the channel instead of inventing
       // a plausible-looking IP.
       undefined,
       "discord-bot",
+      matchedDrop ? [{ bucket: matchedDrop.bucket, path: matchedDrop.path, quantity: 1 }] : undefined,
     );
 
+    // Typed item text didn't match any catalog icon — vault it as a plain
+    // entry anyway (best-effort, same as the catalog path above) instead of
+    // silently losing the drop the officer just reported.
+    if (params.itemDrop && !matchedDrop) {
+      try {
+        await core.storage.addDropsToStorage(takenGuildId, params.actorId, params.bossName, [
+          { itemName: params.itemDrop, type: "Other", rarity: null, quantity: 1 },
+        ]);
+      } catch (error) {
+        console.error("[bot] Failed to vault unmatched kill drop to guild storage", error);
+      }
+    }
+
+    const drop = params.itemDrop
+      ? {
+          itemName: matchedDrop?.itemName ?? params.itemDrop,
+          matched: !!matchedDrop,
+          iconUrl: matchedDrop?.iconUrl ?? null,
+        }
+      : null;
+
     const next = result.nextSchedule;
-    if (!next) return { nextSpawn: null };
+    if (!next) return { nextSpawn: null, drop };
 
     // Same live/countdown projection every other read uses — a freshly rolled
     // schedule can itself already be "live" (e.g. a fixed-schedule boss whose
@@ -176,6 +372,7 @@ export class BossService {
         guildTurn: next.guildTurnGuildName ?? next.guildTurn ?? null,
         live: timer.live,
       },
+      drop,
     };
   }
 

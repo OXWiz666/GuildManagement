@@ -8,13 +8,23 @@ import { discordTimestamp, resolveWallClock } from "../../utils/time.js";
 import { UserFacingError } from "../../utils/errors.js";
 import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 
+const USAGE = "!kill <boss> [item drop, item drop, ...] [HH:MM]";
+
+// A boss realistically drops a handful of items — this is a guard against a
+// mistyped/pasted wall of text creating dozens of storage rows, not a real
+// ceiling anyone should hit. @guild/core's own cap (MAX_DROPS_PER_KILL = 40)
+// is a second, independent backstop for the catalog-matched half of the list.
+const MAX_DROPS_PER_KILL = 20;
+
 /**
- * `!kill <boss> [item drop] [HH:MM]` — log a kill and restart the boss's timer.
+ * `!kill <boss> [item drop, item drop, ...] [HH:MM]` — log a kill and restart
+ * the boss's timer.
  *
- * An item name after the boss (e.g. `!kill Livera Pernox Bow`) is matched
- * against the live drop catalog and vaulted into Guild Storage automatically
- * — no manual "add to storage" step. Unmatched item text still lands in the
- * vault as a plain entry rather than being silently dropped.
+ * One or more comma-separated item names after the boss (e.g. `!kill Livera
+ * Pernox Bow, Temporal Fragment`) are each matched against the live drop
+ * catalog and vaulted into Guild Storage automatically — no manual "add to
+ * storage" step. A name that doesn't match anything in the catalog still
+ * lands in the vault as a plain entry rather than being silently dropped.
  *
  * The optional time is wall-clock in the server's configured timezone (default
  * Asia/Singapore, the game's server time). Omitted, the kill is "now".
@@ -26,8 +36,8 @@ import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 export const killCommand: Command = {
   name: "kill",
   aliases: ["killed", "down"],
-  description: "Log a boss kill (with an optional item drop) and restart its respawn timer.",
-  usage: "!kill <boss> [item drop] [HH:MM]",
+  description: "Log a boss kill (with optional item drops) and restart its respawn timer.",
+  usage: USAGE,
   category: "Bosses",
   requiresLink: true,
   // Kills reorder the faction rotation queue for every guild — a mis-logged
@@ -38,17 +48,18 @@ export const killCommand: Command = {
     const actor = ctx.actor!; // guaranteed by requiresLink + middleware
 
     if (ctx.args.length === 0) {
-      throw new UserFacingError("Which boss?", "Usage: `!kill <boss> [item drop] [HH:MM]`");
+      throw new UserFacingError("Which boss?", `Usage: \`${USAGE}\``);
     }
 
     // A trailing HH:MM is the time; everything before it is boss (+ optional
-    // item), which may itself contain spaces ("Baron Baraudmore", "Pernox Bow").
+    // comma-separated items), which may itself contain spaces ("Baron
+    // Baraudmore", "Pernox Bow").
     const last = ctx.args[ctx.args.length - 1]!;
     const hasTime = /^\d{1,2}:\d{2}$/.test(last);
 
     const rest = hasTime ? ctx.args.slice(0, -1) : ctx.args;
     if (rest.length === 0) {
-      throw new UserFacingError("Which boss?", "Usage: `!kill <boss> [item drop] [HH:MM]`");
+      throw new UserFacingError("Which boss?", `Usage: \`${USAGE}\``);
     }
 
     // Splits on an exact boss-name/alias match, so free-text item names never
@@ -56,10 +67,17 @@ export const killCommand: Command = {
     // Item text only splits out when the boss is given by its full registry
     // name or a configured alias — a bare unique-prefix shorthand like `!kill l`
     // still works, but only for a boss-only kill.
-    const { bossName, itemDrop } = await ctx.services.boss.matchBossAndItem(
+    const { bossName, itemDrops } = await ctx.services.boss.matchBossAndItem(
       rest,
       ctx.server.discordServerId,
     );
+
+    if (itemDrops && itemDrops.length > MAX_DROPS_PER_KILL) {
+      throw new UserFacingError(
+        "Too many drops in one message",
+        `Log at most ${MAX_DROPS_PER_KILL} items per kill — split the rest into a follow-up \`!editkilltime\`-free storage entry, or a second message.`,
+      );
+    }
 
     const killedAt = hasTime ? resolveWallClock(last, ctx.server.timezone) : new Date();
 
@@ -67,28 +85,32 @@ export const killCommand: Command = {
     // to — used directly below rather than re-querying, which is what
     // previously let a stale leftover schedule (sorted ahead of the correct
     // one) get displayed as "Next Spawn" right after a kill.
-    const { nextSpawn: spawn, drop } = await ctx.services.boss.recordKill({
+    const { nextSpawn: spawn, drops } = await ctx.services.boss.recordKill({
       guildId: ctx.server.guildId,
       bossName,
       killedAt,
       actorId: actor.userId,
-      itemDrop,
+      itemDrops,
     });
 
     const embed = brandedEmbed(BrandColor.RED)
       .setTitle(`💀 ${bossName} — Killed`)
-      .setThumbnail(drop?.iconUrl ?? getBossImageUrl(bossName))
+      .setThumbnail(drops.find((d) => d.iconUrl)?.iconUrl ?? getBossImageUrl(bossName))
       .addFields(
         { name: "Killed At", value: discordTimestamp(killedAt, "f"), inline: true },
         { name: "Logged By", value: actor.ign ?? actor.displayName, inline: true },
       );
 
-    if (drop) {
+    if (drops.length) {
       embed.addFields({
-        name: "Drop",
-        value: drop.matched
-          ? `📦 **${drop.itemName}** → added to Guild Storage`
-          : `📦 **${drop.itemName}** → added to Guild Storage (no catalog icon matched)`,
+        name: drops.length > 1 ? "Drops" : "Drop",
+        value: drops
+          .map((d) =>
+            d.matched
+              ? `📦 **${d.itemName}** → added to Guild Storage`
+              : `📦 **${d.itemName}** → added to Guild Storage (no catalog icon matched)`,
+          )
+          .join("\n"),
       });
     }
 
@@ -130,8 +152,8 @@ export const killCommand: Command = {
             killedBy: actor.ign ?? actor.displayName,
             nextSpawn: spawn?.nextSpawn ?? null,
             nextTurn: spawn?.guildTurn ?? null,
-            dropItemName: drop?.itemName ?? null,
-            dropIconUrl: drop?.iconUrl ?? null,
+            dropItemNames: drops.map((d) => d.itemName),
+            dropIconUrl: drops.find((d) => d.iconUrl)?.iconUrl ?? null,
           }),
         ],
       })

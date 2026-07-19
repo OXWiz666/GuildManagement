@@ -262,8 +262,13 @@ export async function supabaseSync(
   ipAddress?: string,
   userAgent?: string,
 ): Promise<AuthResponse> {
-  // Find user by email
-  let user = await prisma.user.findUnique({
+  // Discord OAuth should resolve to an already-linked ForgeKeep account even
+  // when the Discord email differs from the account email the member originally
+  // registered with. Fall back to email for password/email and unlinked OAuth.
+  let user = supabaseUser.discord?.id
+    ? await prisma.user.findUnique({ where: { discordId: supabaseUser.discord.id } })
+    : null;
+  user ??= await prisma.user.findUnique({
     where: { email: supabaseUser.email.toLowerCase() },
   });
 

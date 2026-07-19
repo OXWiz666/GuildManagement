@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { useQuery, queryClient } from "@/lib/query";
+import { useSocket } from "@/components/providers/socket-provider";
 import {
   Reveal,
   StaggerReveal,
@@ -18,6 +19,7 @@ import {
 
 export default function OnboardingDashboard() {
   const { user, refreshUser } = useAuth();
+  const { socket } = useSocket();
   const { addToast } = useToast();
 
   // Onboarding paths: join an existing guild, create your own guild, or create
@@ -70,6 +72,29 @@ export default function OnboardingDashboard() {
     },
     { persist: true, staleTime: 30000 }
   );
+
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const handleJoinRequestProcessed = async (payload: {
+      requestId?: string;
+      action?: "ACCEPT" | "DECLINE";
+      guildName?: string;
+    }) => {
+      if (pendingApp?.id && payload.requestId && payload.requestId !== pendingApp.id) return;
+
+      queryClient.invalidateQueries(`pending_application:${user.id}`);
+      const refreshedUser = await refreshUser();
+      if (payload.action === "ACCEPT" && refreshedUser?.guilds.length) {
+        addToast("success", `Welcome to ${payload.guildName || refreshedUser.guilds[0]?.guildName || "the guild"}!`);
+      } else if (payload.action === "DECLINE") {
+        addToast("info", "Your guild application was declined.");
+      }
+    };
+
+    socket.on("join_request_processed", handleJoinRequestProcessed);
+    return () => socket.off("join_request_processed", handleJoinRequestProcessed);
+  }, [socket, user, pendingApp?.id, refreshUser, addToast]);
 
   async function handleVerifyCode() {
     if (!inviteCode.trim()) {
@@ -163,9 +188,9 @@ export default function OnboardingDashboard() {
   async function handleCheckStatus() {
     addToast("info", "Checking application status...");
     try {
-      await refreshUser();
+      const refreshedUser = await refreshUser();
       queryClient.invalidateQueries(`pending_application:${user?.id || "anon"}`);
-      if (user && user.guilds.length > 0) {
+      if (refreshedUser && refreshedUser.guilds.length > 0) {
         addToast("success", "Welcome to the guild!");
       } else {
         addToast("info", "Application checked.");

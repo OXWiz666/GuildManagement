@@ -3,8 +3,10 @@ import type { Command, CommandContext, CommandCategory } from "../../types/comma
 import { brandedEmbed, clampDescription } from "../../embeds/builders.js";
 import { BrandColor } from "../../embeds/theme.js";
 import { canRun } from "../../middleware/permissions.js";
+import { hasMinimumRole } from "@guild/shared";
 
 const CATEGORY_ORDER: CommandCategory[] = ["Bosses", "Combat Power", "Attendance", "Configuration", "General"];
+const MEMBER_HELP_COMMANDS = new Set(["spawn", "cp", "commands"]);
 
 /**
  * `!commands` — dynamic help.
@@ -18,7 +20,7 @@ const CATEGORY_ORDER: CommandCategory[] = ["Bosses", "Combat Power", "Attendance
  */
 export const commandsCommand: Command = {
   name: "commands",
-  aliases: ["help", "cmds", "h"],
+  aliases: ["command", "help", "cmds", "h"],
   description: "Show available commands.",
   usage: "!commands [command]",
   category: "General",
@@ -34,13 +36,23 @@ export const commandsCommand: Command = {
     if (query) {
       const target = findCommand(query);
       if (target) {
+        if (!isVisibleInHelp(target, ctx.actor)) {
+          await ctx.message.reply({
+            embeds: [
+              brandedEmbed(BrandColor.BLUE)
+                .setTitle("Command unavailable")
+                .setDescription("That command is limited to officers and leaders, so it is hidden from member help."),
+            ],
+          });
+          return;
+        }
         await ctx.message.reply({ embeds: [detailEmbed(target)] });
         return;
       }
     }
 
     const prefix = env.COMMAND_PREFIX;
-    const visible = COMMANDS.filter((command) => canRun(command, ctx.actor));
+    const visible = COMMANDS.filter((command) => isVisibleInHelp(command, ctx.actor));
 
     const embed = brandedEmbed(BrandColor.GOLD).setTitle("ForgeKeep — Commands");
 
@@ -111,4 +123,11 @@ function detailEmbed(command: Command) {
   }
 
   return embed;
+}
+
+function isVisibleInHelp(command: Command, actor: CommandContext["actor"]): boolean {
+  if (!canRun(command, actor)) return false;
+  if (!actor) return command.name === "link" || command.name === "commands";
+  if (!hasMinimumRole(actor.role, "OFFICER")) return MEMBER_HELP_COMMANDS.has(command.name);
+  return true;
 }

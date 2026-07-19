@@ -32,8 +32,12 @@ const StalkProfileModal = dynamic(() => import("./components/StalkProfileModal")
 
 type SortMode = "NAME" | "RANKING" | "GUILD_POINTS" | "BALANCE" | "CLASS" | "CP" | "JOINED";
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function MembersPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { addToast } = useToast();
   const { socket, onlineUserIds } = useSocket();
   const [searchQuery, setSearchQuery] = useState("");
@@ -237,7 +241,7 @@ export default function MembersPage() {
   }
 
   async function confirmRoleChange() {
-    if (!confirmModal || !activeGuild) return;
+    if (!confirmModal || !activeGuild || isUpdating) return;
     setIsUpdating(true);
 
     try {
@@ -253,11 +257,14 @@ export default function MembersPage() {
           : `Updated ${confirmModal.memberName}'s role to ${confirmModal.newRole.replace("_", " ")}`;
         addToast("success", actionLabel);
         queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
+        if (confirmModal.isTransfer) {
+          await refreshUser();
+        }
       } else {
         addToast("error", result.error?.message || "Failed to update role");
       }
-    } catch {
-      addToast("error", "Failed to update role");
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err, "Failed to update role"));
     } finally {
       setIsUpdating(false);
       setConfirmModal(null);

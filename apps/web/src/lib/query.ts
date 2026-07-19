@@ -44,10 +44,10 @@ export function useQuery<T>(
     fetcherRef.current = fetcher;
   }, [fetcher]);
 
-  const getCached = useCallback(() => {
+  const getCached = useCallback((allowStale = false) => {
     // 1. Check memory cache
     const cached = globalQueryCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < staleTime) {
+    if (cached && (allowStale || Date.now() - cached.timestamp < staleTime)) {
       return cached.data as T;
     }
 
@@ -57,7 +57,7 @@ export function useQuery<T>(
         const stored = localStorage.getItem(lsKey);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Date.now() - parsed.timestamp < staleTime) {
+          if (allowStale || Date.now() - parsed.timestamp < staleTime) {
             // Pre-populate memory cache to speed up next checks
             globalQueryCache.set(cacheKey, { data: parsed.data, timestamp: parsed.timestamp });
             return parsed.data as T;
@@ -71,8 +71,8 @@ export function useQuery<T>(
     return null;
   }, [cacheKey, staleTime, persist, lsKey, key]);
 
-  const [data, setData] = useState<T | null>(() => getCached());
-  const [isLoading, setIsLoading] = useState(() => enabled && getCached() === null);
+  const [data, setData] = useState<T | null>(() => getCached(true));
+  const [isLoading, setIsLoading] = useState(() => enabled && getCached(true) === null);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<unknown>(null);
 

@@ -1402,12 +1402,13 @@ export default function BossRotationPage() {
                                 <span className="text-white/25">No drops recorded</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-2">
                               {canManage && (
                                 <button
                                   type="button"
                                   onClick={() => openHistoryKillEditModal(kill)}
-                                  className="mr-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--forge-gold-bright)] hover:text-[var(--forge-gold)] transition-colors cursor-pointer"
+                                  className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-[var(--forge-gold-bright)] transition-colors hover:bg-[var(--forge-gold)]/10 hover:text-[var(--forge-gold)] cursor-pointer"
                                 >
                                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M12 20h9" />
@@ -1419,10 +1420,11 @@ export default function BossRotationPage() {
                               <button
                                 type="button"
                                 onClick={() => setSaleModalKill(kill)}
-                                className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer"
+                                className="inline-flex h-7 items-center justify-center rounded-md px-2 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-400/10 hover:text-emerald-200 cursor-pointer"
                               >
                                 Details
                               </button>
+                              </div>
                             </td>
                           </tr>
                         );

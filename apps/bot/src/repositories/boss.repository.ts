@@ -12,6 +12,15 @@ export interface UpcomingSpawn {
   guildId: string | null;
 }
 
+export interface UpcomingActivity {
+  id: string;
+  type: string;
+  title: string;
+  location: string | null;
+  opponent: string | null;
+  scheduledAt: Date;
+}
+
 /**
  * Boss spawn/kill reads.
  *
@@ -88,6 +97,28 @@ export class BossRepository {
     });
 
     return guilds.map((g) => g.id);
+  }
+
+  async listUpcomingActivities(guildId: string, limit = 5): Promise<UpcomingActivity[]> {
+    const rows = await prisma.guildActivity.findMany({
+      where: {
+        guildId,
+        status: "UPCOMING",
+        scheduledAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+      },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        location: true,
+        opponent: true,
+        scheduledAt: true,
+      },
+      orderBy: { scheduledAt: "asc" },
+      take: limit,
+    });
+
+    return rows;
   }
 
   /** The live (not-yet-killed) schedule for one boss, if any. */

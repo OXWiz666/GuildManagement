@@ -35,6 +35,26 @@ export const faction = new Hono<AppEnv>()
     const { ipAddress, userAgent } = getClientInfo(c);
     return ok(c, await services.faction.updateFactionStatus(c.get("user").userId, factionId, status, reason, ipAddress, userAgent));
   })
+  .post("/create-from-guild", requireAuth, async (c) => {
+    const { guildId, factionName } = await readJson<{ guildId?: string; factionName?: string }>(c);
+    if (!guildId) throw new BadRequestError("guildId is required");
+    if (!factionName) throw new BadRequestError("factionName is required");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.faction.createFactionFromGuild(
+      c.get("user").userId,
+      guildId,
+      factionName,
+      ipAddress,
+      userAgent,
+    );
+    await cache.invalidatePattern("faction-overview:*");
+    await cache.invalidatePattern("faction-members:*");
+    await cache.invalidatePattern("faction-guild-memberships:*");
+    await cache.invalidatePattern("fk:user:memberships:");
+    await cache.invalidatePattern(`boss-schedule:${guildId}:*`);
+    await cache.invalidatePattern(`stats:${guildId}:*`);
+    return ok(c, result, 201);
+  })
 
   // ─── Announcements ───────────────────────────────────────────
   .get("/announcements", requireAuth, async (c) => {

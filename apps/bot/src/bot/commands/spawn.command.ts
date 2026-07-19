@@ -1,6 +1,6 @@
 import { getBossImageUrl } from "@guild/shared";
 import type { Command, CommandContext } from "../../types/command.js";
-import type { ResolvedSpawn } from "../../services/boss.service.js";
+import type { ResolvedActivity, ResolvedSpawn } from "../../services/boss.service.js";
 import { brandedEmbed, clampDescription } from "../../embeds/builders.js";
 import { BrandColor } from "../../embeds/theme.js";
 import { dayBucket, discordTimestamp, type DayBucket } from "../../utils/time.js";
@@ -29,12 +29,24 @@ export const spawnCommand: Command = {
       ? await ctx.services.boss.resolveBossName(filter, ctx.server.discordServerId)
       : undefined;
 
-    const spawns = await ctx.services.boss.listUpcoming({
-      guildId: ctx.server.guildId,
-      ...(bossName ? { bossName } : {}),
-    });
+    const [spawns, activities] = await Promise.all([
+      ctx.services.boss.listUpcoming({
+        guildId: ctx.server.guildId,
+        ...(bossName ? { bossName } : {}),
+      }),
+      bossName ? Promise.resolve([]) : ctx.services.boss.listUpcomingActivities(ctx.server.guildId, 5),
+    ]);
 
     if (spawns.length === 0) {
+      if (!bossName && activities.length > 0) {
+        const embed = withActivityFields(
+          brandedEmbed(BrandColor.GOLD).setTitle(`Boss Spawns - ${ctx.server.guildName}`),
+          activities,
+        ).setDescription("No boss spawns are scheduled right now.");
+        await ctx.message.reply({ embeds: [embed] });
+        return;
+      }
+
       const embed = brandedEmbed(BrandColor.BLUE)
         .setTitle(bossName ? `No upcoming spawn for ${bossName}` : "No upcoming spawns")
         .setDescription(
@@ -52,7 +64,7 @@ export const spawnCommand: Command = {
       return;
     }
 
-    await ctx.message.reply({ embeds: [groupedEmbed(spawns, ctx)] });
+    await ctx.message.reply({ embeds: [withActivityFields(groupedEmbed(spawns, ctx), activities)] });
   },
 };
 
@@ -90,6 +102,22 @@ function singleBossEmbed(spawn: ResolvedSpawn, ctx: CommandContext) {
     });
   }
 
+  return embed;
+}
+
+function withActivityFields(embed: ReturnType<typeof brandedEmbed>, activities: ResolvedActivity[]) {
+  if (activities.length === 0) return embed;
+  embed.addFields({
+    name: `Events (${activities.length})`,
+    value: clampDescription(
+      activities.map((activity) => {
+        const location = activity.location ? ` - ${activity.location}` : "";
+        const opponent = activity.opponent ? ` - vs ${activity.opponent}` : "";
+        return `**${activity.title}** - ${discordTimestamp(activity.scheduledAt, "f")} - ${discordTimestamp(activity.scheduledAt, "R")}${location}${opponent}`;
+      }),
+      1024,
+    ),
+  });
   return embed;
 }
 

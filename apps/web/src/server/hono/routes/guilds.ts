@@ -229,7 +229,6 @@ export const guilds = new Hono<AppEnv>()
     const { ipAddress, userAgent } = getClientInfo(c);
     const updated = await services.guild.updateMemberRole(guildId, memberId, { role: role as GuildRoleType | undefined, customRoleId }, user.userId, ipAddress, userAgent);
     await cache.delete(`guild-members:${guildId}`);
-    broadcastToGuild(guildId, "member_role_updated", updated);
     return ok(c, { member: updated });
   })
   .delete("/:guildId/members/me", requireGuildRole("MEMBER"), async (c) => {

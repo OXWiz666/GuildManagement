@@ -68,6 +68,16 @@ export async function handleMessage(
 
   try {
     const server = await services.repositories.discordServer.findByDiscordGuildId(message.guildId);
+    const dbClaimed = await services.repositories.notification.claimCommandMessage({
+      messageId: message.id,
+      command: command.name,
+      discordGuildId: message.guildId,
+      discordServerId: server?.discordServerId ?? null,
+      guildId: server?.guildId ?? null,
+      channelId: message.channelId,
+      authorDiscordId: message.author.id,
+    });
+    if (!dbClaimed) return;
 
     // Bootstrap commands must run before a server is bound. `!link` is needed
     // before `!bindguild`, and `!commands` explains that flow.

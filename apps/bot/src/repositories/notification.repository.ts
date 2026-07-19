@@ -1,6 +1,7 @@
 import { Prisma, prisma } from "@guild/db";
 
 export type NotificationKind =
+  | "COMMAND"
   | "SPAWN_WARNING"
   | "SPAWN"
   | "KILL"
@@ -12,6 +13,45 @@ export type NotificationKind =
 const UNIQUE_VIOLATION = "P2002";
 
 export class NotificationRepository {
+  async claimCommandMessage(params: {
+    messageId: string;
+    command: string;
+    discordGuildId: string;
+    discordServerId?: string | null;
+    guildId?: string | null;
+    channelId?: string | null;
+    authorDiscordId?: string | null;
+  }): Promise<boolean> {
+    try {
+      await prisma.notificationHistory.create({
+        data: {
+          dedupeKey: `command:${params.messageId}`,
+          kind: "COMMAND",
+          discordServerId: params.discordServerId ?? null,
+          guildId: params.guildId ?? null,
+          channelId: params.channelId ?? null,
+          status: "SENT",
+          sentAt: new Date(),
+          payload: {
+            command: params.command,
+            discordGuildId: params.discordGuildId,
+            authorDiscordId: params.authorDiscordId ?? null,
+          },
+        },
+        select: { id: true },
+      });
+      return true;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_VIOLATION
+      ) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   /**
    * Claim the right to send one notification.
    *

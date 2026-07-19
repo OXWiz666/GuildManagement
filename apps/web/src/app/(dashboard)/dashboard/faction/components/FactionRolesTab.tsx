@@ -18,8 +18,10 @@ const ROLE_OPTIONS = Object.keys(ROLE_LABELS) as FactionCapabilityRole[];
 
 /**
  * Faction Roles — capability grants (Officer / Treasurer / Inventory
- * Manager) orthogonal to a member's guild rank. Foundation phase only:
- * these grants have no consumer yet (Accounting/Inventory land later).
+ * Manager) orthogonal to a member's guild rank. Inventory Manager gates
+ * mutations on the Inventory tab; Treasurer is accepted by the Accounting
+ * tab's backend, though the tab itself is currently only shown to Faction
+ * Leaders/Admins (see faction/page.tsx's ACCOUNTING gate).
  */
 export default function FactionRolesTab({ canManage }: { canManage: boolean }) {
   const { addToast } = useToast();

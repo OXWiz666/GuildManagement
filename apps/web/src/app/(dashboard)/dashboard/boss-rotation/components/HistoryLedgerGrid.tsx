@@ -10,6 +10,8 @@ interface HistoryLedgerGridProps {
   /** Column order for the selected boss category. */
   bossNames: string[];
   onSelectKill: (kill: BossKilledHistoryEntry) => void;
+  canEdit?: boolean;
+  onEditKill?: (kill: BossKilledHistoryEntry) => void;
 }
 
 function formatDayHeader(dateKey: string) {
@@ -32,7 +34,7 @@ function isToday(dateKey: string) {
 // One row per date, one column per boss — each cell stacks every kill logged
 // for that boss on that date (time + taking guild), so a busy day shows every
 // hand-off instead of collapsing to a single "last kill" entry.
-export default function HistoryLedgerGrid({ days, bossNames, onSelectKill }: HistoryLedgerGridProps) {
+export default function HistoryLedgerGrid({ days, bossNames, onSelectKill, canEdit = false, onEditKill }: HistoryLedgerGridProps) {
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       <div className="max-h-[560px] overflow-auto custom-scrollbar">
@@ -103,22 +105,40 @@ export default function HistoryLedgerGrid({ days, bossNames, onSelectKill }: His
                             {kills.map((kill) => {
                               const color = getGuildColor(kill.takenGuildName || "");
                               return (
-                                <button
+                                <div
                                   key={kill.id}
-                                  type="button"
-                                  onClick={() => onSelectKill(kill)}
-                                  className={`flex items-center gap-1.5 rounded-md border px-1.5 py-1 cursor-pointer transition-all hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.35)] ${color.bg} ${color.border}`}
+                                  className={`group inline-flex items-stretch rounded-md border transition-all hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.35)] ${color.bg} ${color.border}`}
                                 >
-                                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
-                                  <span className="flex flex-col items-start leading-tight">
-                                    <span className={`text-[10px] font-bold whitespace-nowrap ${color.text}`}>
-                                      {kill.takenGuildName || "Unrecorded"}
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectKill(kill)}
+                                    className={`flex items-center gap-1.5 px-1.5 py-1 cursor-pointer ${canEdit && onEditKill ? "rounded-l-md" : "rounded-md"}`}
+                                  >
+                                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
+                                    <span className="flex flex-col items-start leading-tight">
+                                      <span className={`text-[10px] font-bold whitespace-nowrap ${color.text}`}>
+                                        {kill.takenGuildName || "Unrecorded"}
+                                      </span>
+                                      <span className="text-[9px] font-mono text-white/40 whitespace-nowrap">
+                                        {new Date(kill.killedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                                      </span>
                                     </span>
-                                    <span className="text-[9px] font-mono text-white/40 whitespace-nowrap">
-                                      {new Date(kill.killedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                                    </span>
-                                  </span>
-                                </button>
+                                  </button>
+                                  {canEdit && onEditKill && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onEditKill(kill)}
+                                      className="flex w-6 items-center justify-center rounded-r-md border-l border-white/[0.08] text-white/35 transition-colors hover:bg-white/[0.06] hover:text-[var(--forge-gold-bright)] cursor-pointer"
+                                      title={`Edit ${kill.bossName} kill time`}
+                                      aria-label={`Edit ${kill.bossName} kill time`}
+                                    >
+                                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 20h9" />
+                                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>

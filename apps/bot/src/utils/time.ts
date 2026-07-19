@@ -100,6 +100,52 @@ export function resolveWallClock(input: string, timeZone: string, now: Date = ne
   return resolved;
 }
 
+/**
+ * Resolve a bare `HH:MM` wall-clock reading in `timeZone` to a real instant,
+ * same DST-aware two-pass resolution as `resolveWallClock` — but for a
+ * *spawn* time (`!setspawn`) rather than a kill: interpreted as today in that
+ * zone, and rolled FORWARD one day if that already passed, since a spawn
+ * being set is always the next upcoming one, never a past instant.
+ */
+export function resolveFutureWallClock(input: string, timeZone: string, now: Date = new Date()): Date {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(input.trim());
+  if (!match) {
+    throw new UserFacingError(
+      `\`${input}\` isn't a valid time.`,
+      "Use 24-hour `HH:MM` — for example `!setspawn Venatus 21:30`.",
+    );
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) {
+    throw new UserFacingError(
+      `\`${input}\` isn't a valid time.`,
+      "Hours must be 00–23 and minutes 00–59.",
+    );
+  }
+
+  const dateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const [year, month, day] = dateParts.split("-").map(Number) as [number, number, number];
+
+  const naiveUtc = Date.UTC(year, month - 1, day, hours, minutes, 0, 0);
+  const guess = new Date(naiveUtc - zoneOffsetMinutes(now, timeZone) * 60_000);
+  const resolved = new Date(naiveUtc - zoneOffsetMinutes(guess, timeZone) * 60_000);
+
+  // A spawn being set is always the next upcoming one. Past ⇒ the user meant
+  // tomorrow (e.g. setting tonight's 11:30 PM spawn shortly after midnight).
+  if (resolved.getTime() < now.getTime()) {
+    return new Date(resolved.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return resolved;
+}
+
 /** Human-readable countdown, e.g. "2h 14m". Returns null once elapsed. */
 export function formatRemaining(target: Date, now: Date = new Date()): string | null {
   const ms = target.getTime() - now.getTime();

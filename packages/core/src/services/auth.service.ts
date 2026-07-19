@@ -251,6 +251,10 @@ export async function supabaseSync(
     // (Discord) never go through that form — those get an auto-generated
     // username instead.
     username?: string | null;
+    discord?: {
+      id: string;
+      username: string | null;
+    } | null;
     // Set on the very first sign-up sync when the user chose a leader account
     // type. Ignored on every subsequent sync (the user already exists).
     onboarding?: LeaderOnboardingInput | null;
@@ -283,6 +287,9 @@ export async function supabaseSync(
         username,
         passwordHash: "", // Empty hash for Supabase users
         displayName: supabaseUser.displayName,
+        discordId: supabaseUser.discord?.id ?? null,
+        discordUsername: supabaseUser.discord?.username ?? null,
+        discordLinkedAt: supabaseUser.discord?.id ? new Date() : null,
         // Supabase already gates this account behind its own confirmation
         // (email/OAuth) before a session can ever reach here, so it's
         // considered verified for our purposes too.
@@ -296,7 +303,12 @@ export async function supabaseSync(
       action: AUDIT_ACTIONS.USER_REGISTERED,
       target: "User",
       targetId: user.id,
-      detail: { email: user.email, displayName: user.displayName, provider: "supabase" },
+      detail: {
+        email: user.email,
+        displayName: user.displayName,
+        provider: "supabase",
+        discordLinked: Boolean(supabaseUser.discord?.id),
+      },
       ipAddress,
       userAgent,
     });
@@ -316,11 +328,41 @@ export async function supabaseSync(
       }
     }
   } else {
-    // Optionally update display name if it changed
+    const updateData: {
+      displayName?: string;
+      discordId?: string | null;
+      discordUsername?: string | null;
+      discordLinkedAt?: Date | null;
+    } = {};
+
     if (user.displayName !== supabaseUser.displayName) {
+      updateData.displayName = supabaseUser.displayName;
+    }
+
+    if (supabaseUser.discord?.id) {
+      const existingDiscordOwner = await prisma.user.findUnique({
+        where: { discordId: supabaseUser.discord.id },
+        select: { id: true },
+      });
+      if (existingDiscordOwner && existingDiscordOwner.id !== user.id) {
+        throw new ConflictError("This Discord account is already linked to a different ForgeKeep account");
+      }
+
+      if (user.discordId && user.discordId !== supabaseUser.discord.id) {
+        throw new ConflictError("This ForgeKeep account is already linked to a different Discord account");
+      }
+
+      if (user.discordId !== supabaseUser.discord.id || user.discordUsername !== supabaseUser.discord.username) {
+        updateData.discordId = supabaseUser.discord.id;
+        updateData.discordUsername = supabaseUser.discord.username;
+        updateData.discordLinkedAt = user.discordLinkedAt ?? new Date();
+      }
+    }
+
+    if (Object.keys(updateData).length > 0) {
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { displayName: supabaseUser.displayName },
+        data: updateData,
       });
     }
   }

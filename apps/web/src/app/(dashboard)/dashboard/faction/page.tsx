@@ -22,8 +22,22 @@ import FactionAuditLogTab from "./components/FactionAuditLogTab";
 import FactionSettingsTab from "./components/FactionSettingsTab";
 import FactionInventoryTab from "./components/FactionInventoryTab";
 import FactionInventoryRequestsTab from "./components/FactionInventoryRequestsTab";
+import FactionAccountingTab from "./components/FactionAccountingTab";
 
-type FactionTab = "OVERVIEW" | "ANNOUNCEMENTS" | "EVENTS" | "GUILD_MEMBERS" | "INVENTORY" | "ITEM_REQUESTS" | "JOIN_FACTION" | "AUDIT_LOG" | "SETTINGS";
+type FactionTab =
+  // Content — open to every faction member
+  | "OVERVIEW"
+  | "ANNOUNCEMENTS"
+  | "EVENTS"
+  // Management — Faction Leader/Admin (some shared with Guild Leaders)
+  | "GUILD_MEMBERS"
+  | "INVENTORY"
+  | "ITEM_REQUESTS"
+  | "ACCOUNTING"
+  | "AUDIT_LOG"
+  | "SETTINGS"
+  // Onboarding — guilds not yet fully settled in the faction
+  | "JOIN_FACTION";
 
 export default function FactionPage() {
   const { user } = useAuth();
@@ -135,15 +149,22 @@ export default function FactionPage() {
     );
   }
 
+  // Grouped so the tab bar reads as: shared content, then faction
+  // management (leadership-only), then onboarding for guilds still
+  // settling in — instead of an arbitrary mix of the two.
   const tabs: Array<{ id: FactionTab; label: string; count?: number }> = [
+    // ─ Content ─ open to every faction member
     { id: "OVERVIEW", label: "Overview" },
     { id: "ANNOUNCEMENTS", label: "Announcement", count: announcements.length },
     { id: "EVENTS", label: "Events", count: events.length },
-    ...(canManage ? [{ id: "GUILD_MEMBERS" as FactionTab, label: "Guild Members", count: members.length }] : []),
     { id: "INVENTORY", label: "Inventory" },
     ...(isGuildLeader || canManage ? [{ id: "ITEM_REQUESTS" as FactionTab, label: "Item Requests" }] : []),
+    // ─ Management ─ Faction Leader/Admin only
+    ...(canManage ? [{ id: "GUILD_MEMBERS" as FactionTab, label: "Guild Members", count: members.length }] : []),
+    ...(canManage ? [{ id: "ACCOUNTING" as FactionTab, label: "Accounting" }] : []),
     ...(canManage ? [{ id: "AUDIT_LOG" as FactionTab, label: "Audit Log" }] : []),
     ...(canManage ? [{ id: "SETTINGS" as FactionTab, label: "Settings" }] : []),
+    // ─ Onboarding ─ Guild Leaders whose guild isn't fully settled
     ...(isGuildLeader ? [{ id: "JOIN_FACTION" as FactionTab, label: "Join a Faction" }] : []),
   ];
 
@@ -277,6 +298,8 @@ export default function FactionPage() {
         {activeTab === "ITEM_REQUESTS" && (
           <FactionInventoryRequestsTab canManage={canManage} isGuildLeader={isGuildLeader} guildId={activeGuild.guildId} />
         )}
+
+        {activeTab === "ACCOUNTING" && <FactionAccountingTab canView={canManage} />}
 
         {activeTab === "AUDIT_LOG" && <FactionAuditLogTab canView={canManage} />}
 

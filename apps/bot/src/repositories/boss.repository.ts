@@ -105,6 +105,58 @@ export class BossRepository {
   }
 
   /**
+   * The schedule row backing this boss's currently OPEN check-in window, if
+   * any — regardless of whether that row is still "live" or has since been
+   * marked KILLED. A kill immediately rolls the boss's schedule forward to a
+   * fresh UPCOMING row for its *next* spawn (see syncNextRotationSchedule),
+   * so a naive "nearest upcoming" lookup run right after `!kill` resolves to
+   * that future placeholder instead of the fight that just happened —
+   * re-running `!attendance <boss>` (to add stragglers, or after
+   * `!editkilltime` corrects the time) would then open a second,
+   * unrelated session and show as a phantom duplicate boss card. Checking
+   * the open AttendanceSession first keeps repeat scans attached to the
+   * kill they actually belong to.
+   */
+  async findOpenSessionSchedule(params: { bossName: string; guildId: string }): Promise<UpcomingSpawn | null> {
+    const session = await prisma.attendanceSession.findFirst({
+      where: {
+        guildId: params.guildId,
+        isActive: true,
+        expiresAt: { gt: new Date() },
+        bossSchedule: { bossName: params.bossName },
+      },
+      select: {
+        bossSchedule: {
+          select: {
+            id: true,
+            bossName: true,
+            spawnTime: true,
+            location: true,
+            status: true,
+            guildId: true,
+            guildTurn: true,
+            guildTurnGuild: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const row = session?.bossSchedule;
+    if (!row) return null;
+
+    return {
+      scheduleId: row.id,
+      bossName: row.bossName,
+      spawnTime: row.spawnTime,
+      location: row.location,
+      status: row.status,
+      guildTurn: row.guildTurnGuild?.name ?? row.guildTurn,
+      guildId: row.guildId,
+    };
+  }
+
+  /**
    * Members who committed to a specific spawn — backs `!party`.
    * BossCommitment is the pre-fight headcount the website already collects.
    */

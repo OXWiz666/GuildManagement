@@ -438,17 +438,51 @@ export class BossService {
     );
   }
 
+  /**
+   * Overwrite a boss's next spawn time directly (`!setspawn`) — for when the
+   * real spawn is known from outside observation (a rival guild's own timer,
+   * a screenshot of the in-game clock) rather than from a kill logged here.
+   * Skips the usual kill-plus-cooldown math entirely; see `setBossSpawnTime`
+   * in @guild/core.
+   */
+  async setSpawnTime(params: {
+    guildId: string;
+    bossName: string;
+    spawnTime: Date;
+    actorId: string;
+  }) {
+    return core.dashboard.setBossSpawnTime(
+      params.guildId,
+      params.bossName,
+      params.spawnTime,
+      params.actorId,
+      undefined,
+      "discord-bot",
+    );
+  }
+
   /** Registry metadata (level, location, cooldown) for embeds. */
   getRegistryBoss(bossName: string) {
     return PREDEFINED_BOSSES.find((b) => b.name.toLowerCase() === bossName.toLowerCase()) ?? null;
   }
 
   /**
-   * The current (nearest upcoming, not-yet-killed) schedule row for a boss —
-   * what `!attendance <boss>` attaches a smart-attendance session to, so the
-   * website renders the real boss card instead of a generic session.
+   * The schedule row `!attendance <boss>` attaches a smart-attendance
+   * session to, so the website renders the real boss card instead of a
+   * generic session.
+   *
+   * Prefers a schedule that already has this boss's check-in window open —
+   * covers both the pre-kill advance check-in and a repeat `!attendance`
+   * scan (stragglers, or after `!editkilltime`) on a kill just logged, so
+   * either reuses the SAME session instead of minting a second one against
+   * the next-spawn placeholder the kill already rolled the schedule
+   * forward to. Only falls back to "nearest upcoming, not-yet-killed" when
+   * no window is open yet — the true first-scan advance check-in case.
    */
   async findScheduleForBoss(bossName: string, guildId: string): Promise<UpcomingSpawn | null> {
+    const openSession = await this.bosses.findOpenSessionSchedule({ bossName, guildId });
+    if (openSession) return openSession;
+
     const factionGuildIds = await this.bosses.getFactionGuildIds(guildId);
     return this.bosses.findLiveSchedule({
       bossName,

@@ -143,6 +143,25 @@ export const faction = new Hono<AppEnv>()
     return ok(c, result);
   })
 
+  // ─── Accounting (faction-wide treasury rollup) ────────────────
+  // Not viewer-specific (same data for every Treasurer/manager), so a plain
+  // page+limit cache key is safe — mirrors the accounting:* pattern in
+  // dashboard.ts. Ledger is append-only, so a short TTL with no explicit
+  // invalidation is an acceptable staleness tradeoff (same as /members).
+  .get("/accounting", requireAuth, async (c) => {
+    const user = c.get("user");
+    const requestedPage = c.req.query("page") ? parseInt(c.req.query("page")!, 10) : 1;
+    const requestedLimit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : 25;
+    const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, requestedLimit)) : 25;
+    const cacheKey = `faction-accounting:${user.userId}:p${page}:l${limit}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const data = await services.faction.getFactionAccounting(user.userId, page, limit);
+    await cache.set(cacheKey, data, 30);
+    return ok(c, data);
+  })
+
   // ─── Audit log ───────────────────────────────────────────────
   // Short TTL, no explicit invalidation — same tradeoff as /members and
   // /overview below: this is a historical log, not an editable list, so a

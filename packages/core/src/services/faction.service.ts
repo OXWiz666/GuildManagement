@@ -221,6 +221,162 @@ export async function getFactionMembers(actorId: string) {
 }
 
 // ═══════════════════════════════════════════════════
+// FACTION ACCOUNTING
+// Read-only rollup of every member guild's treasury — Faction Leader/Admin
+// or a member holding the TREASURER capability grant (see FactionRoleType).
+// Guild currencies are independently configurable (GuildSettings), so
+// balances are never summed across differing currency codes — the
+// per-guild breakdown always keeps its own currency, and the faction-wide
+// `totals` only combine guilds that share the same currencyCode.
+// ═══════════════════════════════════════════════════
+async function requireFactionAccountingViewer(actorId: string): Promise<{ factionId: string; role: string }> {
+  const memberships = await getCachedActiveMemberships(actorId);
+  const managerMembership = memberships.find((m) => isFactionManagerRole(m.role) && m.guild.factionId);
+  if (managerMembership?.guild.factionId) {
+    return { factionId: managerMembership.guild.factionId, role: managerMembership.role };
+  }
+
+  const withFaction = memberships.find((m) => m.guild.factionId);
+  if (!withFaction?.guild.factionId) {
+    throw new ForbiddenError("You must belong to a faction to view its accounting");
+  }
+
+  const grant = await prisma.factionRoleAssignment.findFirst({
+    where: { factionId: withFaction.guild.factionId, role: "TREASURER", guildMember: { userId: actorId, isActive: true } },
+    select: { id: true },
+  });
+  if (!grant) {
+    throw new ForbiddenError("Only Faction Leaders, Admins, and Faction Treasurers can view faction accounting");
+  }
+  return { factionId: withFaction.guild.factionId, role: withFaction.role };
+}
+
+export async function getFactionAccounting(actorId: string, page: number = 1, limit: number = 25) {
+  const { factionId } = await requireFactionAccountingViewer(actorId);
+  const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
+  const safeLimit = Number.isFinite(limit) ? Math.min(100, Math.max(1, Math.floor(limit))) : 25;
+  const skip = (safePage - 1) * safeLimit;
+
+  const guilds = await prisma.guild.findMany({
+    where: { factionId, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      settings: {
+        select: { currencyCode: true, currencySymbol: true, secondaryCurrencyCode: true, secondaryCurrencySymbol: true },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+  const guildIds = guilds.map((g) => g.id);
+  if (guildIds.length === 0) {
+    return {
+      guilds: [],
+      totals: [],
+      transactions: [],
+      pagination: { page: safePage, limit: safeLimit, total: 0, totalPages: 1 },
+    };
+  }
+
+  const [treasuryAggregates, totalTransactions, ledgerHistory] = await Promise.all([
+    prisma.ledgerEntry.groupBy({
+      by: ["guildId", "currency", "accountType", "entryType"],
+      where: { guildId: { in: guildIds }, accountType: { in: ["GUILD_FUND", "TAX"] } },
+      _sum: { amount: true },
+    }),
+    prisma.ledgerEntry.count({ where: { guildId: { in: guildIds } } }),
+    prisma.ledgerEntry.findMany({
+      where: { guildId: { in: guildIds } },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: safeLimit,
+    }),
+  ]);
+
+  const guildNameMap = new Map(guilds.map((g) => [g.id, g.name] as const));
+
+  const sum = (guildId: string, currency: string, accountType: "GUILD_FUND" | "TAX", entryType: "CREDIT" | "DEBIT"): bigint =>
+    treasuryAggregates.find(
+      (r) => r.guildId === guildId && r.currency === currency && r.accountType === accountType && r.entryType === entryType,
+    )?._sum.amount || 0n;
+
+  const guildBreakdown = guilds.map((g) => {
+    const currencyCode = g.settings?.currencyCode || "PHP";
+    const currencySymbol = g.settings?.currencySymbol || "₱";
+    const secondaryCode = g.settings?.secondaryCurrencyCode;
+    const secondarySymbol = g.settings?.secondaryCurrencySymbol;
+
+    const fundBalanceCents = sum(g.id, currencyCode, "GUILD_FUND", "CREDIT") - sum(g.id, currencyCode, "GUILD_FUND", "DEBIT");
+    const taxBalanceCents = sum(g.id, currencyCode, "TAX", "CREDIT") - sum(g.id, currencyCode, "TAX", "DEBIT");
+    const totalExpensesCents = sum(g.id, currencyCode, "GUILD_FUND", "DEBIT") + sum(g.id, currencyCode, "TAX", "DEBIT");
+
+    const secondary = secondaryCode
+      ? {
+          currencyCode: secondaryCode,
+          currencySymbol: secondarySymbol || "💎",
+          fundBalance: Number(sum(g.id, secondaryCode, "GUILD_FUND", "CREDIT") - sum(g.id, secondaryCode, "GUILD_FUND", "DEBIT")) / 100,
+          taxBalance: Number(sum(g.id, secondaryCode, "TAX", "CREDIT") - sum(g.id, secondaryCode, "TAX", "DEBIT")) / 100,
+          totalExpenses: Number(sum(g.id, secondaryCode, "GUILD_FUND", "DEBIT") + sum(g.id, secondaryCode, "TAX", "DEBIT")) / 100,
+        }
+      : null;
+
+    return {
+      guildId: g.id,
+      guildName: g.name,
+      guildAvatarUrl: g.avatarUrl,
+      currencyCode,
+      currencySymbol,
+      fundBalance: Number(fundBalanceCents) / 100,
+      taxBalance: Number(taxBalanceCents) / 100,
+      totalExpenses: Number(totalExpensesCents) / 100,
+      secondary,
+    };
+  });
+
+  // Faction-wide totals — only combined across guilds sharing the same
+  // currencyCode, since two guilds can each configure a different currency.
+  const totalsMap = new Map<
+    string,
+    { currencyCode: string; currencySymbol: string; fundBalance: number; taxBalance: number; totalExpenses: number; guildCount: number }
+  >();
+  for (const g of guildBreakdown) {
+    const existing = totalsMap.get(g.currencyCode);
+    const t = existing || { currencyCode: g.currencyCode, currencySymbol: g.currencySymbol, fundBalance: 0, taxBalance: 0, totalExpenses: 0, guildCount: 0 };
+    t.fundBalance += g.fundBalance;
+    t.taxBalance += g.taxBalance;
+    t.totalExpenses += g.totalExpenses;
+    t.guildCount += 1;
+    totalsMap.set(g.currencyCode, t);
+  }
+
+  const transactions = ledgerHistory.map((item) => ({
+    id: item.id,
+    guildId: item.guildId,
+    guildName: guildNameMap.get(item.guildId) || "Unknown guild",
+    accountType: item.accountType,
+    currency: item.currency,
+    amount: Number(item.amount) / 100,
+    entryType: item.entryType,
+    referenceType: item.referenceType,
+    description: item.description,
+    createdAt: item.createdAt.toISOString(),
+  }));
+
+  return {
+    guilds: guildBreakdown,
+    totals: Array.from(totalsMap.values()),
+    transactions,
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total: totalTransactions,
+      totalPages: Math.max(1, Math.ceil(totalTransactions / safeLimit)),
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════
 // FACTION OVERVIEW
 // A read-only snapshot of the faction the actor's guild belongs to — the
 // faction identity plus every member guild (with member counts and leader

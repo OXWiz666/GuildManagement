@@ -105,7 +105,10 @@ export const bindGuildCommand: Command = {
 
     // This command runs outside the normal guild scope, so resolve the linked
     // user directly rather than via ctx.actor (which needs a bound server).
-    const linked = await ctx.services.repositories.identity.isLinked(ctx.message.author.id);
+    const linked = await ctx.services.repositories.identity.isLinked(
+      ctx.message.author.id,
+      ctx.message.author.username,
+    );
     if (!linked) {
       throw new UserFacingError(
         "Link your ForgeKeep account first.",
@@ -115,6 +118,7 @@ export const bindGuildCommand: Command = {
 
     const user = await ctx.services.repositories.identity.resolveActorAnyGuild(
       ctx.message.author.id,
+      ctx.message.author.username,
     );
     if (!user) {
       throw new UserFacingError("Couldn't resolve your ForgeKeep account.");
@@ -144,5 +148,38 @@ export const bindGuildCommand: Command = {
     );
 
     await ctx.message.reply({ embeds: [embed] });
+  },
+};
+
+export const unbindGuildCommand: Command = {
+  name: "unbindguild",
+  aliases: ["unbind", "removeguild"],
+  description: "Unbind this Discord server from its ForgeKeep guild (Guild Leader only).",
+  usage: "!unbindguild",
+  category: "Configuration",
+  requiresLink: true,
+  minimumRole: "GUILD_LEADER",
+
+  async execute(ctx: CommandContext): Promise<void> {
+    const result = await ctx.services.repositories.discordServer.unbind(ctx.server.discordGuildId);
+    if (!result) {
+      throw new UserFacingError(
+        "Nothing to unbind",
+        "This Discord server is not currently bound to an active ForgeKeep guild.",
+      );
+    }
+
+    await ctx.message.reply({
+      embeds: [
+        successEmbed(
+          "Server unbound",
+          [
+            `This Discord server is no longer connected to **${result.guildName}**.`,
+            "",
+            "Run `!bindguild <invite-code>` to connect it again.",
+          ].join("\n"),
+        ),
+      ],
+    });
   },
 };

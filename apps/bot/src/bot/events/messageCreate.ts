@@ -68,6 +68,16 @@ export async function handleMessage(
 
   try {
     const server = await services.repositories.discordServer.findByDiscordGuildId(message.guildId);
+    const dbClaimed = await services.repositories.notification.claimCommandMessage({
+      messageId: message.id,
+      command: command.name,
+      discordGuildId: message.guildId,
+      discordServerId: server?.discordServerId ?? null,
+      guildId: server?.guildId ?? null,
+      channelId: message.channelId,
+      authorDiscordId: message.author.id,
+    });
+    if (!dbClaimed) return;
 
     // Bootstrap commands must run before a server is bound. `!link` is needed
     // before `!bindguild`, and `!commands` explains that flow.
@@ -101,13 +111,17 @@ export async function handleMessage(
     const actor = await services.repositories.identity.resolveActor(
       message.author.id,
       server.guildId,
+      message.author.username,
     );
 
     const ctx = buildContext(message, args, keyword, server, actor, services, dispatcher);
 
     // Throws NotLinkedError / MissingPermissionError, caught below.
     if (command.requiresLink || command.minimumRole) {
-      if (!actor && await services.repositories.identity.isLinked(message.author.id)) {
+      if (
+        !actor &&
+        await services.repositories.identity.isLinked(message.author.id, message.author.username)
+      ) {
         throw new NotGuildMemberError();
       }
       assertCommandAllowed(command, actor);

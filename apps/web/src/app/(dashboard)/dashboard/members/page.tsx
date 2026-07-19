@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
@@ -47,7 +47,7 @@ export default function MembersPage() {
   const { socket, onlineUserIds } = useSocket();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
-  const [sortBy, setSortBy] = useState<SortMode>("NAME");
+  const [sortBy, setSortBy] = useState<SortMode>("RANKING");
   const [confirmModal, setConfirmModal] = useState<{
     memberId: string;
     memberName: string;
@@ -85,7 +85,7 @@ export default function MembersPage() {
       }
       return result.data?.members ?? [];
     },
-    { persist: true, staleTime: 30000 }
+    { persist: true, staleTime: 5000 }
   );
   const members = membersRaw || [];
   const membersErrorMessage =
@@ -101,7 +101,7 @@ export default function MembersPage() {
       const result = await dashboardApi.getAccountingDashboard(activeGuild.guildId, 1, 1);
       return result.success && result.data ? result.data : null;
     },
-    { persist: true, staleTime: 15000, enabled: !!activeGuild }
+    { persist: true, staleTime: 5000, enabled: !!activeGuild }
   );
 
   const currencySymbol = accounting?.treasury?.primary?.currencySymbol || "₱";
@@ -134,7 +134,7 @@ export default function MembersPage() {
       const result = await guildApi.getGuildApplications(activeGuild.guildId);
       return result.success && result.data?.applications ? result.data.applications : [];
     },
-    { persist: true, staleTime: 30000 }
+    { persist: true, staleTime: 5000, enabled: !!activeGuild && isOfficer }
   );
   const applications = applicationsRaw || [];
 
@@ -164,13 +164,33 @@ export default function MembersPage() {
   );
   const customRoles = customRolesRaw || [];
 
+  const invalidateRoster = useCallback(() => {
+    if (!activeGuild) return;
+    queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
+    queryClient.invalidateQueries(`accounting_dashboard:${activeGuild.guildId}`);
+    queryClient.invalidateQueries(`member_stats_board:${activeGuild.guildId}`);
+    queryClient.invalidateQueries(`guild_stats_summary:${activeGuild.guildId}`);
+  }, [activeGuild]);
+
+  const applyAcceptedMemberOptimistically = useCallback((payload: unknown) => {
+    if (!activeGuild || typeof payload !== "object" || payload === null) return;
+    const joined = (payload as { member?: GuildMemberData }).member;
+    if (!joined) return;
+    queryClient.setQueryData<GuildMemberData[]>(`guild_members:${activeGuild.guildId}`, (old) => {
+      const current = old ?? [];
+      const withoutDuplicate = current.filter((member) => member.id !== joined.id && member.userId !== joined.userId);
+      return [joined, ...withoutDuplicate];
+    });
+  }, [activeGuild]);
+
   // Listen to real-time events to refresh members list and pending join applications instantly
   useEffect(() => {
     if (!socket || !activeGuild) return;
 
-    const handleRosterUpdate = () => {
+    const handleRosterUpdate = (payload?: unknown) => {
       console.log("[Roster Socket]: Guild members updated. Refreshing members list...");
-      queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
+      applyAcceptedMemberOptimistically(payload);
+      invalidateRoster();
     };
 
     const handleApplicationsUpdate = () => {
@@ -208,7 +228,7 @@ export default function MembersPage() {
       socket.off("join_request_processed", handleRosterUpdate);
       socket.off("invite_code_updated", handleInviteUpdate);
     };
-  }, [socket, activeGuild, isOfficer]);
+  }, [socket, activeGuild, isOfficer, applyAcceptedMemberOptimistically, invalidateRoster]);
 
   // Filter & sort members
   const filteredMembers = useMemo(() => {
@@ -303,7 +323,14 @@ export default function MembersPage() {
           addToast("info", "Application declined");
         }
         queryClient.invalidateQueries(`guild_applications:${activeGuild.guildId}`);
-        queryClient.invalidateQueries(`guild_members:${activeGuild.guildId}`);
+        if (result.data?.member) {
+          queryClient.setQueryData<GuildMemberData[]>(`guild_members:${activeGuild.guildId}`, (old) => {
+            const current = old ?? [];
+            const withoutDuplicate = current.filter((member) => member.id !== result.data!.member!.id && member.userId !== result.data!.member!.userId);
+            return [result.data!.member!, ...withoutDuplicate];
+          });
+        }
+        invalidateRoster();
       } else {
         addToast("error", result.error?.message || "Failed to process application");
       }

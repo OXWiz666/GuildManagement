@@ -326,7 +326,7 @@ export async function handleApplicationAction(
       where: { id: requestId },
       include: {
         user: {
-          select: { displayName: true },
+          select: { id: true, displayName: true, email: true, avatarUrl: true, bannerUrl: true },
         },
         guild: {
           select: { name: true },
@@ -377,6 +377,7 @@ export async function handleApplicationAction(
       applicantId: request.userId,
       guildId,
       guildName: request.guild.name,
+      member: null,
     };
   }
 
@@ -489,5 +490,26 @@ export async function handleApplicationAction(
     applicantId: request.userId,
     guildId,
     guildName: request.guild.name,
+    member: {
+      id: result.newMember.id,
+      userId: result.newMember.userId,
+      role: result.newMember.role,
+      rankName: result.newMember.rankName,
+      ign: result.newMember.ign,
+      cp: result.newMember.cp,
+      class: result.newMember.class,
+      weapon: result.newMember.weapon,
+      memberCode: result.newMember.memberCode,
+      joinedAt: result.newMember.joinedAt.toISOString(),
+      isActive: result.newMember.isActive,
+      customRole: null,
+      user: {
+        id: request.user.id,
+        displayName: request.user.displayName,
+        email: request.user.email,
+        avatarUrl: request.user.avatarUrl,
+        bannerUrl: request.user.bannerUrl,
+      },
+    },
   };
 }

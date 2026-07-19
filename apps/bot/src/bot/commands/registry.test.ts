@@ -54,6 +54,7 @@ describe("command registry", () => {
     // explicitly allowed here.
     const bootstrapCommands = new Set(["link", "unlink", "bindguild", "commands"]);
     const memberCommands = new Set(["spawn", "cp"]);
+    const guildLeaderCommands = new Set(["unbindguild"]);
 
     for (const command of COMMANDS) {
       if (bootstrapCommands.has(command.name)) continue;
@@ -61,6 +62,8 @@ describe("command registry", () => {
       expect(command.requiresLink, `!${command.name} requires a link`).toBe(true);
       if (memberCommands.has(command.name)) {
         expect(command.minimumRole, `!${command.name} remains member-accessible`).toBeNull();
+      } else if (guildLeaderCommands.has(command.name)) {
+        expect(command.minimumRole, `!${command.name} requires guild leader or higher`).toBe("GUILD_LEADER");
       } else {
         expect(command.minimumRole, `!${command.name} requires officer or higher`).toBe("OFFICER");
       }

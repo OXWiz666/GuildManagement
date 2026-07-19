@@ -37,6 +37,7 @@ export const guilds = new Hono<AppEnv>()
   .delete("/join-requests/:requestId", requireAuth, async (c) => {
     const user = c.get("user");
     const result = await services.application.cancelJoinRequest(user.userId, c.req.param("requestId"));
+    await cache.invalidatePattern(`guild-applications:${result.guildId}`);
     broadcastToGuild(result.guildId, "join_request_cancelled", { requestId: c.req.param("requestId") });
     return ok(c, result);
   })
@@ -54,6 +55,7 @@ export const guilds = new Hono<AppEnv>()
     if (fullRequest) {
       broadcastToGuild(result.guildId, "join_request_created", { ...fullRequest, createdAt: fullRequest.createdAt.toISOString() });
     }
+    await cache.invalidatePattern(`guild-applications:${result.guildId}`);
     return ok(c, result);
   })
 
@@ -82,8 +84,14 @@ export const guilds = new Hono<AppEnv>()
     }
     const { ipAddress, userAgent } = getClientInfo(c);
     const result = await services.application.handleApplicationAction(guildId, requestId, action, user.userId, ipAddress, userAgent);
-    if (action === "ACCEPT") await cache.delete(`guild-members:${guildId}`);
-    const payload = { requestId, action, memberCode: result.memberCode, guildId, guildName: result.guildName };
+    await Promise.all([
+      cache.delete(`guild-members:${guildId}`),
+      cache.invalidatePattern(`guild-applications:${guildId}`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
+      cache.invalidatePattern(`member:stats-summary:${guildId}`),
+      cache.invalidatePattern(`accounting:${guildId}:*`),
+    ]);
+    const payload = { requestId, action, memberCode: result.memberCode, guildId, guildName: result.guildName, member: result.member };
     await Promise.all([
       broadcastToGuild(guildId, "join_request_processed", payload),
       broadcastToUser(result.applicantId, "join_request_processed", payload),

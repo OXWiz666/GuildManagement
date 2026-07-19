@@ -55,7 +55,9 @@ export const resolveIdentifierSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: emailSchema,
+  // Kept as `email` for API compatibility with existing clients, but this
+  // field now accepts the same username-or-email identifier as the login form.
+  email: loginIdentifierSchema,
   password: z.string().min(1, "Password is required"),
 });
 

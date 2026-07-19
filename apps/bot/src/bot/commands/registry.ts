@@ -6,7 +6,7 @@ import { setSpawnCommand } from "./setspawn.command.js";
 import { forceSpawnAllCommand, forceSpawnCommand } from "./forcespawn.command.js";
 import { spawnCommand } from "./spawn.command.js";
 import { partyCommand } from "./party.command.js";
-import { bindGuildCommand, linkCommand, unlinkCommand } from "./link.command.js";
+import { bindGuildCommand, linkCommand, unbindGuildCommand, unlinkCommand } from "./link.command.js";
 import { cmdHereCommand, notifHereCommand, threadHereCommand } from "./config.command.js";
 import { aliasCommand } from "./alias.command.js";
 import { commandsCommand } from "./commands.command.js";
@@ -34,6 +34,7 @@ export const COMMANDS: Command[] = [
   linkCommand,
   unlinkCommand,
   bindGuildCommand,
+  unbindGuildCommand,
   notifHereCommand,
   cmdHereCommand,
   threadHereCommand,

@@ -31,20 +31,28 @@ export class IdentityRepository {
    * Negative results are not cached: an unlinked user who just ran `!link`
    * must work on their very next command.
    */
-  async resolveActor(discordId: string, guildId: string): Promise<Actor | null> {
+  async resolveActor(
+    discordId: string,
+    guildId: string,
+    discordUsername?: string | null,
+  ): Promise<Actor | null> {
     const key = cacheKeys.discordActor(discordId, guildId);
 
     const cached = await redisCache.get<Actor>(key);
     if (cached) return cached;
 
-    const actor = await this.loadActor(discordId, guildId);
+    const actor = await this.loadActor(discordId, guildId, discordUsername);
     if (actor) await redisCache.set(key, actor, cacheTtl.discordActor);
 
     return actor;
   }
 
   /** Uncached read — the source of truth for `resolveActor`. */
-  private async loadActor(discordId: string, guildId: string): Promise<Actor | null> {
+  private async loadActor(
+    discordId: string,
+    guildId: string,
+    discordUsername?: string | null,
+  ): Promise<Actor | null> {
     const user = await prisma.user.findUnique({
       where: { discordId },
       select: {
@@ -61,6 +69,22 @@ export class IdentityRepository {
       },
     });
 
+    if (user) return this.toActor(user, discordId);
+
+    return this.loadActorByUniqueUsername(discordId, guildId, discordUsername);
+  }
+
+  private toActor(
+    user: {
+      id: string;
+      displayName: string;
+      isActive: boolean;
+      bannedAt: Date | null;
+      deletedAt: Date | null;
+      guildMembers: Array<{ id: string; role: string; ign: string | null }>;
+    } | null,
+    discordId: string,
+  ): Actor | null {
     if (!user) return null;
     // Platform-level bans/deletions must apply in Discord too.
     if (!user.isActive || user.bannedAt || user.deletedAt) return null;
@@ -78,10 +102,88 @@ export class IdentityRepository {
     };
   }
 
+  /**
+   * Repair legacy/OAuth link rows that stored a Discord id the bot no longer
+   * receives. The username must identify exactly one active member in this
+   * guild, which keeps the fallback from granting access on a loose match.
+   */
+  private async loadActorByUniqueUsername(
+    discordId: string,
+    guildId: string,
+    discordUsername?: string | null,
+  ): Promise<Actor | null> {
+    const username = discordUsername?.trim();
+    if (!username) return null;
+
+    const users = await prisma.user.findMany({
+      where: {
+        discordUsername: { equals: username, mode: "insensitive" },
+        isActive: true,
+        bannedAt: null,
+        deletedAt: null,
+        guildMembers: { some: { guildId, isActive: true } },
+      },
+      select: {
+        id: true,
+        displayName: true,
+        discordId: true,
+        discordLinkedAt: true,
+        isActive: true,
+        bannedAt: true,
+        deletedAt: true,
+        guildMembers: {
+          where: { guildId, isActive: true },
+          select: { id: true, role: true, ign: true },
+          take: 1,
+        },
+      },
+      take: 2,
+    });
+
+    if (users.length !== 1) return null;
+
+    const user = users[0]!;
+    const actor = this.toActor(user, discordId);
+    if (!actor) return null;
+
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          discordId,
+          discordUsername: username,
+          discordLinkedAt: user.discordLinkedAt ?? new Date(),
+        },
+      });
+    } catch {
+      return this.loadActor(discordId, guildId, null);
+    }
+
+    if (user.discordId && user.discordId !== discordId) {
+      await redisCache.del(cacheKeys.discordActor(user.discordId, guildId));
+    }
+
+    return actor;
+  }
+
   /** True when this Discord account is linked to any ForgeKeep user. */
-  async isLinked(discordId: string): Promise<boolean> {
+  async isLinked(discordId: string, discordUsername?: string | null): Promise<boolean> {
     const count = await prisma.user.count({ where: { discordId } });
-    return count > 0;
+    if (count > 0) return true;
+
+    const username = discordUsername?.trim();
+    if (!username) return false;
+
+    const usernameCount = await prisma.user.count({
+      where: {
+        discordUsername: { equals: username, mode: "insensitive" },
+        isActive: true,
+        bannedAt: null,
+        deletedAt: null,
+      },
+    });
+
+    return usernameCount > 0;
   }
 
   /**
@@ -94,6 +196,7 @@ export class IdentityRepository {
    */
   async resolveActorAnyGuild(
     discordId: string,
+    discordUsername?: string | null,
   ): Promise<{ userId: string; displayName: string } | null> {
     const user = await prisma.user.findUnique({
       where: { discordId },
@@ -106,7 +209,62 @@ export class IdentityRepository {
       },
     });
 
-    if (!user || !user.isActive || user.bannedAt || user.deletedAt) return null;
+    if (!user) {
+      return this.resolveActorAnyGuildByUniqueUsername(discordId, discordUsername);
+    }
+    if (!user.isActive || user.bannedAt || user.deletedAt) return null;
+
+    return { userId: user.id, displayName: user.displayName };
+  }
+
+  private async resolveActorAnyGuildByUniqueUsername(
+    discordId: string,
+    discordUsername?: string | null,
+  ): Promise<{ userId: string; displayName: string } | null> {
+    const username = discordUsername?.trim();
+    if (!username) return null;
+
+    const users = await prisma.user.findMany({
+      where: {
+        discordUsername: { equals: username, mode: "insensitive" },
+        isActive: true,
+        bannedAt: null,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        displayName: true,
+        discordLinkedAt: true,
+      },
+      take: 2,
+    });
+
+    if (users.length !== 1) return null;
+
+    const user = users[0]!;
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          discordId,
+          discordUsername: username,
+          discordLinkedAt: user.discordLinkedAt ?? new Date(),
+        },
+      });
+    } catch {
+      const exact = await prisma.user.findUnique({
+        where: { discordId },
+        select: {
+          id: true,
+          displayName: true,
+          isActive: true,
+          bannedAt: true,
+          deletedAt: true,
+        },
+      });
+      if (!exact || !exact.isActive || exact.bannedAt || exact.deletedAt) return null;
+      return { userId: exact.id, displayName: exact.displayName };
+    }
 
     return { userId: user.id, displayName: user.displayName };
   }

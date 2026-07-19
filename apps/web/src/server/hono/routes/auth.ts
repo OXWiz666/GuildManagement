@@ -18,7 +18,7 @@ import { ok, okEmpty } from "../respond";
 import { getClientInfo, readJson, getRefreshToken, setRefreshCookie, clearRefreshCookie } from "../request";
 import { zBody } from "../validation";
 import { requireAuth } from "../middleware/auth";
-import { authLimit } from "../middleware/ratelimit";
+import { authLimit, lookupLimit } from "../middleware/ratelimit";
 
 /**
  * Auth domain — Hono port of apps/web/src/app/api/auth/**. Preserves the
@@ -28,13 +28,13 @@ import { authLimit } from "../middleware/ratelimit";
 export const auth = new Hono<AppEnv>()
   // ─── Public availability / lookup ────────────────────────────
   .get("/email-registered", async (c) => {
-    authLimit(c);
+    lookupLimit(c);
     const email = c.req.query("email");
     if (!email) throw new BadRequestError("email is required");
     return ok(c, await services.auth.checkEmailRegistered(email));
   })
   .get("/username-available", async (c) => {
-    authLimit(c);
+    lookupLimit(c);
     const username = c.req.query("username");
     if (!username) throw new BadRequestError("username is required");
     return ok(c, await services.auth.checkUsernameAvailable(username));

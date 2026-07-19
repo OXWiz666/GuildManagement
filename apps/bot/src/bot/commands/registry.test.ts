@@ -47,7 +47,7 @@ describe("command registry", () => {
   it("gates every write command behind a role", () => {
     // Guard against a future command being added without a permission by
     // omission. These mutate faction-wide state and must never be open.
-    const writeCommands = ["kill", "editkilltime", "forcespawn", "forcespawnall"];
+    const writeCommands = ["kill", "editkilltime", "setspawn", "forcespawn", "forcespawnall"];
 
     for (const name of writeCommands) {
       const command = findCommand(name);

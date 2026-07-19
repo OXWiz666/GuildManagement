@@ -238,6 +238,9 @@ export default function BossRotationPage() {
   const [showDropsPicker, setShowDropsPicker] = useState(false);
   const [isKilling, setIsKilling] = useState(false);
   const [saleModalKill, setSaleModalKill] = useState<BossKilledHistoryEntry | null>(null);
+  const [editingHistoryKill, setEditingHistoryKill] = useState<BossKilledHistoryEntry | null>(null);
+  const [editHistoryKillTime, setEditHistoryKillTime] = useState("");
+  const [isEditingHistoryKill, setIsEditingHistoryKill] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -689,6 +692,7 @@ export default function BossRotationPage() {
     ? modalGuildQueue[(modalGuildQueue.findIndex((guild) => guild.id === selectedTakenGuild.id) + 1) % modalGuildQueue.length] || null
     : null;
   const canConfirmTaken = Boolean(killTarget && killTime && selectedTakenGuild && !isKilling);
+  const canSaveHistoryEdit = Boolean(editingHistoryKill && editHistoryKillTime && editingHistoryKill.bossScheduleId && !isEditingHistoryKill);
 
   // Stable reference (vs. an inline `() => openKillModal(rotation)` per
   // card) so RotationCard's memo isn't defeated by a fresh closure on every
@@ -709,6 +713,16 @@ export default function BossRotationPage() {
       setKillDrops([]);
     },
     [takingGuilds],
+  );
+
+  const openHistoryKillEditModal = useCallback(
+    (kill: BossKilledHistoryEntry) => {
+      if (!canManage) return;
+      setSaleModalKill(null);
+      setEditingHistoryKill(kill);
+      setEditHistoryKillTime(toDateTimeInputValue(new Date(kill.killedAt)));
+    },
+    [canManage],
   );
 
   // react-hooks/refs can't see into buildWeeklyChips: it only ever *stores*
@@ -804,6 +818,36 @@ export default function BossRotationPage() {
       window.clearTimeout(timeoutId);
       isKillingRef.current = false;
       setIsKilling(false);
+    }
+  }
+
+  async function saveHistoryKillEdit() {
+    if (!activeGuild || !editingHistoryKill || !editHistoryKillTime || isEditingHistoryKill) return;
+    if (!editingHistoryKill.bossScheduleId) {
+      addToast("error", "This history entry cannot be edited because it is not linked to a schedule.");
+      return;
+    }
+
+    setIsEditingHistoryKill(true);
+    try {
+      const killedAt = new Date(editHistoryKillTime).toISOString();
+      const result = await dashboardApi.editBossKillHistoryEntry(activeGuild.guildId, editingHistoryKill.id, killedAt);
+      if (result.success) {
+        addToast("success", `${editingHistoryKill.bossName} kill time updated.`);
+        setEditingHistoryKill(null);
+        setEditHistoryKillTime("");
+        queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_rotation_audit:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_killed_history:${activeGuild.guildId}`);
+        void refetchRotation();
+      } else {
+        addToast("error", result.error?.message || "Failed to update kill time");
+      }
+    } catch {
+      addToast("error", "Failed to update kill time");
+    } finally {
+      setIsEditingHistoryKill(false);
     }
   }
 
@@ -1283,7 +1327,13 @@ export default function BossRotationPage() {
                 body={`No ${historyCategory === "FIXED_HOUR" ? "Fixed-Hour" : "Fixed-Schedule"} boss kills found. Try a different range or category.`}
               />
             ) : historyRows.length === 0 ? null : historyView === "LEDGER" ? (
-              <HistoryLedgerGrid days={filteredHistoryDays} bossNames={categoryBossNames} onSelectKill={setSaleModalKill} />
+              <HistoryLedgerGrid
+                days={filteredHistoryDays}
+                bossNames={categoryBossNames}
+                onSelectKill={setSaleModalKill}
+                canEdit={canManage}
+                onEditKill={openHistoryKillEditModal}
+              />
             ) : (
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
                 <div className="overflow-x-auto">
@@ -1353,6 +1403,19 @@ export default function BossRotationPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-right whitespace-nowrap">
+                              {canManage && (
+                                <button
+                                  type="button"
+                                  onClick={() => openHistoryKillEditModal(kill)}
+                                  className="mr-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--forge-gold-bright)] hover:text-[var(--forge-gold)] transition-colors cursor-pointer"
+                                >
+                                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 20h9" />
+                                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                  </svg>
+                                  Edit
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => setSaleModalKill(kill)}
@@ -1493,6 +1556,70 @@ export default function BossRotationPage() {
             setShowDropsPicker(false);
           }}
         />
+      )}
+
+      {editingHistoryKill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-md"
+            onClick={() => !isEditingHistoryKill && setEditingHistoryKill(null)}
+          />
+          <div className="relative w-full max-w-md rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)] shadow-[0_40px_90px_-25px_rgba(0,0,0,0.8)] p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative p-0.5 rounded-xl border border-[var(--forge-gold)]/30 glow-gold-active">
+                <BossAvatar src={editingHistoryKill.bossImageUrl || getBossImageUrl(editingHistoryKill.bossName)} name={editingHistoryKill.bossName} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.22em] text-[var(--forge-gold-bright)]">Edit kill time</p>
+                <h3 className="text-base font-semibold text-white truncate">{editingHistoryKill.bossName}</h3>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/60 p-3 space-y-2 mb-4">
+              <ModalLine label="Taken by" value={editingHistoryKill.takenGuildName || "Unrecorded"} tone="emerald" />
+              <ModalLine label="Recorded by" value={editingHistoryKill.recordedBy.displayName} />
+              <ModalLine
+                label="Current time"
+                value={new Date(editingHistoryKill.killedAt).toLocaleString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                tone="amber"
+              />
+            </div>
+
+            {!editingHistoryKill.bossScheduleId && (
+              <p className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-200/80">
+                This history entry is not linked to a boss schedule, so its timer cannot be corrected.
+              </p>
+            )}
+
+            <label className="block mb-5">
+              <span className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em] mb-2">
+                Corrected killed time
+              </span>
+              <input
+                type="datetime-local"
+                value={editHistoryKillTime}
+                max={toDateTimeInputValue(new Date())}
+                onChange={(event) => setEditHistoryKillTime(event.target.value)}
+                disabled={isEditingHistoryKill || !editingHistoryKill.bossScheduleId}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--obsidian-elevated)]/60 border border-[var(--metal-border)] text-[13px] text-white focus:outline-none focus:border-[var(--forge-gold)]/40 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </label>
+
+            <div className="flex justify-end gap-2 border-t border-white/[0.06] pt-4">
+              <Button variant="ghost" size="sm" onClick={() => setEditingHistoryKill(null)} disabled={isEditingHistoryKill}>
+                Cancel
+              </Button>
+              <Button variant="accent" size="sm" onClick={saveHistoryKillEdit} isLoading={isEditingHistoryKill} disabled={!canSaveHistoryEdit}>
+                Save edit
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {saleModalKill && activeGuild && (

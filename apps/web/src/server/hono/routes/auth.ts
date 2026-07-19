@@ -133,6 +133,11 @@ export const auth = new Hono<AppEnv>()
         guild_name?: string;
         faction_name?: string;
       };
+      identities?: Array<{
+        provider?: string;
+        provider_id?: string;
+        identity_data?: Record<string, unknown>;
+      }>;
     };
 
     if (!supabaseUser.id || !supabaseUser.email) {
@@ -142,6 +147,14 @@ export const auth = new Hono<AppEnv>()
     const email = supabaseUser.email;
     const meta = supabaseUser.user_metadata ?? {};
     const displayName = meta.display_name || meta.full_name || email.split("@")[0]!;
+    const discordIdentity = supabaseUser.identities?.find((identity) => identity.provider === "discord") ?? null;
+    const discordIdentityData = discordIdentity?.identity_data ?? {};
+    const discordUsername =
+      typeof discordIdentityData["user_name"] === "string" ? discordIdentityData["user_name"]
+      : typeof discordIdentityData["preferred_username"] === "string" ? discordIdentityData["preferred_username"]
+      : typeof discordIdentityData["name"] === "string" ? discordIdentityData["name"]
+      : typeof discordIdentityData["full_name"] === "string" ? discordIdentityData["full_name"]
+      : null;
 
     const onboarding = leaderOnboardingSchema.safeParse({
       accountType: meta.account_type,
@@ -156,6 +169,12 @@ export const auth = new Hono<AppEnv>()
         email,
         displayName,
         username: meta.username ?? null,
+        discord: discordIdentity?.provider_id
+          ? {
+              id: discordIdentity.provider_id,
+              username: discordUsername,
+            }
+          : null,
         onboarding: onboarding.success ? onboarding.data : null,
       },
       ipAddress,

@@ -2,6 +2,7 @@ import type { Command } from "../../types/command.js";
 import { cpCommand } from "./cp.command.js";
 import { killCommand } from "./kill.command.js";
 import { editKillTimeCommand } from "./editkilltime.command.js";
+import { setSpawnCommand } from "./setspawn.command.js";
 import { forceSpawnAllCommand, forceSpawnCommand } from "./forcespawn.command.js";
 import { spawnCommand } from "./spawn.command.js";
 import { partyCommand } from "./party.command.js";
@@ -23,6 +24,7 @@ export const COMMANDS: Command[] = [
   spawnCommand,
   killCommand,
   editKillTimeCommand,
+  setSpawnCommand,
   itemsCommand,
   forceSpawnCommand,
   forceSpawnAllCommand,

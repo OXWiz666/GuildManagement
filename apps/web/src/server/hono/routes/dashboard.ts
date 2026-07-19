@@ -342,6 +342,19 @@ export const dashboard = new Hono<AppEnv>()
     const month = c.req.query("month") ?? undefined;
     return ok(c, await services.dashboard.getBossKilledHistory(c.req.param("guildId"), user.userId, month));
   })
+  .patch("/boss-rotation/:guildId/history/:auditLogId", requireAuth, async (c) => {
+    const user = c.get("user");
+    const guildId = c.req.param("guildId");
+    const auditLogId = c.req.param("auditLogId");
+    const { killedAt } = await readJson<{ killedAt?: string }>(c);
+    if (!killedAt) throw new BadRequestError("Killed timestamp is required");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const data = await services.dashboard.editBossKillHistoryEntry(guildId, auditLogId, killedAt, user.userId, ipAddress, userAgent);
+    await Promise.all([cache.invalidatePattern(`boss-schedule:*`), cache.invalidatePattern(`stats:${guildId}:*`)]);
+    broadcastToFaction(data.factionId, "boss_rotation_updated", data);
+    broadcastToGuild(guildId, "boss_rotation_updated", data);
+    return ok(c, data);
+  })
   .get("/boss-rotation/:guildId/low-rotation", requireAuth, async (c) => {
     const user = c.get("user");
     dashboardLimit(c, user.userId);

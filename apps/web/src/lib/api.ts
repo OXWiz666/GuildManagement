@@ -1267,6 +1267,19 @@ export const dashboardApi = {
     );
   },
 
+  async editBossKillHistoryEntry(guildId: string, auditLogId: string, killedAt: string) {
+    return api.patch<{
+      bossName: string;
+      previousKilledAt: string | null;
+      killedAt: string;
+      nextSpawnTime: string;
+      schedule: BossScheduleData | null;
+    }>(
+      `/dashboard/boss-rotation/${guildId}/history/${auditLogId}`,
+      { killedAt },
+    );
+  },
+
   async updateBossRotationQueue(guildId: string, bossName: string, queueGuildIds: string[]) {
     return api.post<BossRotationResponse>(
       `/dashboard/boss-rotation/${guildId}/${encodeURIComponent(bossName)}/queue`,
@@ -1749,6 +1762,53 @@ export interface FactionAuditLogPage {
   pageSize: number;
 }
 
+export interface FactionAccountingGuildBreakdown {
+  guildId: string;
+  guildName: string;
+  guildAvatarUrl: string | null;
+  currencyCode: string;
+  currencySymbol: string;
+  fundBalance: number;
+  taxBalance: number;
+  totalExpenses: number;
+  secondary: {
+    currencyCode: string;
+    currencySymbol: string;
+    fundBalance: number;
+    taxBalance: number;
+    totalExpenses: number;
+  } | null;
+}
+
+export interface FactionAccountingTotal {
+  currencyCode: string;
+  currencySymbol: string;
+  fundBalance: number;
+  taxBalance: number;
+  totalExpenses: number;
+  guildCount: number;
+}
+
+export interface FactionAccountingTransaction {
+  id: string;
+  guildId: string;
+  guildName: string;
+  accountType: "MEMBER" | "GUILD_FUND" | "TAX";
+  currency: string;
+  amount: number;
+  entryType: "CREDIT" | "DEBIT";
+  referenceType: string;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface FactionAccountingData {
+  guilds: FactionAccountingGuildBreakdown[];
+  totals: FactionAccountingTotal[];
+  transactions: FactionAccountingTransaction[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
 export interface FactionGuildSearchResult {
   id: string;
   name: string;
@@ -1887,6 +1947,10 @@ export const factionApi = {
 
   async getRoleAssignments() {
     return api.get<{ assignments: FactionRoleAssignmentData[] }>(`/faction/roles`);
+  },
+
+  async getAccounting(page = 1, limit = 25) {
+    return api.get<FactionAccountingData>(`/faction/accounting?page=${page}&limit=${limit}`);
   },
 
   async assignRole(guildMemberId: string, role: FactionCapabilityRole) {

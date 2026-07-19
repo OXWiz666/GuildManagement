@@ -213,13 +213,13 @@ Discord**, which shows the connected server and every channel.
 
 ### Boss aliases
 
-Map your guild's shorthand onto real boss names, so `!spawn parak` works even
+Map your guild's shorthand onto real boss names, so `!spawn kuracorp` works even
 though the registry calls it "Baron Baraudmore":
 
 ```
 !alias                                  # list
-!alias add parak Baron Baraudmore       # add (Officer+)
-!alias remove parak                     # remove
+!alias add kuracorp Baron Baraudmore       # add (Officer+)
+!alias remove kuracorp                     # remove
 ```
 
 Or use **Guild Settings → Integrations → Discord**, which has a boss picker —

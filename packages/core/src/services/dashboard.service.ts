@@ -337,6 +337,20 @@ function parseBossHistoryMonth(month?: string) {
   return { key, start, end };
 }
 
+function bossHistoryMonthKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+async function invalidateBossKilledHistoryCache(guildId: string, dates: Array<Date | null | undefined> = []) {
+  const keys = new Set<string>([cacheKeys.bossKilledHistory(guildId, parseBossHistoryMonth().key)]);
+  for (const date of dates) {
+    if (date && !Number.isNaN(date.getTime())) {
+      keys.add(cacheKeys.bossKilledHistory(guildId, bossHistoryMonthKey(date)));
+    }
+  }
+  await redisCache.delMany(Array.from(keys));
+}
+
 function getDetailString(detail: Record<string, unknown> | null, key: string) {
   const value = detail?.[key];
   return typeof value === "string" ? value : null;
@@ -2647,6 +2661,7 @@ export async function editBossKillTime(
   });
 
   await invalidateBossRotationCache(guildId);
+  await invalidateBossKilledHistoryCache(guildId, [previousKilledAt, killedDate]);
 
   return {
     bossName: killed.bossName,
@@ -2654,7 +2669,239 @@ export async function editBossKillTime(
     killedAt: killedDate,
     nextSpawnTime,
     schedule: result.nextSchedule,
+    factionId,
   };
+}
+
+export async function editBossKillHistoryEntry(
+  guildId: string,
+  auditLogId: string,
+  killedAt: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossTakenManager(actorId, guildId);
+
+  const killedDate = new Date(killedAt);
+  if (Number.isNaN(killedDate.getTime())) {
+    throw new BadRequestError("Killed timestamp is invalid");
+  }
+  if (killedDate.getTime() > Date.now()) {
+    throw new BadRequestError("A kill time cannot be in the future");
+  }
+
+  const log = await prisma.auditLog.findUnique({
+    where: { id: auditLogId },
+    select: { id: true, guildId: true, action: true, target: true, targetId: true, detail: true },
+  });
+  if (!log || log.guildId !== guildId || !BOSS_KILL_AUDIT_ACTIONS.includes(log.action)) {
+    throw new NotFoundError("Boss kill history entry not found");
+  }
+
+  const detail = log.detail && typeof log.detail === "object" && !Array.isArray(log.detail)
+    ? log.detail as Record<string, unknown>
+    : null;
+  const bossName = getDetailString(detail, "bossName") || (typeof log.target === "string" ? log.target : "");
+  const scheduleId = getDetailString(detail, "scheduleId") || (log.target === "BossSchedule" ? log.targetId : null);
+  if (!bossName || !scheduleId) {
+    throw new BadRequestError("This history entry is not linked to an editable boss schedule");
+  }
+
+  const guild = await prisma.guild.findUnique({
+    where: { id: guildId },
+    select: { factionId: true },
+  });
+  const factionId = guild?.factionId ?? null;
+  const factionGuildIds = (await getActiveFactionGuilds(factionId, guildId)).map((g) => g.id);
+
+  const killed = await prisma.bossSchedule.findUnique({ where: { id: scheduleId } });
+  if (!killed || killed.status !== BossEventStatus.KILLED) {
+    throw new NotFoundError("Boss kill schedule not found");
+  }
+  if (killed.bossName.toLowerCase() !== bossName.trim().toLowerCase()) {
+    throw new BadRequestError("History entry does not match the linked boss schedule");
+  }
+  if (killed.guildId !== null && !factionGuildIds.includes(killed.guildId)) {
+    throw new ForbiddenError("You cannot edit another faction's boss history");
+  }
+
+  const previousKilledAt = killed.killedAt;
+  const nextSpawnTime = getNextBossSpawnTime(killed.bossName, killedDate);
+  const latestKilled = await prisma.bossSchedule.findFirst({
+    where: {
+      bossName: killed.bossName,
+      OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
+      status: BossEventStatus.KILLED,
+    },
+    orderBy: { killedAt: "desc" },
+    select: { id: true },
+  });
+  const affectsCurrentTimer = latestKilled?.id === killed.id;
+
+  const liveSchedule = affectsCurrentTimer
+    ? await prisma.bossSchedule.findFirst({
+        where: {
+          bossName: killed.bossName,
+          OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
+          status: { not: BossEventStatus.KILLED },
+        },
+        orderBy: { spawnTime: "asc" },
+        select: { guildTurn: true, guildTurnGuildId: true },
+      })
+    : null;
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.bossSchedule.update({
+      where: { id: killed.id },
+      data: { killedAt: killedDate },
+    });
+
+    if (!affectsCurrentTimer) return { nextSchedule: null };
+
+    if (factionId) {
+      await tx.bossRotation.updateMany({
+        where: { factionId, bossName: killed.bossName },
+        data: { nextSpawnTime, updatedById: actorId },
+      });
+    }
+
+    const nextSchedule = await syncNextRotationSchedule(
+      {
+        bossName: killed.bossName,
+        factionGuildIds,
+        fallbackGuildId: killed.guildId,
+        bossImageUrl: killed.bossImageUrl,
+        location: killed.location,
+        spawnTime: nextSpawnTime,
+        nextGuildName: liveSchedule?.guildTurn ?? null,
+        nextGuildId: liveSchedule?.guildTurnGuildId ?? null,
+        creatorId: actorId,
+      },
+      tx,
+    );
+
+    return { nextSchedule };
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_KILL_TIME_EDITED",
+    target: "BossSchedule",
+    targetId: killed.id,
+    detail: {
+      bossName: killed.bossName,
+      originalAuditLogId: log.id,
+      previousKilledAt: previousKilledAt?.toISOString() ?? null,
+      killedAt: killedDate.toISOString(),
+      nextSpawnTime: nextSpawnTime.toISOString(),
+      affectsCurrentTimer,
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  await invalidateBossRotationCache(guildId);
+  await invalidateBossKilledHistoryCache(guildId, [previousKilledAt, killedDate]);
+
+  return {
+    bossName: killed.bossName,
+    previousKilledAt,
+    killedAt: killedDate,
+    nextSpawnTime,
+    schedule: result.nextSchedule ? serializeBossScheduleForApi(result.nextSchedule) : null,
+    factionId,
+  };
+}
+
+/**
+ * Overwrite a boss's next spawn time directly, bypassing the normal
+ * kill-time-plus-cooldown derivation entirely.
+ *
+ * Every other timer write (`editBossKillTime`, `markBossRotationKilled`,
+ * timer resets) always *derives* the next spawn from a kill instant via
+ * `getNextBossSpawnTime` — there was previously no way to just tell the
+ * system "the real spawn is at this exact time," which matters when that
+ * time comes from outside observation (e.g. a rival guild's own timer)
+ * rather than from a kill logged in ForgeKeep. This intentionally skips the
+ * cooldown math and writes `spawnTime` as given.
+ *
+ * Only ever touches the boss's live (not-yet-killed) schedule row(s) — a
+ * KILLED row is historical and must not be rewritten by this path (use
+ * `editBossKillTime`/`editBossKillHistoryEntry` for that). If no live row
+ * exists yet, one is created (faction-unified when the guild is in a
+ * faction, matching every other schedule-creation path's scoping — see
+ * `syncNextRotationSchedule`).
+ */
+export async function setBossSpawnTime(
+  guildId: string,
+  bossName: string,
+  spawnTime: Date,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await requireBossTakenManager(actorId, guildId);
+
+  const guild = await prisma.guild.findUnique({
+    where: { id: guildId },
+    select: { factionId: true },
+  });
+  const factionId = guild?.factionId ?? null;
+  const factionGuildIds = (await getActiveFactionGuilds(factionId, guildId)).map((g) => g.id);
+  const trimmedName = bossName.trim();
+
+  const openSchedules = await prisma.bossSchedule.findMany({
+    where: {
+      bossName: trimmedName,
+      OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
+      status: { not: BossEventStatus.KILLED },
+    },
+    orderBy: { spawnTime: "asc" },
+  });
+
+  let updated;
+  if (openSchedules.length > 0) {
+    const primary = openSchedules[0]!;
+    // Multiple open rows for the same boss shouldn't normally coexist, but if
+    // they do (faction row + a stale guild row), roll every one forward
+    // together so every read path agrees — same reasoning as
+    // syncNextRotationSchedule's updateMany.
+    await prisma.bossSchedule.updateMany({
+      where: { id: { in: openSchedules.map((s) => s.id) } },
+      data: { spawnTime, status: BossEventStatus.UPCOMING },
+    });
+    updated = { ...primary, spawnTime, status: BossEventStatus.UPCOMING };
+  } else {
+    const registryBoss = PREDEFINED_BOSSES.find((b) => b.name.toLowerCase() === trimmedName.toLowerCase());
+    updated = await prisma.bossSchedule.create({
+      data: {
+        guildId: factionId ? null : guildId,
+        bossName: trimmedName,
+        bossImageUrl: getBossImageUrl(trimmedName),
+        spawnTime,
+        location: registryBoss?.location ?? "Unknown",
+        status: BossEventStatus.UPCOMING,
+        creatorId: actorId,
+      },
+    });
+  }
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "BOSS_SPAWN_TIME_SET",
+    target: "BossSchedule",
+    targetId: updated.id,
+    detail: { bossName: trimmedName, spawnTime: spawnTime.toISOString() },
+    ipAddress,
+    userAgent,
+  });
+
+  await invalidateBossRotationCache(guildId);
+
+  return { bossName: trimmedName, spawnTime, scheduleId: updated.id };
 }
 
 /**
@@ -3065,7 +3312,7 @@ async function getBossKilledHistoryUncached(guildId: string, month?: string) {
   const logs = await prisma.auditLog.findMany({
     where: {
       guildId,
-      action: { in: BOSS_KILL_AUDIT_ACTIONS },
+      action: { in: [...BOSS_KILL_AUDIT_ACTIONS, "BOSS_KILL_TIME_EDITED"] },
     },
     include: {
       actor: {
@@ -3079,6 +3326,23 @@ async function getBossKilledHistoryUncached(guildId: string, month?: string) {
     orderBy: { createdAt: "desc" },
     take: 1000,
   });
+
+  const latestEditByScheduleId = new Map<string, { killedAt: string; nextSpawnTime: string | null; editedAt: Date }>();
+  for (const log of logs) {
+    if (log.action !== "BOSS_KILL_TIME_EDITED" || !log.targetId) continue;
+    const detail = log.detail && typeof log.detail === "object" && !Array.isArray(log.detail)
+      ? log.detail as Record<string, unknown>
+      : null;
+    const editedKilledAt = getDetailString(detail, "killedAt");
+    if (!editedKilledAt) continue;
+    const existing = latestEditByScheduleId.get(log.targetId);
+    if (existing && existing.editedAt >= log.createdAt) continue;
+    latestEditByScheduleId.set(log.targetId, {
+      killedAt: editedKilledAt,
+      nextSpawnTime: getDetailString(detail, "nextSpawnTime"),
+      editedAt: log.createdAt,
+    });
+  }
 
   const days = new Map<string, {
     date: string;
@@ -3111,10 +3375,13 @@ async function getBossKilledHistoryUncached(guildId: string, month?: string) {
   }>();
 
   for (const log of logs) {
+    if (!BOSS_KILL_AUDIT_ACTIONS.includes(log.action)) continue;
     const detail = log.detail && typeof log.detail === "object" && !Array.isArray(log.detail)
       ? log.detail as Record<string, unknown>
       : null;
-    const killedAtValue = getDetailString(detail, "killedAt") || log.createdAt.toISOString();
+    const bossScheduleId = getDetailString(detail, "scheduleId") || (log.target === "BossSchedule" ? log.targetId : null);
+    const edit = bossScheduleId ? latestEditByScheduleId.get(bossScheduleId) : null;
+    const killedAtValue = edit?.killedAt || getDetailString(detail, "killedAt") || log.createdAt.toISOString();
     const killedDate = new Date(killedAtValue);
 
     if (Number.isNaN(killedDate.getTime()) || killedDate < start || killedDate >= end) {
@@ -3155,8 +3422,8 @@ async function getBossKilledHistoryUncached(guildId: string, month?: string) {
       },
       takenGuildName: getDetailString(detail, "takenGuildName"),
       nextGuildName: getDetailString(detail, "nextGuildName") || getDetailString(detail, "nextGuildTurn"),
-      nextSpawnTime: getDetailString(detail, "nextSpawnTime"),
-      bossScheduleId: getDetailString(detail, "scheduleId"),
+      nextSpawnTime: edit?.nextSpawnTime || getDetailString(detail, "nextSpawnTime"),
+      bossScheduleId,
       drops,
     });
     days.set(dayKey, existingDay);

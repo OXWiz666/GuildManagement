@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { services, cache, broadcastToGuild, BadRequestError } from "@guild/core";
+import { services, cache, broadcastToGuild, broadcastToUser, BadRequestError } from "@guild/core";
 import { prisma } from "@guild/db";
 import { activityPointRulesSchema, gearItemsSchema, GUILD_ROLES, type GuildRoleType } from "@guild/shared";
 import type { AppEnv } from "../env";
@@ -83,7 +83,11 @@ export const guilds = new Hono<AppEnv>()
     const { ipAddress, userAgent } = getClientInfo(c);
     const result = await services.application.handleApplicationAction(guildId, requestId, action, user.userId, ipAddress, userAgent);
     if (action === "ACCEPT") await cache.delete(`guild-members:${guildId}`);
-    broadcastToGuild(guildId, "join_request_processed", { requestId, action, memberCode: result.memberCode });
+    const payload = { requestId, action, memberCode: result.memberCode, guildId, guildName: result.guildName };
+    await Promise.all([
+      broadcastToGuild(guildId, "join_request_processed", payload),
+      broadcastToUser(result.applicantId, "join_request_processed", payload),
+    ]);
     return ok(c, result);
   })
 

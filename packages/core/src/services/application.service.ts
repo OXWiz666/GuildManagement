@@ -371,7 +371,13 @@ export async function handleApplicationAction(
       userAgent,
     });
 
-    return { success: true, status: updatedRequest.status };
+    return {
+      success: true,
+      status: updatedRequest.status,
+      applicantId: request.userId,
+      guildId,
+      guildName: request.guild.name,
+    };
   }
 
   // action === "ACCEPT"
@@ -476,5 +482,12 @@ export async function handleApplicationAction(
     userAgent,
   });
 
-  return { success: true, status: JoinRequestStatus.ACCEPTED, memberCode: result.memberCode };
+  return {
+    success: true,
+    status: JoinRequestStatus.ACCEPTED,
+    memberCode: result.memberCode,
+    applicantId: request.userId,
+    guildId,
+    guildName: request.guild.name,
+  };
 }

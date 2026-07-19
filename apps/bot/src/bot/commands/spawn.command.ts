@@ -60,26 +60,26 @@ function singleBossEmbed(spawn: ResolvedSpawn, ctx: CommandContext) {
   const registry = ctx.services.boss.getRegistryBoss(spawn.bossName);
 
   const embed = brandedEmbed(spawn.live ? BrandColor.GREEN : BrandColor.GOLD)
-    .setTitle(`${spawn.live ? "🟢" : "⏳"} ${spawn.bossName}`)
+    .setTitle(spawn.bossName)
     .setThumbnail(getBossImageUrl(spawn.bossName))
     .addFields(
       {
         name: "Status",
-        value: spawn.live ? "**LIVE NOW**" : `Respawns ${discordTimestamp(spawn.nextSpawn, "R")}`,
+        value: spawn.live ? "Live now" : `Respawns ${discordTimestamp(spawn.nextSpawn, "R")}`,
         inline: true,
       },
       {
-        name: spawn.live ? "Up For" : "Remaining",
+        name: spawn.live ? "Up for" : "Remaining",
         value: spawn.live ? `\`${spawn.liveElapsedText || "just now"}\`` : `\`${spawn.timerText}\``,
         inline: true,
       },
       { name: "Location", value: spawn.location || registry?.location || "Unknown", inline: true },
       {
-        name: "Spawn Time",
+        name: "Spawn time",
         value: discordTimestamp(spawn.nextSpawn, "f"),
         inline: true,
       },
-      { name: "Guild Turn", value: spawn.guildTurn ?? "Unassigned", inline: true },
+      { name: "Guild turn", value: spawn.guildTurn ?? "Unassigned", inline: true },
     );
 
   if (registry) {
@@ -117,7 +117,7 @@ function groupedEmbed(spawns: ResolvedSpawn[], ctx: CommandContext) {
 
   if (live.length > 0) {
     embed.addFields({
-      name: `🟢 Live Now (${live.length})`,
+      name: `Live now (${live.length})`,
       value: clampDescription(live.map(liveLine), 1024),
     });
   }
@@ -125,7 +125,7 @@ function groupedEmbed(spawns: ResolvedSpawn[], ctx: CommandContext) {
   for (const [bucket, rows] of groups) {
     if (rows.length === 0) continue;
     embed.addFields({
-      name: `${bucketIcon(bucket)} ${bucket} (${rows.length})`,
+      name: `${bucket} (${rows.length})`,
       // Embed FIELD values cap at 1024 chars — a tighter limit than the 4096
       // description cap, so clamp to the field limit here.
       value: clampDescription(rows.map(pendingLine), 1024),
@@ -137,7 +137,7 @@ function groupedEmbed(spawns: ResolvedSpawn[], ctx: CommandContext) {
 }
 
 function liveLine(spawn: ResolvedSpawn): string {
-  const turn = spawn.guildTurn ? ` — 🛡 ${spawn.guildTurn}` : "";
+  const turn = spawn.guildTurn ? ` · ${spawn.guildTurn}` : "";
   // timerText is the literal "LIVE" while a boss is up — the useful figure is
   // how long it has been up, which the shared timer reports separately.
   const elapsed = spawn.liveElapsedText ? ` · up for \`${spawn.liveElapsedText}\`` : "";
@@ -145,12 +145,6 @@ function liveLine(spawn: ResolvedSpawn): string {
 }
 
 function pendingLine(spawn: ResolvedSpawn): string {
-  const turn = spawn.guildTurn ? ` — 🛡 ${spawn.guildTurn}` : "";
+  const turn = spawn.guildTurn ? ` · ${spawn.guildTurn}` : "";
   return `**${spawn.bossName}** · ${discordTimestamp(spawn.nextSpawn, "t")} · ${discordTimestamp(spawn.nextSpawn, "R")}${turn}`;
-}
-
-function bucketIcon(bucket: DayBucket): string {
-  if (bucket === "Today") return "📅";
-  if (bucket === "Tomorrow") return "🌅";
-  return "🗓";
 }

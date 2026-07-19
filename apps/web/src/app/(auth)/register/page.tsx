@@ -49,7 +49,14 @@ export default function RegisterPage() {
       try {
         const result = await authApi.checkUsernameAvailable(candidate);
         if (requestId !== usernameCheckRef.current) return; // stale response
-        setUsernameStatus(result.success && result.data?.available ? "available" : "taken");
+        if (!result.success) {
+          // A failed check (rate limited, network hiccup, server error) is not
+          // evidence the username is taken — fall back to idle rather than
+          // showing a false "taken" that blocks submission.
+          setUsernameStatus("idle");
+          return;
+        }
+        setUsernameStatus(result.data?.available ? "available" : "taken");
       } catch {
         if (requestId === usernameCheckRef.current) setUsernameStatus("idle");
       }

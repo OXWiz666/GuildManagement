@@ -51,6 +51,17 @@ export function authLimit(c: Context): void {
   enforce("auth", ipKey(c), 15 * 60 * 1000, 10, "Too many authentication attempts. Please try again later.");
 }
 
+/**
+ * Lightweight availability lookups (username/email live-check while typing):
+ * 30 requests / min / IP. Separate from `authLimit` — that bucket is sized
+ * for actual login/register/reset attempts, not per-keystroke debounced polls,
+ * and sharing it meant a few edits in the registration form could exhaust the
+ * budget and make every username look "taken".
+ */
+export function lookupLimit(c: Context): void {
+  enforce("lookup", ipKey(c), 60 * 1000, 30, "Too many requests. Please slow down.");
+}
+
 /** Attendance check-in (anti-brute-force): 5 requests / 5 min / IP. */
 export function checkInLimit(c: Context): void {
   enforce("checkin", ipKey(c), 5 * 60 * 1000, 5, "Too many check-in attempts. Please try again later.");

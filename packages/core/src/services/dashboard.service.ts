@@ -4178,30 +4178,28 @@ export async function getDashboardSummary(guildId: string, userId: string) {
     }),
     redisCache.getOrSet(guildCacheKey, cacheTtl.dashboardStats, async () => {
       const [
-        activeMembers,
+        activeMemberCount,
+        onlineMembers,
         bossKillsToday,
         totalBossKills,
         guildAudit,
         claims,
       ] = await Promise.all([
-        // Fetch active members to count total and online members
-        prisma.guildMember.findMany({
+        prisma.guildMember.count({
           where: { guildId, isActive: true },
-          select: {
-            userId: true,
+        }),
+        prisma.session.findMany({
+          where: {
+            lastActive: { gte: fifteenMinutesAgo },
             user: {
-              select: {
-                sessions: {
-                  where: {
-                    lastActive: { gte: fifteenMinutesAgo },
-                  },
-                  take: 1,
-                  select: {
-                    id: true,
-                  },
-                },
+              guildMembers: {
+                some: { guildId, isActive: true },
               },
             },
+          },
+          distinct: ["userId"],
+          select: {
+            userId: true,
           },
         }),
         // Boss Kills Today count
@@ -4244,12 +4242,9 @@ export async function getDashboardSummary(guildId: string, userId: string) {
         }),
       ]);
 
-      const totalMembers = activeMembers.length;
-      const onlineMembersCount = activeMembers.filter((m) => m.user.sessions.length > 0).length;
-
       return {
-        totalMembers,
-        onlineMembersCount,
+        totalMembers: activeMemberCount,
+        onlineMembersCount: onlineMembers.length,
         bossKillsToday,
         totalBossKills,
         guildAudit,

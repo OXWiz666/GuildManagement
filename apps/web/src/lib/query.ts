@@ -94,6 +94,10 @@ export function useQuery<T>(
     
     // Check if we have stale/cached data in localStorage to display while fetching
     let hasCachedData = !!cached;
+    if (cached) {
+      setData(cached.data as T);
+      setIsLoading(false);
+    }
     if (!hasCachedData && persist && typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem(lsKey);

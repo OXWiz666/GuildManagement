@@ -4,6 +4,7 @@ import { brandedEmbed, clampDescription, formatNumber } from "../../embeds/build
 import { BrandColor } from "../../embeds/theme.js";
 import { discordTimestamp } from "../../utils/time.js";
 import { UserFacingError } from "../../utils/errors.js";
+import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 
 /**
  * `!party [boss]` — who has committed to an upcoming fight.
@@ -20,7 +21,7 @@ export const partyCommand: Command = {
   usage: "!party [boss]",
   category: "Bosses",
   requiresLink: true,
-  minimumRole: null,
+  minimumRole: OFFICER_MINIMUM,
 
   async execute(ctx: CommandContext): Promise<void> {
     const filter = ctx.rest.trim();

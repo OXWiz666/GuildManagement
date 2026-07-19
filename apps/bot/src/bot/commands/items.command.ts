@@ -2,6 +2,7 @@ import { AttachmentBuilder } from "discord.js";
 import type { Command, CommandContext } from "../../types/command.js";
 import { brandedEmbed, clampDescription } from "../../embeds/builders.js";
 import { BrandColor } from "../../embeds/theme.js";
+import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 
 const PREVIEW_LIMIT = 35;
 
@@ -12,8 +13,8 @@ export const itemsCommand: Command = {
   description: "Show boss-drop item names from the shared icon catalog.",
   usage: "!items [search]",
   category: "Bosses",
-  requiresLink: false,
-  minimumRole: null,
+  requiresLink: true,
+  minimumRole: OFFICER_MINIMUM,
 
   async execute(ctx: CommandContext): Promise<void> {
     const query = ctx.rest.trim();

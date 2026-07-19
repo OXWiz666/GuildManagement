@@ -108,9 +108,8 @@ export const forceSpawnAllCommand: Command = {
   usage: "!forcespawnall",
   category: "Bosses",
   requiresLink: true,
-  // Deliberately stricter than !forcespawn: this rewrites timers for the entire
-  // fixed roster across every guild in the faction, and is tedious to undo.
-  minimumRole: "GUILD_LEADER",
+  // Same guild-operations gate as the rest of the bot management commands.
+  minimumRole: OFFICER_MINIMUM,
 
   async execute(ctx: CommandContext): Promise<void> {
     const actor = ctx.actor!;

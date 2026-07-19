@@ -44,24 +44,29 @@ describe("command registry", () => {
     }
   });
 
-  it("gates every write command behind a role", () => {
+  it("keeps only !spawn and !cp member-accessible among linked guild commands", () => {
     // Guard against a future command being added without a permission by
     // omission. These mutate faction-wide state and must never be open.
-    const writeCommands = ["kill", "editkilltime", "setspawn", "forcespawn", "forcespawnall"];
+    const bootstrapCommands = new Set(["link", "unlink", "bindguild", "commands"]);
+    const memberCommands = new Set(["spawn", "cp"]);
 
-    for (const name of writeCommands) {
-      const command = findCommand(name);
-      expect(command, `!${name} is registered`).not.toBeNull();
-      expect(command!.requiresLink, `!${name} requires a link`).toBe(true);
-      expect(command!.minimumRole, `!${name} has a minimum role`).not.toBeNull();
+    for (const command of COMMANDS) {
+      if (bootstrapCommands.has(command.name)) continue;
+
+      expect(command.requiresLink, `!${command.name} requires a link`).toBe(true);
+      if (memberCommands.has(command.name)) {
+        expect(command.minimumRole, `!${command.name} remains member-accessible`).toBeNull();
+      } else {
+        expect(command.minimumRole, `!${command.name} requires officer or higher`).toBe("OFFICER");
+      }
     }
   });
 
-  it("keeps !forcespawnall stricter than !forcespawn", () => {
+  it("uses the same Officer+ gate for boss timer management commands", () => {
     // forcespawnall rewrites timers for the whole fixed roster across every
     // guild in the faction — deliberately a higher bar.
     expect(findCommand("forcespawn")!.minimumRole).toBe("OFFICER");
-    expect(findCommand("forcespawnall")!.minimumRole).toBe("GUILD_LEADER");
+    expect(findCommand("forcespawnall")!.minimumRole).toBe("OFFICER");
   });
 
   it("leaves account-linking commands open to unlinked users", () => {

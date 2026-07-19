@@ -239,6 +239,31 @@ export const guilds = new Hono<AppEnv>()
   })
 
   // ─── Settings ────────────────────────────────────────────────
+  .get("/:guildId/profile", requireGuildRole("MEMBER"), async (c) => {
+    const guildId = c.req.param("guildId");
+    const user = c.get("user");
+    const cacheKey = `guild-profile:${guildId}:user:${user.userId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const profile = await services.guild.getGuildProfile(guildId, user.userId);
+    await cache.set(cacheKey, profile, 60);
+    return ok(c, profile);
+  })
+  .patch("/:guildId/profile", requireGuildRole("GUILD_LEADER"), async (c) => {
+    const guildId = c.req.param("guildId");
+    const user = c.get("user");
+    const { name } = await readJson<{ name?: string }>(c);
+    if (!name) throw new BadRequestError("Guild name is required");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const profile = await services.guild.renameGuild(guildId, name, user.userId, ipAddress, userAgent);
+    await Promise.all([
+      cache.invalidatePattern(`guild-profile:${guildId}:*`),
+      cache.delete(`guild-settings:${guildId}`),
+      cache.delete(`guild-members:${guildId}`),
+    ]);
+    broadcastToGuild(guildId, "guild_profile_updated", profile);
+    return ok(c, { profile });
+  })
   .get("/:guildId/settings", requireGuildRole("MEMBER"), async (c) => {
     const guildId = c.req.param("guildId");
     const cacheKey = `guild-settings:${guildId}`;

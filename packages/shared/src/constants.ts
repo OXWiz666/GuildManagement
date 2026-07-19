@@ -180,6 +180,50 @@ export const STORAGE_CATEGORY_LABELS: Record<StorageCategory, string> = {
 export const STORAGE_STATUSES = ["IN_STORAGE", "LISTED_MARKET", "DISTRIBUTED"] as const;
 export type StorageStatus = (typeof STORAGE_STATUSES)[number];
 
+// Faction Inventory categories — broader than guild-level STORAGE_CATEGORIES
+// since the faction pool covers raw materials/currency/consumables too, not
+// just legendary gear. Stored as free text on FactionInventoryItem.category
+// (same convention as GuildStorageItem.category) so a new category never
+// needs a migration.
+export const FACTION_INVENTORY_CATEGORIES = [
+  "LOGS",
+  "MATERIALS",
+  "TEMPORAL_PIECES",
+  "EQUIPMENT",
+  "WEAPONS",
+  "ARMOR",
+  "ACCESSORIES",
+  "CLOAKS",
+  "ABILITY_BOOKS",
+  "SKILL_BOOKS",
+  "MOUNT_ITEMS",
+  "UPGRADE_MATERIALS",
+  "EVENT_REWARDS",
+  "CURRENCY_ITEMS",
+  "CONSUMABLES",
+  "MISCELLANEOUS",
+] as const;
+export type FactionInventoryCategory = (typeof FACTION_INVENTORY_CATEGORIES)[number];
+
+export const FACTION_INVENTORY_CATEGORY_LABELS: Record<FactionInventoryCategory, string> = {
+  LOGS: "Logs",
+  MATERIALS: "Materials",
+  TEMPORAL_PIECES: "Temporal Pieces",
+  EQUIPMENT: "Equipment",
+  WEAPONS: "Weapons",
+  ARMOR: "Armor",
+  ACCESSORIES: "Accessories",
+  CLOAKS: "Cloaks",
+  ABILITY_BOOKS: "Ability Books",
+  SKILL_BOOKS: "Skill Books",
+  MOUNT_ITEMS: "Mount Items",
+  UPGRADE_MATERIALS: "Upgrade Materials",
+  EVENT_REWARDS: "Event Rewards",
+  CURRENCY_ITEMS: "Currency Items",
+  CONSUMABLES: "Consumables",
+  MISCELLANEOUS: "Miscellaneous",
+};
+
 // How an item left the vault
 export const STORAGE_DISPOSITIONS = ["MARKET", "GUILD_SALE", "GUILD_AUCTION"] as const;
 export type StorageDisposition = (typeof STORAGE_DISPOSITIONS)[number];

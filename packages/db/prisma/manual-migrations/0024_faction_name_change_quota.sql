@@ -1,0 +1,2 @@
+ALTER TABLE "factions"
+ADD COLUMN IF NOT EXISTS "name_change_count" INTEGER NOT NULL DEFAULT 0;

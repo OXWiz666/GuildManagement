@@ -3,11 +3,11 @@
 import { type ReactNode } from "react";
 
 export type GuildSettingsTab =
+  | "general"
   | "points"
   | "activities"
   | "roles"
   | "distribution"
-  | "mounts"
   | "discord";
 
 interface TabDef {
@@ -39,6 +39,12 @@ const ico = (path: ReactNode) => (
 );
 
 const ICONS = {
+  settings: ico(
+    <>
+      <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 .9-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6.9h.1a2 2 0 0 1 0 4H21a1.7 1.7 0 0 0-1.6 1z" />
+    </>,
+  ),
   trophy: ico(
     <>
       <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
@@ -58,13 +64,6 @@ const ICONS = {
     <>
       <rect x="3" y="8" width="18" height="4" rx="1" />
       <path d="M12 8v13M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7" />
-    </>,
-  ),
-  mount: ico(
-    <>
-      <path d="M4 18l3-9 4-2 3 3h4l2 3-2 5" />
-      <circle cx="8" cy="19" r="1.5" />
-      <circle cx="17" cy="19" r="1.5" />
     </>,
   ),
   // Discord's mark, traced with the same 1.8 stroke as the others so it reads
@@ -87,11 +86,11 @@ const GROUPS: Group[] = [
     key: "configuration",
     label: "Configuration",
     tabs: [
+      { value: "general", label: "General Settings", short: "General", icon: ICONS.settings },
       { value: "points", label: "Guild Points System", short: "Points", icon: ICONS.trophy },
       { value: "activities", label: "Activities Multiplier", short: "Activities", icon: ICONS.hammer },
-      { value: "roles", label: "Moderator & Permission", short: "Roles", icon: ICONS.shield },
       { value: "distribution", label: "Distribution Rules", short: "Distribution", icon: ICONS.split },
-      { value: "mounts", label: "Mount Wishlist", short: "Mounts", icon: ICONS.mount },
+      { value: "roles", label: "Moderator & Permission", short: "Roles", icon: ICONS.shield },
     ],
   },
   // Its own group (the nav draws a divider between groups): Discord is an
@@ -99,7 +98,7 @@ const GROUPS: Group[] = [
   {
     key: "integrations",
     label: "Integrations",
-    tabs: [{ value: "discord", label: "Discord", short: "Discord", icon: ICONS.discord }],
+    tabs: [{ value: "discord", label: "Discord Integration", short: "Discord", icon: ICONS.discord }],
   },
 ];
 
@@ -120,9 +119,9 @@ export default function GuildSettingsNav({
   })).filter((group) => group.tabs.length > 0);
 
   return (
-    <div className="flex items-stretch gap-1.5 overflow-x-auto rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50 backdrop-blur p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex flex-wrap items-stretch gap-1.5 overflow-visible rounded-2xl border border-white/[0.06] bg-[#0c0d12]/50 backdrop-blur p-1.5">
       {groups.map((group, gi) => (
-        <div key={group.key} className="flex items-center gap-1.5 shrink-0">
+        <div key={group.key} className="flex flex-wrap items-center gap-1.5">
           {gi > 0 && (
             <span aria-hidden className="mx-0.5 h-7 w-px shrink-0 bg-white/[0.08]" />
           )}

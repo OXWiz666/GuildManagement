@@ -1,15 +1,83 @@
 import * as crypto from "crypto";
-import { prisma, FactionJoinDirection, FactionJoinStatus } from "@guild/db";
-import { BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
+import {
+  prisma,
+  Prisma,
+  FactionJoinDirection,
+  FactionJoinStatus,
+  FactionGuildStatus,
+  FactionStatus,
+  SubscriptionStatus,
+  type FactionRoleType,
+} from "@guild/db";
+import { orgNameSchema, slugify } from "@guild/shared";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
 import { writeAuditLog } from "./audit.service";
+import { writeFactionAuditLog } from "./factionAudit.service";
 import { createNotifications } from "./notification.service";
 import { getBossRegistryForRotation } from "./dashboard.service";
+import { getCachedActiveMemberships } from "../lib/faction-membership-cache";
 
 function isFactionManagerRole(role: string) {
   return role === "FACTION_LEADER" || role === "ADMIN";
 }
 
 const GUILD_LEADERSHIP_ROLES_LOCAL = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN"] as const;
+const ACTIVE_SUBSCRIPTION_STATES: SubscriptionStatus[] = [
+  SubscriptionStatus.TRIALING,
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE,
+];
+const FREE_FACTION_RENAME_LIMIT = 2;
+
+type FactionSubscriptionSnapshot = {
+  status: string;
+  plan: { name: string };
+} | null;
+
+function getFactionRenameQuota(
+  faction: { nameChangeCount: number },
+  activeSubscription: FactionSubscriptionSnapshot,
+) {
+  const isSubscribed = Boolean(activeSubscription);
+  const remainingNameChanges = isSubscribed
+    ? null
+    : Math.max(0, FREE_FACTION_RENAME_LIMIT - faction.nameChangeCount);
+
+  return {
+    nameChangeCount: faction.nameChangeCount,
+    nameChangeLimit: isSubscribed ? null : FREE_FACTION_RENAME_LIMIT,
+    remainingNameChanges,
+    canRename: isSubscribed || (remainingNameChanges ?? 0) > 0,
+    isSubscribed,
+    subscriptionStatus: activeSubscription?.status ?? null,
+    planName: activeSubscription?.plan.name ?? null,
+  };
+}
+
+async function getActiveFactionSubscription(factionId: string) {
+  return prisma.subscription.findFirst({
+    where: {
+      status: { in: ACTIVE_SUBSCRIPTION_STATES },
+      guild: { factionId },
+    },
+    orderBy: [{ currentPeriodEnd: "desc" }, { createdAt: "desc" }],
+    select: { status: true, plan: { select: { name: true } } },
+  });
+}
+
+async function uniqueFactionSlug(name: string, factionId: string): Promise<string> {
+  const base = slugify(name) || "faction";
+
+  const isTaken = async (slug: string) =>
+    Boolean(await prisma.faction.findFirst({ where: { slug, NOT: { id: factionId } }, select: { id: true } }));
+
+  if (!(await isTaken(base))) return base;
+  for (let i = 0; i < 5; i++) {
+    const candidate = `${base}-${crypto.randomBytes(2).toString("hex")}`;
+    if (!(await isTaken(candidate))) return candidate;
+  }
+  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+}
 
 function abbreviate(name: string): string {
   const initials = name
@@ -24,18 +92,17 @@ function abbreviate(name: string): string {
 
 // Resolves the faction a Faction Leader/Admin manages (their own guild's
 // faction), distinct from `requireFactionManagerMemberships` which only
-// checks role, not which faction that role applies to.
+// checks role, not which faction that role applies to. `guild.factionId` now
+// comes embedded in the cached membership row (see getCachedActiveMemberships),
+// so this no longer pays a second, separate `guild.findUnique` round trip.
 async function requireManagedFaction(actorId: string) {
   const memberships = await requireFactionManagerMemberships(actorId);
   const managerMembership = memberships.find((m) => isFactionManagerRole(m.role));
-  const guild = await prisma.guild.findUnique({
-    where: { id: managerMembership!.guildId },
-    select: { factionId: true },
-  });
-  if (!guild?.factionId) {
+  const factionId = managerMembership?.guild.factionId;
+  if (!factionId) {
     throw new BadRequestError("Your guild is not part of a faction");
   }
-  return { membership: managerMembership!, factionId: guild.factionId };
+  return { membership: managerMembership!, factionId };
 }
 
 // A guild's own leadership (Guild Leader / Faction Leader / Admin) — used to
@@ -51,9 +118,7 @@ async function requireGuildLeadership(actorId: string, guildId: string) {
 }
 
 async function getActiveMemberships(userId: string) {
-  return prisma.guildMember.findMany({
-    where: { userId, isActive: true },
-  });
+  return getCachedActiveMemberships(userId);
 }
 
 async function requireFactionMember(userId: string) {
@@ -75,6 +140,15 @@ async function requireFactionManagerMemberships(userId: string) {
 async function requireFactionManager(userId: string) {
   const memberships = await requireFactionManagerMemberships(userId);
   return memberships[0]!;
+}
+
+// Resolves the guild role an actor was wearing when performing a faction
+// action, for the audit-log's actorRole snapshot. Prefers a membership
+// within the faction itself; falls back to any active membership.
+async function resolveActorFactionRole(actorId: string, factionId: string): Promise<string> {
+  const memberships = await getCachedActiveMemberships(actorId);
+  const inFaction = memberships.find((m) => m.guild.factionId === factionId);
+  return inFaction?.role ?? memberships[0]?.role ?? "UNKNOWN";
 }
 
 function serializeCreator(creator: { id: string; displayName: string; avatarUrl: string | null }) {
@@ -159,17 +233,14 @@ export async function getFactionOverview(actorId: string) {
   const memberships = await requireFactionMember(actorId);
   const guildIds = memberships.map((m) => m.guildId);
 
-  const ownGuilds = await prisma.guild.findMany({
-    where: { id: { in: guildIds } },
-    select: { id: true, factionId: true },
-  });
-  const factionId = ownGuilds.find((g) => g.factionId)?.factionId ?? null;
+  // `guild.factionId` comes embedded in the cached membership row (see
+  // getCachedActiveMemberships), so this no longer needs its own
+  // `guild.findMany` round trip — same data, one fewer query.
+  const factionId = memberships.find((m) => m.guild.factionId)?.guild.factionId ?? null;
 
-  const canManage = memberships.some((m) => {
-    if (!isFactionManagerRole(m.role)) return false;
-    const guild = ownGuilds.find((g) => g.id === m.guildId);
-    return guild?.factionId === factionId && factionId !== null;
-  });
+  const canManage = memberships.some(
+    (m) => isFactionManagerRole(m.role) && m.guild.factionId === factionId && factionId !== null,
+  );
 
   if (!factionId) {
     return { faction: null, guilds: [], totalGuilds: 0, totalMembers: 0, canManage: false };
@@ -177,17 +248,34 @@ export async function getFactionOverview(actorId: string) {
 
   const faction = await prisma.faction.findUnique({
     where: { id: factionId },
-    select: { id: true, name: true, slug: true, description: true, avatarUrl: true, createdAt: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      nameChangeCount: true,
+      description: true,
+      avatarUrl: true,
+      bannerUrl: true,
+      code: true,
+      server: true,
+      region: true,
+      game: true,
+      status: true,
+      createdAt: true,
+    },
   });
   if (!faction) {
     return { faction: null, guilds: [], totalGuilds: 0, totalMembers: 0, canManage: false };
   }
 
-  const guilds = await prisma.guild.findMany({
-    where: { factionId, isActive: true },
-    select: { id: true, name: true, slug: true, avatarUrl: true },
-    orderBy: { name: "asc" },
-  });
+  const [guilds, activeSubscription] = await Promise.all([
+    prisma.guild.findMany({
+      where: { factionId, isActive: true },
+      select: { id: true, name: true, slug: true, avatarUrl: true },
+      orderBy: { name: "asc" },
+    }),
+    getActiveFactionSubscription(factionId),
+  ]);
   const memberGuildIds = guilds.map((g) => g.id);
 
   const counts = memberGuildIds.length
@@ -229,7 +317,14 @@ export async function getFactionOverview(actorId: string) {
       slug: faction.slug,
       description: faction.description,
       avatarUrl: faction.avatarUrl,
+      bannerUrl: faction.bannerUrl,
+      code: faction.code,
+      server: faction.server,
+      region: faction.region,
+      game: faction.game,
+      status: faction.status,
       createdAt: faction.createdAt.toISOString(),
+      ...getFactionRenameQuota(faction, activeSubscription),
     },
     guilds: overviewGuilds,
     totalGuilds: overviewGuilds.length,
@@ -620,6 +715,15 @@ export async function approveFactionJoinRequest(
       where: { id: requestId },
       data: { status: FactionJoinStatus.APPROVED, respondedByUserId: actorId },
     }),
+    prisma.factionGuildMembership.create({
+      data: {
+        factionId: request.factionId,
+        guildId: request.guildId,
+        status: FactionGuildStatus.ACTIVE,
+        joinedAt: new Date(),
+        approvedByUserId: actorId,
+      },
+    }),
   ]);
 
   await lockRotationParticipantsExcluding(request.factionId, request.guildId);
@@ -631,6 +735,18 @@ export async function approveFactionJoinRequest(
     target: "FactionJoinRequest",
     targetId: requestId,
     detail: { factionId: request.factionId, factionName: request.faction.name, direction: request.direction },
+    ipAddress,
+    userAgent,
+  });
+  const actorRole = await resolveActorFactionRole(actorId, request.factionId);
+  await writeFactionAuditLog({
+    factionId: request.factionId,
+    actorId,
+    actorRole,
+    action: "GUILD_ADDED",
+    entityType: "Guild",
+    entityId: request.guildId,
+    newValue: { guildName: request.guild.name, direction: request.direction },
     ipAddress,
     userAgent,
   });
@@ -691,9 +807,11 @@ export async function removeGuildFromFaction(
 
   // Either the faction's own manager, or that guild's own leadership, may remove it.
   let authorized = false;
+  let managerInitiated = false;
   try {
     const { factionId: managedFactionId } = await requireManagedFaction(actorId);
     authorized = managedFactionId === factionId;
+    managerInitiated = authorized;
   } catch {
     // not a faction manager — fall through to self-leave check
   }
@@ -703,6 +821,11 @@ export async function removeGuildFromFaction(
   }
 
   await prisma.guild.update({ where: { id: guildId }, data: { factionId: null } });
+
+  await prisma.factionGuildMembership.updateMany({
+    where: { factionId, guildId, status: { in: [FactionGuildStatus.ACTIVE, FactionGuildStatus.SUSPENDED, FactionGuildStatus.PENDING] } },
+    data: { status: managerInitiated ? FactionGuildStatus.REMOVED : FactionGuildStatus.LEFT_FACTION },
+  });
 
   // Purge this guild from every rotation queue in its old faction.
   const rotations = await prisma.bossRotation.findMany({ where: { factionId } });
@@ -739,6 +862,356 @@ export async function removeGuildFromFaction(
     target: "Guild",
     targetId: guildId,
     detail: { factionId, guildName: guild.name },
+    ipAddress,
+    userAgent,
+  });
+  const actorRole = await resolveActorFactionRole(actorId, factionId);
+  await writeFactionAuditLog({
+    factionId,
+    actorId,
+    actorRole,
+    action: managerInitiated ? "GUILD_REMOVED" : "GUILD_LEFT",
+    entityType: "Guild",
+    entityId: guildId,
+    previousValue: { guildName: guild.name },
+    ipAddress,
+    userAgent,
+  });
+
+  return { success: true };
+}
+
+// ═══════════════════════════════════════════════════
+// FACTIONWIDE SYSTEM — PHASE 1: FOUNDATION
+// Profile/status lifecycle, richer faction<->guild relationship metadata,
+// and faction capability role grants (Officer/Treasurer/Inventory Manager).
+// ═══════════════════════════════════════════════════
+
+function serializeFactionGuildMembership(m: any) {
+  return {
+    id: m.id,
+    factionId: m.factionId,
+    guildId: m.guildId,
+    guildName: m.guild?.name ?? null,
+    guildAvatarUrl: m.guild?.avatarUrl ?? null,
+    status: m.status,
+    joinedAt: m.joinedAt.toISOString(),
+    contributionRequirement: m.contributionRequirement,
+    assignedFactionRole: m.assignedFactionRole,
+    approvedByUserId: m.approvedByUserId,
+    notes: m.notes,
+    updatedAt: m.updatedAt.toISOString(),
+  };
+}
+
+function serializeFactionRoleAssignment(a: any) {
+  return {
+    id: a.id,
+    factionId: a.factionId,
+    guildMemberId: a.guildMemberId,
+    role: a.role,
+    grantedByUserId: a.grantedByUserId,
+    createdAt: a.createdAt.toISOString(),
+    member: a.guildMember
+      ? {
+          id: a.guildMember.id,
+          ign: a.guildMember.ign,
+          role: a.guildMember.role,
+          userId: a.guildMember.userId,
+          displayName: a.guildMember.user?.displayName ?? null,
+          avatarUrl: a.guildMember.user?.avatarUrl ?? null,
+          guildId: a.guildMember.guildId,
+          guildName: a.guildMember.guild?.name ?? null,
+        }
+      : null,
+  };
+}
+
+export async function updateFactionProfile(
+  actorId: string,
+  payload: {
+    name?: string;
+    description?: string;
+    avatarUrl?: string;
+    bannerUrl?: string;
+    code?: string;
+    server?: string;
+    region?: string;
+    game?: string;
+  },
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const { membership, factionId } = await requireManagedFaction(actorId);
+  const before = await prisma.faction.findUnique({ where: { id: factionId } });
+  if (!before) throw new NotFoundError("Faction not found");
+
+  let nextName: string | undefined;
+  if (payload.name !== undefined) {
+    const parsedName = orgNameSchema.safeParse(payload.name);
+    if (!parsedName.success) {
+      throw new ValidationError("Invalid faction name", parsedName.error.flatten());
+    }
+    nextName = parsedName.data;
+  }
+
+  const isNameChanging = nextName !== undefined && nextName !== before.name;
+  const activeSubscription = isNameChanging ? await getActiveFactionSubscription(factionId) : null;
+  if (isNameChanging && !activeSubscription && before.nameChangeCount >= FREE_FACTION_RENAME_LIMIT) {
+    throw new ForbiddenError("Free factions can change their name only twice. Subscribe for unlimited faction renames.");
+  }
+
+  const nextSlug = isNameChanging ? await uniqueFactionSlug(nextName!, factionId) : undefined;
+  const data: Prisma.FactionUpdateInput = {
+    ...(isNameChanging ? { name: nextName, slug: nextSlug, nameChangeCount: { increment: 1 } } : {}),
+    description: payload.description === undefined ? undefined : payload.description?.trim() || null,
+    avatarUrl: payload.avatarUrl === undefined ? undefined : payload.avatarUrl?.trim() || null,
+    bannerUrl: payload.bannerUrl === undefined ? undefined : payload.bannerUrl?.trim() || null,
+    code: payload.code === undefined ? undefined : payload.code?.trim() || null,
+    server: payload.server === undefined ? undefined : payload.server?.trim() || null,
+    region: payload.region === undefined ? undefined : payload.region?.trim() || null,
+    game: payload.game === undefined ? undefined : payload.game?.trim() || null,
+  };
+
+  let faction;
+  try {
+    if (isNameChanging && !activeSubscription) {
+      const updated = await prisma.faction.updateMany({
+        where: { id: factionId, nameChangeCount: { lt: FREE_FACTION_RENAME_LIMIT } },
+        data: data as Prisma.FactionUpdateManyMutationInput,
+      });
+      if (updated.count === 0) {
+        throw new ForbiddenError("Free factions can change their name only twice. Subscribe for unlimited faction renames.");
+      }
+      faction = await prisma.faction.findUniqueOrThrow({ where: { id: factionId } });
+    } else {
+      faction = await prisma.faction.update({
+        where: { id: factionId },
+        data,
+      });
+    }
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ConflictError("Faction name, slug, or code is already taken");
+    }
+    throw error;
+  }
+
+  await writeFactionAuditLog({
+    factionId,
+    actorId,
+    actorRole: membership.role,
+    action: "FACTION_PROFILE_UPDATED",
+    entityType: "Faction",
+    entityId: factionId,
+    previousValue: {
+      name: before.name,
+      description: before.description,
+      avatarUrl: before.avatarUrl,
+      bannerUrl: before.bannerUrl,
+      code: before.code,
+      server: before.server,
+      region: before.region,
+      game: before.game,
+    },
+    newValue: payload,
+    ipAddress,
+    userAgent,
+  });
+
+  return { faction };
+}
+
+/**
+ * Faction status lifecycle (Active/Inactive/Suspended/Archived) is a Super
+ * Admin power per the spec's permission matrix — NOT a Faction Leader one.
+ * Authorization happens at the route layer via the `requirePlatformAdmin`
+ * Hono middleware; this function trusts its caller and just resolves the
+ * actor's snapshot role for the audit entry.
+ */
+export async function updateFactionStatus(
+  actorId: string,
+  factionId: string,
+  status: FactionStatus,
+  reason?: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const before = await prisma.faction.findUnique({ where: { id: factionId } });
+  if (!before) throw new NotFoundError("Faction not found");
+
+  const faction = await prisma.faction.update({
+    where: { id: factionId },
+    data: { status, isActive: status === FactionStatus.ACTIVE },
+  });
+
+  await writeFactionAuditLog({
+    factionId,
+    actorId,
+    actorRole: "SUPER_ADMIN",
+    action: "FACTION_STATUS_CHANGED",
+    entityType: "Faction",
+    entityId: factionId,
+    previousValue: { status: before.status },
+    newValue: { status: faction.status },
+    reason,
+    ipAddress,
+    userAgent,
+  });
+
+  return { faction };
+}
+
+export async function listFactionGuildMemberships(actorId: string) {
+  const { factionId } = await requireManagedFaction(actorId);
+  const memberships = await prisma.factionGuildMembership.findMany({
+    where: { factionId, status: { in: [FactionGuildStatus.PENDING, FactionGuildStatus.ACTIVE, FactionGuildStatus.SUSPENDED] } },
+    include: { guild: { select: { name: true, avatarUrl: true } } },
+    orderBy: { joinedAt: "asc" },
+  });
+  return memberships.map(serializeFactionGuildMembership);
+}
+
+export async function updateFactionGuildMembership(
+  actorId: string,
+  guildId: string,
+  payload: { contributionRequirement?: string | null; assignedFactionRole?: string | null; notes?: string | null },
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const { membership, factionId } = await requireManagedFaction(actorId);
+  const current = await prisma.factionGuildMembership.findFirst({
+    where: { factionId, guildId, status: { in: [FactionGuildStatus.PENDING, FactionGuildStatus.ACTIVE, FactionGuildStatus.SUSPENDED] } },
+  });
+  if (!current) {
+    throw new NotFoundError("This guild has no active membership record in your faction");
+  }
+
+  const updated = await prisma.factionGuildMembership.update({
+    where: { id: current.id },
+    data: {
+      contributionRequirement: payload.contributionRequirement === undefined ? undefined : payload.contributionRequirement,
+      assignedFactionRole: payload.assignedFactionRole === undefined ? undefined : payload.assignedFactionRole,
+      notes: payload.notes === undefined ? undefined : payload.notes,
+    },
+    include: { guild: { select: { name: true, avatarUrl: true } } },
+  });
+
+  await writeFactionAuditLog({
+    factionId,
+    actorId,
+    actorRole: membership.role,
+    action: "FACTION_GUILD_MEMBERSHIP_UPDATED",
+    entityType: "FactionGuildMembership",
+    entityId: current.id,
+    previousValue: {
+      contributionRequirement: current.contributionRequirement,
+      assignedFactionRole: current.assignedFactionRole,
+      notes: current.notes,
+    },
+    newValue: payload,
+    ipAddress,
+    userAgent,
+  });
+
+  return serializeFactionGuildMembership(updated);
+}
+
+export async function listFactionRoleAssignments(actorId: string) {
+  const { factionId } = await requireManagedFaction(actorId);
+  const assignments = await prisma.factionRoleAssignment.findMany({
+    where: { factionId },
+    include: {
+      guildMember: {
+        select: {
+          id: true,
+          ign: true,
+          role: true,
+          userId: true,
+          guildId: true,
+          user: { select: { displayName: true, avatarUrl: true } },
+          guild: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return assignments.map(serializeFactionRoleAssignment);
+}
+
+export async function assignFactionRole(
+  actorId: string,
+  guildMemberId: string,
+  role: FactionRoleType,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const { membership, factionId } = await requireManagedFaction(actorId);
+
+  const target = await prisma.guildMember.findUnique({
+    where: { id: guildMemberId },
+    include: { guild: { select: { factionId: true, name: true } }, user: { select: { displayName: true } } },
+  });
+  if (!target || !target.isActive || target.guild.factionId !== factionId) {
+    throw new BadRequestError("Target member must belong to a guild in your faction");
+  }
+
+  const assignment = await prisma.factionRoleAssignment.upsert({
+    where: { guildMemberId_factionId_role: { guildMemberId, factionId, role } },
+    create: { factionId, guildMemberId, role, grantedByUserId: actorId },
+    update: {},
+    include: {
+      guildMember: {
+        select: {
+          id: true,
+          ign: true,
+          role: true,
+          userId: true,
+          guildId: true,
+          user: { select: { displayName: true, avatarUrl: true } },
+          guild: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  await writeFactionAuditLog({
+    factionId,
+    actorId,
+    actorRole: membership.role,
+    action: "FACTION_ROLE_GRANTED",
+    entityType: "FactionRoleAssignment",
+    entityId: assignment.id,
+    newValue: { guildMemberId, role, memberName: target.ign ?? target.user.displayName },
+    ipAddress,
+    userAgent,
+  });
+
+  return serializeFactionRoleAssignment(assignment);
+}
+
+export async function revokeFactionRole(
+  actorId: string,
+  assignmentId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const { membership, factionId } = await requireManagedFaction(actorId);
+  const assignment = await prisma.factionRoleAssignment.findUnique({ where: { id: assignmentId } });
+  if (!assignment || assignment.factionId !== factionId) {
+    throw new NotFoundError("Faction role assignment not found");
+  }
+
+  await prisma.factionRoleAssignment.delete({ where: { id: assignmentId } });
+
+  await writeFactionAuditLog({
+    factionId,
+    actorId,
+    actorRole: membership.role,
+    action: "FACTION_ROLE_REVOKED",
+    entityType: "FactionRoleAssignment",
+    entityId: assignmentId,
+    previousValue: { guildMemberId: assignment.guildMemberId, role: assignment.role },
     ipAddress,
     userAgent,
   });

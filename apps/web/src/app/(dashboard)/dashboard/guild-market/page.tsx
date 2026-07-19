@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/lib/auth-context";
 import { useSocket } from "@/components/providers/socket-provider";
-import { dashboardApi, guildApi, type BossScheduleData } from "@/lib/api";
+import { dashboardApi, guildApi } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -19,10 +19,7 @@ const LootStatsGrid = dynamic(() => import("./components/LootStatsGrid"));
 const SoldItemsTable = dynamic(() => import("./components/SoldItemsTable"));
 const AccountingTab = dynamic(() => import("./components/AccountingTab"));
 const RankingsTab = dynamic(() => import("./components/RankingsTab"));
-const RecordSaleModal = dynamic(() => import("./components/RecordSaleModal"));
 const TreasuryAdjModal = dynamic(() => import("./components/TreasuryAdjModal"));
-const GuildStorageTab = dynamic(() => import("./components/GuildStorageTab"));
-const AuctionHallTab = dynamic(() => import("./components/AuctionHallTab"));
 import { useQuery, queryClient } from "@/lib/query";
 
 const TREASURY_LEDGER_PAGE_SIZE = 10;
@@ -34,8 +31,7 @@ export default function GuildMarketPage() {
 
   const [activeTab, setActiveTab] = useState<MarketTab>("loot");
 
-  // Loot & Accounting inputs
-  const [saleCurrency, setSaleCurrency] = useState("PHP");
+  // Accounting inputs
   const [adjCurrency, setAdjCurrency] = useState("PHP");
 
   // Search & Filter state
@@ -48,16 +44,6 @@ export default function GuildMarketPage() {
   // Pagination page state for ledger transaction history
   const [ledgerPage, setLedgerPage] = useState(1);
 
-  // Record Loot Sale Modal states (batch: many loots per activity)
-  const [showSaleModal, setShowSaleModal] = useState(false);
-  const [isSubmittingSale, setIsSubmittingSale] = useState(false);
-  const [saleCategory, setSaleCategory] = useState<string>("LOW_BOSS");
-  const [saleBossScheduleId, setSaleBossScheduleId] = useState<string>("");
-  const [saleSoldDate, setSaleSoldDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [saleItems, setSaleItems] = useState<Array<{ itemName: string; saleValue: string }>>([
-    { itemName: "", saleValue: "" },
-  ]);
-
   // Treasury Adjustment Modal states
   const [showAdjModal, setShowAdjModal] = useState(false);
   const [isSubmittingAdj, setIsSubmittingAdj] = useState(false);
@@ -66,10 +52,6 @@ export default function GuildMarketPage() {
   const [adjEntryType, setAdjEntryType] = useState<"CREDIT" | "DEBIT">("DEBIT");
   const [adjAmount, setAdjAmount] = useState("");
   const [adjDescription, setAdjDescription] = useState("");
-
-  // Active attendees for selected boss fight preview
-  const [previewAttendees, setPreviewAttendees] = useState<any[]>([]);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   const activeGuild = user?.guilds?.[0];
   // ADMIN and FACTION_LEADER sit above GUILD_LEADER in the role hierarchy
@@ -97,7 +79,6 @@ export default function GuildMarketPage() {
   // Sync default currency from settings
   useEffect(() => {
     if (settings) {
-      setSaleCurrency(settings.currencyCode);
       setAdjCurrency(settings.currencyCode);
     }
   }, [settings]);
@@ -133,28 +114,12 @@ export default function GuildMarketPage() {
     { persist: true, staleTime: 15000, enabled: !!activeGuild }
   );
 
-  // 4. Boss Schedules Query (shares cache key!)
-  const {
-    data: schedulesRaw,
-    isLoading: isLoadingSchedules,
-  } = useQuery<BossScheduleData[]>(
-    activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty",
-    async () => {
-      if (!activeGuild) return [];
-      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
-      return result.success && result.data?.schedules ? result.data.schedules : [];
-    },
-    { persist: true, staleTime: 15000, enabled: !!activeGuild }
-  );
-  const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
-
-  const isLoading = isLoadingSales || isLoadingAccounting || isLoadingSchedules;
+  const isLoading = isLoadingSales || isLoadingAccounting;
 
   const invalidateAll = () => {
     if (!activeGuild) return;
     queryClient.invalidateQueries(`loot_sales:${activeGuild.guildId}`);
     queryClient.invalidateQueries(`accounting_dashboard:${activeGuild.guildId}`);
-    queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
   };
 
   // Listen to real-time events to refresh Guild Market and Ledger history instantly
@@ -166,106 +131,14 @@ export default function GuildMarketPage() {
       invalidateAll();
     };
 
-    const gid = activeGuild.guildId;
-    const handleStorage = () => queryClient.invalidateQueries(`market_storage:${gid}`);
-    const handleAuction = () => {
-      queryClient.invalidateQueries(`market_auctions:${gid}`);
-      queryClient.invalidateQueries(`market_auction_history:${gid}`);
-    };
-
     socket.on("loot_sale_recorded", handleMarketUpdate);
     socket.on("treasury_adjusted", handleMarketUpdate);
-    socket.on("storage_updated", handleStorage);
-    socket.on("auction_updated", handleAuction);
 
     return () => {
       socket.off("loot_sale_recorded", handleMarketUpdate);
       socket.off("treasury_adjusted", handleMarketUpdate);
-      socket.off("storage_updated", handleStorage);
-      socket.off("auction_updated", handleAuction);
     };
   }, [socket, activeGuild]);
-
-  // Load named, confirmed attendees for the selected activity in the sale modal
-  useEffect(() => {
-    if (!activeGuild || !saleBossScheduleId) {
-      setPreviewAttendees([]);
-      return;
-    }
-
-    let cancelled = false;
-    async function loadPreview() {
-      setIsLoadingPreview(true);
-      try {
-        const result = await dashboardApi.getBossAttendees(activeGuild!.guildId, saleBossScheduleId);
-        if (cancelled) return;
-        setPreviewAttendees(result.success && result.data?.attendees ? result.data.attendees : []);
-      } catch {
-        if (!cancelled) setPreviewAttendees([]);
-      } finally {
-        if (!cancelled) setIsLoadingPreview(false);
-      }
-    }
-    loadPreview();
-    return () => {
-      cancelled = true;
-    };
-  }, [saleBossScheduleId, activeGuild]);
-
-  // Item row helpers for the batch modal
-  const addSaleItem = () => setSaleItems((prev) => [...prev, { itemName: "", saleValue: "" }]);
-  const removeSaleItem = (index: number) =>
-    setSaleItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
-  const updateSaleItem = (index: number, field: "itemName" | "saleValue", value: string) =>
-    setSaleItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
-
-  const resetSaleModal = () => {
-    setSaleBossScheduleId("");
-    setSaleSoldDate(new Date().toISOString().slice(0, 10));
-    setSaleItems([{ itemName: "", saleValue: "" }]);
-  };
-
-  // Submit batch of sold loot items handler
-  const handleRecordSale = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeGuild) return;
-
-    const cleanedItems = saleItems
-      .map((item) => ({ itemName: item.itemName.trim(), saleValue: parseFloat(item.saleValue) }))
-      .filter((item) => item.itemName && !isNaN(item.saleValue) && item.saleValue > 0);
-
-    if (cleanedItems.length === 0) {
-      addToast("error", "Add at least one loot item with a name and positive sale value");
-      return;
-    }
-
-    setIsSubmittingSale(true);
-    try {
-      const result = await dashboardApi.addLootSaleBatch(activeGuild.guildId, {
-        category: saleCategory,
-        bossScheduleId: saleBossScheduleId || null,
-        currency: saleCurrency,
-        soldDate: saleSoldDate || undefined,
-        items: cleanedItems,
-      });
-      if (result.success) {
-        addToast(
-          "success",
-          `Logged ${cleanedItems.length} sold item${cleanedItems.length > 1 ? "s" : ""}! Proceeds split and taxes resolved.`,
-        );
-        setShowSaleModal(false);
-        resetSaleModal();
-        setLedgerPage(1);
-        invalidateAll();
-      } else {
-        addToast("error", result.error?.message || "Failed to log sold items");
-      }
-    } catch (err: any) {
-      addToast("error", err?.message || "An error occurred");
-    } finally {
-      setIsSubmittingSale(false);
-    }
-  };
 
   // Submit Treasury adjustment handler
   const handleRecordAdjustment = async (e: React.FormEvent) => {
@@ -386,16 +259,11 @@ export default function GuildMarketPage() {
         <ModuleHeader
           eyebrow="Market"
           title="Guild Market"
-          description="Record loot drops, track sold items history, split dividends to attendees, and audit the guild treasury ledger."
+          description="Track sold items history, attendee dividends, member balances, and the guild treasury ledger."
           right={
             <div className="flex items-center gap-2">
               {isOfficer && (
                 <>
-                  <Magnetic strength={4}>
-                    <Button variant="primary" size="sm" onClick={() => setShowSaleModal(true)}>
-                      Log sold items
-                    </Button>
-                  </Magnetic>
                   <Magnetic strength={4}>
                     <Button
                       variant="secondary"
@@ -494,39 +362,7 @@ export default function GuildMarketPage() {
           </>
         )}
 
-        {/* Tab Content 4: GUILD STORAGE */}
-        {activeTab === "storage" && <GuildStorageTab guildId={activeGuild.guildId} />}
-
-        {/* Tab Content 5: AUCTION HALL (DKP) */}
-        {activeTab === "auctions" && <AuctionHallTab guildId={activeGuild.guildId} />}
-
         </div>
-
-        {/* Modal: Record Drop Loot Sale */}
-        {showSaleModal && (
-          <RecordSaleModal
-            guildId={activeGuild.guildId}
-            settings={settings}
-            schedules={schedules}
-            category={saleCategory}
-            bossScheduleId={saleBossScheduleId}
-            soldDate={saleSoldDate}
-            currency={saleCurrency}
-            items={saleItems}
-            attendees={previewAttendees}
-            isLoadingAttendees={isLoadingPreview}
-            isSubmitting={isSubmittingSale}
-            onClose={() => setShowSaleModal(false)}
-            onSubmit={handleRecordSale}
-            onCategoryChange={setSaleCategory}
-            onBossScheduleChange={setSaleBossScheduleId}
-            onSoldDateChange={setSaleSoldDate}
-            onCurrencyChange={setSaleCurrency}
-            onAddItem={addSaleItem}
-            onRemoveItem={removeSaleItem}
-            onItemChange={updateSaleItem}
-          />
-        )}
 
         {/* Modal: Treasury Manual Payout Action */}
         {showAdjModal && (

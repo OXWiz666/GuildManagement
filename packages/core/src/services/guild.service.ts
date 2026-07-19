@@ -1,12 +1,15 @@
-import { type GuildSettings, type GuildMember } from "@guild/db";
+import * as crypto from "crypto";
+import { prisma, Prisma, SubscriptionStatus, type GuildSettings, type GuildMember } from "@guild/db";
 import {
   AUDIT_ACTIONS,
   canManageRole,
+  orgNameSchema,
   resolveRoleDisplayName,
+  slugify,
   CUSTOMIZABLE_ROLES,
   type GuildRoleType,
 } from "@guild/shared";
-import { BadRequestError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
 import { cache } from "../lib/cache";
 import { broadcastToGuild } from "../lib/socket";
 import { IGuildRepository, PrismaGuildRepository } from "../repositories/guild.repository";
@@ -21,6 +24,20 @@ const MEMBERSHIP_CACHE_TTL = 15; // seconds
 const membershipCacheKey = (guildId: string, userId: string) =>
   `membership:${guildId}:${userId}`;
 const SELF_LEAVE_BLOCKED_ROLES = new Set(["GUILD_LEADER", "FACTION_LEADER"]);
+const ACTIVE_SUBSCRIPTION_STATES: SubscriptionStatus[] = [
+  SubscriptionStatus.TRIALING,
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE,
+];
+const FREE_GUILD_RENAME_LIMIT = 1;
+const GUILD_PROFILE_INCLUDE = {
+  subscriptions: {
+    where: { status: { in: ACTIVE_SUBSCRIPTION_STATES } },
+    orderBy: [{ currentPeriodEnd: "desc" }, { createdAt: "desc" }],
+    take: 1,
+    select: { status: true, plan: { select: { name: true } } },
+  },
+} satisfies Prisma.GuildInclude;
 
 // ─── Member Types ───────────────────────────────
 
@@ -44,6 +61,58 @@ export interface GuildMemberWithUser {
     avatarUrl: string | null;
     bannerUrl: string | null;
   };
+}
+
+export interface GuildProfile {
+  id: string;
+  name: string;
+  slug: string;
+  nameChangeCount: number;
+  nameChangeLimit: number | null;
+  remainingNameChanges: number | null;
+  canRename: boolean;
+  isSubscribed: boolean;
+  subscriptionStatus: string | null;
+  planName: string | null;
+}
+
+function toGuildProfile(guild: {
+  id: string;
+  name: string;
+  slug: string;
+  nameChangeCount: number;
+  subscriptions: Array<{ status: string; plan: { name: string } }>;
+}): GuildProfile {
+  const activeSubscription = guild.subscriptions[0] ?? null;
+  const isSubscribed = Boolean(activeSubscription);
+  const remaining = isSubscribed ? null : Math.max(0, FREE_GUILD_RENAME_LIMIT - guild.nameChangeCount);
+
+  return {
+    id: guild.id,
+    name: guild.name,
+    slug: guild.slug,
+    nameChangeCount: guild.nameChangeCount,
+    nameChangeLimit: isSubscribed ? null : FREE_GUILD_RENAME_LIMIT,
+    remainingNameChanges: remaining,
+    canRename: isSubscribed || (remaining ?? 0) > 0,
+    isSubscribed,
+    subscriptionStatus: activeSubscription?.status ?? null,
+    planName: activeSubscription?.plan.name ?? null,
+  };
+}
+
+async function uniqueGuildSlug(name: string, guildId: string): Promise<string> {
+  const base = slugify(name) || "guild";
+
+  const isTaken = async (slug: string) =>
+    Boolean(await prisma.guild.findFirst({ where: { slug, NOT: { id: guildId } }, select: { id: true } }));
+
+  if (!(await isTaken(base))) return base;
+  for (let i = 0; i < 5; i++) {
+    const candidate = `${base}-${crypto.randomBytes(2).toString("hex")}`;
+    if (!(await isTaken(candidate))) return candidate;
+  }
+  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 export class GuildService {
@@ -347,6 +416,132 @@ export class GuildService {
   }
 
   /**
+   * Guild profile metadata that belongs to the Guild row, not GuildSettings.
+   */
+  async getGuildProfile(guildId: string, actorId: string): Promise<GuildProfile> {
+    const [membership, guild] = await Promise.all([
+      this.guildRepo.getMemberByUser(actorId, guildId),
+      prisma.guild.findUnique({
+        where: { id: guildId },
+        include: GUILD_PROFILE_INCLUDE,
+      }),
+    ]);
+
+    if (!membership || !membership.isActive) {
+      throw new ForbiddenError("You must be an active member of this guild");
+    }
+    if (!guild) throw new NotFoundError("Guild not found");
+
+    return toGuildProfile(guild);
+  }
+
+  /**
+   * Rename a guild. Free guilds can rename once; active subscriptions remove
+   * the quota. Only leaders/faction leaders/admins can rename the guild.
+   */
+  async renameGuild(
+    guildId: string,
+    rawName: string,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<GuildProfile> {
+    const actorMembership = await this.guildRepo.getMemberByUser(actorId, guildId);
+
+    if (
+      !actorMembership ||
+      !actorMembership.isActive ||
+      !["GUILD_LEADER", "FACTION_LEADER", "ADMIN"].includes(actorMembership.role)
+    ) {
+      throw new ForbiddenError("Only Guild Leaders can rename the guild");
+    }
+
+    const parsedName = orgNameSchema.safeParse(rawName);
+    if (!parsedName.success) {
+      throw new ValidationError(parsedName.error.issues[0]?.message || "Invalid guild name", parsedName.error.flatten());
+    }
+    const newName = parsedName.data;
+
+    try {
+      const { updated, auditDetail } = await prisma.$transaction(async (tx) => {
+        const guild = await tx.guild.findUnique({
+          where: { id: guildId },
+          include: GUILD_PROFILE_INCLUDE,
+        });
+
+        if (!guild) throw new NotFoundError("Guild not found");
+        if (guild.name === newName) return { updated: guild, auditDetail: null };
+
+        const isSubscribed = guild.subscriptions.length > 0;
+        if (!isSubscribed && guild.nameChangeCount >= FREE_GUILD_RENAME_LIMIT) {
+          throw new ForbiddenError("Free guilds can change their name only once. Subscribe for unlimited guild renames.");
+        }
+
+        const newSlug = await uniqueGuildSlug(newName, guildId);
+
+        if (!isSubscribed) {
+          const result = await tx.guild.updateMany({
+            where: { id: guildId, nameChangeCount: { lt: FREE_GUILD_RENAME_LIMIT } },
+            data: { name: newName, slug: newSlug, nameChangeCount: { increment: 1 } },
+          });
+
+          if (result.count === 0) {
+            throw new ForbiddenError("Free guilds can change their name only once. Subscribe for unlimited guild renames.");
+          }
+        } else {
+          await tx.guild.update({
+            where: { id: guildId },
+            data: { name: newName, slug: newSlug, nameChangeCount: { increment: 1 } },
+          });
+        }
+
+        const renamed = await tx.guild.findUnique({
+          where: { id: guildId },
+          include: GUILD_PROFILE_INCLUDE,
+        });
+        if (!renamed) throw new NotFoundError("Guild not found");
+
+        return {
+          updated: renamed,
+          auditDetail: {
+            field: "name",
+            oldName: guild.name,
+            newName,
+            oldSlug: guild.slug,
+            newSlug,
+            isSubscribed,
+          },
+        };
+      });
+
+      if (auditDetail) {
+        await this.auditRepo.create({
+          actorId,
+          guildId,
+          action: AUDIT_ACTIONS.GUILD_UPDATED,
+          target: "Guild",
+          targetId: guildId,
+          detail: auditDetail,
+          ipAddress,
+          userAgent,
+        });
+      }
+
+      await Promise.all([
+        cache.delete(`guild-settings:${guildId}`),
+        cache.delete(`guild-members:${guildId}`),
+      ]);
+
+      return toGuildProfile(updated);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictError("A guild with this name already exists. Try a slightly different name.");
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Get guild settings.
    */
   async getGuildSettings(guildId: string): Promise<GuildSettings> {
@@ -368,6 +563,11 @@ export class GuildService {
       bossKillPoints?: number;
       rankMultipliers?: Record<string, number>;
       activeShareModel?: string;
+      serverName?: string | null;
+      timezone?: string;
+      region?: string | null;
+      language?: string;
+      settingsTemplateName?: string | null;
       currencyCode?: string;
       currencySymbol?: string;
       secondaryCurrencyCode?: string | null;
@@ -393,6 +593,27 @@ export class GuildService {
       throw new ForbiddenError("Only Guild Leaders and Officers can update settings");
     }
 
+    const serverName = payload.serverName?.trim();
+    const timezone = payload.timezone?.trim();
+    const region = payload.region?.trim();
+    const language = payload.language?.trim();
+    const settingsTemplateName = payload.settingsTemplateName?.trim();
+    if (serverName && serverName.length > 80) {
+      throw new ValidationError("Server name must be 80 characters or fewer");
+    }
+    if (timezone !== undefined && (!timezone || timezone.length > 64)) {
+      throw new ValidationError("Timezone is required and must be 64 characters or fewer");
+    }
+    if (region && region.length > 60) {
+      throw new ValidationError("Region must be 60 characters or fewer");
+    }
+    if (language !== undefined && (!language || language.length > 12)) {
+      throw new ValidationError("Language is required and must be 12 characters or fewer");
+    }
+    if (settingsTemplateName && settingsTemplateName.length > 64) {
+      throw new ValidationError("Template name must be 64 characters or fewer");
+    }
+
     let roleDisplayNames: Partial<Record<GuildRoleType, string>> | undefined;
     if (payload.roleDisplayNames) {
       roleDisplayNames = {};
@@ -414,6 +635,11 @@ export class GuildService {
       bossKillPoints: payload.bossKillPoints,
       rankMultipliers: payload.rankMultipliers || undefined,
       activeShareModel: payload.activeShareModel,
+      serverName: payload.serverName === undefined ? undefined : serverName || null,
+      timezone: payload.timezone === undefined ? undefined : timezone,
+      region: payload.region === undefined ? undefined : region || null,
+      language: payload.language === undefined ? undefined : language,
+      settingsTemplateName: payload.settingsTemplateName === undefined ? undefined : settingsTemplateName || null,
       currencyCode: payload.currencyCode,
       currencySymbol: payload.currencySymbol,
       secondaryCurrencyCode: payload.secondaryCurrencyCode,
@@ -481,6 +707,18 @@ export const leaveGuild = (
   userAgent?: string,
 ): Promise<{ success: true; guildId: string }> =>
   guildService.leaveGuild(guildId, actorId, ipAddress, userAgent);
+
+export const getGuildProfile = (guildId: string, actorId: string): Promise<GuildProfile> =>
+  guildService.getGuildProfile(guildId, actorId);
+
+export const renameGuild = (
+  guildId: string,
+  name: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+): Promise<GuildProfile> =>
+  guildService.renameGuild(guildId, name, actorId, ipAddress, userAgent);
 
 export const getGuildSettings = (guildId: string): Promise<GuildSettings> =>
   guildService.getGuildSettings(guildId);

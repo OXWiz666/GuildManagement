@@ -4,6 +4,7 @@ import { useState } from "react";
 import SettingsCard from "../../settings/components/SettingsCard";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { marketApi, type MountCatalogItem } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { useQuery, queryClient } from "@/lib/query";
@@ -17,9 +18,9 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
   const { addToast } = useToast();
   const [name, setName] = useState("");
   const [maxSlots, setMaxSlots] = useState("1");
-  const [iconUrl, setIconUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [mountToRemove, setMountToRemove] = useState<MountCatalogItem | null>(null);
 
   const key = `market_mounts:${guildId}`;
   const { data, isLoading } = useQuery(
@@ -48,13 +49,11 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
       const res = await marketApi.upsertMount(guildId, {
         name: name.trim(),
         maxSlots: slots,
-        iconUrl: iconUrl.trim() || undefined,
       });
       if (res.success) {
         addToast("success", `Added ${name.trim()}.`);
         setName("");
         setMaxSlots("1");
-        setIconUrl("");
         refresh();
       } else addToast("error", res.error?.message || "Failed to add mount");
     } catch (err: any) {
@@ -99,12 +98,12 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
   }
 
   async function removeMount(mount: MountCatalogItem) {
-    if (!window.confirm(`Remove ${mount.name} from the mount catalog? This also clears its distribution history.`)) return;
     setBusyId(mount.id);
     try {
       const res = await marketApi.deleteMount(guildId, mount.id);
       if (res.success) {
         addToast("success", `Removed ${mount.name}.`);
+        setMountToRemove(null);
         refresh();
       } else addToast("error", res.error?.message || "Failed to remove mount");
     } catch (err: any) {
@@ -115,6 +114,7 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
   }
 
   return (
+    <>
     <SettingsCard
       eyebrow="Guild Settings"
       title="Mount wishlist catalog"
@@ -130,10 +130,6 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
           Add mount
         </Button>
       </div>
-      <div className="mt-2">
-        <Input label="Icon URL (optional)" value={iconUrl} onChange={(e) => setIconUrl(e.target.value)} placeholder="https://…" />
-      </div>
-
       {/* Known mount data — quick-add table */}
       <div className="mt-5">
         <p className="text-[10px] uppercase tracking-[0.18em] text-white/35 mb-2">Mount data</p>
@@ -209,7 +205,7 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={() => removeMount(mount)}
+                  onClick={() => setMountToRemove(mount)}
                   disabled={busyId === mount.id}
                   className="text-rose-300/70"
                 >
@@ -221,5 +217,23 @@ export default function MountWishlistSection({ guildId }: MountWishlistSectionPr
         )}
       </div>
     </SettingsCard>
+    <ConfirmModal
+      show={Boolean(mountToRemove)}
+      title="Remove Mount"
+      message={
+        mountToRemove
+          ? `Remove ${mountToRemove.name} from the mount catalog? This also clears its distribution history.`
+          : ""
+      }
+      confirmText="Remove mount"
+      cancelText="Cancel"
+      isDanger
+      isSubmitting={Boolean(mountToRemove && busyId === mountToRemove.id)}
+      onConfirm={() => {
+        if (mountToRemove) void removeMount(mountToRemove);
+      }}
+      onCancel={() => setMountToRemove(null)}
+    />
+    </>
   );
 }

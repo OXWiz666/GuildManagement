@@ -321,7 +321,13 @@ path so a restart doesn't re-download.
 
 ---
 
-## Step 9 — Deploy (Fly.io)
+## Step 9 — Deploy
+
+Deploying to Railway instead of Fly? See **[RAILWAY.md](./RAILWAY.md)** —
+same Dockerfile, different host-specific config. The Fly guide below and the
+env var table above still apply either way.
+
+### Fly.io
 
 **No local Docker needed** — `--remote-only` builds the image on Fly's builders.
 

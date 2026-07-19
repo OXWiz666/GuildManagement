@@ -27,8 +27,10 @@ export {
   getManageableRoles,
   canManageRole,
   resolveRoleDisplayName,
+  FACTION_ROLES,
+  FACTION_ROLE_DISPLAY_NAMES,
 } from "./types/roles";
-export type { GuildRoleType, CustomizableRoleType } from "./types/roles";
+export type { GuildRoleType, CustomizableRoleType, FactionRoleType } from "./types/roles";
 
 // Platform (SaaS-level) roles
 export {
@@ -122,6 +124,8 @@ export {
   EQUIPMENT_SLOT_LABELS,
   EQUIPMENT_GRID,
   LOW_CONFIDENCE_THRESHOLD,
+  FACTION_INVENTORY_CATEGORIES,
+  FACTION_INVENTORY_CATEGORY_LABELS,
 } from "./constants";
 export type {
   AuditAction,
@@ -133,6 +137,7 @@ export type {
   StorageDisposition,
   DistributionTier,
   LegendaryStatus,
+  FactionInventoryCategory,
   CoreSlot,
   NonCoreSlot,
   MarketRules,
@@ -215,6 +220,42 @@ export type {
   PaymentInput,
   CouponInput,
 } from "./validators/platform";
+
+// Factionwide System (Phase 1: Foundation) validators
+export {
+  updateFactionProfileSchema,
+  updateFactionStatusSchema,
+  updateFactionGuildMembershipSchema,
+  assignFactionRoleSchema,
+  listFactionAuditLogsQuerySchema,
+} from "./validators/faction";
+export type {
+  UpdateFactionProfileInput,
+  UpdateFactionStatusInput,
+  UpdateFactionGuildMembershipInput,
+  AssignFactionRoleInput,
+  ListFactionAuditLogsQueryInput,
+} from "./validators/faction";
+
+// Factionwide System (Phase 2: Faction Inventory) validators
+export {
+  createInventoryItemSchema,
+  updateInventoryItemSchema,
+  recordAdditionSchema,
+  adjustQuantitySchema,
+  submitInventoryRequestSchema,
+  reviewInventoryRequestSchema,
+  listInventoryTransactionsQuerySchema,
+} from "./validators/factionInventory";
+export type {
+  CreateInventoryItemInput,
+  UpdateInventoryItemInput,
+  RecordAdditionInput,
+  AdjustQuantityInput,
+  SubmitInventoryRequestInput,
+  ReviewInventoryRequestInput,
+  ListInventoryTransactionsQueryInput,
+} from "./validators/factionInventory";
 
 // Equipment validators (Item Screenshot Update)
 export {

@@ -80,6 +80,7 @@ export default function ConfirmModal({
         {/* Modal Buttons */}
         <div className="flex gap-3 justify-end relative z-10 border-t border-white/[0.06] pt-4 mt-1">
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={onCancel}
@@ -89,6 +90,7 @@ export default function ConfirmModal({
             {cancelText}
           </Button>
           <Button
+            type="button"
             variant={isDanger ? "danger" : "primary"}
             size="sm"
             onClick={onConfirm}

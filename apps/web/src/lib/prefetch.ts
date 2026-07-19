@@ -1,5 +1,6 @@
 import { prefetchQuery } from "./query";
-import { dashboardApi, guildApi, factionApi, equipmentApi, activityApi } from "./api";
+import { dashboardApi, guildApi, factionApi, equipmentApi, activityApi, marketApi } from "./api";
+import { marketRpc } from "./rpc";
 
 /**
  * Warms the client-side query cache for a sidebar destination's primary
@@ -110,14 +111,24 @@ export function prefetchForRoute(href: string, guildId: string | undefined) {
         const r = await guildApi.getSettings(guildId);
         return r.success ? r.data : null;
       }, 300000);
-      run(`boss_schedules:${guildId}`, async () => {
-        const r = await dashboardApi.getBossSchedules(guildId);
-        return r.success && r.data?.schedules ? r.data.schedules : [];
-      }, 15000);
       run(`loot_sales:${guildId}`, async () => {
         const r = await dashboardApi.getLootSales(guildId);
         return r.success && r.data?.sales ? r.data.sales : [];
       }, 30000);
+      break;
+
+    case "/dashboard/guild-storage":
+      run(`market_storage:${guildId}`, async () => {
+        const r = await marketRpc.getStorage(guildId);
+        return r.success && r.data ? r.data : { storage: [], listed: [], canManage: false };
+      }, 15000);
+      break;
+
+    case "/dashboard/auction-hall":
+      run(`market_auctions:${guildId}`, async () => {
+        const r = await marketApi.getAuctions(guildId);
+        return r.success && r.data ? r.data : { auctions: [], canManage: false, myBidPoints: 0 };
+      }, 8000);
       break;
 
     case "/dashboard/guild-settings":
@@ -146,7 +157,9 @@ const ALL_PREFETCHABLE_ROUTES = [
   "/dashboard/boss-attendance",
   "/dashboard/members",
   "/dashboard/guild-market",
+  "/dashboard/guild-storage",
   "/dashboard/guild-settings",
+  "/dashboard/auction-hall",
 ];
 
 /**

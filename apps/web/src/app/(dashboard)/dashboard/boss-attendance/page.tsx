@@ -19,6 +19,10 @@ import {
 // Imports from co-located components
 import AttendanceCoverflow from "./components/AttendanceCoverflow";
 import AttendanceHistoryList, { type AttendanceHistoryItem } from "./components/AttendanceHistoryList";
+import {
+  AttendanceCalendarView,
+  AttendanceTimelineView,
+} from "./components/AttendanceScheduleViews";
 
 // Both are modals mounted only on demand — code-split out of the main route
 // chunk.
@@ -46,7 +50,7 @@ export default function BossAttendancePage() {
 
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-  const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "calendar" | "timeline" | "history" | "advance">("overview");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
@@ -338,6 +342,8 @@ export default function BossAttendancePage() {
           <ModuleTabs
             tabs={[
               { value: "overview", label: "Overview" },
+              { value: "calendar", label: "Calendar", count: schedules.length },
+              { value: "timeline", label: "Timeline", count: schedules.length + sessions.filter((session) => !session.bossScheduleId).length },
               { value: "history", label: "Attendance History", count: stats?.history?.length ?? 0 },
               { value: "advance", label: "Advance Turn-In", count: advanceEligibleCount },
             ]}
@@ -464,6 +470,30 @@ export default function BossAttendancePage() {
         {activeTab === "history" && (
           /* Personal attendance history */
           <AttendanceHistoryList history={stats?.history || []} />
+        )}
+
+        {activeTab === "calendar" && (
+          <AttendanceCalendarView
+            schedules={schedules}
+            sessions={sessions}
+            isLoading={isLoadingSchedules || isLoadingSessions}
+            myGuildId={activeGuild.guildId}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+            onSelectSession={(session) => setSelectedSessionId(session.id)}
+          />
+        )}
+
+        {activeTab === "timeline" && (
+          <AttendanceTimelineView
+            schedules={schedules}
+            sessions={sessions}
+            isLoading={isLoadingSchedules || isLoadingSessions}
+            myGuildId={activeGuild.guildId}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+            onSelectSession={(session) => setSelectedSessionId(session.id)}
+          />
         )}
 
         {activeTab === "advance" && (

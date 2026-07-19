@@ -124,6 +124,8 @@ export {
   EQUIPMENT_SLOT_LABELS,
   EQUIPMENT_GRID,
   LOW_CONFIDENCE_THRESHOLD,
+  FACTION_INVENTORY_CATEGORIES,
+  FACTION_INVENTORY_CATEGORY_LABELS,
 } from "./constants";
 export type {
   AuditAction,
@@ -135,6 +137,7 @@ export type {
   StorageDisposition,
   DistributionTier,
   LegendaryStatus,
+  FactionInventoryCategory,
   CoreSlot,
   NonCoreSlot,
   MarketRules,
@@ -233,6 +236,26 @@ export type {
   AssignFactionRoleInput,
   ListFactionAuditLogsQueryInput,
 } from "./validators/faction";
+
+// Factionwide System (Phase 2: Faction Inventory) validators
+export {
+  createInventoryItemSchema,
+  updateInventoryItemSchema,
+  recordAdditionSchema,
+  adjustQuantitySchema,
+  submitInventoryRequestSchema,
+  reviewInventoryRequestSchema,
+  listInventoryTransactionsQuerySchema,
+} from "./validators/factionInventory";
+export type {
+  CreateInventoryItemInput,
+  UpdateInventoryItemInput,
+  RecordAdditionInput,
+  AdjustQuantityInput,
+  SubmitInventoryRequestInput,
+  ReviewInventoryRequestInput,
+  ListInventoryTransactionsQueryInput,
+} from "./validators/factionInventory";
 
 // Equipment validators (Item Screenshot Update)
 export {

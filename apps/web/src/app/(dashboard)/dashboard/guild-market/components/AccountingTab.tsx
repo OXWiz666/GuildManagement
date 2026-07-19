@@ -162,11 +162,11 @@ export default function AccountingTab({
                 <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">
                   <th className="px-4 py-3">In-Game Name</th>
                   <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3 text-right">Total Payouts PHP</th>
+                  <th className="px-4 py-3 text-right">Total Withdraw / Debit PHP</th>
                   <th className="px-4 py-3 text-right">Net Balance PHP</th>
                   {accounting?.treasury?.secondary?.currencyCode && (
                     <>
-                      <th className="px-4 py-3 text-right">Total Payouts {accounting.treasury.secondary.currencyCode}</th>
+                      <th className="px-4 py-3 text-right">Total Withdraw / Debit {accounting.treasury.secondary.currencyCode}</th>
                       <th className="px-4 py-3 text-right">Net Balance {accounting.treasury.secondary.currencyCode}</th>
                     </>
                   )}
@@ -183,7 +183,7 @@ export default function AccountingTab({
                     <td className="px-4 py-3"><Badge role={m.role} customName={m.customRole?.name} customColor={m.customRole?.color} /></td>
                     <td className="px-4 py-3 text-right font-mono text-zinc-400">
                       {settings?.currencySymbol || "₱"}{" "}
-                      {m.totalEarned.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      {(m.totalWithdrawn ?? m.totalEarned ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
                     <td className={`px-4 py-3 text-right font-bold font-mono ${m.balance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                       {settings?.currencySymbol || "₱"}{" "}
@@ -193,7 +193,7 @@ export default function AccountingTab({
                       <>
                         <td className="px-4 py-3 text-right font-mono text-zinc-400">
                           {accounting.treasury.secondary.currencySymbol}{" "}
-                          {m.secTotalEarned.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                          {(m.secTotalWithdrawn ?? m.secTotalEarned ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                         </td>
                         <td className={`px-4 py-3 text-right font-bold font-mono ${m.secBalance >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                           {accounting.treasury.secondary.currencySymbol}{" "}

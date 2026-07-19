@@ -20,8 +20,10 @@ import JoinFactionTab from "./components/JoinFactionTab";
 import FactionGuildsTab from "./components/FactionGuildsTab";
 import FactionAuditLogTab from "./components/FactionAuditLogTab";
 import FactionSettingsTab from "./components/FactionSettingsTab";
+import FactionInventoryTab from "./components/FactionInventoryTab";
+import FactionInventoryRequestsTab from "./components/FactionInventoryRequestsTab";
 
-type FactionTab = "OVERVIEW" | "ANNOUNCEMENTS" | "EVENTS" | "GUILD_MEMBERS" | "JOIN_FACTION" | "AUDIT_LOG" | "SETTINGS";
+type FactionTab = "OVERVIEW" | "ANNOUNCEMENTS" | "EVENTS" | "GUILD_MEMBERS" | "INVENTORY" | "ITEM_REQUESTS" | "JOIN_FACTION" | "AUDIT_LOG" | "SETTINGS";
 
 export default function FactionPage() {
   const { user } = useAuth();
@@ -138,6 +140,8 @@ export default function FactionPage() {
     { id: "ANNOUNCEMENTS", label: "Announcement", count: announcements.length },
     { id: "EVENTS", label: "Events", count: events.length },
     ...(canManage ? [{ id: "GUILD_MEMBERS" as FactionTab, label: "Guild Members", count: members.length }] : []),
+    { id: "INVENTORY", label: "Inventory" },
+    ...(isGuildLeader || canManage ? [{ id: "ITEM_REQUESTS" as FactionTab, label: "Item Requests" }] : []),
     ...(canManage ? [{ id: "AUDIT_LOG" as FactionTab, label: "Audit Log" }] : []),
     ...(canManage ? [{ id: "SETTINGS" as FactionTab, label: "Settings" }] : []),
     ...(isGuildLeader ? [{ id: "JOIN_FACTION" as FactionTab, label: "Join a Faction" }] : []),
@@ -266,6 +270,12 @@ export default function FactionPage() {
             <FactionMembersTab canManage={canManage} />
             <FactionGuildsTab canManage={canManage} />
           </div>
+        )}
+
+        {activeTab === "INVENTORY" && <FactionInventoryTab canManage={canManage} />}
+
+        {activeTab === "ITEM_REQUESTS" && (
+          <FactionInventoryRequestsTab canManage={canManage} isGuildLeader={isGuildLeader} guildId={activeGuild.guildId} />
         )}
 
         {activeTab === "AUDIT_LOG" && <FactionAuditLogTab canView={canManage} />}

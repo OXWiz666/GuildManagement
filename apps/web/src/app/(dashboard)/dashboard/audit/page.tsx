@@ -239,7 +239,7 @@ export default function AuditLogPage() {
 
         {/* Tab Selection Row & Optional Filters */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap gap-2.5">  
             <TabButton
               active={activeTab === "all"}
               onClick={() => handleTabChange("all")}

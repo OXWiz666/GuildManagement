@@ -567,6 +567,7 @@ export class GuildService {
       timezone?: string;
       region?: string | null;
       language?: string;
+      settingsTemplateName?: string | null;
       currencyCode?: string;
       currencySymbol?: string;
       secondaryCurrencyCode?: string | null;
@@ -596,6 +597,7 @@ export class GuildService {
     const timezone = payload.timezone?.trim();
     const region = payload.region?.trim();
     const language = payload.language?.trim();
+    const settingsTemplateName = payload.settingsTemplateName?.trim();
     if (serverName && serverName.length > 80) {
       throw new ValidationError("Server name must be 80 characters or fewer");
     }
@@ -607,6 +609,9 @@ export class GuildService {
     }
     if (language !== undefined && (!language || language.length > 12)) {
       throw new ValidationError("Language is required and must be 12 characters or fewer");
+    }
+    if (settingsTemplateName && settingsTemplateName.length > 64) {
+      throw new ValidationError("Template name must be 64 characters or fewer");
     }
 
     let roleDisplayNames: Partial<Record<GuildRoleType, string>> | undefined;
@@ -634,6 +639,7 @@ export class GuildService {
       timezone: payload.timezone === undefined ? undefined : timezone,
       region: payload.region === undefined ? undefined : region || null,
       language: payload.language === undefined ? undefined : language,
+      settingsTemplateName: payload.settingsTemplateName === undefined ? undefined : settingsTemplateName || null,
       currencyCode: payload.currencyCode,
       currencySymbol: payload.currencySymbol,
       secondaryCurrencyCode: payload.secondaryCurrencyCode,

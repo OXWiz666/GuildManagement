@@ -525,6 +525,7 @@ export interface GuildSettingsData {
   timezone: string;
   region: string | null;
   language: string;
+  settingsTemplateName: string | null;
   taxRatePercent: number;
   attendancePoints: number;
   bossKillPoints: number;
@@ -547,6 +548,7 @@ export type UpdateGuildSettingsPayload = Partial<{
   timezone: string;
   region: string | null;
   language: string;
+  settingsTemplateName: string | null;
   taxRatePercent: number;
   attendancePoints: number;
   bossKillPoints: number;
@@ -1902,6 +1904,166 @@ export const factionApi = {
     }
     const qs = query.toString();
     return api.get<FactionAuditLogPage>(`/faction/audit-logs${qs ? `?${qs}` : ""}`);
+  },
+};
+
+// ─── Faction Inventory (Phase 2) ────────────────────
+
+export interface FactionInventoryItemData {
+  id: string;
+  factionId: string;
+  itemName: string;
+  itemIcon: string | null;
+  category: string;
+  rarity: string | null;
+  description: string | null;
+  currentQuantity: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  distributedQuantity: number;
+  unitValueCents: number | null;
+  storageLocation: string | null;
+  batchNumber: string | null;
+  expirationDate: string | null;
+  minStockThreshold: number | null;
+  status: string;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FactionInventoryTransactionData {
+  id: string;
+  itemId: string;
+  itemName: string;
+  itemIcon: string | null;
+  category: string;
+  sourceGuildId: string | null;
+  destinationGuildId: string | null;
+  quantity: number;
+  previousQuantity: number;
+  newQuantity: number;
+  transactionType: string;
+  reason: string | null;
+  requestedByUserId: string;
+  approvedByUserId: string | null;
+  approvalStatus: string;
+  createdAt: string;
+  approvedAt: string | null;
+}
+
+export interface FactionInventoryTransactionPage {
+  transactions: FactionInventoryTransactionData[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface FactionInventoryRequestData {
+  id: string;
+  factionId: string;
+  itemId: string;
+  itemName: string;
+  itemIcon: string | null;
+  requestingGuildId: string;
+  requestingGuildName: string;
+  requestedByUserId: string;
+  quantity: number;
+  purpose: string | null;
+  priority: "NORMAL" | "IMPORTANT" | "URGENT" | "CRITICAL";
+  requiredDate: string | null;
+  evidenceUrl: string | null;
+  status: "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "DISTRIBUTED" | "CANCELLED";
+  reviewerId: string | null;
+  approvalNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const factionInventoryApi = {
+  async getItems() {
+    return api.get<{ items: FactionInventoryItemData[] }>(`/faction/inventory/items`);
+  },
+
+  async createItem(payload: {
+    itemName: string;
+    itemIcon?: string;
+    category: string;
+    rarity?: string;
+    description?: string;
+    unitValueCents?: number;
+    storageLocation?: string;
+    batchNumber?: string;
+    expirationDate?: string;
+    minStockThreshold?: number;
+  }) {
+    return api.post<{ item: FactionInventoryItemData }>(`/faction/inventory/items`, payload);
+  },
+
+  async updateItem(itemId: string, payload: Partial<Omit<FactionInventoryItemData, "id" | "factionId" | "createdByUserId" | "createdAt" | "updatedAt" | "currentQuantity" | "reservedQuantity" | "distributedQuantity" | "availableQuantity">>) {
+    return api.patch<{ item: FactionInventoryItemData }>(`/faction/inventory/items/${itemId}`, payload);
+  },
+
+  async recordAddition(itemId: string, quantity: number, reason?: string) {
+    return api.post<{ itemId: string; previousQuantity: number; newQuantity: number }>(
+      `/faction/inventory/items/${itemId}/addition`,
+      { quantity, reason },
+    );
+  },
+
+  async recordContribution(itemId: string, quantity: number, sourceGuildId: string, reason?: string) {
+    return api.post<{ itemId: string; previousQuantity: number; newQuantity: number }>(
+      `/faction/inventory/items/${itemId}/contribution`,
+      { quantity, reason, sourceGuildId },
+    );
+  },
+
+  async adjustQuantity(itemId: string, delta: number, reason: string) {
+    return api.post<{ itemId: string; previousQuantity: number; newQuantity: number }>(
+      `/faction/inventory/items/${itemId}/adjust`,
+      { delta, reason },
+    );
+  },
+
+  async getTransactions(params: { itemId?: string; transactionType?: string; from?: string; to?: string; page?: number; pageSize?: number } = {}) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    const qs = query.toString();
+    return api.get<FactionInventoryTransactionPage>(`/faction/inventory/transactions${qs ? `?${qs}` : ""}`);
+  },
+
+  async getRequests(params: { mine?: boolean; guildId?: string } = {}) {
+    const query = new URLSearchParams();
+    if (params.mine) query.set("mine", "true");
+    if (params.guildId) query.set("guildId", params.guildId);
+    const qs = query.toString();
+    return api.get<{ requests: FactionInventoryRequestData[] }>(`/faction/inventory/requests${qs ? `?${qs}` : ""}`);
+  },
+
+  async submitRequest(payload: {
+    guildId: string;
+    itemId: string;
+    quantity: number;
+    purpose?: string;
+    priority?: "NORMAL" | "IMPORTANT" | "URGENT" | "CRITICAL";
+    requiredDate?: string;
+    evidenceUrl?: string;
+  }) {
+    return api.post<{ request: FactionInventoryRequestData }>(`/faction/inventory/requests`, payload);
+  },
+
+  async reviewRequest(id: string, action: "APPROVE" | "REJECT", approvalNotes?: string) {
+    return api.post<{ request: FactionInventoryRequestData }>(`/faction/inventory/requests/${id}/review`, { action, approvalNotes });
+  },
+
+  async distributeRequest(id: string) {
+    return api.post<{ request: FactionInventoryRequestData }>(`/faction/inventory/requests/${id}/distribute`, {});
+  },
+
+  async cancelRequest(id: string) {
+    return api.post<{ request: FactionInventoryRequestData }>(`/faction/inventory/requests/${id}/cancel`, {});
   },
 };
 

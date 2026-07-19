@@ -13,6 +13,8 @@ import { useQuery, queryClient } from "@/lib/query";
 
 export interface GuildSettingsSectionProps {
   guildId: string;
+  mode?: "all" | "general" | "points";
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 const TIMEZONE_OPTIONS = [
@@ -31,15 +33,87 @@ const TIMEZONE_OPTIONS = [
 ] as const;
 
 const REGION_OPTIONS = ["SEA", "PH", "SG", "JP", "KR", "NA", "EU", "OCE", "Global"] as const;
-const LANGUAGE_OPTIONS = [
-  { value: "en", label: "English" },
-  { value: "fil", label: "Filipino" },
-  { value: "ja", label: "Japanese" },
-  { value: "ko", label: "Korean" },
-  { value: "zh", label: "Chinese" },
+
+const PRIMARY_CURRENCY_SYMBOL_OPTIONS = [
+  { symbol: "₱", label: "Philippine peso" },
+  { symbol: "$", label: "Dollar" },
+  { symbol: "€", label: "Euro" },
+  { symbol: "¥", label: "Yen" },
+  { symbol: "₩", label: "Won" },
+  { symbol: "£", label: "Pound" },
+  { symbol: "₹", label: "Rupee" },
+  { symbol: "₽", label: "Ruble" },
+  { symbol: "₫", label: "Dong" },
+  { symbol: "฿", label: "Baht" },
 ] as const;
 
-export default function GuildSettingsSection({ guildId }: GuildSettingsSectionProps) {
+const GAME_CURRENCY_SYMBOL_OPTIONS = [
+  { symbol: "💎", label: "Diamond" },
+  { symbol: "🪙", label: "Gold coin" },
+  { symbol: "⚔️", label: "Weapon token" },
+  { symbol: "🛡️", label: "Defense token" },
+  { symbol: "🔮", label: "Magic orb" },
+  { symbol: "✨", label: "Essence" },
+  { symbol: "🏅", label: "Medal" },
+  { symbol: "🧿", label: "Relic" },
+] as const;
+
+const SETTINGS_TEMPLATES = [
+  {
+    id: "democratic",
+    name: "Democratic",
+    description: "Balanced guild economy with modest tax, shared member influence, and light leadership weighting.",
+    taxRatePercent: "20",
+    activeShareModel: "PRO_RATA",
+    currencyCode: "PHP",
+    secondaryCurrencyCode: "DIAMOND",
+    multipliers: { gl: "1.2", officer: "1.1", core: "1.05", elite: "1.0", member: "1.0" },
+  },
+  {
+    id: "socialist",
+    name: "Socialist",
+    description: "Everyone receives equal multiplier weight. Best for fully equal-share guilds.",
+    taxRatePercent: "0",
+    activeShareModel: "EQUAL",
+    currencyCode: "PHP",
+    secondaryCurrencyCode: "DIAMOND",
+    multipliers: { gl: "1.0", officer: "1.0", core: "1.0", elite: "1.0", member: "1.0" },
+  },
+] as const;
+
+type SettingsTemplate = (typeof SETTINGS_TEMPLATES)[number];
+type TemplateSelectionId = SettingsTemplate["id"] | "custom";
+
+const CUSTOM_PRESET_ID = "custom" as const;
+
+const isPrimaryCurrencySymbol = (symbol?: string | null): symbol is string =>
+  Boolean(symbol && PRIMARY_CURRENCY_SYMBOL_OPTIONS.some((option) => option.symbol === symbol));
+
+const isGameCurrencySymbol = (symbol?: string | null): symbol is string =>
+  Boolean(symbol && GAME_CURRENCY_SYMBOL_OPTIONS.some((option) => option.symbol === symbol));
+
+function formatTimezoneOption(timeZone: string) {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "longOffset",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(new Date());
+    const offset = parts.find((part) => part.type === "timeZoneName")?.value.replace("GMT", "UTC");
+    const time = parts
+      .filter((part) => part.type === "hour" || part.type === "minute" || part.type === "literal")
+      .map((part) => part.value)
+      .join("");
+    return offset ? `${timeZone} (${offset}, ${time})` : timeZone;
+  } catch {
+    return timeZone;
+  }
+}
+
+export default function GuildSettingsSection({ guildId, mode = "all", onDirtyChange }: GuildSettingsSectionProps) {
   const { addToast } = useToast();
   const { user, refreshUser } = useAuth();
   const { resolveRoleName } = useRoleDisplayNames();
@@ -51,13 +125,13 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
   const [serverName, setServerName] = useState("");
   const [timezone, setTimezone] = useState("Asia/Singapore");
   const [region, setRegion] = useState("");
-  const [language, setLanguage] = useState("en");
+  const [settingsTemplateName, setSettingsTemplateName] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<TemplateSelectionId>("democratic");
   const [taxRatePercent, setTaxRatePercent] = useState("10");
-  const [activeShareModel, setActiveShareModel] = useState("EQUAL");
   const [currencyCode, setCurrencyCode] = useState("PHP");
   const [currencySymbol, setCurrencySymbol] = useState("₱");
-  const [secondaryCurrencyCode, setSecondaryCurrencyCode] = useState("");
-  const [secondaryCurrencySymbol, setSecondaryCurrencySymbol] = useState("");
+  const [secondaryCurrencyCode, setSecondaryCurrencyCode] = useState("DIAMOND");
+  const [secondaryCurrencySymbol, setSecondaryCurrencySymbol] = useState("💎");
 
   // Rank Multipliers
   const [multGL, setMultGL] = useState("2.0");
@@ -65,6 +139,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
   const [multCore, setMultCore] = useState("1.2");
   const [multElite, setMultElite] = useState("1.1");
   const [multMember, setMultMember] = useState("1.0");
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
 
   // ─── Persistent Queries ────────────────────────────────
 
@@ -99,13 +174,18 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
       setServerName(guildSettings.serverName || "");
       setTimezone(guildSettings.timezone || "Asia/Singapore");
       setRegion(guildSettings.region || "");
-      setLanguage(guildSettings.language || "en");
+      setSettingsTemplateName(guildSettings.settingsTemplateName || "");
+      const savedTemplate = SETTINGS_TEMPLATES.find((template) => template.name === guildSettings.settingsTemplateName);
+      if (savedTemplate) {
+        setSelectedTemplateId(savedTemplate.id);
+      } else if (guildSettings.settingsTemplateName) {
+        setSelectedTemplateId(CUSTOM_PRESET_ID);
+      }
       setTaxRatePercent(guildSettings.taxRatePercent.toString());
-      setActiveShareModel(guildSettings.activeShareModel);
       setCurrencyCode(guildSettings.currencyCode);
-      setCurrencySymbol(guildSettings.currencySymbol);
-      setSecondaryCurrencyCode(guildSettings.secondaryCurrencyCode || "");
-      setSecondaryCurrencySymbol(guildSettings.secondaryCurrencySymbol || "");
+      setCurrencySymbol(isPrimaryCurrencySymbol(guildSettings.currencySymbol) ? guildSettings.currencySymbol : "₱");
+      setSecondaryCurrencyCode(guildSettings.secondaryCurrencyCode || "DIAMOND");
+      setSecondaryCurrencySymbol(isGameCurrencySymbol(guildSettings.secondaryCurrencySymbol) ? guildSettings.secondaryCurrencySymbol : "💎");
 
       // Multipliers
       const mult = guildSettings.rankMultipliers || {};
@@ -131,7 +211,23 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
     serverName.trim() !== (guildSettings?.serverName || "") ||
     timezone !== (guildSettings?.timezone || "Asia/Singapore") ||
     region !== (guildSettings?.region || "") ||
-    language !== (guildSettings?.language || "en");
+    settingsTemplateName.trim() !== (guildSettings?.settingsTemplateName || "");
+  const isPointsDirty =
+    taxRatePercent !== (guildSettings?.taxRatePercent.toString() ?? "10") ||
+    currencyCode !== (guildSettings?.currencyCode ?? "PHP") ||
+    currencySymbol !== (isPrimaryCurrencySymbol(guildSettings?.currencySymbol) ? guildSettings?.currencySymbol : "₱") ||
+    secondaryCurrencyCode.trim() !== (guildSettings?.secondaryCurrencyCode || "DIAMOND") ||
+    secondaryCurrencySymbol.trim() !== (guildSettings?.secondaryCurrencySymbol || "💎") ||
+    multGL !== (guildSettings?.rankMultipliers?.GUILD_LEADER ?? 2.0).toString() ||
+    multOfficer !== (guildSettings?.rankMultipliers?.OFFICER ?? 1.5).toString() ||
+    multCore !== (guildSettings?.rankMultipliers?.CORE_MEMBER ?? 1.2).toString() ||
+    multElite !== (guildSettings?.rankMultipliers?.ELITE_MEMBER ?? 1.1).toString() ||
+    multMember !== (guildSettings?.rankMultipliers?.MEMBER ?? 1.0).toString();
+  const activeDirty = mode === "general" ? isGeneralDirty : mode === "points" ? isPointsDirty : isGeneralDirty || isPointsDirty;
+
+  useEffect(() => {
+    onDirtyChange?.(activeDirty);
+  }, [activeDirty, onDirtyChange]);
 
   const handleGeneralSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,7 +254,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
         serverName: serverName.trim() || null,
         timezone,
         region: region.trim() || null,
-        language,
+        settingsTemplateName: settingsTemplateName.trim() || null,
       });
       if (settingsResult.success) {
         addToast("success", "General guild settings saved");
@@ -179,11 +275,10 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
     try {
       const payload = {
         taxRatePercent: parseInt(taxRatePercent, 10),
-        activeShareModel,
         currencyCode,
         currencySymbol,
-        secondaryCurrencyCode: secondaryCurrencyCode.trim() || null,
-        secondaryCurrencySymbol: secondaryCurrencySymbol.trim() || null,
+        secondaryCurrencyCode: secondaryCurrencyCode.trim() || "DIAMOND",
+        secondaryCurrencySymbol: secondaryCurrencySymbol.trim() || "💎",
         rankMultipliers: {
           GUILD_LEADER: parseFloat(multGL),
           OFFICER: parseFloat(multOfficer),
@@ -207,6 +302,99 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
     }
   };
 
+  const buildTemplatePayload = (template: SettingsTemplate) => ({
+    settingsTemplateName: template.name,
+    taxRatePercent: parseInt(template.taxRatePercent, 10),
+    activeShareModel: template.activeShareModel,
+    currencyCode: template.currencyCode,
+    currencySymbol: PRIMARY_CURRENCY_SYMBOL_OPTIONS[0].symbol,
+    secondaryCurrencyCode: template.secondaryCurrencyCode,
+    secondaryCurrencySymbol: GAME_CURRENCY_SYMBOL_OPTIONS[0].symbol,
+    rankMultipliers: {
+      GUILD_LEADER: parseFloat(template.multipliers.gl),
+      OFFICER: parseFloat(template.multipliers.officer),
+      CORE_MEMBER: parseFloat(template.multipliers.core),
+      ELITE_MEMBER: parseFloat(template.multipliers.elite),
+      MEMBER: parseFloat(template.multipliers.member),
+    },
+  });
+
+  const buildCustomPresetPayload = (name: string) => ({
+    settingsTemplateName: name,
+    taxRatePercent: parseInt(taxRatePercent, 10),
+    activeShareModel: guildSettings?.activeShareModel ?? "EQUAL",
+    currencyCode,
+    currencySymbol,
+    secondaryCurrencyCode: secondaryCurrencyCode.trim() || "DIAMOND",
+    secondaryCurrencySymbol: secondaryCurrencySymbol.trim() || "💎",
+    rankMultipliers: {
+      GUILD_LEADER: parseFloat(multGL),
+      OFFICER: parseFloat(multOfficer),
+      CORE_MEMBER: parseFloat(multCore),
+      ELITE_MEMBER: parseFloat(multElite),
+      MEMBER: parseFloat(multMember),
+    },
+  });
+
+  const applyTemplateToDraft = (template: SettingsTemplate) => {
+    setSettingsTemplateName(template.name);
+    setTaxRatePercent(template.taxRatePercent);
+    setCurrencyCode(template.currencyCode);
+    setCurrencySymbol(PRIMARY_CURRENCY_SYMBOL_OPTIONS[0].symbol);
+    setSecondaryCurrencyCode(template.secondaryCurrencyCode);
+    setSecondaryCurrencySymbol(GAME_CURRENCY_SYMBOL_OPTIONS[0].symbol);
+    setMultGL(template.multipliers.gl);
+    setMultOfficer(template.multipliers.officer);
+    setMultCore(template.multipliers.core);
+    setMultElite(template.multipliers.elite);
+    setMultMember(template.multipliers.member);
+  };
+
+  const applyTemplate = async (template: SettingsTemplate) => {
+    applyTemplateToDraft(template);
+    setIsApplyingTemplate(true);
+    try {
+      const result = await guildApi.updateSettings(guildId, buildTemplatePayload(template));
+      if (result.success) {
+        addToast("success", `${template.name} template applied.`);
+        queryClient.invalidateQueries(`guild_settings:${guildId}`);
+      } else {
+        addToast("error", result.error?.message || "Failed to apply template");
+      }
+    } catch (err: unknown) {
+      addToast("error", err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsApplyingTemplate(false);
+    }
+  };
+
+  const saveCustomPreset = async () => {
+    const name = settingsTemplateName.trim();
+    if (!name) {
+      addToast("error", "Enter a custom preset name");
+      return;
+    }
+    setIsApplyingTemplate(true);
+    try {
+      const result = await guildApi.updateSettings(guildId, buildCustomPresetPayload(name));
+      if (result.success) {
+        addToast("success", `${name} custom preset saved.`);
+        queryClient.invalidateQueries(`guild_settings:${guildId}`);
+      } else {
+        addToast("error", result.error?.message || "Failed to save custom preset");
+      }
+    } catch (err: unknown) {
+      addToast("error", err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsApplyingTemplate(false);
+    }
+  };
+
+  const selectedTemplate =
+    selectedTemplateId === CUSTOM_PRESET_ID
+      ? null
+      : SETTINGS_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? SETTINGS_TEMPLATES[0];
+
   if (isLoadingSettings || isLoadingProfile) {
     return (
       <div className="glass rounded-2xl p-6 border border-white/[0.06] animate-pulse h-96 flex items-center justify-center">
@@ -217,13 +405,99 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
 
   return (
     <div className="space-y-6">
+      {(mode === "all" || mode === "general") && (
       <SettingsCard
         eyebrow="General Settings"
-        title="Guild identity & locale"
-        description="Control the guild name, server label, timezone, region, and default language used across the website and Discord workflows."
+        title="Guild identity & region"
+        description="Control the guild name, server label, timezone, and region used across the website and Discord workflows."
       >
         <form onSubmit={handleGeneralSubmit} className="space-y-4">
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+            <div className="mb-5 rounded-xl border border-[var(--forge-gold)]/15 bg-[var(--forge-gold)]/[0.035] p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-[12px] font-bold uppercase tracking-wider text-white/75">
+                    Customize Template
+                  </h4>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-white/45">
+                    Apply a named guild setup template, or save the guild&apos;s current manual settings as a custom preset.
+                  </p>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,190px)_minmax(0,220px)_minmax(0,1fr)]">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
+                        Preset
+                      </label>
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => {
+                          if (e.target.value === CUSTOM_PRESET_ID) {
+                            setSelectedTemplateId(CUSTOM_PRESET_ID);
+                            setSettingsTemplateName(settingsTemplateName || "Custom Preset");
+                            return;
+                          }
+                          const nextTemplate =
+                            SETTINGS_TEMPLATES.find((template) => template.id === e.target.value) ?? SETTINGS_TEMPLATES[0];
+                          setSelectedTemplateId(nextTemplate.id);
+                          setSettingsTemplateName(nextTemplate.name);
+                        }}
+                        className="w-full rounded-lg border border-white/[0.08] bg-black/25 px-3.5 py-2.5 text-[13px] font-semibold text-white transition-colors focus:border-white/20 focus:outline-none"
+                      >
+                        {SETTINGS_TEMPLATES.map((template) => (
+                          <option key={template.id} className="bg-[#0b0c10]" value={template.id}>
+                            {template.name}
+                          </option>
+                        ))}
+                        <option className="bg-[#0b0c10]" value={CUSTOM_PRESET_ID}>
+                          Custom Preset
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
+                        Template name
+                      </label>
+                      <input
+                        value={settingsTemplateName}
+                        onChange={(e) => {
+                          setSelectedTemplateId(CUSTOM_PRESET_ID);
+                          setSettingsTemplateName(e.target.value);
+                        }}
+                        maxLength={64}
+                        placeholder="e.g. Kurakorp raid split"
+                        className="w-full rounded-lg border border-white/[0.08] bg-black/25 px-3.5 py-2.5 text-[13px] font-semibold text-white placeholder:text-white/25 transition-colors focus:border-white/20 focus:outline-none"
+                      />
+                    </div>
+                    <div className="rounded-lg border border-white/[0.06] bg-black/15 px-3.5 py-2.5">
+                      <p className="text-[11px] font-semibold text-white">
+                        {selectedTemplate
+                          ? selectedTemplate.description
+                          : "Use the guild's current manual settings as a named preset."}
+                      </p>
+                      <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--forge-gold-bright)]">
+                        {selectedTemplate
+                          ? `${selectedTemplate.taxRatePercent}% tax - ${selectedTemplate.activeShareModel.replace("_", " ")} split`
+                          : "Custom values from your saved guild settings"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <Magnetic strength={3}>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      if (selectedTemplate) void applyTemplate(selectedTemplate);
+                      else void saveCustomPreset();
+                    }}
+                    isLoading={isApplyingTemplate}
+                    className="shrink-0"
+                  >
+                    {selectedTemplate ? "Apply template" : "Save custom preset"}
+                  </Button>
+                </Magnetic>
+              </div>
+            </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="min-w-0">
                 <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
@@ -246,7 +520,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
                   value={serverName}
                   onChange={(e) => setServerName(e.target.value)}
                   maxLength={80}
-                  placeholder="e.g. Vengeance SEA 1"
+                  placeholder="e.g. HORATIO 1"
                   className="w-full rounded-lg border border-white/[0.08] bg-black/20 px-3.5 py-2.5 text-[13px] font-semibold text-white placeholder:text-white/25 transition-colors focus:border-white/20 focus:outline-none"
                 />
               </div>
@@ -261,10 +535,13 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
                 >
                   {TIMEZONE_OPTIONS.map((option) => (
                     <option key={option} className="bg-[#0b0c10]" value={option}>
-                      {option}
+                      {formatTimezoneOption(option)}
                     </option>
                   ))}
                 </select>
+                <p className="mt-1.5 text-[10px] text-white/35">
+                  Offsets are calculated from the selected IANA timezone, including daylight-saving changes where applicable.
+                </p>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
@@ -280,22 +557,6 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
                     {REGION_OPTIONS.map((option) => (
                       <option key={option} className="bg-[#0b0c10]" value={option}>
                         {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-white/45">
-                    Language
-                  </label>
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="w-full rounded-lg border border-white/[0.08] bg-black/20 px-3.5 py-2.5 text-[13px] font-semibold text-white transition-colors focus:border-white/20 focus:outline-none"
-                  >
-                    {LANGUAGE_OPTIONS.map((option) => (
-                      <option key={option.value} className="bg-[#0b0c10]" value={option.value}>
-                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -339,18 +600,23 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
           </div>
         </form>
       </SettingsCard>
+      )}
 
+      {(mode === "all" || mode === "points") && (
       <SettingsCard
         eyebrow="Guild Settings"
-        title="Guild point system & configurations"
-        description="Configure tax rates, point allocations for events, rank multipliers, and preferred economies."
+        title="Guild Points System"
+        description="Configure tax rates, currencies, and rank multipliers used by the guild economy."
       >
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Economy settings — table view */}
+          {/* Economy settings - table view */}
           <div>
             <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-4 border-b border-white/[0.04] pb-1.5">
               Guild Economy & Tax
             </h4>
+            <p className="mb-3 text-[11px] leading-relaxed text-white/40">
+              These values control how sold item taxes, treasury totals, and member balances are displayed in Guild Market and Distribution.
+            </p>
             <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-white/[0.06]">
@@ -385,12 +651,17 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
                         </div>
                         <div className="w-24 shrink-0">
                           <span className="block text-[9px] text-white/30 uppercase tracking-wider mb-1">Symbol</span>
-                          <input
+                          <select
                             value={currencySymbol}
                             onChange={(e) => setCurrencySymbol(e.target.value)}
-                            placeholder="e.g. ₱"
                             className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
-                          />
+                          >
+                            {PRIMARY_CURRENCY_SYMBOL_OPTIONS.map((option) => (
+                              <option key={`${option.symbol}-${option.label}`} className="bg-[#0b0c10]" value={option.symbol}>
+                                {option.symbol}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </td>
@@ -412,12 +683,17 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
                         </div>
                         <div className="w-24 shrink-0">
                           <span className="block text-[9px] text-white/30 uppercase tracking-wider mb-1">Symbol</span>
-                          <input
+                          <select
                             value={secondaryCurrencySymbol}
                             onChange={(e) => setSecondaryCurrencySymbol(e.target.value)}
-                            placeholder="e.g. 💎"
                             className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
-                          />
+                          >
+                            {GAME_CURRENCY_SYMBOL_OPTIONS.map((option) => (
+                              <option key={`${option.symbol}-${option.label}`} className="bg-[#0b0c10]" value={option.symbol}>
+                                {option.symbol}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </td>
@@ -427,34 +703,14 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
             </div>
           </div>
 
-          {/* Dividend distribution — attendance points themselves now come
-              entirely from the "Boss" activity in Activities Multiplier
-              (every real attendance session is boss-triggered), so the old
-              flat Base Attendance Points field has been retired here. */}
-          <div>
-            <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-4 border-b border-white/[0.04] pb-1.5">
-              Loot dividend distribution
-            </h4>
-            <div className="max-w-xs flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
-                Default share model
-              </label>
-              <select
-                value={activeShareModel}
-                onChange={(e) => setActiveShareModel(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-white/20 transition-colors"
-              >
-                <option className="bg-[#0b0c10]" value="EQUAL">EQUAL split among attendees</option>
-                <option className="bg-[#0b0c10]" value="PRO_RATA">PRO RATA based on Guild Points</option>
-              </select>
-            </div>
-          </div>
-
           {/* Rank Multipliers */}
           <div>
             <h4 className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-4 border-b border-white/[0.04] pb-1.5">
               Rank share multipliers
             </h4>
+            <p className="mb-3 text-[11px] leading-relaxed text-white/40">
+              Multipliers weight rank influence when a pro-rata loot split uses Guild Points. Keep values near 1.0 for even weighting.
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <Input
                 label={resolveRoleName("GUILD_LEADER")}
@@ -503,6 +759,7 @@ export default function GuildSettingsSection({ guildId }: GuildSettingsSectionPr
           </div>
         </form>
       </SettingsCard>
+      )}
     </div>
   );
 }

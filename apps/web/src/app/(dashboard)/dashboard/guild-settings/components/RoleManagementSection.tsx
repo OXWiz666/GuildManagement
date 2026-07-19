@@ -2,25 +2,33 @@
 
 import { useEffect, useMemo, useState } from "react";
 import SettingsCard from "../../settings/components/SettingsCard";
-import { guildApi, type CustomRoleData, type GuildMemberData } from "@/lib/api";
+import { DEFAULT_MARKET_RULES } from "@guild/shared";
+import { guildApi, marketApi, type CustomRoleData, type GuildMemberData, type MarketRulesData } from "@/lib/api";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import { useSocket } from "@/components/providers/socket-provider";
+import { useToast } from "@/components/ui/Toast";
 import { useQuery, queryClient } from "@/lib/query";
 import RoleList, { selectionKey, type RoleSelection } from "./RoleList";
 import RoleEditorPanel from "./RoleEditorPanel";
 
 interface RoleManagementSectionProps {
   guildId: string;
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 /** Discord Server Settings-style role management: a role list on the left
  *  (built-in rank bands + guild-created custom roles) and a detail editor on
  *  the right — replaces the old two-button/two-modal flow. */
-export default function RoleManagementSection({ guildId }: RoleManagementSectionProps) {
+export default function RoleManagementSection({ guildId, onDirtyChange }: RoleManagementSectionProps) {
   const { socket } = useSocket();
+  const { addToast } = useToast();
   const { overrides: roleDisplayOverrides } = useRoleDisplayNames();
   const [selection, setSelection] = useState<RoleSelection>({ kind: "band", band: "OFFICER" });
   const [busyRoleId, setBusyRoleId] = useState<string | null>(null);
+  const [rules, setRules] = useState<MarketRulesData>(DEFAULT_MARKET_RULES as MarketRulesData);
+  const [savedRules, setSavedRules] = useState<MarketRulesData>(DEFAULT_MARKET_RULES as MarketRulesData);
+  const [isSavingThresholds, setIsSavingThresholds] = useState(false);
+  const [roleEditorDirty, setRoleEditorDirty] = useState(false);
 
   const { data: customRolesRaw } = useQuery<CustomRoleData[]>(
     `guild_custom_roles:${guildId}`,
@@ -64,6 +72,19 @@ export default function RoleManagementSection({ guildId }: RoleManagementSection
   const members = membersRaw || [];
 
   useEffect(() => {
+    let cancelled = false;
+    marketApi.getRules(guildId).then((res) => {
+      if (!cancelled && res.success && res.data) {
+        setRules(res.data.rules);
+        setSavedRules(res.data.rules);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [guildId]);
+
+  useEffect(() => {
     if (!socket) return;
     const handleCustomRolesUpdate = () => queryClient.invalidateQueries(`guild_custom_roles:${guildId}`);
     const handleRosterUpdate = () => queryClient.invalidateQueries(`guild_members:${guildId}`);
@@ -90,6 +111,37 @@ export default function RoleManagementSection({ guildId }: RoleManagementSection
     return 0;
   }
 
+  const isThresholdDirty = JSON.stringify(rules.cpTiers) !== JSON.stringify(savedRules.cpTiers);
+  const isDirty = isThresholdDirty || roleEditorDirty;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const setCpTier = (key: "eliteMinCp" | "upperMinCp", value: string) =>
+    setRules((current) => ({
+      ...current,
+      cpTiers: { ...current.cpTiers, [key]: parseInt(value, 10) || 0 },
+    }));
+
+  async function saveThresholds() {
+    setIsSavingThresholds(true);
+    try {
+      const result = await marketApi.updateRules(guildId, rules);
+      if (result.success && result.data) {
+        setRules(result.data.rules);
+        setSavedRules(result.data.rules);
+        addToast("success", "Role CP thresholds updated.");
+      } else {
+        addToast("error", result.error?.message || "Failed to save CP thresholds");
+      }
+    } catch (err: unknown) {
+      addToast("error", err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsSavingThresholds(false);
+    }
+  }
+
   async function move(role: CustomRoleData, direction: -1 | 1) {
     const ordered = [...customRoles].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     const index = ordered.findIndex((r) => r.id === role.id);
@@ -108,11 +160,12 @@ export default function RoleManagementSection({ guildId }: RoleManagementSection
   }
 
   return (
-    <SettingsCard
-      eyebrow="Guild Settings"
-      title="Roles"
-      description="Rename your guild's built-in rank tiers, or create custom named roles that inherit a fixed permission level."
-    >
+    <div className="space-y-6">
+      <SettingsCard
+        eyebrow="Guild Settings"
+        title="Roles"
+        description="Rename built-in rank tiers, set CP thresholds beside each rank, or create custom roles that inherit a fixed permission level."
+      >
       <div className="flex flex-col lg:flex-row gap-4">
         <RoleList
           customRoles={customRoles}
@@ -130,6 +183,12 @@ export default function RoleManagementSection({ guildId }: RoleManagementSection
           customRoles={customRoles}
           roleDisplayOverrides={roleDisplayOverrides || {}}
           members={members}
+          cpTiers={rules.cpTiers}
+          onCpTierChange={setCpTier}
+          onSaveCpThresholds={saveThresholds}
+          isCpThresholdDirty={isThresholdDirty}
+          isSavingCpThresholds={isSavingThresholds}
+          onDirtyChange={setRoleEditorDirty}
           onSaved={() => {}}
           onDeleted={() => setSelection({ kind: "band", band: "OFFICER" })}
           onCreated={(role) => {
@@ -139,6 +198,7 @@ export default function RoleManagementSection({ guildId }: RoleManagementSection
           onCancelNew={() => setSelection({ kind: "band", band: "OFFICER" })}
         />
       </div>
-    </SettingsCard>
+      </SettingsCard>
+    </div>
   );
 }

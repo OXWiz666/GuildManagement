@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
@@ -124,6 +125,8 @@ export default function AdminGuildsPage() {
 
 function GuildDetailModal({ guildId, onClose, onRefresh }: { guildId: string; onClose: () => void; onRefresh: () => void }) {
   const { addToast } = useToast();
+  const [transferTarget, setTransferTarget] = useState<{ memberId: string; name: string } | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false);
   const { data, isLoading } = useQuery<any>(
     `admin_guild:${guildId}`,
     async () => {
@@ -133,14 +136,20 @@ function GuildDetailModal({ guildId, onClose, onRefresh }: { guildId: string; on
     { staleTime: 5000 },
   );
 
-  async function transfer(memberId: string, name: string) {
-    if (!window.confirm(`Transfer leadership of this guild to ${name}?`)) return;
-    const res = await adminApi.transferGuildOwnership(guildId, memberId);
-    if (res.success) {
-      addToast("success", "Ownership transferred");
-      queryClient.invalidateQueries(`admin_guild:${guildId}`);
-      onRefresh();
-    } else addToast("error", res.error?.message || "Failed");
+  async function transfer() {
+    if (!transferTarget) return;
+    setIsTransferring(true);
+    try {
+      const res = await adminApi.transferGuildOwnership(guildId, transferTarget.memberId);
+      if (res.success) {
+        addToast("success", "Ownership transferred");
+        setTransferTarget(null);
+        queryClient.invalidateQueries(`admin_guild:${guildId}`);
+        onRefresh();
+      } else addToast("error", res.error?.message || "Failed");
+    } finally {
+      setIsTransferring(false);
+    }
   }
 
   return (
@@ -175,7 +184,7 @@ function GuildDetailModal({ guildId, onClose, onRefresh }: { guildId: string; on
                   <div key={m.memberId} className="flex items-center justify-between text-[11px]">
                     <span className="text-white/70">{m.displayName} <span className="text-white/35">· {m.role}</span></span>
                     {m.role !== "GUILD_LEADER" && (
-                      <Button variant="ghost" size="xs" onClick={() => transfer(m.memberId, m.displayName)}>Make leader</Button>
+                      <Button variant="ghost" size="xs" onClick={() => setTransferTarget({ memberId: m.memberId, name: m.displayName })}>Make leader</Button>
                     )}
                   </div>
                 ))}
@@ -188,6 +197,16 @@ function GuildDetailModal({ guildId, onClose, onRefresh }: { guildId: string; on
           </div>
         )}
       </div>
+      <ConfirmModal
+        show={Boolean(transferTarget)}
+        title="Transfer Leadership"
+        message={transferTarget ? `Transfer leadership of this guild to ${transferTarget.name}?` : ""}
+        confirmText="Transfer"
+        cancelText="Cancel"
+        isSubmitting={isTransferring}
+        onConfirm={transfer}
+        onCancel={() => setTransferTarget(null)}
+      />
     </div>
   );
 }

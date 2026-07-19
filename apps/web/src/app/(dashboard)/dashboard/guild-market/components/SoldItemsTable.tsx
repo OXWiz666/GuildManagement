@@ -18,6 +18,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   HIGH_BOSS: "High Boss",
   DUNGEON: "Dungeon",
   FFA: "FFA",
+  GUILD_STORAGE: "Guild Storage",
 };
 
 interface ActivityGroup {
@@ -111,21 +112,21 @@ export default function SoldItemsTable({
 
       {groups.length === 0 ? (
         <div className="py-16 text-center text-xs text-white/35 italic">
-          No sold items found. Log loot drops from an activity using the “Log sold items” action above.
+          No sold items found.
         </div>
       ) : (
         <div className="overflow-auto scroll-fade-x max-h-[600px] rounded-xl">
           <table className="w-full border-collapse text-left text-[12px]">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">
-                <th className="px-4 py-3">Loot</th>
-                <th className="px-4 py-3">Activity</th>
+                <th className="px-4 py-3">Sold Item</th>
+                <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3 text-right">Total</th>
+                <th className="px-4 py-3 text-right">Gross Sale</th>
                 <th className="px-4 py-3 text-right">Guild Tax</th>
                 <th className="px-4 py-3 text-right">Net Profit</th>
-                <th className="px-4 py-3">Total Attendees</th>
+                <th className="px-4 py-3">Attendees</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04] text-white/70 align-top">

@@ -5,9 +5,7 @@ import { type ReactNode } from "react";
 export type MarketTab =
   | "loot"
   | "accounting"
-  | "rankings"
-  | "storage"
-  | "auctions";
+  | "rankings";
 
 interface TabDef {
   value: MarketTab;
@@ -60,19 +58,6 @@ const ICONS = {
       <path d="M9 21h6M12 15v6" />
     </>,
   ),
-  vault: ico(
-    <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 8.8V6M12 18v-2.8M15.2 12H18M6 12h2.8" />
-    </>,
-  ),
-  hammer: ico(
-    <>
-      <path d="M14 5l5 5-3 3-5-5z" />
-      <path d="M11 8L4 15a2 2 0 0 0 0 3 2 2 0 0 0 3 0l7-7" />
-    </>,
-  ),
 };
 
 const GROUPS: Group[] = [
@@ -83,14 +68,6 @@ const GROUPS: Group[] = [
       { value: "loot", label: "Loot Sales", short: "Loot", icon: ICONS.coins },
       { value: "accounting", label: "Accounting", short: "Ledger", icon: ICONS.ledger },
       { value: "rankings", label: "Rankings", short: "Ranks", icon: ICONS.trophy },
-    ],
-  },
-  {
-    key: "vault",
-    label: "Vault",
-    tabs: [
-      { value: "storage", label: "Guild Storage", short: "Storage", icon: ICONS.vault },
-      { value: "auctions", label: "Auction Hall", short: "Auctions", icon: ICONS.hammer },
     ],
   },
 ];

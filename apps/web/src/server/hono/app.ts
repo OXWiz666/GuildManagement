@@ -8,6 +8,7 @@ import { notifications } from "./routes/notifications";
 import { equipment } from "./routes/equipment";
 import { guilds } from "./routes/guilds";
 import { faction } from "./routes/faction";
+import { factionInventory } from "./routes/factionInventory";
 import { auth } from "./routes/auth";
 import { admin } from "./routes/admin";
 import { dashboard } from "./routes/dashboard";
@@ -38,6 +39,7 @@ const routes = app
   .route("/equipment", equipment)
   .route("/guilds", guilds)
   .route("/faction", faction)
+  .route("/faction/inventory", factionInventory)
   .route("/auth", auth)
   .route("/admin", admin)
   .route("/dashboard", dashboard)
@@ -52,6 +54,7 @@ export type NotificationsType = typeof notifications;
 export type EquipmentType = typeof equipment;
 export type GuildsType = typeof guilds;
 export type FactionType = typeof faction;
+export type FactionInventoryType = typeof factionInventory;
 export type AuthType = typeof auth;
 export type AdminType = typeof admin;
 export type DashboardType = typeof dashboard;

@@ -4370,12 +4370,22 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
       },
       _sum: { amount: true },
     }),
-    // B. Credits and debits for ALL members and ALL currencies in a single query
+    // B. Member money board. Attendance ledger rows are Guild Points only;
+    // member cash balance is loot-share credits minus withdrawal/debit entries.
     prisma.ledgerEntry.groupBy({
       by: ["accountId", "entryType", "currency"],
       where: {
         guildId,
         accountType: "MEMBER",
+        OR: [
+          { entryType: "CREDIT", referenceType: "BOSS_LOOT_SHARE" },
+          {
+            entryType: "DEBIT",
+            referenceType: {
+              notIn: ["ATTENDANCE", "ATTENDANCE_REVOKE", "ATTENDANCE_STATUS_PENDING"],
+            },
+          },
+        ],
       },
       _sum: { amount: true },
     }),
@@ -4443,12 +4453,12 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
     // Primary Currency Balance
     const prim = memberBalancesMap[userId]?.[currencyCode] || { CREDIT: 0n, DEBIT: 0n };
     const balance = Number(prim.CREDIT - prim.DEBIT) / 100;
-    const totalEarned = Number(prim.CREDIT) / 100;
+    const totalWithdrawn = Number(prim.DEBIT) / 100;
 
     // Secondary Currency Balance
     const sec = memberBalancesMap[userId]?.[secondaryCode] || { CREDIT: 0n, DEBIT: 0n };
     const secBalance = Number(sec.CREDIT - sec.DEBIT) / 100;
-    const secTotalEarned = Number(sec.CREDIT) / 100;
+    const secTotalWithdrawn = Number(sec.DEBIT) / 100;
 
     return {
       memberId: m.id,
@@ -4461,9 +4471,11 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
       class: m.class || "Unknown",
       dkp,
       balance,
-      totalEarned,
+      totalEarned: totalWithdrawn,
+      totalWithdrawn,
       secBalance,
-      secTotalEarned,
+      secTotalEarned: secTotalWithdrawn,
+      secTotalWithdrawn,
       user: m.user,
     };
   });

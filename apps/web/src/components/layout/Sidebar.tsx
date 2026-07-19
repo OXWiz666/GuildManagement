@@ -117,24 +117,24 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
-        label: "Audit Log",
-        href: "/dashboard/audit",
-        icon: (
-          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
-          </svg>
-        ),
-        roles: ["ADMIN", "FACTION_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER"],
-      },
-      {
-        label: "Guild Inventory",
+        label: "Guild Market",
         href: "/dashboard/guild-market",
         icon: (
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
             <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
             <line x1="12" y1="22.08" x2="12" y2="12" />
+          </svg>
+        ),
+      },
+      {
+        label: "Guild Storage",
+        href: "/dashboard/guild-storage",
+        icon: (
+          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <circle cx="12" cy="12" r="3.2" />
+            <path d="M12 8.8V6M12 18v-2.8M15.2 12H18M6 12h2.8" />
           </svg>
         ),
       },
@@ -148,6 +148,27 @@ const navGroups: NavGroup[] = [
             <path d="M12 8S10 2 7 4s5 4 5 4M12 8s2-6 5-4-5 4-5 4" />
           </svg>
         ),
+      },
+      {
+        label: "Auction Hall",
+        href: "/dashboard/auction-hall",
+        icon: (
+          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 5l5 5-3 3-5-5z" />
+            <path d="M11 8L4 15a2 2 0 0 0 0 3 2 2 0 0 0 3 0l7-7" />
+          </svg>
+        ),
+      },
+      {
+        label: "Audit Log",
+        href: "/dashboard/audit",
+        icon: (
+          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+          </svg>
+        ),
+        roles: ["ADMIN", "FACTION_LEADER", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER"],
       },
     ],
   },

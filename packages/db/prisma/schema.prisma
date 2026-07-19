@@ -221,6 +221,9 @@ model Faction {
   guildMemberships   FactionGuildMembership[]
   roleAssignments    FactionRoleAssignment[]
   auditLogs          FactionAuditLog[]
+  inventoryItems       FactionInventoryItem[]
+  inventoryTransactions FactionInventoryTransaction[]
+  inventoryRequests    FactionInventoryRequest[]
 
   @@index([leaderUserId])
   @@map("factions")
@@ -353,6 +356,144 @@ model FactionAuditLog {
 }
 
 // ═══════════════════════════════════════════════════
+// FACTIONWIDE SYSTEM — PHASE 2: FACTION INVENTORY
+// A centralized item pool shared across a faction's member guilds.
+// ═══════════════════════════════════════════════════
+
+model FactionInventoryItem {
+  id        String   @id @default(cuid())
+  factionId String   @map("faction_id")
+  faction   Faction  @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  itemName  String   @map("item_name")
+  itemIcon  String?  @map("item_icon")
+  // Free-text, validated against FACTION_INVENTORY_CATEGORIES in
+  // packages/shared/src/constants.ts — same "string, not enum" convention
+  // GuildStorageItem.category already uses, so new categories don't need a migration.
+  category    String
+  rarity      String?
+  description String?
+
+  currentQuantity     Int @default(0) @map("current_quantity")
+  reservedQuantity     Int @default(0) @map("reserved_quantity")
+  distributedQuantity Int @default(0) @map("distributed_quantity")
+  // Available = current - reserved, computed at read time (not stored) —
+  // storing it risks drift from the two source columns; see service layer.
+
+  unitValueCents    Int?      @map("unit_value_cents") // integer cents — never float, matches GuildStorageItem.listingPrice's convention
+  storageLocation   String?   @map("storage_location")
+  batchNumber       String?   @map("batch_number")
+  expirationDate    DateTime? @map("expiration_date")
+  minStockThreshold Int?      @map("min_stock_threshold")
+  status            String    @default("ACTIVE") // ACTIVE | ARCHIVED
+  createdByUserId   String    @map("created_by_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  transactions FactionInventoryTransaction[]
+  requests     FactionInventoryRequest[]
+
+  @@index([factionId, status])
+  @@index([factionId, category])
+  @@map("faction_inventory_items")
+}
+
+enum FactionInventoryTransactionType {
+  GUILD_CONTRIBUTION
+  MANUAL_ADDITION
+  DISTRIBUTION
+  RESERVATION
+  RESERVATION_RELEASE
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum FactionInventoryApprovalStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// The ledger. previousQuantity/newQuantity are snapshotted at write time
+// (not derived later), matching CombatPowerHistory's old_cp/new_cp pattern.
+// Never mutated after creation — corrections are new ADJUSTMENT/REVERSAL rows.
+model FactionInventoryTransaction {
+  id        String               @id @default(cuid())
+  factionId String               @map("faction_id")
+  faction   Faction              @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  itemId    String               @map("item_id")
+  item      FactionInventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  sourceGuildId      String? @map("source_guild_id")
+  destinationGuildId String? @map("destination_guild_id")
+
+  quantity         Int
+  previousQuantity Int @map("previous_quantity")
+  newQuantity      Int @map("new_quantity")
+
+  transactionType   FactionInventoryTransactionType @map("transaction_type")
+  referenceNumber   String?                         @map("reference_number")
+  reason            String?
+  evidenceUrl       String?                         @map("evidence_url")
+  requestedByUserId String                          @map("requested_by_user_id")
+  approvedByUserId  String?                         @map("approved_by_user_id")
+  approvalStatus    FactionInventoryApprovalStatus  @default(APPROVED) @map("approval_status")
+  createdAt         DateTime                        @default(now()) @map("created_at")
+  approvedAt        DateTime?                       @map("approved_at")
+
+  @@index([factionId, itemId, createdAt])
+  @@index([factionId, approvalStatus])
+  @@map("faction_inventory_transactions")
+}
+
+enum FactionInventoryRequestPriority {
+  NORMAL
+  IMPORTANT
+  URGENT
+  CRITICAL
+}
+
+enum FactionInventoryRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  DISTRIBUTED
+  CANCELLED
+}
+
+// A guild asking the faction pool for items. Lifecycle: SUBMITTED -> (officer)
+// APPROVED (reserves quantity, no stock movement yet) or REJECTED -> officer
+// DISTRIBUTED (atomically moves reserved -> distributed, writes a
+// FactionInventoryTransaction of type DISTRIBUTION).
+model FactionInventoryRequest {
+  id                String               @id @default(cuid())
+  factionId         String               @map("faction_id")
+  faction           Faction              @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  itemId            String               @map("item_id")
+  item              FactionInventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  requestingGuildId String               @map("requesting_guild_id")
+  requestingGuild   Guild                @relation("FactionInventoryRequestingGuild", fields: [requestingGuildId], references: [id], onDelete: Cascade)
+  requestedByUserId String               @map("requested_by_user_id")
+
+  quantity      Int
+  purpose       String?
+  priority      FactionInventoryRequestPriority @default(NORMAL)
+  requiredDate  DateTime?                       @map("required_date")
+  evidenceUrl   String?                         @map("evidence_url")
+  status        FactionInventoryRequestStatus   @default(SUBMITTED)
+  reviewerId    String?                         @map("reviewer_id")
+  approvalNotes String?                         @map("approval_notes")
+  createdAt     DateTime                        @default(now()) @map("created_at")
+  updatedAt     DateTime                        @updatedAt @map("updated_at")
+
+  @@index([factionId, status])
+  @@index([requestingGuildId, status])
+  @@map("faction_inventory_requests")
+}
+
+// ═══════════════════════════════════════════════════
 // GUILDS
 // ═══════════════════════════════════════════════════
 model Guild {
@@ -404,6 +545,7 @@ model Guild {
   cpSnapshots         GuildCpSnapshot[]
   notificationHistory NotificationHistory[]
   factionGuildMemberships FactionGuildMembership[]
+  factionInventoryRequests FactionInventoryRequest[] @relation("FactionInventoryRequestingGuild")
 
   @@index([factionId])
   @@map("guilds")
@@ -441,6 +583,7 @@ model GuildSettings {
   timezone   String  @default("Asia/Singapore")
   region     String?
   language   String  @default("en")
+  settingsTemplateName String? @map("settings_template_name")
 
   // Currency config — never hard-coded
   currencyCode            String  @default("PHP") @map("currency_code")

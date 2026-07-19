@@ -20,6 +20,7 @@ import * as discordLink from "./services/discordLink.service";
 import * as equipment from "./services/equipment.service";
 import * as faction from "./services/faction.service";
 import * as factionAudit from "./services/factionAudit.service";
+import * as factionInventory from "./services/factionInventory.service";
 import * as guild from "./services/guild.service";
 import * as ledger from "./services/ledger.service";
 import * as loot from "./services/loot.service";
@@ -49,6 +50,7 @@ export const services = {
   equipment,
   faction,
   factionAudit,
+  factionInventory,
   guild,
   ledger,
   loot,

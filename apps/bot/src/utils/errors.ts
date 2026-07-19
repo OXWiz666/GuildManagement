@@ -40,6 +40,16 @@ export class NotLinkedError extends UserFacingError {
   }
 }
 
+export class NotGuildMemberError extends UserFacingError {
+  constructor() {
+    super(
+      "Your Discord account is linked, but it is not an active member of this ForgeKeep guild.",
+      "Join this guild on ForgeKeep first, or ask a Guild Leader to approve your join request.",
+    );
+    this.name = "NotGuildMemberError";
+  }
+}
+
 export class ServerNotBoundError extends UserFacingError {
   constructor() {
     super(

@@ -31,6 +31,11 @@ const RoleConfirmModal = dynamic(() => import("./components/RoleConfirmModal"));
 const StalkProfileModal = dynamic(() => import("./components/StalkProfileModal"));
 
 type SortMode = "NAME" | "RANKING" | "GUILD_POINTS" | "BALANCE" | "CLASS" | "CP" | "JOINED";
+type MemberBalanceRow = { memberId: string; balance: number; dkp: number };
+type MembersAccountingData = {
+  treasury?: { primary?: { currencySymbol?: string | null } };
+  memberBalances?: MemberBalanceRow[];
+};
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -89,7 +94,7 @@ export default function MembersPage() {
   // 1b. Accounting Query — sources Balance + Guild Points for the roster.
   // Member enrichment only needs balances, so it requests one ledger row and
   // keeps its query key separate from Guild Market's paginated ledger pages.
-  const { data: accounting } = useQuery<any | null>(
+  const { data: accounting } = useQuery<MembersAccountingData | null>(
     activeGuild ? `accounting_dashboard:${activeGuild.guildId}:1:1` : "accounting_dashboard_empty",
     async () => {
       if (!activeGuild) return null;
@@ -102,7 +107,7 @@ export default function MembersPage() {
   const currencySymbol = accounting?.treasury?.primary?.currencySymbol || "₱";
   const enrichedMembers: MemberWithFinance[] = useMemo(() => {
     const balancesByMemberId = new Map<string, { balance: number; dkp: number }>(
-      (accounting?.memberBalances || []).map((b: any) => [b.memberId, { balance: b.balance, dkp: b.dkp }]),
+      (accounting?.memberBalances || []).map((b) => [b.memberId, { balance: b.balance, dkp: b.dkp }]),
     );
     return (membersRaw || []).map((m) => {
       const fin = balancesByMemberId.get(m.id);
@@ -175,7 +180,7 @@ export default function MembersPage() {
       }
     };
 
-    const handleInviteUpdate = (payload: { inviteCode: string }) => {
+    const handleInviteUpdate = () => {
       console.log("[Invite Socket]: Invite code updated.");
       queryClient.invalidateQueries(`guild_invite_code:${activeGuild.guildId}`);
     };
@@ -281,8 +286,8 @@ export default function MembersPage() {
       } else {
         addToast("error", result.error?.message || "Failed to assign custom role");
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to assign custom role");
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err, "Failed to assign custom role"));
     }
   }
 
@@ -302,8 +307,8 @@ export default function MembersPage() {
       } else {
         addToast("error", result.error?.message || "Failed to process application");
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to process application");
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err, "Failed to process application"));
     } finally {
       setIsReviewingId(null);
     }
@@ -320,8 +325,8 @@ export default function MembersPage() {
       } else {
         addToast("error", "Failed to generate invite code");
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to generate invite code");
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err, "Failed to generate invite code"));
     } finally {
       setIsGeneratingInvite(false);
     }

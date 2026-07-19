@@ -7,7 +7,7 @@ import { UserFacingError } from "../../utils/errors.js";
 export const smartAttendanceCommand: Command = {
   name: "attendance",
   aliases: ["smartattendance", "smartatt", "rallyatt", "rallyattendance"],
-  description: "Scan a rally screenshot and mark white/highlighted members present for a boss.",
+  description: "Scan a rally screenshot: white names are confirmed, gray names are queued for officer review.",
   usage: "!attendance <boss> [minutes] + screenshot",
   category: "Attendance",
   requiresLink: true,
@@ -73,8 +73,8 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
     [
       `Boss: **${bossName}**`,
       `Session: **${result.session.title}** ${result.session.created ? "(created)" : "(existing)"}`,
-      `Checked in: **${result.confirmed.length}** new, **${result.alreadyPresent.length}** already present`,
-      `Gray/absent: **${result.absent.length}**`,
+      `White names: **${result.confirmed.length}** new, **${result.alreadyPresent.length}** already confirmed`,
+      `Gray names: **${result.absent.length}** awaiting confirmation`,
       `OCR confidence: **${Math.round(result.pageConfidence * 100)}%**`,
     ].join("\n"),
   ).setThumbnail(attachment.url);
@@ -93,7 +93,7 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
 
   if (result.absent.length > 0) {
     embed.addFields({
-      name: "Gray / No Attendance",
+      name: "Gray / Needs Officer Confirm",
       value: clampDescription(
         result.absent.map((m) => `\`${m.source}\` -> ${m.name}`),
         1024,

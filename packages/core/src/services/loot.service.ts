@@ -1,6 +1,7 @@
-import { prisma, Prisma } from "@guild/db";
+import { prisma, Prisma, type GuildSettings } from "@guild/db";
 import { writeAuditLog } from "./audit.service";
 import { NotFoundError, BadRequestError } from "../utils/errors";
+import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 
 interface CreateLootSaleInput {
   guildId: string;
@@ -14,7 +15,7 @@ interface CreateLootSaleInput {
 }
 
 interface LootSaleContext {
-  settings: Awaited<ReturnType<typeof prisma.guildSettings.findUnique>>;
+  settings: GuildSettings | null;
   attendees: Array<{ userId: string }>;
   memberPoints: Record<string, number>;
   totalPoints: number;
@@ -29,9 +30,7 @@ interface LootSaleContext {
  */
 async function resolveLootSaleContext(guildId: string, bossScheduleId?: string | null): Promise<LootSaleContext> {
   const [settings, attendees] = await Promise.all([
-    prisma.guildSettings.findUnique({
-      where: { guildId },
-    }),
+    findGuildSettingsByGuildId(guildId),
     bossScheduleId
       ? (async () => {
           const [schedule, records] = await Promise.all([

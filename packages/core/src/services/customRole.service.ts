@@ -2,6 +2,7 @@ import { prisma } from "@guild/db";
 import { CUSTOMIZABLE_ROLES, resolveRoleDisplayName, type GuildRoleType } from "@guild/shared";
 import { BadRequestError, NotFoundError } from "../utils/errors";
 import { writeAuditLog } from "./audit.service";
+import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 
 const MAX_NAME_LENGTH = 32;
 
@@ -178,7 +179,7 @@ export async function deleteCustomRole(
     throw new NotFoundError("Custom role not found");
   }
 
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
+  const settings = await findGuildSettingsByGuildId(guildId);
   const overrides = (settings?.roleDisplayNames || null) as Partial<Record<GuildRoleType, string>> | null;
   const fallbackName = resolveRoleDisplayName(existing.band as GuildRoleType, overrides);
 

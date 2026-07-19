@@ -20,6 +20,8 @@ import { createOrgForUser } from "./onboarding.service";
 import { AUDIT_ACTIONS, type LeaderOnboardingInput } from "@guild/shared";
 import { env } from "../config/env";
 import { broadcastToGuild } from "../lib/socket";
+import { cache as redisCache } from "../lib/redis";
+import { cacheKeys } from "../lib/cache-keys";
 import { publicUrl, uploadObject } from "../lib/supabaseStorage";
 import type {
   AuthResponse,
@@ -33,6 +35,21 @@ import type {
 // ─── Username ────────────────────────────────────
 
 const USERNAME_PATTERN = /^[a-z][a-z0-9_]{2,19}$/;
+
+async function invalidateDiscordActorCacheForUser(userId: string, discordIds: Array<string | null | undefined>) {
+  const ids = [...new Set(discordIds.filter((value): value is string => Boolean(value)))];
+  if (ids.length === 0) return;
+
+  const memberships = await prisma.guildMember.findMany({
+    where: { userId },
+    select: { guildId: true },
+  });
+  if (memberships.length === 0) return;
+
+  await redisCache.delMany(
+    ids.flatMap((discordId) => memberships.map((member) => cacheKeys.discordActor(discordId, member.guildId))),
+  );
+}
 
 function sanitizeUsernameBase(input: string): string {
   let base = input.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 16);
@@ -365,10 +382,14 @@ export async function supabaseSync(
     }
 
     if (Object.keys(updateData).length > 0) {
+      const previousDiscordId = user.discordId;
       user = await prisma.user.update({
         where: { id: user.id },
         data: updateData,
       });
+      if ("discordId" in updateData) {
+        await invalidateDiscordActorCacheForUser(user.id, [previousDiscordId, user.discordId]);
+      }
     }
   }
 

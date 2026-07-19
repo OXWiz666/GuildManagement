@@ -8,6 +8,7 @@
     "dev:api:win": "turbo run dev --filter=@guild/api",
     "dev:web": "turbo run dev --filter=@guild/web",
     "dev:web:win": "turbo run dev --filter=@guild/web",
+    "prebuild": "pnpm deploy:check",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "db:generate": "turbo run db:generate --filter=@guild/db",
@@ -15,6 +16,8 @@
     "db:seed": "turbo run db:seed --filter=@guild/db",
     "db:studio": "turbo run db:studio --filter=@guild/db",
     "db:push": "turbo run db:push --filter=@guild/db",
+    "deploy:check": "node scripts/check-deployment-doc.js",
+    "predeploy": "pnpm deploy:check",
     "clean": "turbo run clean"
   },
   "devDependencies": {

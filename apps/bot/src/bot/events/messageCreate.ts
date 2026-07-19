@@ -7,7 +7,7 @@ import type { NotificationDispatcher } from "../../notifications/dispatcher.js";
 import { findCommand } from "../commands/registry.js";
 import { assertCommandAllowed } from "../../middleware/permissions.js";
 import { errorEmbed } from "../../embeds/builders.js";
-import { ServerNotBoundError, toUserMessage } from "../../utils/errors.js";
+import { NotGuildMemberError, ServerNotBoundError, toUserMessage } from "../../utils/errors.js";
 import { logger, errorFields } from "../../utils/logger.js";
 
 /**
@@ -107,6 +107,9 @@ export async function handleMessage(
 
     // Throws NotLinkedError / MissingPermissionError, caught below.
     if (command.requiresLink || command.minimumRole) {
+      if (!actor && await services.repositories.identity.isLinked(message.author.id)) {
+        throw new NotGuildMemberError();
+      }
       assertCommandAllowed(command, actor);
     }
 

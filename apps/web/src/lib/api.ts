@@ -1858,6 +1858,13 @@ export const factionApi = {
     return api.post<FactionGuildInviteResult>(`/faction/guilds/invite`, { guildId });
   },
 
+  async createFromGuild(guildId: string, factionName: string) {
+    return api.post<{ factionId: string; factionSlug: string; guildId: string }>(
+      `/faction/create-from-guild`,
+      { guildId, factionName },
+    );
+  },
+
   // ─── Multi-Guild (faction join requests) ─────────
 
   async getInviteCode() {

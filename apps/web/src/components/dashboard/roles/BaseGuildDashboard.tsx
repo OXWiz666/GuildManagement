@@ -5,12 +5,13 @@ import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import {
   dashboardApi,
+  factionApi,
   type BossScheduleData,
   type BossRotationResponse,
   type BossRotationItem,
   type FactionGuildData,
 } from "@/lib/api";
-import { getRealtimeBossTimer } from "@guild/shared";
+import { getRealtimeBossTimer, hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useToast } from "@/components/ui/Toast";
 import Badge from "@/components/ui/Badge";
@@ -18,6 +19,7 @@ import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { useQuery, queryClient } from "@/lib/query";
+import BossCommitButton from "@/app/(dashboard)/dashboard/boss-rotation/components/BossCommitButton";
 import BossDropsPicker, { type SelectedDrop, rarityStyle } from "@/app/(dashboard)/dashboard/boss-rotation/components/BossDropsPicker";
 import WishlistPriorityCarousel from "@/components/dashboard/WishlistPriorityCarousel";
 import {
@@ -39,6 +41,10 @@ function toDateTimeInputValue(date: Date) {
   return local.toISOString().slice(0, 16);
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 interface BaseGuildDashboardProps {
   role: string;
   isOfficer?: boolean;
@@ -52,7 +58,7 @@ export default function BaseGuildDashboard({
   isGuildLeader = false,
   isAdmin = false,
 }: BaseGuildDashboardProps) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { addToast } = useToast();
   const { socket } = useSocket();
 
@@ -65,6 +71,9 @@ export default function BaseGuildDashboard({
   const [isConfirmingTaken, setIsConfirmingTaken] = useState(false);
   const [takenDrops, setTakenDrops] = useState<SelectedDrop[]>([]);
   const [showTakenDropsPicker, setShowTakenDropsPicker] = useState(false);
+  const [showFactionCreateModal, setShowFactionCreateModal] = useState(false);
+  const [factionName, setFactionName] = useState("");
+  const [isCreatingFaction, setIsCreatingFaction] = useState(false);
 
   // ─── Upcoming list auto-scroll ───
   const upcomingScrollRef = useRef<HTMLDivElement>(null);
@@ -263,10 +272,41 @@ export default function BaseGuildDashboard({
       } else {
         addToast("error", result.error?.message || "Failed to mark boss taken");
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to mark boss taken");
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err, "Failed to mark boss taken"));
     } finally {
       setIsConfirmingTaken(false);
+    }
+  }
+
+  async function createFactionForActiveGuild(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeGuild || isCreatingFaction) return;
+    const trimmed = factionName.trim();
+    if (trimmed.length < 2) {
+      addToast("error", "Faction name must be at least 2 characters.");
+      return;
+    }
+
+    setIsCreatingFaction(true);
+    try {
+      const result = await factionApi.createFromGuild(activeGuild.guildId, trimmed);
+      if (result.success) {
+        addToast("success", `${trimmed} faction created.`);
+        setShowFactionCreateModal(false);
+        setFactionName("");
+        await refreshUser();
+        queryClient.invalidateQueries("faction_");
+        queryClient.invalidateQueries(`boss_schedules:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`dashboard_stats:${activeGuild.guildId}`);
+        queryClient.invalidateQueries(`boss_rotation_v2:${activeGuild.guildId}`);
+      } else {
+        addToast("error", result.error?.message || "Failed to create faction");
+      }
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err, "Failed to create faction"));
+    } finally {
+      setIsCreatingFaction(false);
     }
   }
 
@@ -291,6 +331,9 @@ export default function BaseGuildDashboard({
     activeGuild.role === "GUILD_LEADER" ||
     activeGuild.role === "FACTION_LEADER" ||
     activeGuild.role === "ADMIN";
+  const canCreateFaction =
+    !activeGuild.factionId &&
+    hasMinimumRole(activeGuild.role as GuildRoleType, "GUILD_LEADER");
 
   return (
     <div className="relative max-w-7xl mx-auto w-full">
@@ -493,6 +536,27 @@ export default function BaseGuildDashboard({
                   title="Your guilds"
                   meta={`${user.guilds.length} active`}
                 />
+                {canCreateFaction && (
+                  <div className="mb-4 flex flex-col gap-3 rounded-xl border border-[var(--forge-gold)]/20 bg-[var(--forge-gold)]/[0.04] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-white">No faction yet</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-white/45">
+                        Create a faction from {activeGuild.guildName} and keep running as a solo guild until you invite others.
+                      </p>
+                    </div>
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => {
+                        setFactionName(activeGuild.guildName);
+                        setShowFactionCreateModal(true);
+                      }}
+                    >
+                      Create Faction
+                    </Button>
+                  </div>
+                )}
                 <StaggerReveal
                   baseDelay={60}
                   stagger={80}
@@ -551,6 +615,7 @@ export default function BaseGuildDashboard({
                 Owns its own tick/slide/drag state entirely internally so it's
                 the only thing re-rendering every second, not this whole page. */}
             <NextBossSpawnCard
+              guildId={activeGuild.guildId}
               dateSlides={dateSlides}
               canManageBossRotations={canManageBossRotations}
               onTaken={openTakenModal}
@@ -630,6 +695,78 @@ export default function BaseGuildDashboard({
           </div>
         </div>
       </div>
+
+      {showFactionCreateModal && activeGuild && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-md animate-fade-in"
+            onClick={() => !isCreatingFaction && setShowFactionCreateModal(false)}
+          />
+          <div
+            className="relative glass-strong border border-[var(--metal-border)] rounded-2xl p-6 max-w-sm w-full shadow-[0_40px_90px_-25px_rgba(0,0,0,0.8)] z-50 animate-scale-in"
+            style={{ animationDuration: "320ms" }}
+          >
+            <span
+              aria-hidden
+              className="absolute inset-x-6 top-0 h-px"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent, rgba(212,168,83,0.30), transparent)",
+              }}
+            />
+            <div className="mb-5">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-[var(--forge-gold-bright)]">
+                Create faction
+              </div>
+              <h3 className="mt-1 text-[17px] font-semibold text-white">
+                Promote {activeGuild.guildName}
+              </h3>
+              <p className="mt-2 text-[12px] leading-relaxed text-white/50">
+                Your guild will become the first guild in this faction. You can invite more guilds later from the faction tab.
+              </p>
+            </div>
+
+            <form onSubmit={createFactionForActiveGuild} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-medium text-white/50 uppercase tracking-[0.18em] mb-2">
+                  Faction name
+                </label>
+                <input
+                  value={factionName}
+                  onChange={(e) => setFactionName(e.target.value)}
+                  disabled={isCreatingFaction}
+                  minLength={2}
+                  maxLength={60}
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-[var(--forge-gold)]/40 disabled:opacity-50"
+                  placeholder="Faction name"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2 border-t border-white/[0.06]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowFactionCreateModal(false)}
+                  disabled={isCreatingFaction}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="accent"
+                  size="sm"
+                  type="submit"
+                  isLoading={isCreatingFaction}
+                  disabled={factionName.trim().length < 2}
+                >
+                  Create Faction
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* TAKEN MODAL — mark a boss taken by a guild + advance the rotation */}
       {takenTarget && (
@@ -922,10 +1059,12 @@ function StatCard({
 // whole dashboard (Welcome header, Your Guilds, Upcoming list, etc.) just to
 // update this one card's countdown text.
 const NextBossSpawnCard = memo(function NextBossSpawnCard({
+  guildId,
   dateSlides,
   canManageBossRotations,
   onTaken,
 }: {
+  guildId: string;
   dateSlides: BossScheduleData[];
   canManageBossRotations: boolean;
   onTaken: (boss: BossScheduleData) => void;
@@ -945,11 +1084,6 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const trackWrapRef = useRef<HTMLDivElement>(null);
-
-  // Keep the carousel index valid whenever the slide set changes.
-  useEffect(() => {
-    setSlideIndex((prev) => (prev > dateSlides.length - 1 ? 0 : prev));
-  }, [dateSlides.length]);
 
   // Auto-advance the carousel with a back-and-forth (ping-pong) motion.
   useEffect(() => {
@@ -1000,8 +1134,9 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
     const threshold = Math.min(80, width * 0.22);
     const off = dragOffset;
     setDragOffset(0);
-    if (off <= -threshold) goToSlide(slideIndex + 1, 1);
-    else if (off >= threshold) goToSlide(slideIndex - 1, -1);
+    const clampedSlideIndex = Math.min(slideIndex, Math.max(0, dateSlides.length - 1));
+    if (off <= -threshold) goToSlide(clampedSlideIndex + 1, 1);
+    else if (off >= threshold) goToSlide(clampedSlideIndex - 1, -1);
     setCarouselPaused(false);
   }
 
@@ -1012,7 +1147,8 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
     return { expired: t.live, live: t.live, warning: t.warning, text: t.text, liveText: t.liveElapsedText };
   }
 
-  const nextBoss = dateSlides[slideIndex] || dateSlides[0] || null;
+  const clampedSlideIndex = Math.min(slideIndex, Math.max(0, dateSlides.length - 1));
+  const nextBoss = dateSlides[clampedSlideIndex] || dateSlides[0] || null;
   if (!nextBoss) return null;
   const nextBossCountdown = tickFor(nextBoss);
 
@@ -1040,7 +1176,7 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
           <span className="h-px flex-1 bg-gradient-to-r from-[var(--forge-gold)]/20 to-transparent" />
           {dateSlides.length > 1 && (
             <span className="text-[10px] font-mono text-white/35 tabular-nums">
-              {slideIndex + 1}/{dateSlides.length}
+              {clampedSlideIndex + 1}/{dateSlides.length}
             </span>
           )}
         </div>
@@ -1058,7 +1194,7 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
           <div
             className="flex items-stretch"
             style={{
-              transform: `translateX(calc(${-slideIndex * 100}% + ${dragOffset}px))`,
+              transform: `translateX(calc(${-clampedSlideIndex * 100}% + ${dragOffset}px))`,
               transition: isDragging ? "none" : "transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)",
             }}
           >
@@ -1151,26 +1287,37 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
         </div>
 
         {/* Taken — mark the boss taken by a guild straight from the widget */}
-        {canManageBossRotations && (
-          <div className="mt-4 pt-4 border-t border-white/[0.06]">
-            <Magnetic strength={4}>
-              <Button
-                variant="accent"
-                size="sm"
-                className="w-full"
-                onClick={() => onTaken(nextBoss)}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                    <path d="M22 4L12 14.01l-3-3" />
-                  </svg>
-                  Taken
-                </span>
-              </Button>
-            </Magnetic>
+        <div className="mt-4 pt-4 border-t border-white/[0.06]">
+          <div
+            className={canManageBossRotations ? "grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-2" : "flex justify-center"}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <BossCommitButton
+              guildId={guildId}
+              scheduleId={nextBoss.id}
+              bossName={nextBoss.bossName}
+              variant="inline"
+            />
+            {canManageBossRotations && (
+              <Magnetic strength={4}>
+                <Button
+                  variant="accent"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => onTaken(nextBoss)}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                      <path d="M22 4L12 14.01l-3-3" />
+                    </svg>
+                    Taken
+                  </span>
+                </Button>
+              </Magnetic>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Carousel controls */}
         {dateSlides.length > 1 && (
@@ -1178,9 +1325,9 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
             <button
               type="button"
               aria-label="Previous spawn"
-              onClick={() => goToSlide(slideIndex - 1, -1)}
+              onClick={() => goToSlide(clampedSlideIndex - 1, -1)}
               className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
-              disabled={slideIndex <= 0}
+              disabled={clampedSlideIndex <= 0}
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
             </button>
@@ -1191,9 +1338,9 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
                   key={slide.id}
                   type="button"
                   aria-label={`Go to spawn ${i + 1}`}
-                  onClick={() => goToSlide(i, i > slideIndex ? 1 : -1)}
+                  onClick={() => goToSlide(i, i > clampedSlideIndex ? 1 : -1)}
                   className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    i === slideIndex
+                    i === clampedSlideIndex
                       ? "w-5 bg-[var(--forge-gold)]"
                       : "w-1.5 bg-white/20 hover:bg-white/40"
                   }`}
@@ -1204,9 +1351,9 @@ const NextBossSpawnCard = memo(function NextBossSpawnCard({
             <button
               type="button"
               aria-label="Next spawn"
-              onClick={() => goToSlide(slideIndex + 1, 1)}
+              onClick={() => goToSlide(clampedSlideIndex + 1, 1)}
               className="h-7 w-7 inline-flex items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-[var(--forge-gold)] hover:border-[var(--forge-gold)]/25 transition-colors cursor-pointer disabled:opacity-30"
-              disabled={slideIndex >= dateSlides.length - 1}
+              disabled={clampedSlideIndex >= dateSlides.length - 1}
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
             </button>

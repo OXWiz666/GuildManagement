@@ -9,7 +9,7 @@ import {
   SubscriptionStatus,
   type FactionRoleType,
 } from "@guild/db";
-import { orgNameSchema, slugify } from "@guild/shared";
+import { AUDIT_ACTIONS, orgNameSchema, slugify } from "@guild/shared";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
 import { writeAuditLog } from "./audit.service";
 import { writeFactionAuditLog } from "./factionAudit.service";
@@ -88,6 +88,15 @@ function abbreviate(name: string): string {
     .toUpperCase();
   if (initials.length >= 2) return initials;
   return name.substring(0, 3).replace(/[^A-Za-z]/g, "").toUpperCase() || "FAC";
+}
+
+async function uniqueFactionInviteCode(name: string): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const code = `${abbreviate(name)}-FAC-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+    const existing = await prisma.faction.findUnique({ where: { inviteCode: code }, select: { id: true } });
+    if (!existing) return code;
+  }
+  return `${abbreviate(name)}-FAC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 // Resolves the faction a Faction Leader/Admin manages (their own guild's
@@ -594,6 +603,94 @@ async function assertGuildJoinable(guildId: string) {
     throw new BadRequestError("This guild already has a pending faction join request");
   }
   return guild;
+}
+
+export async function createFactionFromGuild(
+  actorId: string,
+  guildId: string,
+  factionName: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  const name = orgNameSchema.parse(factionName);
+  const membership = await requireGuildLeadership(actorId, guildId);
+  const guild = await assertGuildJoinable(guildId);
+
+  const slug = await uniqueFactionSlug(name, crypto.randomUUID());
+  const inviteCode = await uniqueFactionInviteCode(name);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const faction = await tx.faction.create({
+      data: {
+        name,
+        slug,
+        leaderUserId: actorId,
+        inviteCode,
+      },
+      select: { id: true, slug: true, name: true },
+    });
+
+    await tx.guild.update({
+      where: { id: guildId },
+      data: { factionId: faction.id },
+    });
+
+    await tx.guildMember.update({
+      where: { id: membership.id },
+      data: {
+        role: "FACTION_LEADER",
+        rankName: "Faction Leader",
+        customRoleId: null,
+      },
+    });
+
+    await tx.factionGuildMembership.create({
+      data: {
+        factionId: faction.id,
+        guildId,
+        status: FactionGuildStatus.ACTIVE,
+        joinedAt: new Date(),
+        approvedByUserId: actorId,
+      },
+    });
+
+    return faction;
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: AUDIT_ACTIONS.FACTION_CREATED,
+    target: "Faction",
+    targetId: result.id,
+    detail: { name, firstGuildId: guildId, firstGuildName: guild.name },
+    ipAddress,
+    userAgent,
+  });
+  await writeFactionAuditLog({
+    factionId: result.id,
+    actorId,
+    actorRole: "FACTION_LEADER",
+    action: "FACTION_CREATED",
+    entityType: "Faction",
+    entityId: result.id,
+    newValue: { name, firstGuildId: guildId, firstGuildName: guild.name },
+    ipAddress,
+    userAgent,
+  });
+  await writeFactionAuditLog({
+    factionId: result.id,
+    actorId,
+    actorRole: "FACTION_LEADER",
+    action: "GUILD_ADDED",
+    entityType: "Guild",
+    entityId: guildId,
+    newValue: { guildName: guild.name, source: "create_from_guild" },
+    ipAddress,
+    userAgent,
+  });
+
+  return { factionId: result.id, factionSlug: result.slug, guildId };
 }
 
 export async function getFactionInviteCode(actorId: string) {

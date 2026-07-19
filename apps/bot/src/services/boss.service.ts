@@ -3,7 +3,7 @@ import { PREDEFINED_BOSSES, getRealtimeBossTimer } from "@guild/shared";
 // flat exports — same entrypoint the website's Hono routes use.
 import { services as core } from "@guild/core";
 import type { AliasRepository } from "../repositories/alias.repository.js";
-import type { BossRepository, UpcomingSpawn } from "../repositories/boss.repository.js";
+import type { BossRepository, UpcomingActivity, UpcomingSpawn } from "../repositories/boss.repository.js";
 import { UnknownBossError } from "../utils/errors.js";
 
 export interface ResolvedSpawn extends UpcomingSpawn {
@@ -39,6 +39,8 @@ export interface DropCatalogNameItem {
   category: string | null;
   rarity: string | null;
 }
+
+export type ResolvedActivity = UpcomingActivity;
 
 // Catalog item names are short, clean, human-typed text (unlike OCR'd rally
 // screenshots), so a plain normalized-Levenshtein ratio is enough — no need
@@ -286,6 +288,10 @@ export class BossService {
         nextSpawn: new Date(timer.nextSpawn),
       };
     });
+  }
+
+  async listUpcomingActivities(guildId: string, limit = 5): Promise<ResolvedActivity[]> {
+    return this.bosses.listUpcomingActivities(guildId, limit);
   }
 
   /**

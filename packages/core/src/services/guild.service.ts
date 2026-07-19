@@ -3,6 +3,7 @@ import { prisma, Prisma, SubscriptionStatus, type GuildSettings, type GuildMembe
 import {
   AUDIT_ACTIONS,
   canManageRole,
+  hasMinimumRole,
   orgNameSchema,
   resolveRoleDisplayName,
   slugify,
@@ -182,8 +183,10 @@ export class GuildService {
       throw new ForbiddenError("You are not a member of this guild");
     }
 
-    // Only GUILD_LEADER can manage roles
-    if (actorMembership.role !== "GUILD_LEADER") {
+    // Guild Leaders and above can manage guild roles. This must match the
+    // route guard's role hierarchy, otherwise Faction Leaders pass middleware
+    // but fail here with a confusing ForbiddenError.
+    if (!hasMinimumRole(actorMembership.role as GuildRoleType, "GUILD_LEADER")) {
       throw new ForbiddenError("Only Guild Leaders can manage roles");
     }
 
@@ -284,6 +287,17 @@ export class GuildService {
         cache.delete(membershipCacheKey(guildId, targetMember.userId)),
         cache.delete(membershipCacheKey(guildId, actorId)),
       ]);
+
+      await broadcastToGuild(guildId, "member_role_updated", {
+        userId: targetMember.userId,
+        oldRole,
+        newRole: "GUILD_LEADER",
+      });
+      await broadcastToGuild(guildId, "member_role_updated", {
+        userId: actorId,
+        oldRole: "GUILD_LEADER",
+        newRole: "OFFICER",
+      });
 
       return {
         id: updatedTarget.id,

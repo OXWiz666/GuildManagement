@@ -31,6 +31,10 @@ describe("command registry", () => {
     expect(findCommand("SPAWN")).toBe(findCommand("spawn"));
   });
 
+  it("accepts !command as a help alias", () => {
+    expect(findCommand("command")).toBe(findCommand("commands"));
+  });
+
   it("returns null for an unknown keyword", () => {
     expect(findCommand("definitelynotacommand")).toBeNull();
   });
@@ -45,8 +49,9 @@ describe("command registry", () => {
   });
 
   it("keeps only !spawn and !cp member-accessible among linked guild commands", () => {
-    // Guard against a future command being added without a permission by
-    // omission. These mutate faction-wide state and must never be open.
+    // Bootstrap/account commands stay open so users can link and see help.
+    // Every other linked guild command should be member-visible only when
+    // explicitly allowed here.
     const bootstrapCommands = new Set(["link", "unlink", "bindguild", "commands"]);
     const memberCommands = new Set(["spawn", "cp"]);
 

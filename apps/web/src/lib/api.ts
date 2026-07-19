@@ -1171,6 +1171,13 @@ export const dashboardApi = {
     );
   },
 
+  async markMembersPresent(guildId: string, sessionId: string, userIds: string[]) {
+    return api.post<{ success: boolean; count: number; skipped: number; points: number }>(
+      `/dashboard/attendance/mark-present/batch`,
+      { guildId, sessionId, userIds },
+    );
+  },
+
   async revokeAttendance(recordId: string, guildId: string) {
     return api.post<{ success: boolean }>(
       `/dashboard/attendance/revoke/${recordId}`,

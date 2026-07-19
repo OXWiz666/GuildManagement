@@ -89,6 +89,27 @@ export class DiscordServerRepository {
     await redisCache.del(cacheKeys.discordServer(discordGuildId));
   }
 
+  async unbind(discordGuildId: string): Promise<{ guildName: string } | null> {
+    const row = await prisma.discordServer.findUnique({
+      where: { discordGuildId },
+      select: {
+        id: true,
+        isActive: true,
+        guild: { select: { name: true } },
+      },
+    });
+
+    if (!row || !row.isActive) return null;
+
+    await prisma.discordServer.update({
+      where: { id: row.id },
+      data: { isActive: false },
+    });
+
+    await redisCache.del(cacheKeys.discordServer(discordGuildId));
+    return { guildName: row.guild.name };
+  }
+
   async setChannel(params: {
     discordServerId: string;
     purpose: ChannelPurpose;

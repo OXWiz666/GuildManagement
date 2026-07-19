@@ -146,6 +146,26 @@ export const dashboard = new Hono<AppEnv>()
     broadcastToGuild(guildId, "attendance_record_confirmed", payload);
     return ok(c, payload);
   })
+  .post("/attendance/mark-present/batch", requireAuth, async (c) => {
+    const user = c.get("user");
+    const { guildId, sessionId, userIds } = await readJson<{ guildId?: string; sessionId?: string; userIds?: string[] }>(c);
+    if (!guildId || !sessionId || !Array.isArray(userIds)) {
+      throw new BadRequestError("guildId, sessionId, and userIds are required");
+    }
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.dashboard.markMembersPresent(guildId, sessionId, userIds, user.userId, ipAddress, userAgent);
+    await Promise.all([
+      cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+      cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+      cache.invalidatePattern(`attendance:sessions:${guildId}*`),
+      cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+      cache.invalidatePattern(`stats:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-card:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
+    ]);
+    broadcastToGuild(guildId, "attendance_records_bulk_confirmed", { sessionId, ...result });
+    return ok(c, result);
+  })
   .get("/attendance/pending/:guildId", requireAuth, async (c) => {
     const user = c.get("user");
     const guildId = c.req.param("guildId");
@@ -229,6 +249,7 @@ export const dashboard = new Hono<AppEnv>()
     await Promise.all([
       cache.invalidatePattern(`boss-schedule:${guildId}:*`),
       cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+      cache.invalidatePattern(`attendance:sessions:${guildId}*`),
       cache.invalidatePattern(`attendance:stats:${guildId}:*`),
       cache.invalidatePattern(`stats:${guildId}:*`),
     ]);
@@ -245,6 +266,7 @@ export const dashboard = new Hono<AppEnv>()
     await Promise.all([
       cache.invalidatePattern(`boss-schedule:${guildId}:*`),
       cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+      cache.invalidatePattern(`attendance:sessions:${guildId}*`),
       cache.invalidatePattern(`attendance:stats:${guildId}:*`),
       cache.invalidatePattern(`stats:${guildId}:*`),
     ]);

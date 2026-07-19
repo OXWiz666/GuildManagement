@@ -279,6 +279,15 @@ async function invalidateAttendanceAndFinanceCache(guildId: string, sessionId?: 
   ]);
 }
 
+async function invalidateAttendanceAndFinanceCacheForUsers(
+  guildId: string,
+  sessionId: string,
+  userIds: string[],
+): Promise<void> {
+  await invalidateAttendanceAndFinanceCache(guildId, sessionId);
+  await redisCache.delMany(userIds.map((userId) => cacheKeys.attendStats(guildId, userId)));
+}
+
 // Every guild-list query that feeds a rotation queue MUST be scoped by
 // factionId — an unscoped `isActive: true` guild list leaks every other
 // faction's guilds into this faction's rotations/master list. A guild with no
@@ -982,6 +991,32 @@ async function assertAttendanceOfficer(guildId: string, actorId: string, action:
   return actorMembership;
 }
 
+async function getAttendanceAwardContext(
+  guildId: string,
+  session: { bossScheduleId: string | null },
+  members: Array<{ userId: string; role: string }>,
+): Promise<{ currencyCode: string; pointsByUserId: Map<string, number> }> {
+  const settings = await findGuildSettingsByGuildId(guildId);
+  const currencyCode = settings?.currencyCode || "PHP";
+  const defaultPoints = settings?.attendancePoints || 10;
+  const pointsByUserId = new Map(members.map((member) => [member.userId, defaultPoints]));
+
+  if (!session.bossScheduleId || members.length === 0) {
+    return { currencyCode, pointsByUserId };
+  }
+
+  const rules = await getEffectiveActivityPointRules(guildId);
+  const bossActivity = rules.activities.find((activity) => activity.key === "BOSS");
+  if (!bossActivity) return { currencyCode, pointsByUserId };
+
+  for (const member of members) {
+    const multiplier = (bossActivity.multipliers as Record<string, number>)[member.role] ?? 1;
+    pointsByUserId.set(member.userId, Math.round(bossActivity.basePoints * multiplier));
+  }
+
+  return { currencyCode, pointsByUserId };
+}
+
 // Shared by the live queue (single active session) and the past-session
 // inspector (arbitrary session id): pulls every record for the session (not
 // just pending) plus the boss it's tied to and the full active roster, so the
@@ -1196,9 +1231,10 @@ export async function markMemberPresent(
     throw new BadRequestError("This member is already confirmed present");
   }
 
-  const settings = await findGuildSettingsByGuildId(guildId);
-  const attendancePoints = settings?.attendancePoints || 10;
-  const currencyCode = settings?.currencyCode || "PHP";
+  const { currencyCode, pointsByUserId } = await getAttendanceAwardContext(guildId, session, [
+    { userId: member.userId, role: member.role },
+  ]);
+  const attendancePoints = pointsByUserId.get(userId) ?? 10;
 
   const result = await prisma.$transaction(async (tx) => {
     const record = existing
@@ -1240,6 +1276,113 @@ export async function markMemberPresent(
 
   await invalidateAttendanceAndFinanceCache(guildId, sessionId, userId);
   return { success: true, record: result.record, points: attendancePoints };
+}
+
+export async function markMembersPresent(
+  guildId: string,
+  sessionId: string,
+  userIds: string[],
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await assertAttendanceOfficer(guildId, actorId, "manually record attendance");
+
+  const uniqueUserIds = [...new Set(userIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueUserIds.length === 0) {
+    throw new BadRequestError("Select at least one member to mark present");
+  }
+  if (uniqueUserIds.length > 200) {
+    throw new BadRequestError("You can mark up to 200 members present at once");
+  }
+
+  const session = await prisma.attendanceSession.findUnique({ where: { id: sessionId } });
+  if (!session || session.guildId !== guildId) {
+    throw new NotFoundError("Attendance session not found");
+  }
+
+  const members = await prisma.guildMember.findMany({
+    where: { guildId, userId: { in: uniqueUserIds }, isActive: true },
+    select: { userId: true, role: true },
+  });
+  const activeUserIds = new Set(members.map((member) => member.userId));
+  const inactiveCount = uniqueUserIds.length - activeUserIds.size;
+  if (inactiveCount > 0) {
+    throw new BadRequestError(`${inactiveCount} selected member(s) are no longer active in this guild`);
+  }
+
+  const existingRecords = await prisma.attendanceRecord.findMany({
+    where: { sessionId, userId: { in: uniqueUserIds } },
+  });
+  const existingByUserId = new Map(existingRecords.map((record) => [record.userId, record]));
+  const membersToMark = members.filter((member) => existingByUserId.get(member.userId)?.status !== AttendanceRecordStatus.CONFIRMED);
+  const alreadyConfirmed = members.length - membersToMark.length;
+
+  if (membersToMark.length === 0) {
+    return { success: true, count: 0, skipped: alreadyConfirmed, points: 0 };
+  }
+
+  const { currencyCode, pointsByUserId } = await getAttendanceAwardContext(guildId, session, membersToMark);
+
+  const records = await prisma.$transaction(async (tx) => {
+    const changed = [];
+    for (const member of membersToMark) {
+      const existing = existingByUserId.get(member.userId);
+      const record = existing
+        ? await tx.attendanceRecord.update({
+            where: { id: existing.id },
+            data: { status: AttendanceRecordStatus.CONFIRMED },
+          })
+        : await tx.attendanceRecord.create({
+            data: { sessionId, userId: member.userId, status: AttendanceRecordStatus.CONFIRMED },
+          });
+      changed.push(record);
+    }
+
+    await tx.ledgerEntry.createMany({
+      data: changed.map((record) => {
+        const points = pointsByUserId.get(record.userId) ?? 10;
+        return {
+          guildId,
+          accountType: "MEMBER",
+          accountId: record.userId,
+          currency: currencyCode,
+          amount: BigInt(points),
+          entryType: "CREDIT",
+          referenceType: "ATTENDANCE",
+          referenceId: record.id,
+          idempotencyKey: `ATT-${record.id}`,
+          actorId,
+          description: `Manually marked present in session: ${session.title}`,
+        };
+      }),
+      skipDuplicates: true,
+    });
+
+    return changed;
+  });
+
+  const totalPoints = records.reduce((sum, record) => sum + (pointsByUserId.get(record.userId) ?? 10), 0);
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "MEMBER_ATTENDANCE_BULK_ADDED",
+    target: "AttendanceSession",
+    targetId: sessionId,
+    detail: {
+      sessionTitle: session.title,
+      count: records.length,
+      skipped: alreadyConfirmed,
+      userIds: records.map((record) => record.userId),
+      pointsAwarded: totalPoints,
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  await invalidateAttendanceAndFinanceCacheForUsers(guildId, sessionId, records.map((record) => record.userId));
+  return { success: true, count: records.length, skipped: alreadyConfirmed, points: totalPoints };
 }
 
 // Scanner/officer helper: creates a PENDING record for a member who appeared in
@@ -3846,11 +3989,21 @@ export async function updateAttendanceSession(
     throw new NotFoundError("Attendance session not found");
   }
 
+  const nextTitle = payload.title !== undefined ? payload.title.trim() : undefined;
+  if (nextTitle !== undefined && (nextTitle.length < 2 || nextTitle.length > 80)) {
+    throw new BadRequestError("Attendance title must be between 2 and 80 characters");
+  }
+
+  const nextExpiresAt = payload.expiresAt ? new Date(payload.expiresAt) : undefined;
+  if (payload.expiresAt && Number.isNaN(nextExpiresAt?.getTime())) {
+    throw new BadRequestError("Attendance expiry is invalid");
+  }
+
   const updatedSession = await prisma.attendanceSession.update({
     where: { id: sessionId },
     data: {
-      title: payload.title,
-      expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : undefined,
+      title: nextTitle,
+      expiresAt: nextExpiresAt,
       isActive: payload.isActive,
     },
   });
@@ -3891,6 +4044,19 @@ export async function deleteAttendanceSession(
     throw new NotFoundError("Attendance session not found");
   }
 
+  const [confirmedRecords, pendingRecords] = await Promise.all([
+    prisma.attendanceRecord.count({
+      where: { sessionId, status: AttendanceRecordStatus.CONFIRMED },
+    }),
+    prisma.attendanceRecord.count({
+      where: { sessionId, status: AttendanceRecordStatus.PENDING },
+    }),
+  ]);
+
+  if (confirmedRecords > 0) {
+    throw new BadRequestError("Revoke confirmed attendance records before deleting this attendance window");
+  }
+
   await prisma.attendanceSession.delete({
     where: { id: sessionId },
   });
@@ -3901,7 +4067,7 @@ export async function deleteAttendanceSession(
     action: "ATTENDANCE_SESSION_DELETED",
     target: "AttendanceSession",
     targetId: sessionId,
-    detail: { title: session.title },
+    detail: { title: session.title, pendingRecordsRemoved: pendingRecords },
     ipAddress,
     userAgent,
   });

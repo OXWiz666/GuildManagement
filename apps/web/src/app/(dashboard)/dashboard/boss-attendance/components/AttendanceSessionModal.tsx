@@ -68,6 +68,7 @@ export default function AttendanceSessionModal({
   const [reopenMinutes, setReopenMinutes] = useState(30);
   const [isReopening, setIsReopening] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const boss = session.bossSchedule;
   const bossName = boss?.bossName || schedule?.bossName || session.title;
@@ -110,7 +111,7 @@ export default function AttendanceSessionModal({
     [pendingIds, deselectedIds],
   );
   const allPendingSelected = pendingIds.length > 0 && pendingIds.every((id) => selectedIds.has(id));
-  const isBusy = actionId !== null || isVerifyingAll || isMarkingAll || isReopening || isClosing;
+  const isBusy = actionId !== null || isVerifyingAll || isMarkingAll || isReopening || isClosing || isDeleting;
 
   async function runAction(id: string, fn: () => Promise<{ success: boolean; error?: { message?: string } }>, successMsg: string, failMsg: string) {
     if (isBusy) return;
@@ -182,29 +183,16 @@ export default function AttendanceSessionModal({
     if (ids.length === 0 || isBusy) return;
     setIsMarkingAll(true);
     try {
-      let succeeded = 0;
-      let failed = 0;
-      let firstError = "";
-      for (const userId of ids) {
-        try {
-          const res = await dashboardApi.markMemberPresent(guildId, session.id, userId);
-          if (res.success) {
-            succeeded++;
-          } else {
-            failed++;
-            firstError ||= res.error?.message || "Failed to mark present";
-          }
-        } catch {
-          failed++;
-          firstError ||= "Failed to mark present";
-        }
-      }
-      if (succeeded > 0) {
-        addToast(failed > 0 ? "warning" : "success", failed > 0 ? `Marked ${succeeded}; ${failed} failed. ${firstError}` : `Marked ${succeeded} member(s) present.`);
+      const res = await dashboardApi.markMembersPresent(guildId, session.id, ids);
+      if (res.success && res.data) {
+        const skipped = res.data.skipped > 0 ? ` ${res.data.skipped} already confirmed.` : "";
+        addToast("success", `Marked ${res.data.count} member(s) present.${skipped}`);
         invalidateAll();
       } else {
-        addToast("error", firstError || "No members were marked present.");
+        addToast("error", res.error?.message || "No members were marked present.");
       }
+    } catch (err) {
+      addToast("error", err instanceof Error ? err.message : "Failed to mark members present");
     } finally {
       setIsMarkingAll(false);
     }
@@ -212,6 +200,10 @@ export default function AttendanceSessionModal({
 
   async function handleReopen() {
     if (isBusy) return;
+    if (!Number.isFinite(reopenMinutes) || reopenMinutes < 1 || reopenMinutes > 1440) {
+      addToast("error", "Open time must be between 1 and 1440 minutes.");
+      return;
+    }
     setIsReopening(true);
     try {
       const res = await dashboardApi.reopenAttendanceSession(guildId, session.id, reopenMinutes);
@@ -229,28 +221,59 @@ export default function AttendanceSessionModal({
     }
   }
 
-  function handleClose() {
+  function handleCloseWindow() {
     if (isBusy) return;
     addToast(
       "warning",
-      "Are you sure you want to close this check-in window? All pending check-in requests for it will be removed.",
+      "Close this check-in window? Members will no longer be able to check in, but the attendance history stays saved.",
       0,
       {
-        label: "Close",
+        label: "Close Window",
         variant: "danger",
         onClick: async () => {
           setIsClosing(true);
           try {
-            const result = await dashboardApi.deleteAttendanceSession(guildId, session.id);
+            const result = await dashboardApi.updateAttendanceSession(guildId, session.id, { isActive: false });
             if (result.success) {
               addToast("success", "Check-in window closed.");
               invalidateAll();
-              onClose();
+            } else {
+              addToast("error", result.error?.message || "Failed to close check-in window");
             }
           } catch (err) {
             addToast("error", err instanceof Error ? err.message : "Failed to close check-in window");
           } finally {
             setIsClosing(false);
+          }
+        },
+      },
+    );
+  }
+
+  function handleDeleteAttendance() {
+    if (isBusy) return;
+    addToast(
+      "warning",
+      `Delete "${bossName}" attendance? This removes the check-in window and all records for it.`,
+      0,
+      {
+        label: "Delete",
+        variant: "danger",
+        onClick: async () => {
+          setIsDeleting(true);
+          try {
+            const result = await dashboardApi.deleteAttendanceSession(guildId, session.id);
+            if (result.success) {
+              addToast("success", "Attendance deleted.");
+              invalidateAll();
+              onClose();
+            } else {
+              addToast("error", result.error?.message || "Failed to delete attendance");
+            }
+          } catch (err) {
+            addToast("error", err instanceof Error ? err.message : "Failed to delete attendance");
+          } finally {
+            setIsDeleting(false);
           }
         },
       },
@@ -270,10 +293,10 @@ export default function AttendanceSessionModal({
   const isMissed = userStatus?.status === "MISSED";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-4 pb-8 pt-24 sm:pt-20">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-2xl max-h-full overflow-y-auto custom-scrollbar animate-scale-in rounded-2xl border border-white/[0.1] bg-[#0c0d12] shadow-2xl shadow-black/60">
+      <div className="relative w-full max-w-2xl max-h-[calc(100vh-7rem)] overflow-y-auto custom-scrollbar animate-scale-in rounded-2xl border border-white/[0.1] bg-[#0c0d12] shadow-2xl shadow-black/60">
         <button
           type="button"
           onClick={onClose}
@@ -370,35 +393,45 @@ export default function AttendanceSessionModal({
                     </>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       onClose();
                       onEditSession(session);
                     }}
-                    className="text-violet-400 hover:text-violet-300 transition-colors font-bold text-[10px] bg-violet-500/5 hover:bg-violet-500/10 px-2 py-1 rounded cursor-pointer"
+                    disabled={isBusy}
+                    className="inline-flex h-7 items-center justify-center rounded-md border border-violet-500/15 bg-violet-500/5 px-2.5 text-[10px] font-bold text-violet-300 transition-colors hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Edit
                   </button>
                   {session.isActive ? (
                     <button
                       type="button"
-                      onClick={handleClose}
+                      onClick={handleCloseWindow}
                       disabled={isBusy}
-                      className="text-rose-400 hover:text-rose-300 transition-colors font-bold text-[10px] bg-rose-500/5 hover:bg-rose-500/10 px-2 py-1 rounded cursor-pointer disabled:opacity-50"
+                      className="inline-flex h-7 items-center justify-center rounded-md border border-amber-500/15 bg-amber-500/5 px-2.5 text-[10px] font-bold text-amber-300 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Close
+                      {isClosing ? "Closing..." : "Close"}
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setShowReopen((v) => !v)}
-                      className="px-3 py-1.5 bg-violet-650 hover:bg-violet-755 text-[11px] font-semibold text-white rounded-lg transition-all cursor-pointer"
+                      disabled={isBusy}
+                      className="inline-flex h-7 items-center justify-center rounded-md border border-emerald-500/15 bg-emerald-500/5 px-2.5 text-[10px] font-bold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Reopen Window
+                      Reopen
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={handleDeleteAttendance}
+                    disabled={isBusy}
+                    className="inline-flex h-7 items-center justify-center rounded-md border border-rose-500/15 bg-rose-500/5 px-2.5 text-[10px] font-bold text-rose-300 transition-colors hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
               </div>
 
@@ -414,7 +447,7 @@ export default function AttendanceSessionModal({
                       min={1}
                       max={1440}
                       value={reopenMinutes}
-                      onChange={(e) => setReopenMinutes(Math.max(1, Number(e.target.value) || 1))}
+                      onChange={(e) => setReopenMinutes(Math.min(1440, Math.max(1, Number(e.target.value) || 1)))}
                       className="w-full px-3.5 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500/40"
                     />
                   </label>

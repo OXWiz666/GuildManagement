@@ -202,9 +202,14 @@ export async function login(
   ipAddress?: string,
   userAgent?: string,
 ): Promise<AuthResponse> {
+  const resolvedEmail = await resolveLoginIdentifier(email);
+  if (!resolvedEmail) {
+    throw new UnauthorizedError("Invalid email or password");
+  }
+
   // Find user
   const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
+    where: { email: resolvedEmail },
   });
 
   if (!user || !user.isActive) {

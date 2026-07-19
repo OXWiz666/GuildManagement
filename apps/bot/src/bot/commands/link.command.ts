@@ -146,3 +146,36 @@ export const bindGuildCommand: Command = {
     await ctx.message.reply({ embeds: [embed] });
   },
 };
+
+export const unbindGuildCommand: Command = {
+  name: "unbindguild",
+  aliases: ["unbind", "removeguild"],
+  description: "Unbind this Discord server from its ForgeKeep guild (Guild Leader only).",
+  usage: "!unbindguild",
+  category: "Configuration",
+  requiresLink: true,
+  minimumRole: "GUILD_LEADER",
+
+  async execute(ctx: CommandContext): Promise<void> {
+    const result = await ctx.services.repositories.discordServer.unbind(ctx.server.discordGuildId);
+    if (!result) {
+      throw new UserFacingError(
+        "Nothing to unbind",
+        "This Discord server is not currently bound to an active ForgeKeep guild.",
+      );
+    }
+
+    await ctx.message.reply({
+      embeds: [
+        successEmbed(
+          "Server unbound",
+          [
+            `This Discord server is no longer connected to **${result.guildName}**.`,
+            "",
+            "Run `!bindguild <invite-code>` to connect it again.",
+          ].join("\n"),
+        ),
+      ],
+    });
+  },
+};

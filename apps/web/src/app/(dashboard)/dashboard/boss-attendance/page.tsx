@@ -150,6 +150,7 @@ export default function BossAttendancePage() {
     socket.on("attendance_record_created", handleAttendanceUpdate);
     socket.on("attendance_record_confirmed", handleAttendanceUpdate);
     socket.on("attendance_records_bulk_confirmed", handleAttendanceUpdate);
+    socket.on("attendance_records_bulk_revoked", handleAttendanceUpdate);
     socket.on("boss_rotation_updated", handleAttendanceUpdate);
 
     return () => {
@@ -159,6 +160,7 @@ export default function BossAttendancePage() {
       socket.off("attendance_record_created", handleAttendanceUpdate);
       socket.off("attendance_record_confirmed", handleAttendanceUpdate);
       socket.off("attendance_records_bulk_confirmed", handleAttendanceUpdate);
+      socket.off("attendance_records_bulk_revoked", handleAttendanceUpdate);
       socket.off("boss_rotation_updated", handleAttendanceUpdate);
     };
   }, [socket, activeGuild, invalidateAll]);

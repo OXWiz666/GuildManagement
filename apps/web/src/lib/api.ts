@@ -662,7 +662,7 @@ export const guildApi = {
   },
 
   async reviewApplication(guildId: string, requestId: string, action: "ACCEPT" | "DECLINE") {
-    return api.patch<{ success: boolean; status: string; memberCode?: string }>(
+    return api.patch<{ success: boolean; status: string; memberCode?: string; member?: GuildMemberData }>(
       `/guilds/${guildId}/applications/${requestId}`,
       { action },
     );
@@ -1182,6 +1182,13 @@ export const dashboardApi = {
     return api.post<{ success: boolean }>(
       `/dashboard/attendance/revoke/${recordId}`,
       { guildId },
+    );
+  },
+
+  async revokeAttendances(guildId: string, recordIds: string[]) {
+    return api.post<{ success: boolean; count: number; reversed: number }>(
+      `/dashboard/attendance/revoke/batch`,
+      { guildId, recordIds },
     );
   },
 

@@ -1507,6 +1507,109 @@ export async function revokeMemberAttendance(
   return { success: true };
 }
 
+export async function revokeMemberAttendances(
+  guildId: string,
+  recordIds: string[],
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await assertAttendanceOfficer(guildId, actorId, "revoke attendance records");
+
+  const uniqueRecordIds = [...new Set(recordIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueRecordIds.length === 0) {
+    throw new BadRequestError("Select at least one attendance record to remove");
+  }
+  if (uniqueRecordIds.length > 200) {
+    throw new BadRequestError("You can remove up to 200 attendance records at once");
+  }
+
+  const records = await prisma.attendanceRecord.findMany({
+    where: { id: { in: uniqueRecordIds } },
+    include: {
+      user: { select: { displayName: true } },
+      session: true,
+    },
+  });
+
+  if (records.length !== uniqueRecordIds.length || records.some((record) => record.session.guildId !== guildId)) {
+    throw new NotFoundError("One or more attendance records were not found in this guild");
+  }
+
+  const confirmedRecords = records.filter((record) => record.status === AttendanceRecordStatus.CONFIRMED);
+  const confirmedIds = confirmedRecords.map((record) => record.id);
+  const creditRows = confirmedIds.length > 0
+    ? await prisma.ledgerEntry.findMany({
+        where: {
+          guildId,
+          accountType: "MEMBER",
+          entryType: "CREDIT",
+          referenceType: "ATTENDANCE",
+          referenceId: { in: confirmedIds },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const creditByRecordId = new Map<string, (typeof creditRows)[number]>();
+  for (const credit of creditRows) {
+    if (!creditByRecordId.has(credit.referenceId)) {
+      creditByRecordId.set(credit.referenceId, credit);
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const debitRows = confirmedRecords
+      .map((record) => {
+        const credit = creditByRecordId.get(record.id);
+        if (!credit) return null;
+        return {
+          guildId,
+          accountType: "MEMBER" as const,
+          accountId: record.userId,
+          currency: credit.currency,
+          amount: credit.amount,
+          entryType: "DEBIT" as const,
+          referenceType: "ATTENDANCE_REVOKE",
+          referenceId: record.id,
+          idempotencyKey: `ATT-REVOKE-${record.id}`,
+          actorId,
+          description: `Reversed attendance credit for session: ${record.session.title}`,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+
+    if (debitRows.length > 0) {
+      await tx.ledgerEntry.createMany({ data: debitRows, skipDuplicates: true });
+    }
+
+    await tx.attendanceRecord.deleteMany({ where: { id: { in: uniqueRecordIds } } });
+  });
+
+  const sessions = [...new Set(records.map((record) => record.sessionId))];
+  const users = [...new Set(records.map((record) => record.userId))];
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "MEMBER_ATTENDANCE_BULK_REVOKED",
+    target: sessions.length === 1 ? "AttendanceSession" : "AttendanceRecord",
+    targetId: sessions[0] ?? uniqueRecordIds[0]!,
+    detail: {
+      count: records.length,
+      confirmedRemoved: confirmedRecords.length,
+      pendingRemoved: records.length - confirmedRecords.length,
+      recordIds: uniqueRecordIds,
+      userIds: users,
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  await Promise.all(
+    sessions.map((sessionId) => invalidateAttendanceAndFinanceCacheForUsers(guildId, sessionId, users)),
+  );
+  return { success: true, count: records.length, reversed: confirmedRecords.length };
+}
+
 export async function markAttendancePending(
   guildId: string,
   recordId: string,

@@ -229,6 +229,71 @@ function MetricCell({ value, tone }: { value: string; tone: "sky" | "amber" | "v
   return <span className={`font-mono font-semibold ${cls}`}>{value}</span>;
 }
 
+function MiniBar({
+  label,
+  value,
+  max,
+  color,
+  detail,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+  detail: string;
+}) {
+  const pct = clampPercent(value, max);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3 text-[11px]">
+        <span className="font-semibold text-white/70">{label}</span>
+        <span className="font-mono text-white/40">{detail}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${pct}%`, backgroundColor: color, boxShadow: `0 0 16px ${color}55` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RankedMember({
+  rank,
+  member,
+  value,
+  suffix,
+  tone,
+}: {
+  rank: number;
+  member: MemberStatsBoardRow;
+  value: string;
+  suffix: string;
+  tone: "gold" | "emerald" | "amber";
+}) {
+  const toneClass = {
+    gold: "text-[var(--forge-gold-bright,#f5c451)] bg-amber-500/10 border-amber-500/15",
+    emerald: "text-emerald-300 bg-emerald-500/10 border-emerald-500/15",
+    amber: "text-amber-300 bg-amber-500/10 border-amber-500/15",
+  }[tone];
+  return (
+    <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+      <span className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-black ${toneClass}`}>
+        {rank}
+      </span>
+      <div className="flex min-w-0 items-center gap-2">
+        <Avatar name={member.displayName} src={member.avatarUrl} size="sm" />
+        <span className="truncate text-[12px] font-semibold text-white">{member.displayName}</span>
+      </div>
+      <span className="text-right font-mono text-[12px] font-bold text-white">
+        {value}
+        <span className="ml-1 text-[10px] font-semibold text-white/35">{suffix}</span>
+      </span>
+    </div>
+  );
+}
+
 const ICONS = {
   pulse: (
     <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -293,6 +358,14 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
   const cpGrowthTotal = useMemo(() => members.reduce((sum, m) => sum + (m.cpGrowth ?? 0), 0), [members]);
   const cpGrowingCount = useMemo(() => members.filter((m) => (m.cpGrowth ?? 0) > 0).length, [members]);
   const activeStreakCount = useMemo(() => members.filter((m) => m.currentStreak > 0).length, [members]);
+  const attendanceBands = useMemo(() => ({
+    excellent: members.filter((member) => member.presenceRate >= 80).length,
+    steady: members.filter((member) => member.presenceRate >= 50 && member.presenceRate < 80).length,
+    watch: members.filter((member) => member.presenceRate < 50).length,
+  }), [members]);
+  const topPoints = useMemo(() => [...members].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 3), [members]);
+  const topGrowth = useMemo(() => [...members].sort((a, b) => (b.cpGrowth ?? -Infinity) - (a.cpGrowth ?? -Infinity)).slice(0, 3), [members]);
+  const topStreaks = useMemo(() => [...members].sort((a, b) => b.currentStreak - a.currentStreak).slice(0, 3), [members]);
   const columns = useMemo<ColumnDef<MemberStatsBoardRow>[]>(
     () => [
       {
@@ -462,6 +535,50 @@ export default function MembersStatisticsTab({ guildId }: MembersStatisticsTabPr
           meterLabel="Active streak"
           meterDetail={`${activeStreakCount} of ${members.length}`}
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.05fr_1.6fr]">
+        <div className="rounded-2xl border border-white/[0.07] bg-[#0d0f13] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Attendance Distribution</h3>
+              <p className="mt-0.5 text-[11px] text-white/35">Active roster grouped by reliability</p>
+            </div>
+            <Badge tone="flat">{members.length} members</Badge>
+          </div>
+          <div className="space-y-3">
+            <MiniBar label="Excellent" value={attendanceBands.excellent} max={members.length} color="#34d399" detail={`${attendanceBands.excellent} at 80%+`} />
+            <MiniBar label="Steady" value={attendanceBands.steady} max={members.length} color="#38bdf8" detail={`${attendanceBands.steady} at 50-79%`} />
+            <MiniBar label="Needs review" value={attendanceBands.watch} max={members.length} color="#fb7185" detail={`${attendanceBands.watch} below 50%`} />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.07] bg-[#0d0f13] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-white">Roster Leaders</h3>
+            <p className="mt-0.5 text-[11px] text-white/35">Top members by points, CP movement, and active streak</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Activity Points</p>
+              {topPoints.map((member, i) => (
+                <RankedMember key={member.userId} rank={i + 1} member={member} value={member.totalPoints.toLocaleString()} suffix="pts" tone="gold" />
+              ))}
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">CP Momentum</p>
+              {topGrowth.map((member, i) => (
+                <RankedMember key={member.userId} rank={i + 1} member={member} value={formatSigned(member.cpGrowth)} suffix="CP" tone="emerald" />
+              ))}
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Streak</p>
+              {topStreaks.map((member, i) => (
+                <RankedMember key={member.userId} rank={i + 1} member={member} value={member.currentStreak.toLocaleString()} suffix="runs" tone="amber" />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Full table */}

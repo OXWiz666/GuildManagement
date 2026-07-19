@@ -63,6 +63,7 @@ export default function AttendanceSessionModal({
   const [actionId, setActionId] = useState<string | null>(null);
   const [isVerifyingAll, setIsVerifyingAll] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const [isRemovingAll, setIsRemovingAll] = useState(false);
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set());
   const [showReopen, setShowReopen] = useState(false);
   const [reopenMinutes, setReopenMinutes] = useState(30);
@@ -111,7 +112,7 @@ export default function AttendanceSessionModal({
     [pendingIds, deselectedIds],
   );
   const allPendingSelected = pendingIds.length > 0 && pendingIds.every((id) => selectedIds.has(id));
-  const isBusy = actionId !== null || isVerifyingAll || isMarkingAll || isReopening || isClosing || isDeleting;
+  const isBusy = actionId !== null || isVerifyingAll || isMarkingAll || isRemovingAll || isReopening || isClosing || isDeleting;
 
   async function runAction(id: string, fn: () => Promise<{ success: boolean; error?: { message?: string } }>, successMsg: string, failMsg: string) {
     if (isBusy) return;
@@ -196,6 +197,36 @@ export default function AttendanceSessionModal({
     } finally {
       setIsMarkingAll(false);
     }
+  }
+
+  function handleRemoveAllCheckedIn() {
+    if (checkedIn.length === 0 || isBusy) return;
+    addToast(
+      "warning",
+      `Remove all ${checkedIn.length} checked-in record(s) from "${bossName}"? Confirmed records will have their points reversed.`,
+      0,
+      {
+        label: "Remove All",
+        variant: "danger",
+        onClick: async () => {
+          setIsRemovingAll(true);
+          try {
+            const res = await dashboardApi.revokeAttendances(guildId, checkedIn.map((record) => record.id));
+            if (res.success && res.data) {
+              addToast("success", `Removed ${res.data.count} check-in record(s).`);
+              setDeselectedIds(new Set());
+              invalidateAll();
+            } else {
+              addToast("error", res.error?.message || "Failed to remove check-ins");
+            }
+          } catch (err) {
+            addToast("error", err instanceof Error ? err.message : "Failed to remove check-ins");
+          } finally {
+            setIsRemovingAll(false);
+          }
+        },
+      },
+    );
   }
 
   async function handleReopen() {
@@ -512,11 +543,11 @@ export default function AttendanceSessionModal({
 
                   {/* CHECKED-IN */}
                   <section>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <h5 className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-400/80">
                         Checked-In ({checkedIn.length})
                       </h5>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         {pendingIds.length > 0 && (
                           <>
                             <button
@@ -537,66 +568,71 @@ export default function AttendanceSessionModal({
                             </button>
                           </>
                         )}
+                        {checkedIn.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveAllCheckedIn}
+                            disabled={isBusy}
+                            className="px-2.5 py-1 bg-rose-500/10 text-[10px] font-semibold text-rose-300 rounded-md border border-rose-500/15 transition-all hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isRemovingAll ? "Removing..." : "Remove All"}
+                          </button>
+                        )}
                       </div>
                     </div>
                     {checkedIn.length === 0 ? (
                       <p className="text-[11px] text-white/35 italic px-1">No one checked in for this window.</p>
                     ) : (
-                      <div className="rounded-lg border border-white/[0.05] max-h-72 overflow-y-auto custom-scrollbar divide-y divide-zinc-850">
+                      <div className="max-h-72 overflow-y-auto rounded-xl border border-white/[0.06] bg-white/[0.015] custom-scrollbar divide-y divide-white/[0.05]">
                         {checkedIn.map((rec) => {
                           const isPendingRec = rec.status === "PENDING";
                           return (
-                            <div key={rec.id} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-white/[0.01]">
-                              {isPendingRec && (
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIds.has(rec.id)}
-                                  onChange={() =>
-                                    setDeselectedIds((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(rec.id)) next.delete(rec.id);
-                                      else next.add(rec.id);
-                                      return next;
-                                    })
-                                  }
-                                  className="h-3.5 w-3.5 rounded border-white/20 bg-white/[0.04] accent-violet-600 cursor-pointer shrink-0"
-                                />
-                              )}
-                              <MemberIdentity displayName={rec.user?.displayName || "Unknown member"} email={rec.user?.email} />
-                              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                            <div key={rec.id} className="grid gap-2 px-3 py-2.5 hover:bg-white/[0.025] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                              <div className="flex min-w-0 items-center gap-3">
                                 {isPendingRec ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-amber-500/10 bg-amber-500/5 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                                    Pending
-                                  </span>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIds.has(rec.id)}
+                                    onChange={() =>
+                                      setDeselectedIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(rec.id)) next.delete(rec.id);
+                                        else next.add(rec.id);
+                                        return next;
+                                      })
+                                    }
+                                    className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-white/20 bg-white/[0.04] accent-violet-600"
+                                  />
                                 ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-emerald-500/10 bg-emerald-500/5 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                                    Confirmed
-                                  </span>
+                                  <span className="h-3.5 w-3.5 shrink-0" />
                                 )}
-                                {isPendingRec ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleConfirm(rec.id)}
-                                    disabled={isBusy}
-                                    className="px-2.5 py-1.25 bg-white/[0.10] hover:bg-white/[0.14] disabled:bg-white/[0.18] text-[11px] font-semibold text-white rounded-md transition-all cursor-pointer"
-                                  >
-                                    Confirm
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMarkPending(rec.id)}
-                                    disabled={isBusy}
-                                    className="px-2.5 py-1.25 bg-amber-500/10 hover:bg-amber-500/20 disabled:bg-white/[0.08] text-[11px] font-semibold text-amber-300 rounded-md transition-all cursor-pointer"
-                                  >
-                                    Set Pending
-                                  </button>
-                                )}
+                                <MemberIdentity displayName={rec.user?.displayName || "Unknown member"} email={rec.user?.email} />
+                              </div>
+                              <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
+                                <span className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[10px] font-bold uppercase tracking-wider ${
+                                  isPendingRec
+                                    ? "border-amber-500/10 bg-amber-500/5 text-amber-400"
+                                    : "border-emerald-500/10 bg-emerald-500/5 text-emerald-400"
+                                }`}>
+                                  {isPendingRec ? "Pending" : "Confirmed"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => isPendingRec ? handleConfirm(rec.id) : handleMarkPending(rec.id)}
+                                  disabled={isBusy}
+                                  className={`h-7 rounded-md px-2.5 text-[11px] font-semibold transition-all disabled:bg-white/[0.08] ${
+                                    isPendingRec
+                                      ? "bg-white/[0.10] text-white hover:bg-white/[0.14]"
+                                      : "bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                                  } disabled:cursor-not-allowed`}
+                                >
+                                  {isPendingRec ? "Confirm" : "Set Pending"}
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleRevoke(rec.id)}
                                   disabled={isBusy}
-                                  className="px-2.5 py-1.25 bg-rose-500/10 hover:bg-rose-500/20 disabled:bg-white/[0.08] text-[11px] font-semibold text-rose-300 rounded-md transition-all cursor-pointer"
+                                  className="h-7 rounded-md bg-rose-500/10 px-2.5 text-[11px] font-semibold text-rose-300 transition-all hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:bg-white/[0.08]"
                                 >
                                   Revoke
                                 </button>

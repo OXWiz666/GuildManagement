@@ -176,6 +176,25 @@ export const dashboard = new Hono<AppEnv>()
     await cache.set(cacheKey, result, 15);
     return ok(c, result);
   })
+  .post("/attendance/revoke/batch", requireAuth, async (c) => {
+    const user = c.get("user");
+    const { guildId, recordIds } = await readJson<{ guildId?: string; recordIds?: string[] }>(c);
+    if (!guildId || !Array.isArray(recordIds)) throw new BadRequestError("guildId and recordIds are required");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.dashboard.revokeMemberAttendances(guildId, recordIds, user.userId, ipAddress, userAgent);
+    await Promise.all([
+      cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+      cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+      cache.invalidatePattern(`attendance:sessions:${guildId}*`),
+      cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+      cache.invalidatePattern(`stats:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-card:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
+      cache.invalidatePattern(`member:stats-summary:${guildId}`),
+    ]);
+    broadcastToGuild(guildId, "attendance_records_bulk_revoked", { recordIds, ...result });
+    return ok(c, result);
+  })
   .post("/attendance/revoke/:recordId", requireAuth, async (c) => {
     const user = c.get("user");
     const recordId = c.req.param("recordId");

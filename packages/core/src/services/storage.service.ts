@@ -3,6 +3,7 @@ import { writeAuditLog } from "./audit.service";
 import { broadcastToGuild } from "../lib/socket";
 import { createLootSale } from "./loot.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
+import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 
 const OFFICER_ROLES = ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
 
@@ -132,7 +133,7 @@ export async function markStorageItemSold(
     throw new BadRequestError("A valid sale value is required");
   }
 
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
+  const settings = await findGuildSettingsByGuildId(guildId);
   const soldAt = payload.soldAt ? new Date(payload.soldAt) : null;
   if (payload.soldAt && (!soldAt || Number.isNaN(soldAt.getTime()))) {
     throw new BadRequestError("Invalid sold date");

@@ -104,6 +104,7 @@ export * from "./utils/pagination";
 export { cache, getCacheStats } from "./lib/cache";
 export { cache as redisCache, isRedisConfigured } from "./lib/redis";
 export { cacheKeys, ttl as cacheTtl } from "./lib/cache-keys";
+export { findGuildSettingsByGuildId, ensureGuildSettingsTemplateColumn } from "./lib/guild-settings-schema";
 
 // ─── Realtime broadcasting ──────────────────────
 export { broadcastToGuild, broadcastToUser, broadcastToFaction } from "./lib/socket";

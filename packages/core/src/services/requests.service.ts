@@ -3,6 +3,7 @@ import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import { MARKET_REQUEST_TYPES, REQUEST_TYPE_LIMIT_KEY, type MarketRequestType } from "@guild/shared";
+import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 import {
   getEffectiveMarketRules,
   resolveDistributionTier,
@@ -55,7 +56,7 @@ export async function createItemRequest(
 ) {
   const [member, settings, rules] = await Promise.all([
     getGuildMemberByUser(actorId, guildId),
-    prisma.guildSettings.findUnique({ where: { guildId } }),
+    findGuildSettingsByGuildId(guildId),
     getEffectiveMarketRules(guildId),
   ]);
 
@@ -249,7 +250,7 @@ export async function getGuildRequests(
 export async function getMyRequests(guildId: string, actorId: string, page = 1, limit = 20) {
   const [member, settings] = await Promise.all([
     getGuildMemberByUser(actorId, guildId),
-    prisma.guildSettings.findUnique({ where: { guildId } }),
+    findGuildSettingsByGuildId(guildId),
   ]);
 
   if (!member || !member.isActive) throw new ForbiddenError("Not a member of this guild");

@@ -101,24 +101,29 @@ export class SmartAttendanceService {
       );
     }
 
-    const existing = detected.present.length
+    const detectedUserIds = [...new Set([...detected.present, ...detected.absent].map((m) => m.userId))];
+    const existing = detectedUserIds.length
       ? await prisma.attendanceRecord.findMany({
           where: {
             sessionId: session.id,
-            userId: { in: detected.present.map((m) => m.userId) },
+            userId: { in: detectedUserIds },
           },
           select: { userId: true, status: true },
         })
       : [];
-    const already = new Set(
+    const alreadyConfirmed = new Set(
       existing.filter((row) => row.status === "CONFIRMED").map((row) => row.userId),
+    );
+    const alreadyPending = new Set(
+      existing.filter((row) => row.status === "PENDING").map((row) => row.userId),
     );
 
     const confirmed: SmartAttendanceResult["confirmed"] = [];
     const alreadyPresent: SmartAttendanceResult["alreadyPresent"] = [];
+    const absent: SmartAttendanceResult["absent"] = [];
 
     for (const match of detected.present) {
-      if (already.has(match.userId)) {
+      if (alreadyConfirmed.has(match.userId)) {
         alreadyPresent.push(match);
         continue;
       }
@@ -134,11 +139,30 @@ export class SmartAttendanceService {
       confirmed.push(match);
     }
 
+    for (const match of detected.absent) {
+      if (alreadyConfirmed.has(match.userId)) {
+        alreadyPresent.push(match);
+        continue;
+      }
+
+      if (!alreadyPending.has(match.userId)) {
+        await core.dashboard.markMemberPendingForReview(
+          params.guildId,
+          session.id,
+          match.userId,
+          params.actorId,
+          undefined,
+          "discord-bot-smart-attendance",
+        );
+      }
+      absent.push(match);
+    }
+
     return {
       session: { id: session.id, title: session.title, created: session.created },
       confirmed,
       alreadyPresent,
-      absent: detected.absent,
+      absent,
       ambiguous: detected.ambiguous,
       pageConfidence: layout.confidence,
       ms: Date.now() - started,

@@ -1,5 +1,6 @@
 import { prisma, type Guild, type GuildMember, type GuildSettings } from "@guild/db";
 import { type GuildRoleType } from "@guild/shared";
+import { findGuildSettingsByGuildId, updateGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 
 const CUSTOM_ROLE_SELECT = { id: true, name: true, color: true, band: true } as const;
 
@@ -166,16 +167,11 @@ export class PrismaGuildRepository implements IGuildRepository {
   }
 
   async getSettings(guildId: string): Promise<GuildSettings | null> {
-    return prisma.guildSettings.findUnique({
-      where: { guildId },
-    });
+    return findGuildSettingsByGuildId(guildId);
   }
 
   async updateSettings(guildId: string, data: any): Promise<GuildSettings> {
-    return prisma.guildSettings.update({
-      where: { guildId },
-      data,
-    });
+    return updateGuildSettingsByGuildId(guildId, data);
   }
 
   async getInviteCode(guildId: string): Promise<string | null> {

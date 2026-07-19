@@ -110,8 +110,10 @@ export default function AttendanceSessionModal({
     [pendingIds, deselectedIds],
   );
   const allPendingSelected = pendingIds.length > 0 && pendingIds.every((id) => selectedIds.has(id));
+  const isBusy = actionId !== null || isVerifyingAll || isMarkingAll || isReopening || isClosing;
 
   async function runAction(id: string, fn: () => Promise<{ success: boolean; error?: { message?: string } }>, successMsg: string, failMsg: string) {
+    if (isBusy) return;
     setActionId(id);
     try {
       const res = await fn();
@@ -142,20 +144,33 @@ export default function AttendanceSessionModal({
 
   async function handleVerifySelected() {
     const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    if (ids.length === 0 || isBusy) return;
     setIsVerifyingAll(true);
     try {
       let succeeded = 0;
+      let failed = 0;
+      let firstError = "";
       for (const recordId of ids) {
         try {
           const res = await dashboardApi.confirmAttendance(recordId, guildId);
-          if (res.success) succeeded++;
+          if (res.success) {
+            succeeded++;
+          } else {
+            failed++;
+            firstError ||= res.error?.message || "Failed to confirm";
+          }
         } catch {
-          // ignore individual failures, continue the batch
+          failed++;
+          firstError ||= "Failed to confirm";
         }
       }
-      addToast("success", `Verified ${succeeded} check-in(s).`);
-      invalidateAll();
+      if (succeeded > 0) {
+        addToast(failed > 0 ? "warning" : "success", failed > 0 ? `Verified ${succeeded}; ${failed} failed. ${firstError}` : `Verified ${succeeded} check-in(s).`);
+        setDeselectedIds(new Set());
+        invalidateAll();
+      } else {
+        addToast("error", firstError || "No check-ins were verified.");
+      }
     } finally {
       setIsVerifyingAll(false);
     }
@@ -164,26 +179,39 @@ export default function AttendanceSessionModal({
   async function handleMarkAllPresent() {
     if (!detailRaw) return;
     const ids = detailRaw.notCheckedInMembers.map((m) => m.userId);
-    if (ids.length === 0) return;
+    if (ids.length === 0 || isBusy) return;
     setIsMarkingAll(true);
     try {
       let succeeded = 0;
+      let failed = 0;
+      let firstError = "";
       for (const userId of ids) {
         try {
           const res = await dashboardApi.markMemberPresent(guildId, session.id, userId);
-          if (res.success) succeeded++;
+          if (res.success) {
+            succeeded++;
+          } else {
+            failed++;
+            firstError ||= res.error?.message || "Failed to mark present";
+          }
         } catch {
-          // ignore individual failures, continue the batch
+          failed++;
+          firstError ||= "Failed to mark present";
         }
       }
-      addToast("success", `Marked ${succeeded} member(s) present.`);
-      invalidateAll();
+      if (succeeded > 0) {
+        addToast(failed > 0 ? "warning" : "success", failed > 0 ? `Marked ${succeeded}; ${failed} failed. ${firstError}` : `Marked ${succeeded} member(s) present.`);
+        invalidateAll();
+      } else {
+        addToast("error", firstError || "No members were marked present.");
+      }
     } finally {
       setIsMarkingAll(false);
     }
   }
 
   async function handleReopen() {
+    if (isBusy) return;
     setIsReopening(true);
     try {
       const res = await dashboardApi.reopenAttendanceSession(guildId, session.id, reopenMinutes);
@@ -202,6 +230,7 @@ export default function AttendanceSessionModal({
   }
 
   function handleClose() {
+    if (isBusy) return;
     addToast(
       "warning",
       "Are you sure you want to close this check-in window? All pending check-in requests for it will be removed.",
@@ -325,7 +354,22 @@ export default function AttendanceSessionModal({
           {isOfficer && (
             <div className="space-y-4 border-t border-white/[0.06] pt-4">
               <div className="flex items-center justify-between gap-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/50">Officer Tools</h4>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/50">Officer Tools</h4>
+                  {detailRaw && (
+                    <>
+                      <span className="rounded-md border border-emerald-500/15 bg-emerald-500/[0.06] px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                        {detailRaw.confirmedRecords.length} confirmed
+                      </span>
+                      <span className="rounded-md border border-amber-500/15 bg-amber-500/[0.06] px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                        {detailRaw.pendingRecords.length} pending
+                      </span>
+                      <span className="rounded-md border border-rose-500/15 bg-rose-500/[0.05] px-2 py-0.5 text-[10px] font-bold text-rose-300">
+                        {detailRaw.notCheckedInMembers.length} missing
+                      </span>
+                    </>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -338,16 +382,14 @@ export default function AttendanceSessionModal({
                     Edit
                   </button>
                   {session.isActive ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleClose}
-                        disabled={isClosing}
-                        className="text-rose-400 hover:text-rose-300 transition-colors font-bold text-[10px] bg-rose-500/5 hover:bg-rose-500/10 px-2 py-1 rounded cursor-pointer disabled:opacity-50"
-                      >
-                        🗑️ Close
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      disabled={isBusy}
+                      className="text-rose-400 hover:text-rose-300 transition-colors font-bold text-[10px] bg-rose-500/5 hover:bg-rose-500/10 px-2 py-1 rounded cursor-pointer disabled:opacity-50"
+                    >
+                      Close
+                    </button>
                   ) : (
                     <button
                       type="button"
@@ -380,8 +422,8 @@ export default function AttendanceSessionModal({
                     <button type="button" onClick={() => setShowReopen(false)} disabled={isReopening} className="px-3 py-1.5 text-xs font-semibold text-white/60 hover:text-white transition-colors cursor-pointer">
                       Cancel
                     </button>
-                    <button type="button" onClick={handleReopen} disabled={isReopening} className="px-3 py-1.5 bg-violet-650 hover:bg-violet-755 disabled:opacity-50 text-xs font-semibold text-white rounded-lg transition-all cursor-pointer">
-                      {isReopening ? "Reopening…" : "Reopen"}
+                    <button type="button" onClick={handleReopen} disabled={isBusy} className="px-3 py-1.5 bg-violet-650 hover:bg-violet-755 disabled:opacity-50 text-xs font-semibold text-white rounded-lg transition-all cursor-pointer">
+                      {isReopening ? "Reopening..." : "Reopen"}
                     </button>
                   </div>
                 </div>
@@ -401,14 +443,14 @@ export default function AttendanceSessionModal({
                       <h5 className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-400/80">
                         Not Checked-In ({detailRaw.notCheckedInMembers.length})
                       </h5>
-                      {detailRaw.notCheckedInMembers.length > 1 && (
+                      {detailRaw.notCheckedInMembers.length > 0 && (
                         <button
                           type="button"
                           onClick={handleMarkAllPresent}
-                          disabled={isMarkingAll || actionId !== null}
-                          className="px-2.5 py-1 bg-violet-650 hover:bg-violet-755 disabled:bg-white/[0.18] text-[10px] font-semibold text-white rounded-md transition-all cursor-pointer disabled:cursor-not-allowed"
+                          disabled={isBusy}
+                          className="px-2.5 py-1 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-white/[0.18] text-[10px] font-semibold text-white rounded-md transition-all cursor-pointer disabled:cursor-not-allowed"
                         >
-                          {isMarkingAll ? "Marking…" : `Mark All Present (${detailRaw.notCheckedInMembers.length})`}
+                          {isMarkingAll ? "Marking..." : `Mark All Present (${detailRaw.notCheckedInMembers.length})`}
                         </button>
                       )}
                     </div>
@@ -423,7 +465,7 @@ export default function AttendanceSessionModal({
                               <button
                                 type="button"
                                 onClick={() => handleMarkPresent(member.userId)}
-                                disabled={actionId === member.userId}
+                                disabled={isBusy}
                                 className="px-2.5 py-1.25 bg-white/[0.10] hover:bg-white/[0.14] disabled:bg-white/[0.18] text-[11px] font-semibold text-white rounded-md transition-all cursor-pointer shrink-0"
                               >
                                 Mark Present
@@ -447,6 +489,7 @@ export default function AttendanceSessionModal({
                             <button
                               type="button"
                               onClick={() => setDeselectedIds(allPendingSelected ? new Set(pendingIds) : new Set())}
+                              disabled={isBusy}
                               className="text-[10px] font-bold text-white/40 hover:text-white/70 transition-colors cursor-pointer"
                             >
                               {allPendingSelected ? "Uncheck all" : "Check all"}
@@ -454,7 +497,7 @@ export default function AttendanceSessionModal({
                             <button
                               type="button"
                               onClick={handleVerifySelected}
-                              disabled={isVerifyingAll || selectedIds.size === 0}
+                              disabled={isBusy || selectedIds.size === 0}
                               className="px-2.5 py-1 bg-violet-650 hover:bg-violet-755 text-[10px] font-semibold text-white rounded-md transition-all cursor-pointer disabled:bg-white/[0.18] disabled:cursor-not-allowed"
                             >
                               Verify Checked ({selectedIds.size})
@@ -501,7 +544,7 @@ export default function AttendanceSessionModal({
                                   <button
                                     type="button"
                                     onClick={() => handleConfirm(rec.id)}
-                                    disabled={actionId === rec.id}
+                                    disabled={isBusy}
                                     className="px-2.5 py-1.25 bg-white/[0.10] hover:bg-white/[0.14] disabled:bg-white/[0.18] text-[11px] font-semibold text-white rounded-md transition-all cursor-pointer"
                                   >
                                     Confirm
@@ -510,7 +553,7 @@ export default function AttendanceSessionModal({
                                   <button
                                     type="button"
                                     onClick={() => handleMarkPending(rec.id)}
-                                    disabled={actionId === rec.id}
+                                    disabled={isBusy}
                                     className="px-2.5 py-1.25 bg-amber-500/10 hover:bg-amber-500/20 disabled:bg-white/[0.08] text-[11px] font-semibold text-amber-300 rounded-md transition-all cursor-pointer"
                                   >
                                     Set Pending
@@ -519,7 +562,7 @@ export default function AttendanceSessionModal({
                                 <button
                                   type="button"
                                   onClick={() => handleRevoke(rec.id)}
-                                  disabled={actionId === rec.id}
+                                  disabled={isBusy}
                                   className="px-2.5 py-1.25 bg-rose-500/10 hover:bg-rose-500/20 disabled:bg-white/[0.08] text-[11px] font-semibold text-rose-300 rounded-md transition-all cursor-pointer"
                                 >
                                   Revoke

@@ -1,5 +1,5 @@
 import { prisma } from "@guild/db";
-import { redisCache, cacheKeys, cacheTtl } from "@guild/core";
+import { redisCache, cacheKeys, cacheTtl, findGuildSettingsByGuildId } from "@guild/core";
 import {
   assessCpChange,
   detectClass,
@@ -81,10 +81,7 @@ export class CpScanService {
         select: { class: true },
         distinct: ["class"],
       }),
-      prisma.guildSettings.findUnique({
-        where: { guildId },
-        select: { characterClasses: true },
-      }),
+      findGuildSettingsByGuildId(guildId),
     ]);
 
     const configured = Array.isArray(settings?.characterClasses)

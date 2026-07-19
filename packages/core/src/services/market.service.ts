@@ -7,6 +7,7 @@ import { createNotifications } from "./notification.service";
 import { broadcastToGuild } from "../lib/socket";
 import { cache as redisCache } from "../lib/redis";
 import { cacheKeys, ttl as cacheTtl } from "../lib/cache-keys";
+import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import {
   GUILD_ROLES,
@@ -133,7 +134,7 @@ export function mergeMarketRules(raw: unknown): MarketRules {
 }
 
 export async function getEffectiveMarketRules(guildId: string): Promise<MarketRules> {
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
+  const settings = await findGuildSettingsByGuildId(guildId);
   return mergeMarketRules(settings?.marketRules);
 }
 

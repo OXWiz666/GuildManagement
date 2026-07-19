@@ -2,6 +2,7 @@ import { prisma } from "@guild/db";
 import { writeAuditLog } from "./audit.service";
 import { getGuildMemberByUser } from "./guild.service";
 import { broadcastToGuild } from "../lib/socket";
+import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 import { ForbiddenError, BadRequestError } from "../utils/errors";
 import {
   CUSTOMIZABLE_ROLES,
@@ -59,7 +60,7 @@ export function mergeActivityPointRules(raw: unknown): ActivityPointRules {
 }
 
 export async function getEffectiveActivityPointRules(guildId: string): Promise<ActivityPointRules> {
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
+  const settings = await findGuildSettingsByGuildId(guildId);
   return mergeActivityPointRules(settings?.activityPointRules);
 }
 

@@ -16,6 +16,7 @@ import { getGuildMemberByUser } from "./guild.service";
 import { addDropsToStorage } from "./storage.service";
 import { getEffectiveActivityPointRules } from "./activityPoints.service";
 import { publicUrl } from "../lib/supabaseStorage";
+import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 
 // Anti-spam in-memory tracking: userId -> { attempts: number, blockedUntil: Date | null }
 interface SpamRecord {
@@ -1195,7 +1196,7 @@ export async function markMemberPresent(
     throw new BadRequestError("This member is already confirmed present");
   }
 
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
+  const settings = await findGuildSettingsByGuildId(guildId);
   const attendancePoints = settings?.attendancePoints || 10;
   const currencyCode = settings?.currencyCode || "PHP";
 
@@ -1241,6 +1242,60 @@ export async function markMemberPresent(
   return { success: true, record: result.record, points: attendancePoints };
 }
 
+// Scanner/officer helper: creates a PENDING record for a member who appeared in
+// a gray/unconfirmed rally row. Existing CONFIRMED records are preserved so a
+// later scan can never downgrade attendance that an officer already approved.
+export async function markMemberPendingForReview(
+  guildId: string,
+  sessionId: string,
+  userId: string,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await assertAttendanceOfficer(guildId, actorId, "queue attendance for review");
+
+  const session = await prisma.attendanceSession.findUnique({ where: { id: sessionId } });
+  if (!session || session.guildId !== guildId) {
+    throw new NotFoundError("Attendance session not found");
+  }
+
+  const member = await getGuildMemberByUser(userId, guildId);
+  if (!member || !member.isActive) {
+    throw new BadRequestError("That member is not an active member of this guild");
+  }
+
+  const existing = await prisma.attendanceRecord.findUnique({
+    where: { userId_sessionId: { userId, sessionId } },
+  });
+  if (existing) {
+    return {
+      success: true,
+      record: existing,
+      created: false,
+      alreadyConfirmed: existing.status === AttendanceRecordStatus.CONFIRMED,
+    };
+  }
+
+  const record = await prisma.attendanceRecord.create({
+    data: { sessionId, userId, status: AttendanceRecordStatus.PENDING },
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "MEMBER_ATTENDANCE_QUEUED_FOR_REVIEW",
+    target: "AttendanceRecord",
+    targetId: record.id,
+    detail: { userId, sessionId, sessionTitle: session.title },
+    ipAddress,
+    userAgent,
+  });
+
+  await invalidateAttendanceCache(guildId, sessionId, userId);
+  return { success: true, record, created: true, alreadyConfirmed: false };
+}
+
 // Inverse of confirm/markMemberPresent: removes a member's attendance record
 // entirely (for undoing a mis-click or a manual correction), reversing the
 // ledger credit first if it had already been confirmed.
@@ -1268,7 +1323,7 @@ export async function revokeMemberAttendance(
   const wasConfirmed = record.status === AttendanceRecordStatus.CONFIRMED;
 
   if (wasConfirmed) {
-    const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
+    const settings = await findGuildSettingsByGuildId(guildId);
     const attendancePoints = settings?.attendancePoints || 10;
     const currencyCode = settings?.currencyCode || "PHP";
 
@@ -1425,9 +1480,7 @@ export async function confirmAttendanceRecord(
   }
 
   // Fetch guild settings for point awards
-  const settings = await prisma.guildSettings.findUnique({
-    where: { guildId },
-  });
+  const settings = await findGuildSettingsByGuildId(guildId);
 
   const currencyCode = settings?.currencyCode || "PHP";
 
@@ -4173,9 +4226,7 @@ export async function getDashboardSummary(guildId: string, userId: string) {
   // caching it under a guild-scoped key would leak one member's balance to
   // the next member who loads the page within the TTL window.
   const [settings, guildStats] = await Promise.all([
-    prisma.guildSettings.findUnique({
-      where: { guildId },
-    }),
+    findGuildSettingsByGuildId(guildId),
     redisCache.getOrSet(guildCacheKey, cacheTtl.dashboardStats, async () => {
       const [
         activeMemberCount,
@@ -4560,9 +4611,7 @@ export async function getAccountingDashboard(guildId: string, actorId: string, p
 }
 
 async function getAccountingDashboardUncached(guildId: string, page: number, limit: number) {
-  const settings = await prisma.guildSettings.findUnique({
-    where: { guildId },
-  });
+  const settings = await findGuildSettingsByGuildId(guildId);
 
   const currencySymbol = settings?.currencySymbol || "₱";
   const currencyCode = settings?.currencyCode || "PHP";

@@ -105,7 +105,10 @@ export const bindGuildCommand: Command = {
 
     // This command runs outside the normal guild scope, so resolve the linked
     // user directly rather than via ctx.actor (which needs a bound server).
-    const linked = await ctx.services.repositories.identity.isLinked(ctx.message.author.id);
+    const linked = await ctx.services.repositories.identity.isLinked(
+      ctx.message.author.id,
+      ctx.message.author.username,
+    );
     if (!linked) {
       throw new UserFacingError(
         "Link your ForgeKeep account first.",
@@ -115,6 +118,7 @@ export const bindGuildCommand: Command = {
 
     const user = await ctx.services.repositories.identity.resolveActorAnyGuild(
       ctx.message.author.id,
+      ctx.message.author.username,
     );
     if (!user) {
       throw new UserFacingError("Couldn't resolve your ForgeKeep account.");

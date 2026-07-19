@@ -111,13 +111,17 @@ export async function handleMessage(
     const actor = await services.repositories.identity.resolveActor(
       message.author.id,
       server.guildId,
+      message.author.username,
     );
 
     const ctx = buildContext(message, args, keyword, server, actor, services, dispatcher);
 
     // Throws NotLinkedError / MissingPermissionError, caught below.
     if (command.requiresLink || command.minimumRole) {
-      if (!actor && await services.repositories.identity.isLinked(message.author.id)) {
+      if (
+        !actor &&
+        await services.repositories.identity.isLinked(message.author.id, message.author.username)
+      ) {
         throw new NotGuildMemberError();
       }
       assertCommandAllowed(command, actor);

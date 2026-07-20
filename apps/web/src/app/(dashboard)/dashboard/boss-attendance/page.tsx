@@ -68,6 +68,10 @@ function isOpenAttendanceSession(session: AttendanceSessionSummary, now = new Da
   return session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
 }
 
+function isKilledBossAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
+  return session.bossSchedule?.status === "KILLED" && isOpenAttendanceSession(session, now);
+}
+
 function sessionPriority(session: AttendanceSessionSummary, now = new Date()) {
   const active = session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
   return (
@@ -94,13 +98,6 @@ function dedupeAttendanceSessions(sessions: AttendanceSessionSummary[], now = ne
   }
 
   return Array.from(byBoss.values());
-}
-
-function isKilledScheduleWithOpenAttendance(schedule: BossScheduleData, now = new Date()) {
-  return (
-    schedule.status === "KILLED" &&
-    Boolean(schedule.attendanceSessions?.some((session) => session.isActive && new Date(session.expiresAt).getTime() > now.getTime()))
-  );
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -164,7 +161,7 @@ export default function BossAttendancePage() {
     activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty",
     async () => {
       if (!activeGuild) return [];
-      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
+      const result = await dashboardApi.getBossSchedules(activeGuild.guildId, true);
       return result.success && result.data?.schedules ? result.data.schedules : [];
     },
     { persist: true, staleTime: 15000 }
@@ -194,33 +191,19 @@ export default function BossAttendancePage() {
     activeGuild ? `attendance_sessions:${activeGuild.guildId}` : "attendance_sessions_empty",
     async () => {
       if (!activeGuild) return [];
-      const result = await dashboardApi.listAttendanceSessions(activeGuild.guildId);
+      const result = await dashboardApi.listAttendanceSessions(activeGuild.guildId, true);
       return result.success && result.data ? result.data : [];
     },
     { persist: true, staleTime: 20000 }
   );
   const sessions = useMemo(() => sessionsRaw || [], [sessionsRaw]);
-  const killedOpenScheduleIds = useMemo(
-    () =>
-      new Set(
-        schedules
-          .filter((schedule) => isKilledScheduleWithOpenAttendance(schedule))
-          .map((schedule) => schedule.id),
-      ),
-    [schedules],
-  );
   const overviewSessions = useMemo(
     () =>
       dedupeAttendanceSessions(
-        sessions.filter(
-          (session) =>
-            session.bossScheduleId &&
-            killedOpenScheduleIds.has(session.bossScheduleId) &&
-            isOpenAttendanceSession(session),
-        ),
+        sessions.filter((session) => session.bossScheduleId && isKilledBossAttendanceSession(session)),
       )
         .sort((a, b) => attendanceSessionTime(b) - attendanceSessionTime(a)),
-    [sessions, killedOpenScheduleIds],
+    [sessions],
   );
 
   const isLoading = isLoadingSchedules || isLoadingStats;

@@ -491,6 +491,13 @@ export class BossService {
     return this.bosses.findOpenKilledAttendanceWindow({ guildId, bossName });
   }
 
+  async checkInToOpenKilledAttendance(guildId: string, bossName: string, userId: string) {
+    const window = await this.getOpenKilledAttendanceWindow(guildId, bossName);
+    if (!window) return null;
+    const result = await core.dashboard.checkInToBoss(userId, guildId, window.scheduleId);
+    return { window, result };
+  }
+
   async listParty(scheduleId: string) {
     return this.bosses.listCommitments(scheduleId);
   }

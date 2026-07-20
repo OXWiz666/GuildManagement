@@ -768,6 +768,8 @@ export interface AttendanceBossSummary {
   bossImageUrl: string;
   location: string;
   spawnTime: string;
+  status?: "UPCOMING" | "SPAWNED" | "KILLED";
+  killedAt?: string | null;
 }
 
 export interface PendingAttendanceData {
@@ -1145,9 +1147,9 @@ export const dashboardApi = {
   },
 
   // ─── Past attendance (Officer / Guild Leader) ───────────────
-  async listAttendanceSessions(guildId: string) {
+  async listAttendanceSessions(guildId: string, fresh = false) {
     return api.get<AttendanceSessionSummary[]>(
-      `/dashboard/attendance/sessions/${guildId}`,
+      `/dashboard/attendance/sessions/${guildId}${fresh ? "?fresh=1" : ""}`,
     );
   },
 
@@ -1235,9 +1237,9 @@ export const dashboardApi = {
     return api.get<GuildStatsSummary>(`/dashboard/members/${guildId}/stats-summary`);
   },
 
-  async getBossSchedules(guildId: string) {
+  async getBossSchedules(guildId: string, fresh = false) {
     return api.get<{ schedules: BossScheduleData[] }>(
-      `/dashboard/boss-schedule/${guildId}`,
+      `/dashboard/boss-schedule/${guildId}${fresh ? "?fresh=1" : ""}`,
     );
   },
 

@@ -10,7 +10,7 @@ import { createLedgerEntry } from "./ledger.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import * as crypto from "crypto";
 import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, SHORT_CYCLE_MAX_HOURS } from "@guild/shared";
-import { broadcastToUser } from "../lib/socket";
+import { broadcastToGuild, broadcastToUser } from "../lib/socket";
 import { getDropCatalogMap } from "./equipment.service";
 import { getGuildMemberByUser } from "./guild.service";
 import { addDropsToStorage } from "./storage.service";
@@ -712,6 +712,11 @@ async function openBossCheckInSession(
       data: { expiresAt },
     });
     await invalidateAttendanceCache(guildId);
+    void broadcastToGuild(guildId, "attendance_session_updated", {
+      ...reopened,
+      expiresAt: reopened.expiresAt.toISOString(),
+      createdAt: reopened.createdAt.toISOString(),
+    });
     return reopened;
   }
 
@@ -736,6 +741,11 @@ async function openBossCheckInSession(
   });
 
   await invalidateAttendanceCache(guildId);
+  void broadcastToGuild(guildId, "attendance_session_created", {
+    ...created,
+    expiresAt: created.expiresAt.toISOString(),
+    createdAt: created.createdAt.toISOString(),
+  });
   return created;
 }
 
@@ -827,7 +837,7 @@ export async function submitAttendanceCode(userId: string, code: string) {
       isActive: true,
       expiresAt: { gt: now },
     },
-    select: { id: true, title: true, guildId: true, guild: { select: { name: true } } },
+    select: { id: true, title: true, guildId: true, bossScheduleId: true, guild: { select: { name: true } } },
   });
 
   if (!session) {
@@ -888,6 +898,14 @@ export async function submitAttendanceCode(userId: string, code: string) {
   });
 
   await invalidateAttendanceCache(session.guildId, session.id, userId);
+  void broadcastToGuild(session.guildId, "attendance_record_created", {
+    sessionId: session.id,
+    bossScheduleId: session.bossScheduleId,
+    record: {
+      ...record,
+      joinedAt: record.joinedAt.toISOString(),
+    },
+  });
 
   return {
     success: true,
@@ -970,6 +988,14 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
   });
 
   await invalidateAttendanceCache(session.guildId, session.id, userId);
+  void broadcastToGuild(session.guildId, "attendance_record_created", {
+    sessionId: session.id,
+    bossScheduleId,
+    record: {
+      ...record,
+      joinedAt: record.joinedAt.toISOString(),
+    },
+  });
 
   return {
     success: true,
@@ -1108,7 +1134,7 @@ async function listAttendanceSessionsUncached(guildId: string, limit: number) {
     take: limit,
     include: {
       bossSchedule: {
-        select: { bossName: true, bossImageUrl: true, location: true, spawnTime: true },
+        select: { bossName: true, bossImageUrl: true, location: true, spawnTime: true, status: true, killedAt: true },
       },
       records: { select: { status: true } },
     },
@@ -1128,6 +1154,8 @@ async function listAttendanceSessionsUncached(guildId: string, limit: number) {
           bossImageUrl: session.bossSchedule.bossImageUrl,
           location: session.bossSchedule.location,
           spawnTime: session.bossSchedule.spawnTime.toISOString(),
+          status: session.bossSchedule.status,
+          killedAt: session.bossSchedule.killedAt ? session.bossSchedule.killedAt.toISOString() : null,
         }
       : null,
     confirmedCount: session.records.filter((r) => r.status === AttendanceRecordStatus.CONFIRMED).length,

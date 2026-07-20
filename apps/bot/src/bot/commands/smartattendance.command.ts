@@ -1,4 +1,5 @@
 import type { Attachment } from "discord.js";
+import { hasMinimumRole } from "@guild/shared";
 import type { Command, CommandContext } from "../../types/command.js";
 import { clampDescription, infoEmbed, successEmbed, warningEmbed } from "../../embeds/builders.js";
 import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
@@ -11,7 +12,7 @@ export const smartAttendanceCommand: Command = {
   usage: "!attendance [boss] OR !attendance <boss> [minutes] + screenshot",
   category: "Attendance",
   requiresLink: true,
-  minimumRole: OFFICER_MINIMUM,
+  minimumRole: null,
 
   async execute(ctx: CommandContext): Promise<void> {
     const attachment = ctx.message.attachments.first();
@@ -55,46 +56,38 @@ async function listOpenAttendance(ctx: CommandContext): Promise<void> {
 }
 
 async function showBossAttendance(ctx: CommandContext): Promise<void> {
+  const actor = ctx.actor!;
   const bossName = await ctx.services.boss.resolveBossName(ctx.rest, ctx.server.discordServerId);
-  const window = await ctx.services.boss.getOpenKilledAttendanceWindow(ctx.server.guildId, bossName);
+  const checkedIn = await ctx.services.boss.checkInToOpenKilledAttendance(ctx.server.guildId, bossName, actor.userId);
 
-  if (!window) {
+  if (!checkedIn) {
     throw new UserFacingError(
       `${bossName} has no open killed-boss attendance window.`,
       "Run `!attendance` to see killed bosses with attendance currently open.",
     );
   }
 
-  const confirmed = window.members.filter((member) => member.status === "CONFIRMED");
-  const pending = window.members.filter((member) => member.status === "PENDING");
-  const embed = infoEmbed(
-    `${window.bossName} Attendance`,
+  const embed = successEmbed(
+    `${checkedIn.window.bossName} Attendance`,
     [
-      `Location: **${window.location}**`,
-      `Window closes in: \`${formatCountdown(window.expiresAt)}\``,
-      `Confirmed: **${confirmed.length}** | Pending: **${pending.length}**`,
+      `**${actor.ign ?? actor.displayName}** checked in and is awaiting officer verification.`,
+      `Window closes in: \`${formatCountdown(checkedIn.window.expiresAt)}\``,
+      `Open Boss Attendance in ForgeKeep to confirm members.`,
     ].join("\n"),
   );
-
-  embed.addFields({
-    name: "Confirmed",
-    value: confirmed.length
-      ? clampDescription(confirmed.map((member) => `\`${member.name}\``), 1024)
-      : "No confirmed members yet.",
-  });
-
-  embed.addFields({
-    name: "Pending Officer Review",
-    value: pending.length
-      ? clampDescription(pending.map((member) => `\`${member.name}\``), 1024)
-      : "No pending members.",
-  });
 
   await ctx.message.reply({ embeds: [embed] });
 }
 
 async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment): Promise<void> {
   const actor = ctx.actor!;
+
+  if (!hasMinimumRole(actor.role, OFFICER_MINIMUM)) {
+    throw new UserFacingError(
+      "Only officers can scan attendance screenshots.",
+      "Members can run `!attendance <boss>` to check in for an open killed-boss attendance window.",
+    );
+  }
 
   if (!attachment.contentType?.startsWith("image/")) {
     throw new UserFacingError(

@@ -19,10 +19,6 @@ import {
 // Imports from co-located components
 import AttendanceCoverflow from "./components/AttendanceCoverflow";
 import AttendanceHistoryList, { type AttendanceHistoryItem } from "./components/AttendanceHistoryList";
-import {
-  AttendanceCalendarView,
-  AttendanceTimelineView,
-} from "./components/AttendanceScheduleViews";
 
 // Both are modals mounted only on demand — code-split out of the main route
 // chunk.
@@ -64,24 +60,56 @@ function isScheduleDateReached(spawnTime: string | null | undefined, now = new D
   return scheduleDateKey(spawnTime) <= scheduleDateKey(now);
 }
 
-function isFutureScheduleDate(spawnTime: string, now = new Date()) {
-  return scheduleDateKey(spawnTime) > scheduleDateKey(now);
-}
-
 function attendanceSessionTime(session: AttendanceSessionSummary) {
   return new Date(session.bossSchedule?.spawnTime || session.createdAt).getTime();
 }
 
-function isOverviewAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
-  return isScheduleDateReached(session.bossSchedule?.spawnTime, now);
+function isOpenAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
+  return session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
+}
+
+function isKilledBossAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
+  return session.bossSchedule?.status === "KILLED" && isOpenAttendanceSession(session, now);
+}
+
+function sessionPriority(session: AttendanceSessionSummary, now = new Date()) {
+  const active = session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
+  return (
+    (active ? 1_000_000_000_000_000 : 0) +
+    session.confirmedCount * 100_000_000 +
+    session.pendingCount * 1_000_000 +
+    new Date(session.createdAt).getTime()
+  );
+}
+
+function dedupeAttendanceSessions(sessions: AttendanceSessionSummary[], now = new Date()) {
+  const byBoss = new Map<string, AttendanceSessionSummary>();
+
+  for (const session of sessions) {
+    const boss = session.bossSchedule;
+    const key = session.bossScheduleId
+      ? `schedule:${session.bossScheduleId}`
+      : `session:${boss?.bossName || session.title}:${boss?.spawnTime || session.createdAt}`;
+    const existing = byBoss.get(key);
+
+    if (!existing || sessionPriority(session, now) > sessionPriority(existing, now)) {
+      byBoss.set(key, session);
+    }
+  }
+
+  return Array.from(byBoss.values());
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function isAdvanceTurnInSchedule(schedule: BossScheduleData, myGuildId: string, now = new Date()) {
   return (
     schedule.status !== "KILLED" &&
     schedule.guildTurnGuildId === myGuildId &&
-    (isFutureScheduleDate(schedule.spawnTime, now) ||
-      !schedule.attendanceSessions ||
+    scheduleDateKey(schedule.spawnTime) === scheduleDateKey(now) &&
+    (!schedule.attendanceSessions ||
       schedule.attendanceSessions.length === 0)
   );
 }
@@ -91,9 +119,9 @@ export default function BossAttendancePage() {
   const { addToast } = useToast();
   const { socket } = useSocket();
 
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
-  const [activeTab, setActiveTab] = useState<"overview" | "calendar" | "timeline" | "history" | "advance">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
@@ -133,7 +161,7 @@ export default function BossAttendancePage() {
     activeGuild ? `boss_schedules:${activeGuild.guildId}` : "boss_schedules_empty",
     async () => {
       if (!activeGuild) return [];
-      const result = await dashboardApi.getBossSchedules(activeGuild.guildId);
+      const result = await dashboardApi.getBossSchedules(activeGuild.guildId, true);
       return result.success && result.data?.schedules ? result.data.schedules : [];
     },
     { persist: true, staleTime: 15000 }
@@ -163,7 +191,7 @@ export default function BossAttendancePage() {
     activeGuild ? `attendance_sessions:${activeGuild.guildId}` : "attendance_sessions_empty",
     async () => {
       if (!activeGuild) return [];
-      const result = await dashboardApi.listAttendanceSessions(activeGuild.guildId);
+      const result = await dashboardApi.listAttendanceSessions(activeGuild.guildId, true);
       return result.success && result.data ? result.data : [];
     },
     { persist: true, staleTime: 20000 }
@@ -171,8 +199,9 @@ export default function BossAttendancePage() {
   const sessions = useMemo(() => sessionsRaw || [], [sessionsRaw]);
   const overviewSessions = useMemo(
     () =>
-      sessions
-        .filter((session) => isOverviewAttendanceSession(session))
+      dedupeAttendanceSessions(
+        sessions.filter((session) => session.bossScheduleId && isKilledBossAttendanceSession(session)),
+      )
         .sort((a, b) => attendanceSessionTime(b) - attendanceSessionTime(a)),
     [sessions],
   );
@@ -230,8 +259,8 @@ export default function BossAttendancePage() {
         addToast("success", `Checked in for ${item.bossName}. Awaiting officer verification.`);
         invalidateAll();
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to check in");
+    } catch (err: unknown) {
+      addToast("error", getErrorMessage(err, "Failed to check in"));
     } finally {
       setCheckingInId(null);
     }
@@ -255,8 +284,8 @@ export default function BossAttendancePage() {
         setShowEditSessionModal(null);
         invalidateAll();
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "Failed to update check-in window");
+    } catch (err: unknown) {
+      addToast("error", getErrorMessage(err, "Failed to update check-in window"));
     } finally {
       setIsEditingSession(false);
     }
@@ -387,8 +416,6 @@ export default function BossAttendancePage() {
           <ModuleTabs
             tabs={[
               { value: "overview", label: "Overview" },
-              { value: "calendar", label: "Calendar", count: schedules.length },
-              { value: "timeline", label: "Timeline", count: schedules.length + sessions.filter((session) => !session.bossScheduleId).length },
               { value: "history", label: "Attendance History", count: stats?.history?.length ?? 0 },
               { value: "advance", label: "Advance Turn-In", count: advanceEligibleCount },
             ]}
@@ -502,8 +529,6 @@ export default function BossAttendancePage() {
           </div>
         </div>
 
-        {/* Boss attendance — Netflix/coverflow row of every check-in window,
-            open or closed. Click a card for the full detail modal. */}
         <AttendanceCoverflow
           sessions={overviewSessions}
           isLoading={isLoadingSessions}
@@ -515,30 +540,6 @@ export default function BossAttendancePage() {
         {activeTab === "history" && (
           /* Personal attendance history */
           <AttendanceHistoryList history={stats?.history || []} />
-        )}
-
-        {activeTab === "calendar" && (
-          <AttendanceCalendarView
-            schedules={schedules}
-            sessions={sessions}
-            isLoading={isLoadingSchedules || isLoadingSessions}
-            myGuildId={activeGuild.guildId}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
-            onSelectSession={(session) => setSelectedSessionId(session.id)}
-          />
-        )}
-
-        {activeTab === "timeline" && (
-          <AttendanceTimelineView
-            schedules={schedules}
-            sessions={sessions}
-            isLoading={isLoadingSchedules || isLoadingSessions}
-            myGuildId={activeGuild.guildId}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
-            onSelectSession={(session) => setSelectedSessionId(session.id)}
-          />
         )}
 
         {activeTab === "advance" && (
@@ -625,6 +626,7 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
         return (
           session &&
           session.isActive &&
+          s.status === "KILLED" &&
           isScheduleDateReached(s.spawnTime, new Date(now)) &&
           new Date(session.expiresAt).getTime() > now
         );

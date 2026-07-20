@@ -21,6 +21,28 @@ export interface UpcomingActivity {
   scheduledAt: Date;
 }
 
+export interface OpenKilledAttendanceWindow {
+  sessionId: string;
+  scheduleId: string;
+  bossName: string;
+  location: string;
+  killedAt: Date | null;
+  expiresAt: Date;
+  confirmedCount: number;
+  pendingCount: number;
+}
+
+export interface BossAttendanceMember {
+  userId: string;
+  name: string;
+  status: "PENDING" | "CONFIRMED";
+  joinedAt: Date;
+}
+
+export interface BossAttendanceWindowDetail extends OpenKilledAttendanceWindow {
+  members: BossAttendanceMember[];
+}
+
 /**
  * Boss spawn/kill reads.
  *
@@ -154,7 +176,7 @@ export class BossRepository {
         guildId: params.guildId,
         isActive: true,
         expiresAt: { gt: new Date() },
-        bossSchedule: { bossName: params.bossName },
+        bossSchedule: { bossName: params.bossName, status: "KILLED" },
       },
       select: {
         bossSchedule: {
@@ -184,6 +206,125 @@ export class BossRepository {
       status: row.status,
       guildTurn: row.guildTurnGuild?.name ?? row.guildTurn,
       guildId: row.guildId,
+    };
+  }
+
+  async listOpenKilledAttendanceWindows(params: {
+    guildId: string;
+    bossName?: string;
+    limit?: number;
+  }): Promise<OpenKilledAttendanceWindow[]> {
+    const rows = await prisma.attendanceSession.findMany({
+      where: {
+        guildId: params.guildId,
+        isActive: true,
+        expiresAt: { gt: new Date() },
+        bossSchedule: {
+          status: "KILLED",
+          ...(params.bossName ? { bossName: params.bossName } : {}),
+        },
+      },
+      select: {
+        id: true,
+        expiresAt: true,
+        records: {
+          select: { status: true },
+        },
+        bossSchedule: {
+          select: {
+            id: true,
+            bossName: true,
+            location: true,
+            killedAt: true,
+          },
+        },
+      },
+      orderBy: { expiresAt: "asc" },
+      take: params.limit ?? 15,
+    });
+
+    return rows
+      .filter((row) => row.bossSchedule)
+      .map((row) => ({
+        sessionId: row.id,
+        scheduleId: row.bossSchedule!.id,
+        bossName: row.bossSchedule!.bossName,
+        location: row.bossSchedule!.location,
+        killedAt: row.bossSchedule!.killedAt,
+        expiresAt: row.expiresAt,
+        confirmedCount: row.records.filter((record) => record.status === "CONFIRMED").length,
+        pendingCount: row.records.filter((record) => record.status === "PENDING").length,
+      }));
+  }
+
+  async findOpenKilledAttendanceWindow(params: {
+    guildId: string;
+    bossName: string;
+  }): Promise<BossAttendanceWindowDetail | null> {
+    const row = await prisma.attendanceSession.findFirst({
+      where: {
+        guildId: params.guildId,
+        isActive: true,
+        expiresAt: { gt: new Date() },
+        bossSchedule: {
+          status: "KILLED",
+          bossName: params.bossName,
+        },
+      },
+      select: {
+        id: true,
+        expiresAt: true,
+        records: {
+          select: {
+            userId: true,
+            status: true,
+            joinedAt: true,
+            user: {
+              select: {
+                displayName: true,
+                username: true,
+                guildMembers: {
+                  where: { guildId: params.guildId },
+                  select: { ign: true },
+                  take: 1,
+                },
+              },
+            },
+          },
+          orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
+        },
+        bossSchedule: {
+          select: {
+            id: true,
+            bossName: true,
+            location: true,
+            killedAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!row?.bossSchedule) return null;
+
+    return {
+      sessionId: row.id,
+      scheduleId: row.bossSchedule.id,
+      bossName: row.bossSchedule.bossName,
+      location: row.bossSchedule.location,
+      killedAt: row.bossSchedule.killedAt,
+      expiresAt: row.expiresAt,
+      confirmedCount: row.records.filter((record) => record.status === "CONFIRMED").length,
+      pendingCount: row.records.filter((record) => record.status === "PENDING").length,
+      members: row.records.map((record) => ({
+        userId: record.userId,
+        name:
+          record.user.guildMembers[0]?.ign ??
+          record.user.displayName ??
+          record.user.username,
+        status: record.status,
+        joinedAt: record.joinedAt,
+      })),
     };
   }
 

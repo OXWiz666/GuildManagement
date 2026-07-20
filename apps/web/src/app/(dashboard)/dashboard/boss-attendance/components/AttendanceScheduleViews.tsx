@@ -73,17 +73,36 @@ function countRecords(session?: AttendanceSessionData) {
   };
 }
 
+function scheduleViewSessionPriority(session: AttendanceSessionSummary) {
+  return (
+    session.confirmedCount * 100_000_000 +
+    session.pendingCount * 1_000_000 +
+    new Date(session.createdAt).getTime()
+  );
+}
+
 function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionSummary[]) {
-  const sessionBySchedule = new Map<string, AttendanceSessionSummary>();
+  const sessionsBySchedule = new Map<string, AttendanceSessionSummary[]>();
   const usedSessionIds = new Set<string>();
+  const standaloneKeys = new Set<string>();
 
   for (const session of sessions) {
-    if (session.bossScheduleId) sessionBySchedule.set(session.bossScheduleId, session);
+    if (!session.bossScheduleId) continue;
+    const bucket = sessionsBySchedule.get(session.bossScheduleId) ?? [];
+    bucket.push(session);
+    sessionsBySchedule.set(session.bossScheduleId, bucket);
   }
 
   const events: AttendanceBossEvent[] = schedules.map((schedule) => {
-    const session = sessionBySchedule.get(schedule.id) ?? null;
-    if (session) usedSessionIds.add(session.id);
+    const scheduleSessions = sessionsBySchedule.get(schedule.id) ?? [];
+    const session = scheduleSessions.reduce<AttendanceSessionSummary | null>(
+      (best, candidate) =>
+        !best || scheduleViewSessionPriority(candidate) > scheduleViewSessionPriority(best)
+          ? candidate
+          : best,
+      null,
+    );
+    for (const scheduleSession of scheduleSessions) usedSessionIds.add(scheduleSession.id);
 
     const fallbackSession = schedule.attendanceSessions?.[0];
     const fallbackCounts = countRecords(fallbackSession);
@@ -108,6 +127,9 @@ function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionS
     if (usedSessionIds.has(session.id)) continue;
     const boss = session.bossSchedule;
     const bossName = boss?.bossName || session.title;
+    const standaloneKey = `${bossName}:${boss?.spawnTime || session.createdAt}`;
+    if (standaloneKeys.has(standaloneKey)) continue;
+    standaloneKeys.add(standaloneKey);
 
     events.push({
       id: session.id,

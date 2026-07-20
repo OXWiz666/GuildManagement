@@ -315,11 +315,12 @@ export const dashboard = new Hono<AppEnv>()
   .get("/attendance/sessions/:guildId", requireAuth, async (c) => {
     const user = c.get("user");
     const guildId = c.req.param("guildId");
+    const fresh = c.req.query("fresh") === "1";
     const cacheKey = `attendance:sessions:${guildId}`;
-    const cached = await cache.get<unknown>(cacheKey);
+    const cached = fresh ? null : await cache.get<unknown>(cacheKey);
     if (cached) return ok(c, cached);
     const sessions = await services.dashboard.listAttendanceSessions(guildId, user.userId);
-    await cache.set(cacheKey, sessions, 15);
+    if (!fresh) await cache.set(cacheKey, sessions, 15);
     return ok(c, sessions);
   })
   .get("/attendance/stats/:guildId", requireAuth, async (c) => {
@@ -566,12 +567,13 @@ export const dashboard = new Hono<AppEnv>()
     const user = c.get("user");
     dashboardLimit(c, user.userId);
     const guildId = c.req.param("guildId");
+    const fresh = c.req.query("fresh") === "1";
     const cacheKey = `boss-schedule:${guildId}:user:${user.userId}`;
-    const cached = await cache.get<unknown>(cacheKey);
+    const cached = fresh ? null : await cache.get<unknown>(cacheKey);
     if (cached) return ok(c, cached);
     const schedules = await services.dashboard.getBossSchedules(guildId, user.userId);
     const data = { schedules };
-    await cache.set(cacheKey, data, 15);
+    if (!fresh) await cache.set(cacheKey, data, 15);
     return ok(c, data);
   })
   .post("/boss-schedule/:guildId", requireAuth, async (c) => {

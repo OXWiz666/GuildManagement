@@ -60,6 +60,18 @@ function isScheduleDateReached(spawnTime: string | null | undefined, now = new D
   return scheduleDateKey(spawnTime) <= scheduleDateKey(now);
 }
 
+function addScheduleDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function isTodayOrTomorrowSchedule(spawnTime: string | null | undefined, now = new Date()) {
+  if (!spawnTime) return false;
+  const key = scheduleDateKey(spawnTime);
+  return key === scheduleDateKey(now) || key === scheduleDateKey(addScheduleDays(now, 1));
+}
+
 function attendanceSessionTime(session: AttendanceSessionSummary) {
   return new Date(session.bossSchedule?.spawnTime || session.createdAt).getTime();
 }
@@ -108,9 +120,7 @@ function isAdvanceTurnInSchedule(schedule: BossScheduleData, myGuildId: string, 
   return (
     schedule.status !== "KILLED" &&
     schedule.guildTurnGuildId === myGuildId &&
-    scheduleDateKey(schedule.spawnTime) === scheduleDateKey(now) &&
-    (!schedule.attendanceSessions ||
-      schedule.attendanceSessions.length === 0)
+    isTodayOrTomorrowSchedule(schedule.spawnTime, now)
   );
 }
 
@@ -531,7 +541,12 @@ export default function BossAttendancePage() {
 
         <AttendanceCoverflow
           sessions={overviewSessions}
+          schedules={schedules.filter((schedule) => isTodayOrTomorrowSchedule(schedule.spawnTime))}
           isLoading={isLoadingSessions}
+          myGuildId={activeGuild.guildId}
+          userId={user.id}
+          checkingInId={checkingInId}
+          onCheckIn={handleCheckIn}
           onSelect={(session) => setSelectedSessionId(session.id)}
         />
         </>

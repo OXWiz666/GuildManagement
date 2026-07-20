@@ -25,15 +25,25 @@ export interface AttendanceSessionModalProps {
   onEditSession: (session: AttendanceSessionSummary) => void;
 }
 
-function MemberIdentity({ displayName, email }: { displayName: string; email?: string }) {
+function MemberIdentity({
+  name,
+  fallbackName,
+  email,
+}: {
+  name: string;
+  fallbackName?: string;
+  email?: string;
+}) {
+  const secondary = fallbackName && fallbackName !== name ? fallbackName : email;
+
   return (
     <div className="flex items-center gap-2.5 min-w-0">
       <div className="h-6 w-6 shrink-0 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center font-bold text-white/55 text-[11px]">
-        {displayName[0]?.toUpperCase()}
+        {name[0]?.toUpperCase()}
       </div>
       <div className="min-w-0">
-        <p className="font-semibold text-white truncate">{displayName}</p>
-        {email && <p className="text-[10px] text-white/40 truncate max-w-[180px]">{email}</p>}
+        <p className="font-semibold text-white truncate">{name}</p>
+        {secondary && <p className="text-[10px] text-white/40 truncate max-w-[180px]">{secondary}</p>}
       </div>
     </div>
   );
@@ -525,7 +535,11 @@ export default function AttendanceSessionModal({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                           {detailRaw.notCheckedInMembers.map((member) => (
                             <div key={member.userId} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-md bg-white/[0.015] border border-white/[0.04] hover:bg-white/[0.03]">
-                              <MemberIdentity displayName={member.user.displayName} email={member.user.email} />
+                              <MemberIdentity
+                                name={member.ign || member.user.displayName}
+                                fallbackName={member.user.displayName}
+                                email={member.user.email}
+                              />
                               <button
                                 type="button"
                                 onClick={() => handleMarkPresent(member.userId)}
@@ -606,7 +620,11 @@ export default function AttendanceSessionModal({
                                 ) : (
                                   <span className="h-3.5 w-3.5 shrink-0" />
                                 )}
-                                <MemberIdentity displayName={rec.user?.displayName || "Unknown member"} email={rec.user?.email} />
+                                <MemberIdentity
+                                  name={rec.ign || rec.user?.displayName || "Unknown member"}
+                                  fallbackName={rec.user?.displayName}
+                                  email={rec.user?.email}
+                                />
                               </div>
                               <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
                                 <span className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[10px] font-bold uppercase tracking-wider ${

@@ -4198,7 +4198,36 @@ export async function getMemberAttendanceStats(guildId: string, userId: string) 
   );
 }
 
+const ATTENDANCE_STATS_TIME_ZONE = "Asia/Singapore";
+const attendanceStatsDateParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: ATTENDANCE_STATS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function attendanceStatsDateKey(value: Date) {
+  const parts = attendanceStatsDateParts.formatToParts(value);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
+  return `${year}-${month}-${day}`;
+}
+
+function isAttendanceSessionScheduleDateReached(
+  session: { bossSchedule: { spawnTime: Date } | null },
+  now: Date,
+) {
+  if (!session.bossSchedule?.spawnTime) return true;
+  return attendanceStatsDateKey(session.bossSchedule.spawnTime) <= attendanceStatsDateKey(now);
+}
+
+function attendanceSessionTimelineMs(session: { bossSchedule: { spawnTime: Date } | null; createdAt: Date }) {
+  return (session.bossSchedule?.spawnTime ?? session.createdAt).getTime();
+}
+
 async function getMemberAttendanceStatsUncached(guildId: string, userId: string) {
+  const now = new Date();
   // Sessions and the ledger points sum are independent reads — run them
   // concurrently instead of one after another.
   const [sessions, ledgerSum] = await Promise.all([
@@ -4228,10 +4257,14 @@ async function getMemberAttendanceStatsUncached(guildId: string, userId: string)
     }),
   ]);
 
+  const visibleSessions = sessions
+    .filter((session) => isAttendanceSessionScheduleDateReached(session, now))
+    .sort((a, b) => attendanceSessionTimelineMs(b) - attendanceSessionTimelineMs(a));
+
   // Streaks (expired sessions chronologically consecutive confirmed)
   let currentStreak = 0;
-  for (const session of sessions) {
-    const isExpired = new Date(session.expiresAt).getTime() < Date.now();
+  for (const session of visibleSessions) {
+    const isExpired = session.expiresAt.getTime() < now.getTime();
     if (!isExpired) {
       const userRecord = session.records[0];
       if (userRecord && userRecord.status === AttendanceRecordStatus.CONFIRMED) {
@@ -4250,19 +4283,19 @@ async function getMemberAttendanceStatsUncached(guildId: string, userId: string)
   // Attendance metrics — confirmedSessions must be the same denominator
   // population as totalSessions (expired only), otherwise a confirmed record
   // on a still-open session inflates the rate past 100%.
-  const totalSessions = sessions.filter(s => new Date(s.expiresAt).getTime() < Date.now()).length;
-  const confirmedSessions = sessions.filter(
-    s => new Date(s.expiresAt).getTime() < Date.now() && s.records[0]?.status === AttendanceRecordStatus.CONFIRMED,
+  const totalSessions = visibleSessions.filter(s => s.expiresAt.getTime() < now.getTime()).length;
+  const confirmedSessions = visibleSessions.filter(
+    s => s.expiresAt.getTime() < now.getTime() && s.records[0]?.status === AttendanceRecordStatus.CONFIRMED,
   ).length;
   const presenceRate = totalSessions > 0 ? Math.round((confirmedSessions / totalSessions) * 100) : 100;
   const participationCount = confirmedSessions;
   const totalPoints = Number(ledgerSum._sum.amount || 0);
 
   // Missed attendance alerts (expired in the last 7 days where the user had no confirmed record)
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const missedSessions = sessions.filter(s => {
-    const isExpired = new Date(s.expiresAt).getTime() < Date.now();
-    const isRecent = new Date(s.createdAt).getTime() > sevenDaysAgo.getTime();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const missedSessions = visibleSessions.filter(s => {
+    const isExpired = s.expiresAt.getTime() < now.getTime();
+    const isRecent = attendanceSessionTimelineMs(s) > sevenDaysAgo.getTime();
     const hasConfirmedRecord = s.records[0]?.status === AttendanceRecordStatus.CONFIRMED;
     return isExpired && isRecent && !hasConfirmedRecord;
   });
@@ -4274,7 +4307,7 @@ async function getMemberAttendanceStatsUncached(guildId: string, userId: string)
     expiresAt: s.expiresAt.toISOString()
   }));
 
-  const history = sessions.map(session => {
+  const history = visibleSessions.map(session => {
     const record = session.records[0];
     let status: "CONFIRMED" | "PENDING" | "MISSED" | "UNCHECKED" = "UNCHECKED";
     
@@ -4285,7 +4318,7 @@ async function getMemberAttendanceStatsUncached(guildId: string, userId: string)
         status = "PENDING";
       }
     } else {
-      const isExpired = new Date(session.expiresAt).getTime() < Date.now();
+      const isExpired = session.expiresAt.getTime() < now.getTime();
       if (isExpired) {
         status = "MISSED";
       } else {

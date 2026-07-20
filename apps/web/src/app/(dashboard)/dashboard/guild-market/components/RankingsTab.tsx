@@ -6,12 +6,62 @@ import Badge from "@/components/ui/Badge";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 
 const ROLE_FILTER_VALUES = ["ALL", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"] as const;
+const SORT_VALUES = ["GUILD_POINTS", "ROLE", "RANK"] as const;
+
+type RankingSort = (typeof SORT_VALUES)[number];
+type RankingRow = {
+  memberId: string;
+  ign: string;
+  role: string;
+  rankName?: string | null;
+  customRole?: { name?: string | null; color?: string | null } | null;
+  cp: number;
+  dkp: number;
+  class: string;
+};
+type RankingAccounting = {
+  memberBalances?: RankingRow[];
+} | null;
+
+const ROLE_SORT_ORDER = new Map(
+  ["GUILD_LEADER", "FACTION_LEADER", "ADMIN", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"].map(
+    (role, index) => [role, index],
+  ),
+);
+
+function compareByGuildPoints(a: RankingRow, b: RankingRow) {
+  return b.dkp - a.dkp || b.cp - a.cp || a.ign.localeCompare(b.ign);
+}
+
+function compareRankings(a: RankingRow, b: RankingRow, sortBy: RankingSort) {
+  if (sortBy === "ROLE") {
+    const roleDelta =
+      (ROLE_SORT_ORDER.get(a.role) ?? ROLE_SORT_ORDER.size) -
+      (ROLE_SORT_ORDER.get(b.role) ?? ROLE_SORT_ORDER.size);
+    if (roleDelta !== 0) return roleDelta;
+    return compareByGuildPoints(a, b);
+  }
+
+  if (sortBy === "RANK") {
+    const aRank = (a.customRole?.name || a.rankName || "").toLowerCase();
+    const bRank = (b.customRole?.name || b.rankName || "").toLowerCase();
+    return aRank.localeCompare(bRank) || compareByGuildPoints(a, b);
+  }
+
+  return compareByGuildPoints(a, b);
+}
 
 interface RankingsTabProps {
-  accounting: any;
+  accounting: RankingAccounting;
   rankingSearch: string;
   onSearchChange: (value: string) => void;
 }
+
+const SORT_LABELS: Record<RankingSort, string> = {
+  GUILD_POINTS: "Sort: Guild Points",
+  ROLE: "Sort: Role",
+  RANK: "Sort: Rank",
+};
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -49,12 +99,13 @@ export default function RankingsTab({
   onSearchChange,
 }: RankingsTabProps) {
   const [roleFilter, setRoleFilter] = useState("ALL");
+  const [sortBy, setSortBy] = useState<RankingSort>("GUILD_POINTS");
   const { resolveRoleName } = useRoleDisplayNames();
 
   // Full sorted ladder (unfiltered) — drives ranks, podium and bar scale
   const sortedAll = useMemo(() => {
-    if (!accounting?.memberBalances) return [] as any[];
-    return [...accounting.memberBalances].sort((a, b) => b.dkp - a.dkp);
+    if (!accounting?.memberBalances) return [] as RankingRow[];
+    return [...accounting.memberBalances].sort((a: RankingRow, b: RankingRow) => compareByGuildPoints(a, b));
   }, [accounting]);
 
   const rankMap = useMemo(() => {
@@ -66,18 +117,28 @@ export default function RankingsTab({
   const maxDkp = sortedAll[0]?.dkp || 1;
 
   const filtered = useMemo(() => {
-    const byRole = roleFilter === "ALL" ? sortedAll : sortedAll.filter((m: any) => m.role === roleFilter);
-    if (!rankingSearch.trim()) return byRole;
-    const s = rankingSearch.toLowerCase();
-    return byRole.filter(
-      (m: any) =>
-        m.ign.toLowerCase().includes(s) ||
-        m.class.toLowerCase().includes(s) ||
-        m.role.toLowerCase().includes(s),
-    );
-  }, [sortedAll, rankingSearch, roleFilter]);
+    const byRole = roleFilter === "ALL" ? sortedAll : sortedAll.filter((m) => m.role === roleFilter);
+    const searched = (() => {
+      if (!rankingSearch.trim()) return byRole;
+      const s = rankingSearch.toLowerCase();
+      return byRole.filter((m) => {
+        const rankName = (m.customRole?.name || m.rankName || "").toLowerCase();
+        const roleName = resolveRoleName(m.role).toLowerCase();
 
-  const showPodium = !rankingSearch.trim() && roleFilter === "ALL" && sortedAll.length >= 3;
+        return (
+          m.ign.toLowerCase().includes(s) ||
+          m.class.toLowerCase().includes(s) ||
+          m.role.toLowerCase().includes(s) ||
+          roleName.includes(s) ||
+          rankName.includes(s)
+        );
+      });
+    })();
+
+    return [...searched].sort((a, b) => compareRankings(a, b, sortBy));
+  }, [sortedAll, rankingSearch, roleFilter, sortBy, resolveRoleName]);
+
+  const showPodium = !rankingSearch.trim() && roleFilter === "ALL" && sortBy === "GUILD_POINTS" && sortedAll.length >= 3;
   const podium = sortedAll.slice(0, 3);
 
   return (
@@ -85,7 +146,7 @@ export default function RankingsTab({
       {/* ─── Podium: top 3 ─── */}
       {showPodium && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {podium.map((row: any, i: number) => {
+          {podium.map((row, i) => {
             const p = PODIUM[i]!;
             return (
               <div
@@ -145,23 +206,32 @@ export default function RankingsTab({
               Dynamic ranking of accumulated Guild Points from attendance and boss kills — the basis for bidding splits.
             </p>
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+              className="h-8 px-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
             >
               {ROLE_FILTER_VALUES.map((value) => (
                 <option key={value} value={value}>{value === "ALL" ? "All roles" : resolveRoleName(value)}</option>
               ))}
             </select>
-            <div className="relative max-w-xs w-full">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as RankingSort)}
+              className="h-8 px-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+            >
+              {SORT_VALUES.map((value) => (
+                <option key={value} value={value}>{SORT_LABELS[value]}</option>
+              ))}
+            </select>
+            <div className="relative min-w-[210px] max-w-xs flex-1 sm:w-64 sm:flex-none">
               <input
                 type="text"
                 placeholder="Search by IGN, class, or rank..."
                 value={rankingSearch}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="w-full px-3 py-1.5 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                className="h-8 w-full px-3 pl-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
               />
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 text-xs">🔍</span>
             </div>
@@ -186,7 +256,7 @@ export default function RankingsTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
-                {filtered.map((row: any, index: number) => {
+                {filtered.map((row, index) => {
                   const rank = rankMap.get(row.memberId) ?? index + 1;
                   const pct = Math.max((row.dkp / maxDkp) * 100, 3);
                   const isTop3 = rank <= 3;

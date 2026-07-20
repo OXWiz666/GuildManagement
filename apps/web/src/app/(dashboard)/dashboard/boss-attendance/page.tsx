@@ -19,6 +19,10 @@ import {
 // Imports from co-located components
 import AttendanceCoverflow from "./components/AttendanceCoverflow";
 import AttendanceHistoryList, { type AttendanceHistoryItem } from "./components/AttendanceHistoryList";
+import {
+  AttendanceCalendarView,
+  AttendanceTimelineView,
+} from "./components/AttendanceScheduleViews";
 
 // Both are modals mounted only on demand — code-split out of the main route
 // chunk.
@@ -68,8 +72,13 @@ function isOpenAttendanceSession(session: AttendanceSessionSummary, now = new Da
   return session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
 }
 
-function isKilledBossAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
-  return session.bossSchedule?.status === "KILLED" && isOpenAttendanceSession(session, now);
+function isKilledBossAttendanceSession(
+  session: AttendanceSessionSummary,
+  scheduleStatus?: BossScheduleData["status"],
+  now = new Date(),
+) {
+  const status = session.bossSchedule?.status ?? scheduleStatus;
+  return status === "KILLED" && isOpenAttendanceSession(session, now);
 }
 
 function sessionPriority(session: AttendanceSessionSummary, now = new Date()) {
@@ -122,6 +131,7 @@ export default function BossAttendancePage() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
+  const [overviewView, setOverviewView] = useState<"cards" | "calendar" | "timeline">("cards");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
@@ -167,6 +177,10 @@ export default function BossAttendancePage() {
     { persist: true, staleTime: 15000 }
   );
   const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
+  const scheduleStatusById = useMemo(
+    () => new Map(schedules.map((schedule) => [schedule.id, schedule.status])),
+    [schedules],
+  );
 
   // 2. Attendance Stats Query
   const {
@@ -200,10 +214,22 @@ export default function BossAttendancePage() {
   const overviewSessions = useMemo(
     () =>
       dedupeAttendanceSessions(
-        sessions.filter((session) => session.bossScheduleId && isKilledBossAttendanceSession(session)),
+        sessions.filter(
+          (session) =>
+            session.bossScheduleId &&
+            isKilledBossAttendanceSession(session, scheduleStatusById.get(session.bossScheduleId)),
+        ),
       )
         .sort((a, b) => attendanceSessionTime(b) - attendanceSessionTime(a)),
-    [sessions],
+    [sessions, scheduleStatusById],
+  );
+  const overviewScheduleIds = useMemo(
+    () => new Set(overviewSessions.map((session) => session.bossScheduleId).filter(Boolean)),
+    [overviewSessions],
+  );
+  const overviewSchedules = useMemo(
+    () => schedules.filter((schedule) => overviewScheduleIds.has(schedule.id)),
+    [schedules, overviewScheduleIds],
   );
 
   const isLoading = isLoadingSchedules || isLoadingStats;
@@ -529,11 +555,68 @@ export default function BossAttendancePage() {
           </div>
         </div>
 
-        <AttendanceCoverflow
-          sessions={overviewSessions}
-          isLoading={isLoadingSessions}
-          onSelect={(session) => setSelectedSessionId(session.id)}
-        />
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.01] p-3 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">Current Boss Attendance</h3>
+              <p className="mt-0.5 text-xs text-white/40">
+                Open attendance windows from killed bosses. Switch views without showing advance bosses.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 rounded-xl border border-white/[0.08] bg-black/25 p-1 text-[11px] font-bold text-white/50">
+              {[
+                { value: "cards", label: "Cards" },
+                { value: "calendar", label: "Calendar" },
+                { value: "timeline", label: "Timeline" },
+              ].map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => setOverviewView(item.value as "cards" | "calendar" | "timeline")}
+                  className={`rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${
+                    overviewView === item.value
+                      ? "bg-white text-black"
+                      : "text-white/55 hover:bg-white/[0.05] hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {overviewView === "cards" && (
+          <AttendanceCoverflow
+            sessions={overviewSessions}
+            isLoading={isLoadingSessions}
+            onSelect={(session) => setSelectedSessionId(session.id)}
+          />
+        )}
+
+        {overviewView === "calendar" && (
+          <AttendanceCalendarView
+            schedules={overviewSchedules}
+            sessions={overviewSessions}
+            isLoading={isLoadingSessions}
+            myGuildId={activeGuild.guildId}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+            onSelectSession={(session) => setSelectedSessionId(session.id)}
+          />
+        )}
+
+        {overviewView === "timeline" && (
+          <AttendanceTimelineView
+            schedules={overviewSchedules}
+            sessions={overviewSessions}
+            isLoading={isLoadingSessions}
+            myGuildId={activeGuild.guildId}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+            onSelectSession={(session) => setSelectedSessionId(session.id)}
+          />
+        )}
         </>
         )}
 

@@ -1,14 +1,14 @@
 import type { Attachment } from "discord.js";
 import type { Command, CommandContext } from "../../types/command.js";
-import { clampDescription, successEmbed } from "../../embeds/builders.js";
+import { clampDescription, infoEmbed, successEmbed, warningEmbed } from "../../embeds/builders.js";
 import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 import { UserFacingError } from "../../utils/errors.js";
 
 export const smartAttendanceCommand: Command = {
   name: "attendance",
   aliases: ["smartattendance", "smartatt", "rallyatt", "rallyattendance"],
-  description: "Scan a rally screenshot: white names are confirmed, gray names are queued for officer review.",
-  usage: "!attendance <boss> [minutes] + screenshot",
+  description: "View open killed-boss attendance windows, or scan a rally screenshot for one boss.",
+  usage: "!attendance [boss] OR !attendance <boss> [minutes] + screenshot",
   category: "Attendance",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,
@@ -16,18 +16,82 @@ export const smartAttendanceCommand: Command = {
   async execute(ctx: CommandContext): Promise<void> {
     const attachment = ctx.message.attachments.first();
     if (!attachment) {
-      throw new UserFacingError(
-        "Attach the rally screenshot with this command.",
-        "Example: `!attendance Livera 30` plus the screenshot.",
-      );
-    }
-    if (ctx.args.length === 0) {
-      throw new UserFacingError("Which boss?", "Usage: `!attendance <boss> [minutes]` plus the screenshot.");
+      if (ctx.args.length === 0) return listOpenAttendance(ctx);
+      return showBossAttendance(ctx);
     }
 
     return scanSmartAttendance(ctx, attachment);
   },
 };
+
+async function listOpenAttendance(ctx: CommandContext): Promise<void> {
+  const windows = await ctx.services.boss.listOpenKilledAttendanceWindows(ctx.server.guildId);
+
+  if (windows.length === 0) {
+    await ctx.message.reply({
+      embeds: [
+        warningEmbed(
+          "No open killed-boss attendance",
+          "Attendance appears here only after a boss is killed and its attendance window is still open.",
+        ),
+      ],
+    });
+    return;
+  }
+
+  const embed = infoEmbed(
+    "Open Boss Attendance",
+    clampDescription(
+      windows.map(
+        (window) =>
+          `**${window.bossName}** - ${window.location}\n` +
+          `Countdown: \`${formatCountdown(window.expiresAt)}\` | Confirmed: **${window.confirmedCount}** | Pending: **${window.pendingCount}**\n` +
+          `Run \`!attendance ${window.bossName}\` to view members.`,
+      ),
+    ),
+  );
+
+  await ctx.message.reply({ embeds: [embed] });
+}
+
+async function showBossAttendance(ctx: CommandContext): Promise<void> {
+  const bossName = await ctx.services.boss.resolveBossName(ctx.rest, ctx.server.discordServerId);
+  const window = await ctx.services.boss.getOpenKilledAttendanceWindow(ctx.server.guildId, bossName);
+
+  if (!window) {
+    throw new UserFacingError(
+      `${bossName} has no open killed-boss attendance window.`,
+      "Run `!attendance` to see killed bosses with attendance currently open.",
+    );
+  }
+
+  const confirmed = window.members.filter((member) => member.status === "CONFIRMED");
+  const pending = window.members.filter((member) => member.status === "PENDING");
+  const embed = infoEmbed(
+    `${window.bossName} Attendance`,
+    [
+      `Location: **${window.location}**`,
+      `Window closes in: \`${formatCountdown(window.expiresAt)}\``,
+      `Confirmed: **${confirmed.length}** | Pending: **${pending.length}**`,
+    ].join("\n"),
+  );
+
+  embed.addFields({
+    name: "Confirmed",
+    value: confirmed.length
+      ? clampDescription(confirmed.map((member) => `\`${member.name}\``), 1024)
+      : "No confirmed members yet.",
+  });
+
+  embed.addFields({
+    name: "Pending Officer Review",
+    value: pending.length
+      ? clampDescription(pending.map((member) => `\`${member.name}\``), 1024)
+      : "No pending members.",
+  });
+
+  await ctx.message.reply({ embeds: [embed] });
+}
 
 async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment): Promise<void> {
   const actor = ctx.actor!;
@@ -48,8 +112,8 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
   const schedule = await ctx.services.boss.findScheduleForBoss(bossName, ctx.server.guildId);
   if (!schedule) {
     throw new UserFacingError(
-      `${bossName} has no open spawn to attach attendance to.`,
-      "Check the Boss Rotation page for its schedule, or log the kill first if it's already been fought.",
+      `${bossName} has no open killed-boss attendance window.`,
+      "Log the boss kill first, then run `!attendance` to confirm the window is open before scanning.",
     );
   }
 
@@ -112,6 +176,15 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
   }
 
   await ctx.message.reply({ embeds: [embed] });
+}
+
+function formatCountdown(expiresAt: Date): string {
+  const diff = expiresAt.getTime() - Date.now();
+  if (diff <= 0) return "closed";
+  const hours = Math.floor(diff / (60 * 60 * 1000));
+  const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+  const seconds = Math.floor((diff % (60 * 1000)) / 1000);
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function parseOptions(args: string[]): {

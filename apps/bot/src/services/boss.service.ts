@@ -473,30 +473,24 @@ export class BossService {
   }
 
   /**
-   * The schedule row `!attendance <boss>` attaches a smart-attendance
-   * session to, so the website renders the real boss card instead of a
-   * generic session.
-   *
-   * Prefers a schedule that already has this boss's check-in window open —
-   * covers both the pre-kill advance check-in and a repeat `!attendance`
-   * scan (stragglers, or after `!editkilltime`) on a kill just logged, so
-   * either reuses the SAME session instead of minting a second one against
-   * the next-spawn placeholder the kill already rolled the schedule
-   * forward to. Only falls back to "nearest upcoming, not-yet-killed" when
-   * no window is open yet — the true first-scan advance check-in case.
+  /**
+   * The schedule row `!attendance <boss>` attaches a smart-attendance scan to.
+   * This must be an already-open killed-boss attendance window; future or
+   * not-yet-killed bosses are intentionally rejected.
    */
   async findScheduleForBoss(bossName: string, guildId: string): Promise<UpcomingSpawn | null> {
-    const openSession = await this.bosses.findOpenSessionSchedule({ bossName, guildId });
-    if (openSession) return openSession;
-
-    const factionGuildIds = await this.bosses.getFactionGuildIds(guildId);
-    return this.bosses.findLiveSchedule({
-      bossName,
-      scopeGuildIds: factionGuildIds.length > 0 ? factionGuildIds : [guildId],
-    });
+    return this.bosses.findOpenSessionSchedule({ bossName, guildId });
   }
 
   /** Committed members for a spawn — backs `!party`. */
+  async listOpenKilledAttendanceWindows(guildId: string) {
+    return this.bosses.listOpenKilledAttendanceWindows({ guildId });
+  }
+
+  async getOpenKilledAttendanceWindow(guildId: string, bossName: string) {
+    return this.bosses.findOpenKilledAttendanceWindow({ guildId, bossName });
+  }
+
   async listParty(scheduleId: string) {
     return this.bosses.listCommitments(scheduleId);
   }

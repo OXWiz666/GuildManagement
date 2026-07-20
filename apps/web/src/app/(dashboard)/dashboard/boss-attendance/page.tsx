@@ -19,10 +19,6 @@ import {
 // Imports from co-located components
 import AttendanceCoverflow from "./components/AttendanceCoverflow";
 import AttendanceHistoryList, { type AttendanceHistoryItem } from "./components/AttendanceHistoryList";
-import {
-  AttendanceCalendarView,
-  AttendanceTimelineView,
-} from "./components/AttendanceScheduleViews";
 
 // Both are modals mounted only on demand — code-split out of the main route
 // chunk.
@@ -64,27 +60,12 @@ function isScheduleDateReached(spawnTime: string | null | undefined, now = new D
   return scheduleDateKey(spawnTime) <= scheduleDateKey(now);
 }
 
-function isFutureScheduleDate(spawnTime: string, now = new Date()) {
-  return scheduleDateKey(spawnTime) > scheduleDateKey(now);
-}
-
-function isTodayOrFutureSchedule(spawnTime: string, now = new Date()) {
-  return scheduleDateKey(spawnTime) >= scheduleDateKey(now);
-}
-
 function attendanceSessionTime(session: AttendanceSessionSummary) {
   return new Date(session.bossSchedule?.spawnTime || session.createdAt).getTime();
 }
 
-function isOverviewAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
-  const active = session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
-  if (session.bossSchedule?.spawnTime) {
-    const sessionDate = scheduleDateKey(session.bossSchedule.spawnTime);
-    const today = scheduleDateKey(now);
-    return sessionDate === today || (sessionDate < today && active);
-  }
-
-  return scheduleDateKey(session.createdAt) === scheduleDateKey(now) || active;
+function isOpenAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
+  return session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
 }
 
 function sessionPriority(session: AttendanceSessionSummary, now = new Date()) {
@@ -115,16 +96,11 @@ function dedupeAttendanceSessions(sessions: AttendanceSessionSummary[], now = ne
   return Array.from(byBoss.values());
 }
 
-function isOverviewSchedule(schedule: BossScheduleData, now = new Date()) {
-  const hasActiveSession = schedule.attendanceSessions?.some(
-    (session) => session.isActive && new Date(session.expiresAt).getTime() > now.getTime(),
+function isKilledScheduleWithOpenAttendance(schedule: BossScheduleData, now = new Date()) {
+  return (
+    schedule.status === "KILLED" &&
+    Boolean(schedule.attendanceSessions?.some((session) => session.isActive && new Date(session.expiresAt).getTime() > now.getTime()))
   );
-  return isTodayOrFutureSchedule(schedule.spawnTime, now) || Boolean(hasActiveSession);
-}
-
-function stripFutureEarlyAttendance(schedule: BossScheduleData, now = new Date()): BossScheduleData {
-  if (!isFutureScheduleDate(schedule.spawnTime, now)) return schedule;
-  return { ...schedule, attendanceSessions: [] };
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -135,8 +111,8 @@ function isAdvanceTurnInSchedule(schedule: BossScheduleData, myGuildId: string, 
   return (
     schedule.status !== "KILLED" &&
     schedule.guildTurnGuildId === myGuildId &&
-    (isFutureScheduleDate(schedule.spawnTime, now) ||
-      !schedule.attendanceSessions ||
+    scheduleDateKey(schedule.spawnTime) === scheduleDateKey(now) &&
+    (!schedule.attendanceSessions ||
       schedule.attendanceSessions.length === 0)
   );
 }
@@ -149,7 +125,6 @@ export default function BossAttendancePage() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
-  const [overviewView, setOverviewView] = useState<"cards" | "calendar" | "timeline">("cards");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
@@ -225,19 +200,27 @@ export default function BossAttendancePage() {
     { persist: true, staleTime: 20000 }
   );
   const sessions = useMemo(() => sessionsRaw || [], [sessionsRaw]);
+  const killedOpenScheduleIds = useMemo(
+    () =>
+      new Set(
+        schedules
+          .filter((schedule) => isKilledScheduleWithOpenAttendance(schedule))
+          .map((schedule) => schedule.id),
+      ),
+    [schedules],
+  );
   const overviewSessions = useMemo(
     () =>
-      dedupeAttendanceSessions(sessions.filter((session) => isOverviewAttendanceSession(session)))
+      dedupeAttendanceSessions(
+        sessions.filter(
+          (session) =>
+            session.bossScheduleId &&
+            killedOpenScheduleIds.has(session.bossScheduleId) &&
+            isOpenAttendanceSession(session),
+        ),
+      )
         .sort((a, b) => attendanceSessionTime(b) - attendanceSessionTime(a)),
-    [sessions],
-  );
-  const overviewSchedules = useMemo(
-    () =>
-      schedules
-        .filter((schedule) => isOverviewSchedule(schedule))
-        .map((schedule) => stripFutureEarlyAttendance(schedule))
-        .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime()),
-    [schedules],
+    [sessions, killedOpenScheduleIds],
   );
 
   const isLoading = isLoadingSchedules || isLoadingStats;
@@ -563,69 +546,11 @@ export default function BossAttendancePage() {
           </div>
         </div>
 
-        {/* Boss attendance overview views for current and upcoming bosses. */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.01] p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--forge-gold)]">
-              Boss Attendance View
-            </p>
-            <p className="mt-1 text-[12px] leading-relaxed text-white/45">
-              Current and next boss attendance only. Older records stay in Attendance History.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { value: "cards", label: "Card View" },
-              { value: "calendar", label: "Use Calendar View" },
-              { value: "timeline", label: "Use Timeline View" },
-            ].map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => setOverviewView(item.value as typeof overviewView)}
-                className={`rounded-lg border px-3 py-2 text-[11px] font-bold transition-colors cursor-pointer ${
-                  overviewView === item.value
-                    ? "border-white bg-white text-black"
-                    : "border-white/[0.08] bg-white/[0.03] text-white/65 hover:bg-white/[0.06] hover:text-white"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {overviewView === "cards" && (
-          <AttendanceCoverflow
-            sessions={overviewSessions}
-            isLoading={isLoadingSessions}
-            onSelect={(session) => setSelectedSessionId(session.id)}
-          />
-        )}
-
-        {overviewView === "calendar" && (
-          <AttendanceCalendarView
-            schedules={overviewSchedules}
-            sessions={overviewSessions}
-            isLoading={isLoadingSchedules || isLoadingSessions}
-            myGuildId={activeGuild.guildId}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
-            onSelectSession={(session) => setSelectedSessionId(session.id)}
-          />
-        )}
-
-        {overviewView === "timeline" && (
-          <AttendanceTimelineView
-            schedules={overviewSchedules}
-            sessions={overviewSessions}
-            isLoading={isLoadingSchedules || isLoadingSessions}
-            myGuildId={activeGuild.guildId}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
-            onSelectSession={(session) => setSelectedSessionId(session.id)}
-          />
-        )}
+        <AttendanceCoverflow
+          sessions={overviewSessions}
+          isLoading={isLoadingSessions}
+          onSelect={(session) => setSelectedSessionId(session.id)}
+        />
         </>
         )}
 
@@ -718,6 +643,7 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
         return (
           session &&
           session.isActive &&
+          s.status === "KILLED" &&
           isScheduleDateReached(s.spawnTime, new Date(now)) &&
           new Date(session.expiresAt).getTime() > now
         );

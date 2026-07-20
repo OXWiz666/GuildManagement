@@ -22,6 +22,15 @@ function sessionStatus(session: AttendanceSessionSummary, now: number) {
   return { label: "Closed", color: "text-white/50 bg-white/[0.04] border-white/[0.1]", pulse: false };
 }
 
+function formatRemaining(expiresAt: string, now: number) {
+  const diff = new Date(expiresAt).getTime() - now;
+  if (diff <= 0) return "Closed";
+  const hours = Math.floor(diff / (60 * 60 * 1000));
+  const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+  const seconds = Math.floor((diff % (60 * 1000)) / 1000);
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 /**
  * Netflix-row / coverflow-style browse of every boss attendance window, open
  * or closed — cards peek past the edge of the container and scroll/snap
@@ -40,6 +49,9 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+  const visibleSessions = sessions.filter(
+    (session) => session.isActive && new Date(session.expiresAt).getTime() > now,
+  );
 
   function scrollBy(delta: number) {
     trackRef.current?.scrollBy({ left: delta, behavior: "smooth" });
@@ -55,7 +67,7 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
           </p>
         </div>
         <span className="text-[10px] font-mono font-bold bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded text-white/55 shrink-0">
-          {sessions.length}
+          {visibleSessions.length}
         </span>
       </div>
 
@@ -63,9 +75,9 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
         <div className="flex gap-3">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[188px] w-[160px] rounded-2xl shrink-0" />)}
         </div>
-      ) : sessions.length === 0 ? (
+      ) : visibleSessions.length === 0 ? (
         <div className="text-center py-12 text-xs text-zinc-650 italic">
-          No current boss attendance windows yet.
+          No killed boss has an open attendance window right now.
         </div>
       ) : (
         <div className="relative">
@@ -82,12 +94,13 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
             ref={trackRef}
             className="flex gap-3 overflow-x-auto pb-2 pt-1 px-1 snap-x snap-mandatory scroll-smooth custom-scrollbar"
           >
-            {sessions.map((session) => {
+            {visibleSessions.map((session) => {
               const boss = session.bossSchedule;
               const bossName = boss?.bossName || session.title;
               const imageSrc = boss?.bossImageUrl || getBossImageUrl(bossName);
               const dateSrc = boss?.spawnTime || session.createdAt;
               const status = sessionStatus(session, now);
+              const remaining = formatRemaining(session.expiresAt, now);
 
               return (
                 <button
@@ -111,6 +124,9 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
                     </p>
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${status.color}`}>
                       {status.label}
+                    </span>
+                    <span className="inline-flex items-center rounded-md border border-[var(--forge-gold)]/20 bg-[var(--forge-gold)]/[0.08] px-1.5 py-0.5 font-mono text-[9px] font-bold text-[var(--forge-gold)]">
+                      {remaining}
                     </span>
                     <div className="flex items-center gap-2 text-[10px] font-mono pt-0.5">
                       <span className="text-emerald-400">{session.confirmedCount}✓</span>

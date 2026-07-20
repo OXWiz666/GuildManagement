@@ -48,12 +48,12 @@ describe("command registry", () => {
     }
   });
 
-  it("keeps only !spawn and !cp member-accessible among linked guild commands", () => {
+  it("keeps only member self-service commands member-accessible among linked guild commands", () => {
     // Bootstrap/account commands stay open so users can link and see help.
     // Every other linked guild command should be member-visible only when
     // explicitly allowed here.
     const bootstrapCommands = new Set(["link", "unlink", "bindguild", "commands"]);
-    const memberCommands = new Set(["spawn", "cp"]);
+    const memberCommands = new Set(["spawn", "cp", "attendance"]);
     const guildLeaderCommands = new Set(["unbindguild"]);
 
     for (const command of COMMANDS) {

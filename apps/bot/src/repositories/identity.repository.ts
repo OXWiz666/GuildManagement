@@ -145,6 +145,7 @@ export class IdentityRepository {
     const user = users[0]!;
     const actor = this.toActor(user, discordId);
     if (!actor) return null;
+    if (user.discordId && user.discordId !== discordId) return null;
 
     try {
       await prisma.user.update({
@@ -234,6 +235,7 @@ export class IdentityRepository {
       select: {
         id: true,
         displayName: true,
+        discordId: true,
         discordLinkedAt: true,
       },
       take: 2,
@@ -242,6 +244,8 @@ export class IdentityRepository {
     if (users.length !== 1) return null;
 
     const user = users[0]!;
+    if (user.discordId && user.discordId !== discordId) return null;
+
     try {
       await prisma.user.update({
         where: { id: user.id },
@@ -283,7 +287,7 @@ export class IdentityRepository {
     now?: Date;
   }): Promise<
     | { ok: true; userId: string; displayName: string }
-    | { ok: false; reason: "NOT_FOUND" | "EXPIRED" | "CONSUMED" | "DISCORD_TAKEN" }
+    | { ok: false; reason: "NOT_FOUND" | "EXPIRED" | "CONSUMED" | "DISCORD_TAKEN" | "USER_ALREADY_LINKED" }
   > {
     const { code, discordId, discordUsername } = params;
     const now = params.now ?? new Date();
@@ -291,12 +295,21 @@ export class IdentityRepository {
     return prisma.$transaction(async (tx) => {
       const row = await tx.discordLinkCode.findUnique({
         where: { code },
-        select: { code: true, userId: true, expiresAt: true, consumedAt: true },
+        select: {
+          code: true,
+          userId: true,
+          expiresAt: true,
+          consumedAt: true,
+          user: { select: { discordId: true } },
+        },
       });
 
       if (!row) return { ok: false, reason: "NOT_FOUND" as const };
       if (row.consumedAt) return { ok: false, reason: "CONSUMED" as const };
       if (row.expiresAt.getTime() <= now.getTime()) return { ok: false, reason: "EXPIRED" as const };
+      if (row.user.discordId && row.user.discordId !== discordId) {
+        return { ok: false, reason: "USER_ALREADY_LINKED" as const };
+      }
 
       // Is this Discord account already attached to a *different* ForgeKeep user?
       const existing = await tx.user.findUnique({

@@ -68,8 +68,13 @@ function isOpenAttendanceSession(session: AttendanceSessionSummary, now = new Da
   return session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
 }
 
-function isKilledBossAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
-  return session.bossSchedule?.status === "KILLED" && isOpenAttendanceSession(session, now);
+function isKilledBossAttendanceSession(
+  session: AttendanceSessionSummary,
+  scheduleStatus?: BossScheduleData["status"],
+  now = new Date(),
+) {
+  const status = session.bossSchedule?.status ?? scheduleStatus;
+  return status === "KILLED" && isOpenAttendanceSession(session, now);
 }
 
 function sessionPriority(session: AttendanceSessionSummary, now = new Date()) {
@@ -167,6 +172,10 @@ export default function BossAttendancePage() {
     { persist: true, staleTime: 15000 }
   );
   const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
+  const scheduleStatusById = useMemo(
+    () => new Map(schedules.map((schedule) => [schedule.id, schedule.status])),
+    [schedules],
+  );
 
   // 2. Attendance Stats Query
   const {
@@ -200,10 +209,14 @@ export default function BossAttendancePage() {
   const overviewSessions = useMemo(
     () =>
       dedupeAttendanceSessions(
-        sessions.filter((session) => session.bossScheduleId && isKilledBossAttendanceSession(session)),
+        sessions.filter(
+          (session) =>
+            session.bossScheduleId &&
+            isKilledBossAttendanceSession(session, scheduleStatusById.get(session.bossScheduleId)),
+        ),
       )
         .sort((a, b) => attendanceSessionTime(b) - attendanceSessionTime(a)),
-    [sessions],
+    [sessions, scheduleStatusById],
   );
 
   const isLoading = isLoadingSchedules || isLoadingStats;

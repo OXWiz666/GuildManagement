@@ -19,6 +19,10 @@ import {
 // Imports from co-located components
 import AttendanceCoverflow from "./components/AttendanceCoverflow";
 import AttendanceHistoryList, { type AttendanceHistoryItem } from "./components/AttendanceHistoryList";
+import {
+  AttendanceCalendarView,
+  AttendanceTimelineView,
+} from "./components/AttendanceScheduleViews";
 
 // Both are modals mounted only on demand — code-split out of the main route
 // chunk.
@@ -80,8 +84,13 @@ function isOpenAttendanceSession(session: AttendanceSessionSummary, now = new Da
   return session.isActive && new Date(session.expiresAt).getTime() > now.getTime();
 }
 
-function isKilledBossAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
-  return session.bossSchedule?.status === "KILLED" && isOpenAttendanceSession(session, now);
+function isKilledBossAttendanceSession(
+  session: AttendanceSessionSummary,
+  scheduleStatus?: BossScheduleData["status"],
+  now = new Date(),
+) {
+  const status = session.bossSchedule?.status ?? scheduleStatus;
+  return status === "KILLED" && isOpenAttendanceSession(session, now);
 }
 
 function sessionPriority(session: AttendanceSessionSummary, now = new Date()) {
@@ -132,6 +141,7 @@ export default function BossAttendancePage() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
+  const [overviewView, setOverviewView] = useState<"cards" | "calendar" | "timeline">("cards");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
@@ -177,6 +187,10 @@ export default function BossAttendancePage() {
     { persist: true, staleTime: 15000 }
   );
   const schedules = useMemo(() => schedulesRaw || [], [schedulesRaw]);
+  const scheduleStatusById = useMemo(
+    () => new Map(schedules.map((schedule) => [schedule.id, schedule.status])),
+    [schedules],
+  );
 
   // 2. Attendance Stats Query
   const {
@@ -213,10 +227,22 @@ export default function BossAttendancePage() {
   const overviewSessions = useMemo(
     () =>
       dedupeAttendanceSessions(
-        sessions.filter((session) => session.bossScheduleId && isKilledBossAttendanceSession(session)),
+        sessions.filter(
+          (session) =>
+            session.bossScheduleId &&
+            isKilledBossAttendanceSession(session, scheduleStatusById.get(session.bossScheduleId)),
+        ),
       )
         .sort((a, b) => attendanceSessionTime(b) - attendanceSessionTime(a)),
-    [sessions],
+    [sessions, scheduleStatusById],
+  );
+  const overviewScheduleIds = useMemo(
+    () => new Set(overviewSessions.map((session) => session.bossScheduleId).filter(Boolean)),
+    [overviewSessions],
+  );
+  const overviewSchedules = useMemo(
+    () => schedules.filter((schedule) => overviewScheduleIds.has(schedule.id)),
+    [schedules, overviewScheduleIds],
   );
 
   const isLoading = isLoadingSchedules || isLoadingStats;

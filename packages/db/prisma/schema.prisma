@@ -1644,6 +1644,7 @@ model DiscordServer {
   guild          Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
   // IANA zone for interpreting bare `!kill <boss> HH:MM` wall-clock times.
   timezone       String   @default("Asia/Singapore")
+  pingRoleId     String?  @map("ping_role_id")
   isActive       Boolean  @default(true) @map("is_active")
   linkedById     String?  @map("linked_by_id")
   linkedBy       User?    @relation("DiscordServerLinker", fields: [linkedById], references: [id], onDelete: SetNull)

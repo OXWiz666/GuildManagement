@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import Card from "@/components/ui/Card";
 
 interface AttendanceRecord {
@@ -14,16 +17,33 @@ interface AttendanceHistoryTableProps {
   history?: AttendanceRecord[];
 }
 
+const PAGE_SIZE = 12;
+
 export default function AttendanceHistoryTable({
   history,
 }: AttendanceHistoryTableProps) {
-  const records = history || [];
+  const records = useMemo(() => history ?? [], [history]);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(records.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const visibleRecords = useMemo(
+    () => records.slice(startIndex, startIndex + PAGE_SIZE),
+    [records, startIndex],
+  );
+  const rangeStart = records.length === 0 ? 0 : startIndex + 1;
+  const rangeEnd = Math.min(records.length, startIndex + visibleRecords.length);
 
   return (
     <Card>
-      <h3 className="font-bold text-white text-xs mb-3 border-b border-white/[0.05] pb-2">
-        Guild Attendance History
-      </h3>
+      <div className="mb-3 flex flex-col gap-2 border-b border-white/[0.05] pb-2 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="font-bold text-white text-xs">
+          Guild Attendance History
+        </h3>
+        <span className="font-mono text-[10px] text-zinc-500">
+          {rangeStart}-{rangeEnd} of {records.length}
+        </span>
+      </div>
 
       <div className="overflow-x-auto scroll-fade-x pr-1">
         <table className="w-full text-left font-mono text-[11px]">
@@ -43,7 +63,7 @@ export default function AttendanceHistoryTable({
                 </td>
               </tr>
             ) : (
-              records.map((rec) => {
+              visibleRecords.map((rec) => {
                 const checkInTime = rec.joinedAt
                   ? new Date(rec.joinedAt).toLocaleString("en-US", {
                       month: "short",
@@ -102,6 +122,51 @@ export default function AttendanceHistoryTable({
           </tbody>
         </table>
       </div>
+
+      {records.length > PAGE_SIZE && (
+        <div className="mt-4 flex flex-col gap-3 border-t border-white/[0.05] pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-mono text-[10px] text-zinc-500">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPage(1)}
+              disabled={currentPage === 1}
+              className="h-7 rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 text-[10px] font-bold text-white/55 transition-colors hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              First
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              disabled={currentPage === 1}
+              className="h-7 rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 text-[10px] font-bold text-white/55 transition-colors hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Prev
+            </button>
+            <span className="min-w-12 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-center font-mono text-[10px] font-bold text-white/70">
+              {currentPage}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              disabled={currentPage === totalPages}
+              className="h-7 rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 text-[10px] font-bold text-white/55 transition-colors hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Next
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="h-7 rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 text-[10px] font-bold text-white/55 transition-colors hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Last
+            </button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

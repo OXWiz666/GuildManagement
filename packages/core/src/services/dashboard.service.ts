@@ -1434,6 +1434,122 @@ export async function markMembersPresent(
   return { success: true, count: records.length, skipped: alreadyConfirmed, points: totalPoints };
 }
 
+export async function confirmAttendanceRecords(
+  guildId: string,
+  recordIds: string[],
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await assertAttendanceOfficer(guildId, actorId, "confirm check-ins");
+
+  const uniqueRecordIds = [...new Set(recordIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueRecordIds.length === 0) {
+    throw new BadRequestError("Select at least one check-in to verify");
+  }
+  if (uniqueRecordIds.length > 200) {
+    throw new BadRequestError("You can verify up to 200 check-ins at once");
+  }
+
+  const records = await prisma.attendanceRecord.findMany({
+    where: { id: { in: uniqueRecordIds } },
+    include: { session: true },
+  });
+
+  if (records.length !== uniqueRecordIds.length || records.some((record) => record.session.guildId !== guildId)) {
+    throw new NotFoundError("One or more attendance records were not found in this guild");
+  }
+
+  const pendingRecords = records.filter((record) => record.status !== AttendanceRecordStatus.CONFIRMED);
+  const alreadyConfirmed = records.length - pendingRecords.length;
+  if (pendingRecords.length === 0) {
+    return { success: true, count: 0, skipped: alreadyConfirmed, points: 0 };
+  }
+
+  const members = await prisma.guildMember.findMany({
+    where: { guildId, userId: { in: pendingRecords.map((record) => record.userId) } },
+    select: { userId: true, role: true },
+  });
+  const roleByUserId = new Map(members.map((member) => [member.userId, member.role]));
+  const recordsBySession = new Map<string, typeof pendingRecords>();
+  for (const record of pendingRecords) {
+    const group = recordsBySession.get(record.sessionId) ?? [];
+    group.push(record);
+    recordsBySession.set(record.sessionId, group);
+  }
+
+  const pointsByRecordId = new Map<string, number>();
+  const ledgerRows: Prisma.LedgerEntryCreateManyInput[] = [];
+  for (const group of recordsBySession.values()) {
+    const session = group[0]!.session;
+    const { currencyCode, pointsByUserId } = await getAttendanceAwardContext(
+      guildId,
+      session,
+      group.map((record) => ({
+        userId: record.userId,
+        role: roleByUserId.get(record.userId) ?? "MEMBER",
+      })),
+    );
+    for (const record of group) {
+      const points = pointsByUserId.get(record.userId) ?? 10;
+      pointsByRecordId.set(record.id, points);
+      ledgerRows.push({
+        guildId,
+        accountType: "MEMBER",
+        accountId: record.userId,
+        currency: currencyCode,
+        amount: BigInt(points),
+        entryType: "CREDIT",
+        referenceType: "ATTENDANCE",
+        referenceId: record.id,
+        idempotencyKey: `ATT-${record.id}`,
+        actorId,
+        description: `Checked present in session: ${session.title}`,
+      });
+    }
+  }
+
+  const pendingIds = pendingRecords.map((record) => record.id);
+  await prisma.$transaction(async (tx) => {
+    await tx.attendanceRecord.updateMany({
+      where: { id: { in: pendingIds } },
+      data: { status: AttendanceRecordStatus.CONFIRMED },
+    });
+    if (ledgerRows.length > 0) {
+      await tx.ledgerEntry.createMany({ data: ledgerRows, skipDuplicates: true });
+    }
+  });
+
+  const sessionIds = [...recordsBySession.keys()];
+  const userIds = [...new Set(pendingRecords.map((record) => record.userId))];
+  const totalPoints = pendingRecords.reduce((sum, record) => sum + (pointsByRecordId.get(record.id) ?? 10), 0);
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "MEMBER_ATTENDANCE_BULK_CONFIRMED",
+    target: sessionIds.length === 1 ? "AttendanceSession" : "AttendanceRecord",
+    targetId: sessionIds[0] ?? pendingIds[0]!,
+    detail: {
+      count: pendingRecords.length,
+      skipped: alreadyConfirmed,
+      recordIds: pendingIds,
+      userIds,
+      pointsAwarded: totalPoints,
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  await Promise.all(
+    [...recordsBySession.entries()].map(([sessionId, group]) =>
+      invalidateAttendanceAndFinanceCacheForUsers(guildId, sessionId, group.map((record) => record.userId)),
+    ),
+  );
+
+  return { success: true, count: pendingRecords.length, skipped: alreadyConfirmed, points: totalPoints };
+}
+
 // Scanner/officer helper: creates a PENDING record for a member who appeared in
 // a gray/unconfirmed rally row. Existing CONFIRMED records are preserved so a
 // later scan can never downgrade attendance that an officer already approved.
@@ -4969,6 +5085,11 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
   const secondarySymbol = settings?.secondaryCurrencySymbol || "💎";
   const secondaryCode = settings?.secondaryCurrencyCode || "DIAMOND";
   const pointsCutoff = getGuildPointsCutoff(settings?.pointsResetCycle);
+  const guildPointReferenceTypes = ["ATTENDANCE", "ATTENDANCE_REVOKE", "ATTENDANCE_STATUS_PENDING"];
+  const treasuryLedgerWhere = {
+    guildId,
+    referenceType: { notIn: guildPointReferenceTypes },
+  };
   const skip = (page - 1) * limit;
   const take = limit;
 
@@ -4981,6 +5102,7 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
     treasuryAggregates,
     members,
     dkpAggregates,
+    allTimeDkpAggregates,
     balanceAggregates,
     totalTransactions,
     ledgerHistory,
@@ -5032,6 +5154,17 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
       },
       _sum: { amount: true },
     }),
+    // A2. Ranking should always show lifetime Guild Points, even when weekly
+    // or monthly reset windows are enabled elsewhere.
+    prisma.ledgerEntry.groupBy({
+      by: ["accountId"],
+      where: {
+        guildId,
+        accountType: "MEMBER",
+        referenceType: "ATTENDANCE",
+      },
+      _sum: { amount: true },
+    }),
     // B. Member money board. Attendance ledger rows are Guild Points only;
     // member cash balance is loot-share credits minus withdrawal/debit entries.
     prisma.ledgerEntry.groupBy({
@@ -5053,10 +5186,10 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
     }),
     // 3. Paginated Transaction Ledger history
     prisma.ledgerEntry.count({
-      where: { guildId },
+      where: treasuryLedgerWhere,
     }),
     prisma.ledgerEntry.findMany({
-      where: { guildId },
+      where: treasuryLedgerWhere,
       orderBy: { createdAt: "desc" },
       skip,
       take,
@@ -5089,6 +5222,10 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
   for (const row of dkpAggregates) {
     memberDkpMap[row.accountId] = Number(row._sum.amount || 0n);
   }
+  const memberAllTimeDkpMap: Record<string, number> = {};
+  for (const row of allTimeDkpAggregates) {
+    memberAllTimeDkpMap[row.accountId] = Number(row._sum.amount || 0n);
+  }
 
   // memberBalancesMap[userId][currencyCode][entryType] = amount
   const memberBalancesMap: Record<string, Record<string, { CREDIT: bigint; DEBIT: bigint }>> = {};
@@ -5111,6 +5248,7 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
   const memberBalances = members.map((m) => {
     const userId = m.userId;
     const dkp = memberDkpMap[userId] || 0;
+    const allTimeDkp = memberAllTimeDkpMap[userId] || 0;
 
     // Primary Currency Balance
     const prim = memberBalancesMap[userId]?.[currencyCode] || { CREDIT: 0n, DEBIT: 0n };
@@ -5131,7 +5269,9 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
       customRole: m.customRole ? { id: m.customRole.id, name: m.customRole.name, color: m.customRole.color } : null,
       cp: m.cp || 0,
       class: m.class || "Unknown",
-      dkp,
+      dkp: allTimeDkp,
+      currentDkp: dkp,
+      allTimeDkp,
       balance,
       totalEarned: totalWithdrawn,
       totalWithdrawn,

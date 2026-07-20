@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { ModuleHeader, Reveal } from "@/components/dashboard/DashboardHelpers";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -24,17 +25,15 @@ export default function GuildSettingsPage() {
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
   const activeGuild = user?.guilds?.[0];
-  const isGuildLeader =
-    !!activeGuild &&
-    (activeGuild.role === "GUILD_LEADER" ||
-      activeGuild.role === "FACTION_LEADER" ||
-      activeGuild.role === "ADMIN");
+  const canManageSettings = activeGuild
+    ? hasMinimumRole(activeGuild.role as GuildRoleType, "OFFICER")
+    : false;
 
   const visibleTabs = useMemo(() => {
     const tabs = new Set<GuildSettingsTab>();
-    if (isGuildLeader) LEADER_TABS.forEach((t) => tabs.add(t));
+    if (canManageSettings) LEADER_TABS.forEach((t) => tabs.add(t));
     return tabs;
-  }, [isGuildLeader]);
+  }, [canManageSettings]);
 
   const [requestedTab, setRequestedTab] = useState<GuildSettingsTab | null>(null);
   const activeTab =
@@ -43,10 +42,10 @@ export default function GuildSettingsPage() {
       : LEADER_TABS.find((t) => visibleTabs.has(t)) ?? null;
 
   useEffect(() => {
-    if (!authLoading && !isGuildLeader) {
+    if (!authLoading && !canManageSettings) {
       router.replace("/dashboard");
     }
-  }, [isGuildLeader, authLoading, router]);
+  }, [canManageSettings, authLoading, router]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -100,7 +99,7 @@ export default function GuildSettingsPage() {
     }
   };
 
-  if (authLoading || !isGuildLeader || !activeGuild || !activeTab) {
+  if (authLoading || !canManageSettings || !activeGuild || !activeTab) {
     return (
       <div className="glass rounded-2xl p-6 border border-white/[0.06] animate-pulse h-96 flex items-center justify-center">
         <span className="text-white/40 text-sm font-semibold tracking-wider animate-pulse">

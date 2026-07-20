@@ -2,7 +2,12 @@ import { prisma } from "@guild/db";
 import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
-import { MARKET_REQUEST_TYPES, REQUEST_TYPE_LIMIT_KEY, type MarketRequestType } from "@guild/shared";
+import {
+  MARKET_REQUEST_TYPES,
+  MARKET_REQUEST_TYPE_LABELS,
+  REQUEST_TYPE_LIMIT_KEY,
+  type MarketRequestType,
+} from "@guild/shared";
 import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 import {
   getEffectiveMarketRules,
@@ -73,9 +78,10 @@ export async function createItemRequest(
   // Enforce rank/CP-tier per-item-type quantity limit
   const tier = resolveDistributionTier(member, rules);
   const typeLimit = rules.limits[tier][REQUEST_TYPE_LIMIT_KEY[payload.itemType]];
+  const itemTypeLabel = MARKET_REQUEST_TYPE_LABELS[payload.itemType] || payload.itemType;
   if (quantity > typeLimit) {
     throw new BadRequestError(
-      `Requested ${quantity} exceeds your ${tier} limit of ${typeLimit} for ${payload.itemType}.`,
+      `Requested ${quantity} exceeds your ${tier} limit of ${typeLimit} for ${itemTypeLabel}.`,
     );
   }
 

@@ -106,6 +106,24 @@ export const dashboard = new Hono<AppEnv>()
     broadcastToGuild(result.guildId, "attendance_record_created", payload);
     return ok(c, payload);
   })
+  .post("/attendance/confirm/batch", requireAuth, async (c) => {
+    const user = c.get("user");
+    const { guildId, recordIds } = await readJson<{ guildId?: string; recordIds?: string[] }>(c);
+    if (!guildId || !Array.isArray(recordIds)) throw new BadRequestError("guildId and recordIds are required");
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const result = await services.dashboard.confirmAttendanceRecords(guildId, recordIds, user.userId, ipAddress, userAgent);
+    await Promise.all([
+      cache.invalidatePattern(`boss-schedule:${guildId}:*`),
+      cache.invalidatePattern(`attendance:pending:${guildId}:*`),
+      cache.invalidatePattern(`attendance:sessions:${guildId}*`),
+      cache.invalidatePattern(`attendance:stats:${guildId}:*`),
+      cache.invalidatePattern(`stats:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-card:${guildId}:*`),
+      cache.invalidatePattern(`member:stats-board:${guildId}`),
+    ]);
+    broadcastToGuild(guildId, "attendance_records_bulk_confirmed", { recordIds, ...result });
+    return ok(c, result);
+  })
   .patch("/attendance/confirm/:recordId", requireAuth, async (c) => {
     const user = c.get("user");
     const recordId = c.req.param("recordId");

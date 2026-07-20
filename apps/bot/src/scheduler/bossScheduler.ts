@@ -5,6 +5,10 @@ import { dedupeKeys } from "../notifications/dedupe.js";
 import { spawnEmbed, spawnWarningEmbed } from "../embeds/notifications.js";
 import { logger, errorFields } from "../utils/logger.js";
 
+function pingContent(roleId: string | null | undefined): string | undefined {
+  return roleId ? `<@&${roleId}>` : undefined;
+}
+
 /**
  * Boss spawn notifications.
  *
@@ -112,6 +116,7 @@ export class BossScheduler {
             discordServerId: server.discordServerId,
             guildId: server.guildId,
             channelId: server.channelId,
+            content: pingContent(server.pingRoleId),
             embeds: [
               spawnEmbed({
                 bossName: spawn.bossName,
@@ -139,6 +144,7 @@ export class BossScheduler {
             discordServerId: server.discordServerId,
             guildId: server.guildId,
             channelId: server.channelId,
+            content: pingContent(server.pingRoleId),
             embeds: [
               spawnWarningEmbed(
                 {

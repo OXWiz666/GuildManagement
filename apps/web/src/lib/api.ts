@@ -1148,6 +1148,13 @@ export const dashboardApi = {
   },
 
   // ─── Past attendance (Officer / Guild Leader) ───────────────
+  async confirmAttendances(guildId: string, recordIds: string[]) {
+    return api.post<{ success: boolean; count: number; skipped: number; points: number }>(
+      `/dashboard/attendance/confirm/batch`,
+      { guildId, recordIds },
+    );
+  },
+
   async listAttendanceSessions(guildId: string, fresh = false) {
     return api.get<AttendanceSessionSummary[]>(
       `/dashboard/attendance/sessions/${guildId}${fresh ? "?fresh=1" : ""}`,

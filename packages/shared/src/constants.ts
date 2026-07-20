@@ -130,7 +130,7 @@ export type MarketRequestType = (typeof MARKET_REQUEST_TYPES)[number];
 export const MARKET_REQUEST_TYPE_LABELS: Record<MarketRequestType, string> = {
   LOGS: "Logs",
   MATERIALS: "Materials",
-  TEMPORAL_PIECES: "Temporal Pieces",
+  TEMPORAL_PIECES: "Mount",
 };
 
 // Map a request type to the matching limit key on a tier's rule

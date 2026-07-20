@@ -51,7 +51,7 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
         <div>
           <h3 className="text-xs font-bold text-white uppercase tracking-wider">Boss Attendance</h3>
           <p className="text-xs text-white/40 mt-0.5">
-            Every check-in window, live or closed — tap a boss to claim, verify, or review.
+            Current check-in windows for today - tap a boss to claim, verify, or review.
           </p>
         </div>
         <span className="text-[10px] font-mono font-bold bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded text-white/55 shrink-0">
@@ -65,7 +65,7 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
         </div>
       ) : sessions.length === 0 ? (
         <div className="text-center py-12 text-xs text-zinc-650 italic">
-          No attendance windows have been opened for this guild yet.
+          No current boss attendance windows yet.
         </div>
       ) : (
         <div className="relative">

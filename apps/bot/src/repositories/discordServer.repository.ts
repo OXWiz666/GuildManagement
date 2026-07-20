@@ -28,6 +28,18 @@ export class DiscordServerRepository {
     const cached = await redisCache.get<ServerContext>(key);
     if (cached) return cached;
 
+    return this.findByDiscordGuildIdUncached(discordGuildId);
+  }
+
+  /**
+   * Source-of-truth binding read. Used by the normal cache miss path and as a
+   * defensive retry when a command is about to tell users the server is
+   * unbound. That retry matters in production where a stale cache or transient
+   * read hiccup would otherwise produce a false "run !bindguild" warning.
+   */
+  async findByDiscordGuildIdUncached(discordGuildId: string): Promise<ServerContext | null> {
+    const key = cacheKeys.discordServer(discordGuildId);
+
     const row = await prisma.discordServer.findUnique({
       where: { discordGuildId },
       select: {
@@ -35,6 +47,7 @@ export class DiscordServerRepository {
         discordGuildId: true,
         guildId: true,
         timezone: true,
+        pingRoleId: true,
         isActive: true,
         guild: { select: { name: true, deletedAt: true, suspendedAt: true } },
       },
@@ -51,10 +64,16 @@ export class DiscordServerRepository {
       guildId: row.guildId,
       guildName: row.guild.name,
       timezone: row.timezone,
+      pingRoleId: row.pingRoleId,
     };
 
     await redisCache.set(key, context, cacheTtl.discordServer);
     return context;
+  }
+
+  async refreshByDiscordGuildId(discordGuildId: string): Promise<ServerContext | null> {
+    await redisCache.del(cacheKeys.discordServer(discordGuildId));
+    return this.findByDiscordGuildIdUncached(discordGuildId);
   }
 
   async bind(params: {
@@ -125,6 +144,19 @@ export class DiscordServerRepository {
     });
   }
 
+  async setPingRole(params: {
+    discordServerId: string;
+    roleId: string | null;
+  }): Promise<void> {
+    const row = await prisma.discordServer.update({
+      where: { id: params.discordServerId },
+      data: { pingRoleId: params.roleId },
+      select: { discordGuildId: true },
+    });
+
+    await redisCache.del(cacheKeys.discordServer(row.discordGuildId));
+  }
+
   async getChannel(discordServerId: string, purpose: ChannelPurpose): Promise<string | null> {
     const row = await prisma.discordChannel.findUnique({
       where: { discordServerId_purpose: { discordServerId, purpose } },
@@ -148,6 +180,7 @@ export class DiscordServerRepository {
       guildName: string;
       timezone: string;
       channelId: string;
+      pingRoleId: string | null;
     }>
   > {
     const rows = await prisma.discordChannel.findMany({
@@ -165,6 +198,7 @@ export class DiscordServerRepository {
             id: true,
             guildId: true,
             timezone: true,
+            pingRoleId: true,
             guild: { select: { name: true } },
           },
         },
@@ -177,6 +211,7 @@ export class DiscordServerRepository {
       guildName: row.discordServer.guild.name,
       timezone: row.discordServer.timezone,
       channelId: row.channelId,
+      pingRoleId: row.discordServer.pingRoleId,
     }));
   }
 }

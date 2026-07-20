@@ -7,18 +7,19 @@ import { useSocket } from "@/components/providers/socket-provider";
 import { dashboardApi, type BossScheduleData, type AttendanceSessionData, type AttendanceSessionSummary } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import DashboardDecor from "@/components/dashboard/DashboardDecor";
 import { useQuery, queryClient } from "@/lib/query";
 import {
   ModuleHeader,
   ModuleTabs,
-  Reveal,
   Magnetic,
 } from "@/components/dashboard/DashboardHelpers";
 
 // Imports from co-located components
 import AttendanceCoverflow from "./components/AttendanceCoverflow";
 import AttendanceHistoryList, { type AttendanceHistoryItem } from "./components/AttendanceHistoryList";
+import { AttendanceCalendarView, AttendanceTimelineView } from "./components/AttendanceScheduleViews";
 
 // Both are modals mounted only on demand — code-split out of the main route
 // chunk.
@@ -132,6 +133,7 @@ export default function BossAttendancePage() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
+  const [overviewView, setOverviewView] = useState<"cards" | "timeline" | "calendar">("cards");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
@@ -140,15 +142,16 @@ export default function BossAttendancePage() {
   // re-resolved against the live queries below, so the modal's countdown,
   // status, and roster stay in sync instead of freezing on a snapshot.
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionOverride, setSelectedSessionOverride] = useState<AttendanceSessionSummary | null>(null);
 
   // Officer Session Editing State
   const [showEditSessionModal, setShowEditSessionModal] = useState<AttendanceSessionData | null>(null);
   const [isEditingSession, setIsEditingSession] = useState(false);
 
   const activeGuild = user?.guilds?.[0];
-  const isGuildLeader = activeGuild?.role === "GUILD_LEADER";
-  const isFactionLeader = activeGuild?.role === "FACTION_LEADER" || activeGuild?.role === "ADMIN";
-  const isOfficer = activeGuild?.role === "OFFICER" || isGuildLeader || isFactionLeader;
+  const isOfficer = activeGuild
+    ? hasMinimumRole(activeGuild.role as GuildRoleType, "OFFICER")
+    : false;
 
   // `currentTime` now only feeds getUserRecordStatus/getCountdownText, which
   // only matter while the session detail modal is open (AttendanceCoverflow
@@ -360,8 +363,8 @@ export default function BossAttendancePage() {
   }, [schedules, activeGuild]);
 
   const selectedSession = useMemo(
-    () => sessions.find((s) => s.id === selectedSessionId) || null,
-    [sessions, selectedSessionId],
+    () => sessions.find((s) => s.id === selectedSessionId) || selectedSessionOverride,
+    [sessions, selectedSessionId, selectedSessionOverride],
   );
   // The matching schedule row carries the current user's own record — the
   // session summary alone only has aggregate confirmed/pending counts.
@@ -369,6 +372,10 @@ export default function BossAttendancePage() {
     () => schedules.find((s) => s.id === selectedSession?.bossScheduleId) || null,
     [schedules, selectedSession],
   );
+  const handleSelectSession = useCallback((session: AttendanceSessionSummary) => {
+    setSelectedSessionId(session.id);
+    setSelectedSessionOverride(session);
+  }, []);
 
   if (!user || !activeGuild) {
     return (
@@ -381,22 +388,22 @@ export default function BossAttendancePage() {
   if (isLoading && schedules.length === 0) {
     return (
       <div className="space-y-6 max-w-full xl:max-w-[1400px] mx-auto px-4 md:px-6 lg:px-8 text-white/85">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/[0.06] pb-5 gap-4 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/[0.06] pb-5 gap-4">
           <div className="space-y-2">
-            <Skeleton className="h-7 w-48 animate-pulse" />
-            <Skeleton className="h-4 w-80 animate-pulse" />
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-80" />
           </div>
           <div className="flex gap-2">
-            <Skeleton className="h-8 w-28 rounded-lg animate-pulse" />
-            <Skeleton className="h-8 w-32 rounded-lg animate-pulse" />
+            <Skeleton className="h-8 w-28 rounded-lg" />
+            <Skeleton className="h-8 w-32 rounded-lg" />
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-xl animate-pulse" />
+            <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-[360px] rounded-2xl animate-pulse" />
+        <Skeleton className="h-[360px] rounded-2xl" />
       </div>
     );
   }
@@ -416,7 +423,7 @@ export default function BossAttendancePage() {
                 <button
                   type="button"
                   onClick={invalidateAll}
-                  className="px-3 py-1.5 rounded-full bg-white text-black hover:bg-white/90 text-[11px] font-semibold transition-all cursor-pointer"
+                  className="px-3 py-1.5 rounded-full bg-white text-black hover:bg-white/90 text-[11px] font-semibold cursor-pointer"
                 >
                   Refresh
                 </button>
@@ -425,17 +432,15 @@ export default function BossAttendancePage() {
           }
         />
 
-        <Reveal delay={80}>
-          <ModuleTabs
-            tabs={[
-              { value: "overview", label: "Overview" },
-              { value: "history", label: "Attendance History", count: stats?.history?.length ?? 0 },
-              { value: "advance", label: "Advance Turn-In", count: advanceEligibleCount },
-            ]}
-            active={activeTab}
-            onChange={setActiveTab}
-          />
-        </Reveal>
+        <ModuleTabs
+          tabs={[
+            { value: "overview", label: "Overview" },
+            { value: "history", label: "Attendance History", count: stats?.history?.length ?? 0 },
+            { value: "advance", label: "Advance Turn-In", count: advanceEligibleCount },
+          ]}
+          active={activeTab}
+          onChange={setActiveTab}
+        />
 
         {activeTab === "overview" && (
         <>
@@ -502,18 +507,12 @@ export default function BossAttendancePage() {
 
           {/* Current streak — flames up while the streak is alive */}
           <div
-            className={`relative overflow-hidden rounded-xl border p-4 shadow-sm transition-colors duration-500 ${
+            className={`relative overflow-hidden rounded-xl border p-4 shadow-sm ${
               (stats?.currentStreak ?? 0) > 0
                 ? "border-amber-500/30 bg-gradient-to-br from-amber-500/[0.10] via-orange-600/[0.05] to-transparent"
                 : "border-white/[0.06] bg-white/[0.02]"
             }`}
           >
-            {(stats?.currentStreak ?? 0) > 0 && (
-              <span
-                aria-hidden
-                className="streak-heat pointer-events-none absolute -right-5 -top-6 h-20 w-20 rounded-full bg-orange-500/25 blur-2xl"
-              />
-            )}
             <p className="relative text-[10px] font-semibold text-white/40 uppercase tracking-wider">Current Streak</p>
             <div className="relative flex items-baseline gap-2 mt-2">
               <h3 className={`text-2xl font-bold tracking-tight ${(stats?.currentStreak ?? 0) > 0 ? "text-amber-300" : "text-amber-400"}`}>
@@ -565,16 +564,52 @@ export default function BossAttendancePage() {
           </div>
         </div>
 
-        <AttendanceCoverflow
-          sessions={overviewSessions}
-          schedules={schedules.filter((schedule) => isTodayOrTomorrowSchedule(schedule.spawnTime))}
-          isLoading={isLoadingSessions}
-          myGuildId={activeGuild.guildId}
-          userId={user.id}
-          checkingInId={checkingInId}
-          onCheckIn={handleCheckIn}
-          onSelect={(session) => setSelectedSessionId(session.id)}
+        <ViewSwitcher
+          value={overviewView}
+          onChange={setOverviewView}
+          options={[
+            { value: "cards", label: "Cards" },
+            { value: "timeline", label: "Timeline" },
+            { value: "calendar", label: "Calendar" },
+          ]}
         />
+
+        {overviewView === "cards" && (
+          <AttendanceCoverflow
+            sessions={overviewSessions}
+            schedules={schedules.filter((schedule) => isTodayOrTomorrowSchedule(schedule.spawnTime))}
+            isLoading={isLoadingSessions}
+            myGuildId={activeGuild.guildId}
+            userId={user.id}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+          onSelect={handleSelectSession}
+          />
+        )}
+
+        {overviewView === "timeline" && (
+          <AttendanceTimelineView
+            sessions={sessions}
+            schedules={schedules}
+            isLoading={isLoadingSchedules || isLoadingSessions}
+            myGuildId={activeGuild.guildId}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+            onSelectSession={handleSelectSession}
+          />
+        )}
+
+        {overviewView === "calendar" && (
+          <AttendanceCalendarView
+            sessions={sessions}
+            schedules={schedules}
+            isLoading={isLoadingSchedules || isLoadingSessions}
+            myGuildId={activeGuild.guildId}
+            checkingInId={checkingInId}
+            onCheckIn={handleCheckIn}
+            onSelectSession={handleSelectSession}
+          />
+        )}
         </>
         )}
 
@@ -605,7 +640,10 @@ export default function BossAttendancePage() {
             schedule={selectedSchedule}
             guildId={activeGuild.guildId}
             isOfficer={isOfficer}
-            onClose={() => setSelectedSessionId(null)}
+            onClose={() => {
+              setSelectedSessionId(null);
+              setSelectedSessionOverride(null);
+            }}
             getUserRecordStatus={getUserRecordStatus}
             getCountdownText={getCountdownText}
             checkingInId={checkingInId}
@@ -643,6 +681,41 @@ export default function BossAttendancePage() {
 // computation entirely internally, so this — the only always-visible piece
 // of the page that genuinely needs a live per-second countdown — is the only
 // thing re-rendering every second, not the whole attendance page.
+function ViewSwitcher<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<{ value: T; label: string }>;
+}) {
+  return (
+    <div className="flex justify-end">
+      <div className="inline-flex rounded-xl border border-white/[0.08] bg-black/20 p-1">
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              aria-pressed={active}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-colors cursor-pointer ${
+                active
+                  ? "bg-white text-black"
+                  : "text-white/45 hover:bg-white/[0.05] hover:text-white/80"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const CheckInAlertBanner = memo(function CheckInAlertBanner({
   schedules,
   user,
@@ -722,7 +795,7 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
         type="button"
         onClick={() => onCheckIn(activeSessionEvent)}
         disabled={checkingInId === activeSessionEvent.id}
-        className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 active:scale-95 disabled:opacity-50 text-sm font-bold text-white rounded-xl transition-all cursor-pointer shadow-lg shadow-violet-500/20 shrink-0"
+        className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-sm font-bold text-white rounded-xl cursor-pointer shadow-lg shadow-violet-500/20 shrink-0"
       >
         {checkingInId === activeSessionEvent.id ? "Checking in…" : "Check In Now"}
       </button>
@@ -892,7 +965,7 @@ const AdvanceCheckInBanner = memo(function AdvanceCheckInBanner({
                             type="button"
                             onClick={() => onCheckIn(item)}
                             disabled={checkingInId === item.id}
-                            className="shrink-0 rounded-lg bg-violet-600 px-3.5 py-2 text-[11px] font-bold text-white transition-all hover:bg-violet-700 active:scale-95 disabled:opacity-50 cursor-pointer"
+                            className="shrink-0 rounded-lg bg-violet-600 px-3.5 py-2 text-[11px] font-bold text-white hover:bg-violet-700 disabled:opacity-50 cursor-pointer"
                           >
                             {checkingInId === item.id ? "Checking in..." : "Check In Early"}
                           </button>

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { MARKET_REQUEST_TYPES, MARKET_REQUEST_TYPE_LABELS } from "@guild/shared";
-import { marketApi } from "@/lib/api";
+import { marketApi, type MountCatalogItem } from "@/lib/api";
+import { useQuery } from "@/lib/query";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -24,9 +25,27 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [quota, setQuota] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const isMountRequest = itemType === "TEMPORAL_PIECES";
+
+  const { data: mountData, isLoading: loadingMounts } = useQuery(
+    `market_mounts:${guildId}`,
+    async () => {
+      const res = await marketApi.listMounts(guildId);
+      return res.success && res.data ? res.data.mounts : [];
+    },
+    { staleTime: 30000, enabled: isMountRequest },
+  );
+  const mountOptions = ((mountData || []) as MountCatalogItem[])
+    .filter((mount) => mount.isActive)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const errorMessage = (err: unknown) => (err instanceof Error ? err.message : "An error occurred");
 
   // Portal target only exists on the client.
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +64,14 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
       addToast("error", "Quantity must be at least 1");
       return;
     }
+    if (isMountRequest && loadingMounts) {
+      addToast("error", "Mount list is still loading");
+      return;
+    }
+    if (isMountRequest && mountOptions.length > 0 && !itemName.trim()) {
+      addToast("error", "Pick a specific mount");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await marketApi.createItemRequest(guildId, {
@@ -60,8 +87,8 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
       } else {
         addToast("error", res.error?.message || "Failed to submit request");
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "An error occurred");
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -80,7 +107,7 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
           <div>
             <p className="text-[10px] text-[var(--forge-gold-bright)] font-bold uppercase tracking-[0.24em]">Guild Market</p>
             <h3 className="text-lg font-extrabold text-white tracking-tight mt-1">Request an item</h3>
-            <p className="text-xs text-white/50 mt-1">Logs, materials, and temporal pieces. Limits depend on your rank/CP tier.</p>
+            <p className="text-xs text-white/50 mt-1">Logs, materials, and mounts. Limits depend on your rank/CP tier.</p>
           </div>
           {quota && (
             <div className="text-right shrink-0">
@@ -101,7 +128,10 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
                   <button
                     type="button"
                     key={t}
-                    onClick={() => setItemType(t)}
+                    onClick={() => {
+                      setItemType(t);
+                      setItemName("");
+                    }}
                     className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                       itemType === t
                         ? "border-[var(--forge-gold)]/50 bg-[var(--forge-gold)]/10 text-white"
@@ -116,12 +146,33 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Specific name (optional)"
-                placeholder="e.g. Life Core"
-                value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
-              />
+              {isMountRequest ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-2">Specific Mount Name</label>
+                  <select
+                    value={itemName}
+                    onChange={(e) => setItemName(e.target.value)}
+                    disabled={loadingMounts || mountOptions.length === 0}
+                    className="w-full rounded-xl bg-surface-100 border border-white/8 text-white px-4 py-3 text-sm transition-all focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 hover:border-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">
+                      {loadingMounts ? "Loading mounts..." : mountOptions.length === 0 ? "No mounts configured" : "Select specific mount"}
+                    </option>
+                    {mountOptions.map((mount) => (
+                      <option key={mount.id} value={mount.name}>
+                        {mount.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <Input
+                  label="Specific name (optional)"
+                  placeholder="e.g. Life Core"
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                />
+              )}
               <Input
                 label="Quantity"
                 type="number"
@@ -149,7 +200,14 @@ export default function RequestItemModal({ guildId, onClose, onSubmitted }: Prop
             <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting} className="text-xs uppercase font-bold text-white/60">
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="sm" isLoading={isSubmitting} className="text-xs uppercase font-bold min-w-[120px]">
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              isLoading={isSubmitting}
+              disabled={isMountRequest && (loadingMounts || (mountOptions.length > 0 && !itemName.trim()))}
+              className="text-xs uppercase font-bold min-w-[120px]"
+            >
               Submit request
             </Button>
           </div>

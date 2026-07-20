@@ -18,6 +18,7 @@ export default function RequestItemPanel({ guildId, isOfficer }: Props) {
   const { addToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const errorMessage = (err: unknown) => (err instanceof Error ? err.message : "An error occurred");
 
   // Officers see the pending queue; members see their own requests.
   const officerKey = `market_requests:${guildId}`;
@@ -56,8 +57,8 @@ export default function RequestItemPanel({ guildId, isOfficer }: Props) {
       } else {
         addToast("error", res.error?.message || "Action failed");
       }
-    } catch (err: any) {
-      addToast("error", err?.message || "An error occurred");
+    } catch (err: unknown) {
+      addToast("error", errorMessage(err));
     } finally {
       setBusyId(null);
     }
@@ -66,6 +67,12 @@ export default function RequestItemPanel({ guildId, isOfficer }: Props) {
   const officerRequests = (officerData || []) as ItemRequestData[];
   const pending = officerRequests.filter((r) => r.status === "PENDING");
   const myRequests = mineData?.requests || [];
+  const specificNameFor = (request: ItemRequestData) => {
+    const name = request.itemName?.trim();
+    const category = request.itemCategory?.trim();
+    if (!name || name === category) return null;
+    return name;
+  };
 
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur p-5">
@@ -75,7 +82,7 @@ export default function RequestItemPanel({ guildId, isOfficer }: Props) {
             <span aria-hidden>📦</span> Resource Requests
           </h3>
           <p className="text-[11px] text-white/45 mt-0.5">
-            Request logs, materials, and temporal pieces. {isOfficer ? "Review and approve member requests below." : "Track your request status."}
+            Request logs, materials, and mounts. {isOfficer ? "Review and approve member requests below." : "Track your request status."}
           </p>
         </div>
         <Magnetic strength={4}>
@@ -102,6 +109,7 @@ export default function RequestItemPanel({ guildId, isOfficer }: Props) {
                   </p>
                   <p className="text-[11px] text-white/55 mt-0.5 flex items-center gap-2">
                     <ItemTypeLabel type={r.itemCategory || ""} />
+                    {specificNameFor(r) && <span className="text-white/45 truncate">{specificNameFor(r)}</span>}
                     <span className="font-mono text-white/70">×{r.quantity}</span>
                     {r.note && <span className="text-white/35 truncate">— {r.note}</span>}
                   </p>
@@ -129,6 +137,7 @@ export default function RequestItemPanel({ guildId, isOfficer }: Props) {
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] text-white/70 flex items-center gap-2">
                   <ItemTypeLabel type={r.itemCategory || ""} />
+                  {specificNameFor(r) && <span className="text-white/45 truncate">{specificNameFor(r)}</span>}
                   <span className="font-mono text-white/70">×{r.quantity}</span>
                 </p>
                 {r.reviewNote && <p className="text-[10px] text-white/35 mt-0.5 truncate">Note: {r.reviewNote}</p>}

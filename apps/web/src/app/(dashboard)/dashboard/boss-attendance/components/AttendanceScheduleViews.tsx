@@ -73,6 +73,32 @@ function countRecords(session?: AttendanceSessionData) {
   };
 }
 
+function summaryFromScheduleSession(
+  schedule: BossScheduleData,
+  session: AttendanceSessionData,
+): AttendanceSessionSummary {
+  const counts = countRecords(session);
+  return {
+    id: session.id,
+    title: session.title,
+    type: session.type,
+    isActive: session.isActive && new Date(session.expiresAt).getTime() > Date.now(),
+    expiresAt: session.expiresAt,
+    createdAt: session.createdAt,
+    bossScheduleId: schedule.id,
+    bossSchedule: {
+      bossName: schedule.bossName,
+      bossImageUrl: schedule.bossImageUrl || getBossImageUrl(schedule.bossName),
+      location: schedule.location,
+      spawnTime: schedule.spawnTime,
+      status: schedule.status,
+      killedAt: schedule.killedAt,
+    },
+    confirmedCount: counts.confirmed,
+    pendingCount: counts.pending,
+  };
+}
+
 function scheduleViewSessionPriority(session: AttendanceSessionSummary) {
   return (
     session.confirmedCount * 100_000_000 +
@@ -116,7 +142,7 @@ function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionS
       status: schedule.status,
       guildTurn: schedule.guildTurnGuildName || schedule.guildTurn || null,
       guildTurnGuildId: schedule.guildTurnGuildId ?? null,
-      session,
+      session: session ?? (fallbackSession ? summaryFromScheduleSession(schedule, fallbackSession) : null),
       schedule,
       confirmedCount: session?.confirmedCount ?? fallbackCounts.confirmed,
       pendingCount: session?.pendingCount ?? fallbackCounts.pending,
@@ -148,6 +174,24 @@ function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionS
   }
 
   return events.sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
+}
+
+function isCurrentOrFutureEvent(event: AttendanceBossEvent, now: number) {
+  const spawnTime = new Date(event.spawnTime).getTime();
+  const sessionOpen = event.session?.isActive && new Date(event.session.expiresAt).getTime() > now;
+  return spawnTime >= now || event.status === "SPAWNED" || Boolean(sessionOpen);
+}
+
+function sortTimelineEvents(events: AttendanceBossEvent[], now: number) {
+  return [...events].sort((a, b) => {
+    const aUpcoming = isCurrentOrFutureEvent(a, now);
+    const bUpcoming = isCurrentOrFutureEvent(b, now);
+    const aTime = new Date(a.spawnTime).getTime();
+    const bTime = new Date(b.spawnTime).getTime();
+
+    if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+    return aUpcoming ? aTime - bTime : bTime - aTime;
+  });
 }
 
 function statusStyle(event: AttendanceBossEvent, now: number) {
@@ -256,7 +300,7 @@ function EventCard({
       <button
         type="button"
         onClick={() => onSelectSession(event.session!)}
-        className={`group flex w-full min-w-0 rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5 text-left transition-all hover:border-[var(--forge-gold)]/35 hover:bg-[var(--forge-gold)]/[0.04] cursor-pointer focus-ring ${
+        className={`group flex w-full min-w-0 rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5 text-left hover:border-[var(--forge-gold)]/35 hover:bg-[var(--forge-gold)]/[0.04] cursor-pointer focus-ring ${
           compact ? "flex-col items-stretch gap-2" : "items-center gap-3"
         }`}
       >
@@ -421,23 +465,24 @@ export function AttendanceTimelineView({
   onCheckIn,
   onSelectSession,
 }: AttendanceScheduleViewProps) {
-  const events = useMemo(() => buildEvents(schedules, sessions), [schedules, sessions]);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60 * 1000);
     return () => clearInterval(timer);
   }, []);
+  const events = useMemo(() => buildEvents(schedules, sessions), [schedules, sessions]);
+  const timelineEvents = useMemo(() => sortTimelineEvents(events, now), [events, now]);
 
   const groups = useMemo(() => {
     const grouped = new Map<string, AttendanceBossEvent[]>();
-    for (const event of events) {
+    for (const event of timelineEvents) {
       const key = dateKey(new Date(event.spawnTime));
       const bucket = grouped.get(key);
       if (bucket) bucket.push(event);
       else grouped.set(key, [event]);
     }
     return Array.from(grouped.entries()).map(([key, items]) => ({ key, items }));
-  }, [events]);
+  }, [timelineEvents]);
 
   return (
     <section className="rounded-2xl border border-white/[0.06] bg-[#08090d]/80 p-4 md:p-5">

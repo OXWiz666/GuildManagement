@@ -30,6 +30,7 @@ export interface ServerContext {
   guildId: string;
   guildName: string;
   timezone: string;
+  pingRoleId?: string | null;
 }
 
 export interface CommandContext {

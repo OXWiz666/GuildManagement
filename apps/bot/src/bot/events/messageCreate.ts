@@ -67,7 +67,10 @@ export async function handleMessage(
   });
 
   try {
-    const server = await services.repositories.discordServer.findByDiscordGuildId(message.guildId);
+    let server = await services.repositories.discordServer.findByDiscordGuildId(message.guildId);
+    if (!server) {
+      server = await services.repositories.discordServer.refreshByDiscordGuildId(message.guildId);
+    }
     const dbClaimed = await services.repositories.notification.claimCommandMessage({
       messageId: message.id,
       command: command.name,

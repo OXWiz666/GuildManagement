@@ -58,7 +58,7 @@ interface RankingsTabProps {
 }
 
 const SORT_LABELS: Record<RankingSort, string> = {
-  GUILD_POINTS: "Sort: Guild Points",
+  GUILD_POINTS: "Sort: All-Time Guild Points",
   ROLE: "Sort: Role",
   RANK: "Sort: Rank",
 };
@@ -170,7 +170,7 @@ export default function RankingsTab({
                 <div className="relative z-10 mt-4 flex items-end justify-between gap-2">
                   <div>
                     <p className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
-                      Guild Points
+                      All-Time Guild Points
                     </p>
                     <p className={`font-mono text-2xl font-bold ${p.accent}`}>
                       {row.dkp.toLocaleString()}
@@ -200,10 +200,10 @@ export default function RankingsTab({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-4 mb-4">
           <div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <span aria-hidden>🏆</span> Guild Points Leaderboard
+              <span aria-hidden>🏆</span> All-Time Guild Points Leaderboard
             </h3>
             <p className="text-[10px] text-white/40 mt-1">
-              Dynamic ranking of accumulated Guild Points from attendance and boss kills — the basis for bidding splits.
+              Lifetime Guild Points from attendance, used for long-term ranking.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -252,7 +252,7 @@ export default function RankingsTab({
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Class</th>
                   <th className="px-4 py-3 text-center">Combat Power</th>
-                  <th className="px-4 py-3 min-w-[180px]">Guild Points</th>
+                  <th className="px-4 py-3 min-w-[180px]">All-Time Guild Points</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">

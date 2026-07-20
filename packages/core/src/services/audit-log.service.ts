@@ -1,4 +1,4 @@
-import { prisma } from "@guild/db";
+import { Prisma, prisma } from "@guild/db";
 
 type AuditLogEntry = {
   id: string;
@@ -237,14 +237,24 @@ export async function getCurrencyDistributionAuditLogs(
   limit: number,
 ): Promise<AuditLogPage> {
   const skip = (page - 1) * limit;
+  const currencyLedgerWhere = {
+    guildId,
+    currency: { in: ["PHP", "DIAMOND"] },
+    accountType: "MEMBER",
+    OR: [
+      { entryType: "CREDIT", referenceType: "BOSS_LOOT_SHARE" },
+      {
+        entryType: "DEBIT",
+        referenceType: {
+          notIn: ["ATTENDANCE", "ATTENDANCE_REVOKE", "ATTENDANCE_STATUS_PENDING"],
+        },
+      },
+    ],
+  } satisfies Prisma.LedgerEntryWhereInput;
 
   const [ledger, total] = await Promise.all([
     prisma.ledgerEntry.findMany({
-      where: {
-        guildId,
-        currency: { in: ["PHP", "DIAMOND"] },
-        accountType: "MEMBER",
-      },
+      where: currencyLedgerWhere,
       include: {
         actor: {
           select: { id: true, displayName: true, avatarUrl: true },
@@ -255,11 +265,7 @@ export async function getCurrencyDistributionAuditLogs(
       take: limit,
     }),
     prisma.ledgerEntry.count({
-      where: {
-        guildId,
-        currency: { in: ["PHP", "DIAMOND"] },
-        accountType: "MEMBER",
-      },
+      where: currencyLedgerWhere,
     }),
   ]);
 

@@ -1,10 +1,17 @@
 import { prisma, Prisma } from "@guild/db";
 import { redisCache, cacheKeys, cacheTtl } from "@guild/core";
 import type { ServerContext } from "../types/command.js";
+import { DiscordPingRoleStorageError } from "../utils/errors.js";
 
 export type ChannelPurpose = "NOTIFICATION" | "COMMAND" | "THREAD";
 
 let pingRoleColumnAvailable: boolean | null = null;
+
+function isMissingPingRoleColumnError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code === "P2022") return true;
+  return error.code === "P2010" && error.meta?.["code"] === "42703";
+}
 
 async function hasPingRoleColumn(): Promise<boolean> {
   if (pingRoleColumnAvailable !== null) return pingRoleColumnAvailable;
@@ -26,12 +33,21 @@ async function hasPingRoleColumn(): Promise<boolean> {
 async function getPingRoleId(discordServerId: string): Promise<string | null> {
   if (!(await hasPingRoleColumn())) return null;
 
-  const rows = await prisma.$queryRaw<Array<{ pingRoleId: string | null }>>`
-    SELECT ping_role_id AS "pingRoleId"
-    FROM "discord_servers"
-    WHERE id = ${discordServerId}
-    LIMIT 1
-  `;
+  let rows: Array<{ pingRoleId: string | null }>;
+  try {
+    rows = await prisma.$queryRaw<Array<{ pingRoleId: string | null }>>`
+      SELECT ping_role_id AS "pingRoleId"
+      FROM "discord_servers"
+      WHERE id = ${discordServerId}
+      LIMIT 1
+    `;
+  } catch (error) {
+    if (isMissingPingRoleColumnError(error)) {
+      pingRoleColumnAvailable = false;
+      return null;
+    }
+    throw error;
+  }
 
   return rows[0]?.pingRoleId ?? null;
 }
@@ -39,11 +55,20 @@ async function getPingRoleId(discordServerId: string): Promise<string | null> {
 async function getPingRoleIdMap(discordServerIds: string[]): Promise<Map<string, string | null>> {
   if (discordServerIds.length === 0 || !(await hasPingRoleColumn())) return new Map();
 
-  const rows = await prisma.$queryRaw<Array<{ id: string; pingRoleId: string | null }>>`
-    SELECT id, ping_role_id AS "pingRoleId"
-    FROM "discord_servers"
-    WHERE id IN (${Prisma.join(discordServerIds)})
-  `;
+  let rows: Array<{ id: string; pingRoleId: string | null }>;
+  try {
+    rows = await prisma.$queryRaw<Array<{ id: string; pingRoleId: string | null }>>`
+      SELECT id, ping_role_id AS "pingRoleId"
+      FROM "discord_servers"
+      WHERE id IN (${Prisma.join(discordServerIds)})
+    `;
+  } catch (error) {
+    if (isMissingPingRoleColumnError(error)) {
+      pingRoleColumnAvailable = false;
+      return new Map();
+    }
+    throw error;
+  }
 
   return new Map(rows.map((row) => [row.id, row.pingRoleId]));
 }
@@ -208,14 +233,23 @@ export class DiscordServerRepository {
     roleId: string | null;
   }): Promise<void> {
     if (!(await hasPingRoleColumn())) {
-      throw new Error("Discord ping role storage is not ready. Apply the latest database migration first.");
+      throw new DiscordPingRoleStorageError();
     }
 
-    const row = await prisma.discordServer.update({
-      where: { id: params.discordServerId },
-      data: { pingRoleId: params.roleId },
-      select: { discordGuildId: true },
-    });
+    let row: { discordGuildId: string };
+    try {
+      row = await prisma.discordServer.update({
+        where: { id: params.discordServerId },
+        data: { pingRoleId: params.roleId },
+        select: { discordGuildId: true },
+      });
+    } catch (error) {
+      if (isMissingPingRoleColumnError(error)) {
+        pingRoleColumnAvailable = false;
+        throw new DiscordPingRoleStorageError();
+      }
+      throw error;
+    }
 
     await redisCache.del(cacheKeys.discordServer(row.discordGuildId));
   }

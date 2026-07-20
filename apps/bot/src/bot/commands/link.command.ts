@@ -155,12 +155,20 @@ export const unbindGuildCommand: Command = {
   name: "unbindguild",
   aliases: ["unbind", "removeguild"],
   description: "Unbind this Discord server from its ForgeKeep guild (Guild Leader only).",
-  usage: "!unbindguild",
+  usage: "!unbindguild confirm",
   category: "Configuration",
   requiresLink: true,
   minimumRole: "GUILD_LEADER",
 
   async execute(ctx: CommandContext): Promise<void> {
+    const confirmation = (ctx.args[0] ?? "").trim().toLowerCase();
+    if (confirmation !== "confirm") {
+      throw new UserFacingError(
+        "Confirm server unbind.",
+        `Run \`!unbindguild confirm\` to disconnect this Discord server from **${ctx.server.guildName}**.`,
+      );
+    }
+
     const result = await ctx.services.repositories.discordServer.unbind(ctx.server.discordGuildId);
     if (!result) {
       throw new UserFacingError(

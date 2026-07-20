@@ -65,6 +65,19 @@ export class DiscordServerRepository {
   }): Promise<void> {
     const { discordGuildId, guildId, linkedById, timezone } = params;
 
+    const previousGuildServers = await prisma.discordServer.findMany({
+      where: { guildId, isActive: true, NOT: { discordGuildId } },
+      select: { discordGuildId: true },
+    });
+
+    // One ForgeKeep guild may have only one active Discord server. Rebinding a
+    // guild from a new server retires the old active server before this one is
+    // activated. The DB partial unique index is the final concurrency guard.
+    await prisma.discordServer.updateMany({
+      where: { guildId, isActive: true, NOT: { discordGuildId } },
+      data: { isActive: false },
+    });
+
     await prisma.discordServer.upsert({
       where: { discordGuildId },
       create: {
@@ -86,7 +99,10 @@ export class DiscordServerRepository {
 
     // Targeted invalidation — the binding is cached on the read path above, and
     // re-pointing a server must take effect immediately, not in 10 minutes.
-    await redisCache.del(cacheKeys.discordServer(discordGuildId));
+    await redisCache.delMany([
+      cacheKeys.discordServer(discordGuildId),
+      ...previousGuildServers.map((server) => cacheKeys.discordServer(server.discordGuildId)),
+    ]);
   }
 
   async unbind(discordGuildId: string): Promise<{ guildName: string } | null> {

@@ -172,6 +172,7 @@ export async function getGuildDiscordIntegration(
 
   const server = await prisma.discordServer.findFirst({
     where: { guildId, isActive: true },
+    orderBy: { updatedAt: "desc" },
     select: {
       id: true,
       discordGuildId: true,
@@ -249,6 +250,7 @@ export async function addBossAlias(
 
   const server = await prisma.discordServer.findFirst({
     where: { guildId, isActive: true },
+    orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
   if (!server) {
@@ -303,6 +305,7 @@ export async function removeBossAlias(
 
   const server = await prisma.discordServer.findFirst({
     where: { guildId, isActive: true },
+    orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
   if (!server) throw new NotFoundError("No Discord server is bound to this guild");

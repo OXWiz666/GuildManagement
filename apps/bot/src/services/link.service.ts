@@ -57,6 +57,11 @@ export class LinkService {
           "This Discord account is already linked to a different ForgeKeep account.",
           "Run `!unlink` first, or use the Discord account that owns the link.",
         );
+      case "USER_ALREADY_LINKED":
+        throw new UserFacingError(
+          "This ForgeKeep account is already linked to a different Discord account.",
+          "Use that Discord account, or unlink it from ForgeKeep before linking a new one.",
+        );
     }
   }
 

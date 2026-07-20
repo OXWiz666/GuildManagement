@@ -52,11 +52,16 @@ export interface LinkCodeResult {
 export async function createLinkCode(userId: string): Promise<LinkCodeResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, isActive: true, deletedAt: true },
+    select: { id: true, isActive: true, deletedAt: true, discordId: true },
   });
 
   if (!user || !user.isActive || user.deletedAt) {
     throw new NotFoundError("User not found");
+  }
+  if (user.discordId) {
+    throw new BadRequestError(
+      "This ForgeKeep account is already linked to Discord. Unlink it before linking a new Discord account.",
+    );
   }
 
   const now = new Date();

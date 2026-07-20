@@ -65,6 +65,16 @@ export class ServerNotBoundError extends UserFacingError {
   }
 }
 
+export class DiscordPingRoleStorageError extends UserFacingError {
+  constructor() {
+    super(
+      "Discord ping role storage is not ready yet.",
+      "Apply the latest database migration and redeploy the bot, then run `!pingrole @Role` again.",
+    );
+    this.name = "DiscordPingRoleStorageError";
+  }
+}
+
 export class MissingPermissionError extends UserFacingError {
   constructor(required: string, actual: string) {
     super(

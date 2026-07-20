@@ -52,6 +52,20 @@ export class NotificationRepository {
     }
   }
 
+  async attachCommandMessageContext(params: {
+    messageId: string;
+    discordServerId: string;
+    guildId: string;
+  }): Promise<void> {
+    await prisma.notificationHistory.updateMany({
+      where: { dedupeKey: `command:${params.messageId}` },
+      data: {
+        discordServerId: params.discordServerId,
+        guildId: params.guildId,
+      },
+    });
+  }
+
   /**
    * Claim the right to send one notification.
    *

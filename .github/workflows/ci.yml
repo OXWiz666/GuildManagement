@@ -14,18 +14,18 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL }}
-      JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
-      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
-      JWT_ACCESS_EXPIRY: ${{ secrets.JWT_ACCESS_EXPIRY }}
-      JWT_REFRESH_EXPIRY: ${{ secrets.JWT_REFRESH_EXPIRY }}
-      BCRYPT_ROUNDS: ${{ secrets.BCRYPT_ROUNDS }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://ci:ci@localhost:5432/ci' }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://ci:ci@localhost:5432/ci' }}
+      JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET || 'ci-access-secret-at-least-32-chars' }}
+      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET || 'ci-refresh-secret-at-least-32-chars' }}
+      JWT_ACCESS_EXPIRY: ${{ secrets.JWT_ACCESS_EXPIRY || '1d' }}
+      JWT_REFRESH_EXPIRY: ${{ secrets.JWT_REFRESH_EXPIRY || '7d' }}
+      BCRYPT_ROUNDS: ${{ secrets.BCRYPT_ROUNDS || '12' }}
       NODE_ENV: production
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://ci.supabase.co' }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'ci-supabase-key' }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-supabase-publishable-key' }}
       NEXT_PUBLIC_API_URL: "/api"
 
     steps:

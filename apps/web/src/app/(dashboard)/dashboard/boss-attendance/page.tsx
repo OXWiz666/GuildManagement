@@ -60,6 +60,18 @@ function isScheduleDateReached(spawnTime: string | null | undefined, now = new D
   return scheduleDateKey(spawnTime) <= scheduleDateKey(now);
 }
 
+function addScheduleDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function isTodayOrTomorrowSchedule(spawnTime: string | null | undefined, now = new Date()) {
+  if (!spawnTime) return false;
+  const key = scheduleDateKey(spawnTime);
+  return key === scheduleDateKey(now) || key === scheduleDateKey(addScheduleDays(now, 1));
+}
+
 function attendanceSessionTime(session: AttendanceSessionSummary) {
   return new Date(session.bossSchedule?.spawnTime || session.createdAt).getTime();
 }
@@ -108,9 +120,7 @@ function isAdvanceTurnInSchedule(schedule: BossScheduleData, myGuildId: string, 
   return (
     schedule.status !== "KILLED" &&
     schedule.guildTurnGuildId === myGuildId &&
-    scheduleDateKey(schedule.spawnTime) === scheduleDateKey(now) &&
-    (!schedule.attendanceSessions ||
-      schedule.attendanceSessions.length === 0)
+    isTodayOrTomorrowSchedule(schedule.spawnTime, now)
   );
 }
 
@@ -181,6 +191,9 @@ export default function BossAttendancePage() {
     },
     { persist: true, staleTime: 30000 }
   );
+  const missedAlerts = stats?.missedAlerts ?? [];
+  const visibleMissedAlerts = missedAlerts.slice(0, 8);
+  const hiddenMissedCount = Math.max(0, missedAlerts.length - visibleMissedAlerts.length);
 
   // 3. Attendance sessions — every check-in window, open or closed. Powers
   // the coverflow browse list and the detail modal's officer roster.
@@ -437,14 +450,37 @@ export default function BossAttendancePage() {
         />
 
         {/* Missed Attendance Alerts Banner */}
-        {stats && stats.missedAlerts && stats.missedAlerts.length > 0 && (
-          <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 shadow-sm flex items-start gap-3">
-            <span className="text-rose-400 text-sm mt-0.5">▪</span>
-            <div>
-              <h4 className="font-bold text-rose-400 text-xs uppercase tracking-wider">Missed Boss Alert</h4>
+        {missedAlerts.length > 0 && (
+          <div className="flex items-start gap-3 overflow-hidden rounded-xl border border-rose-400/15 bg-[linear-gradient(135deg,rgba(244,63,94,0.10),rgba(244,63,94,0.035)_45%,rgba(255,255,255,0.015))] p-4 shadow-sm">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-300/20 bg-rose-500/10 text-sm font-black text-rose-200">
+              !
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-xs font-black uppercase tracking-[0.18em] text-rose-200">Missed Boss Check-In</h4>
+                <span className="rounded-full border border-rose-300/15 bg-rose-400/10 px-2 py-0.5 text-[10px] font-bold text-rose-100">
+                  {missedAlerts.length} missed
+                </span>
+              </div>
               <p className="text-xs text-white/55 leading-relaxed mt-1">
-                You did not check in for: <strong className="text-white/70 font-semibold">{stats.missedAlerts.map(a => a.title).join(", ")}</strong>. Please contact an officer if you were present to claim retrospective points.
+                You were marked absent for these boss windows. Contact an officer if you were present and need retrospective points.
               </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {visibleMissedAlerts.map((alert) => (
+                  <span
+                    key={alert.sessionId}
+                    className="max-w-full truncate rounded-md border border-white/[0.07] bg-black/20 px-2 py-1 text-[11px] font-semibold text-white/75"
+                    title={alert.title}
+                  >
+                    {alert.title.replace(/\s+Check-In$/i, "")}
+                  </span>
+                ))}
+                {hiddenMissedCount > 0 && (
+                  <span className="rounded-md border border-rose-300/15 bg-rose-400/10 px-2 py-1 text-[11px] font-bold text-rose-100">
+                    +{hiddenMissedCount} more
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -531,7 +567,12 @@ export default function BossAttendancePage() {
 
         <AttendanceCoverflow
           sessions={overviewSessions}
+          schedules={schedules.filter((schedule) => isTodayOrTomorrowSchedule(schedule.spawnTime))}
           isLoading={isLoadingSessions}
+          myGuildId={activeGuild.guildId}
+          userId={user.id}
+          checkingInId={checkingInId}
+          onCheckIn={handleCheckIn}
           onSelect={(session) => setSelectedSessionId(session.id)}
         />
         </>

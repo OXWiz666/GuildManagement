@@ -37,11 +37,15 @@ function dateLabel(iso: string) {
   return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
 }
 
-// Consecutive same-day entries get grouped under one date header — assumes
-// `history` arrives newest-first, same as it did for the old carousel.
 function groupByDate(items: AttendanceHistoryItem[]) {
   const groups: Array<{ key: string; label: string; items: AttendanceHistoryItem[] }> = [];
-  for (const item of items) {
+  const sorted = [...items].sort((a, b) => {
+    const aTime = new Date(a.spawnTime || a.createdAt).getTime();
+    const bTime = new Date(b.spawnTime || b.createdAt).getTime();
+    return bTime - aTime;
+  });
+
+  for (const item of sorted) {
     const iso = item.spawnTime || item.createdAt;
     const key = new Date(iso).toDateString();
     const last = groups[groups.length - 1];

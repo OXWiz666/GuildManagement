@@ -43,6 +43,49 @@ interface AttendanceStats {
   history: AttendanceHistoryItem[];
 }
 
+const SCHEDULE_DATE_TIME_ZONE = "Asia/Singapore";
+const scheduleDateParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: SCHEDULE_DATE_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function scheduleDateKey(value: string | Date) {
+  const parts = scheduleDateParts.formatToParts(typeof value === "string" ? new Date(value) : value);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
+  return `${year}-${month}-${day}`;
+}
+
+function isScheduleDateReached(spawnTime: string | null | undefined, now = new Date()) {
+  if (!spawnTime) return true;
+  return scheduleDateKey(spawnTime) <= scheduleDateKey(now);
+}
+
+function isFutureScheduleDate(spawnTime: string, now = new Date()) {
+  return scheduleDateKey(spawnTime) > scheduleDateKey(now);
+}
+
+function attendanceSessionTime(session: AttendanceSessionSummary) {
+  return new Date(session.bossSchedule?.spawnTime || session.createdAt).getTime();
+}
+
+function isOverviewAttendanceSession(session: AttendanceSessionSummary, now = new Date()) {
+  return isScheduleDateReached(session.bossSchedule?.spawnTime, now);
+}
+
+function isAdvanceTurnInSchedule(schedule: BossScheduleData, myGuildId: string, now = new Date()) {
+  return (
+    schedule.status !== "KILLED" &&
+    schedule.guildTurnGuildId === myGuildId &&
+    (isFutureScheduleDate(schedule.spawnTime, now) ||
+      !schedule.attendanceSessions ||
+      schedule.attendanceSessions.length === 0)
+  );
+}
+
 export default function BossAttendancePage() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -126,6 +169,13 @@ export default function BossAttendancePage() {
     { persist: true, staleTime: 20000 }
   );
   const sessions = useMemo(() => sessionsRaw || [], [sessionsRaw]);
+  const overviewSessions = useMemo(
+    () =>
+      sessions
+        .filter((session) => isOverviewAttendanceSession(session))
+        .sort((a, b) => attendanceSessionTime(b) - attendanceSessionTime(a)),
+    [sessions],
+  );
 
   const isLoading = isLoadingSchedules || isLoadingStats;
 
@@ -264,12 +314,7 @@ export default function BossAttendancePage() {
   // here just for the tab's count badge.
   const advanceEligibleCount = useMemo(() => {
     if (!activeGuild) return 0;
-    return schedules.filter(
-      (s) =>
-        s.status !== "KILLED" &&
-        s.guildTurnGuildId === activeGuild.guildId &&
-        (!s.attendanceSessions || s.attendanceSessions.length === 0),
-    ).length;
+    return schedules.filter((s) => isAdvanceTurnInSchedule(s, activeGuild.guildId)).length;
   }, [schedules, activeGuild]);
 
   const selectedSession = useMemo(
@@ -460,7 +505,7 @@ export default function BossAttendancePage() {
         {/* Boss attendance — Netflix/coverflow row of every check-in window,
             open or closed. Click a card for the full detail modal. */}
         <AttendanceCoverflow
-          sessions={sessions}
+          sessions={overviewSessions}
           isLoading={isLoadingSessions}
           onSelect={(session) => setSelectedSessionId(session.id)}
         />
@@ -503,6 +548,7 @@ export default function BossAttendancePage() {
           <AdvanceCheckInBanner
             schedules={schedules}
             myGuildId={activeGuild.guildId}
+            userId={user.id}
             checkingInId={checkingInId}
             onCheckIn={handleCheckIn}
           />
@@ -576,7 +622,12 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
     return schedules
       .filter((s) => {
         const session = s.attendanceSessions?.[0];
-        return session && session.isActive && new Date(session.expiresAt).getTime() > now;
+        return (
+          session &&
+          session.isActive &&
+          isScheduleDateReached(s.spawnTime, new Date(now)) &&
+          new Date(session.expiresAt).getTime() > now
+        );
       })
       .sort((a, b) => {
         const aExp = new Date(a.attendanceSessions![0].expiresAt).getTime();
@@ -679,26 +730,50 @@ function formatTimelineTime(value: string) {
   return new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+function hasUserCheckedInEarly(item: BossScheduleData, userId: string) {
+  return Boolean(
+    item.attendanceSessions?.some((session) =>
+      session.records?.some((record) => record.userId === userId),
+    ),
+  );
+}
+
+function getAdvanceCheckInActionLabel(item: BossScheduleData, userId: string) {
+  const userRecord = item.attendanceSessions
+    ?.flatMap((session) => session.records ?? [])
+    .find((record) => record.userId === userId);
+
+  return userRecord?.status === "CONFIRMED" ? "Confirmed" : "Pending";
+}
+
+function getAdvanceCheckInLabel(item: BossScheduleData, userId: string) {
+  const userRecord = item.attendanceSessions
+    ?.flatMap((session) => session.records ?? [])
+    .find((record) => record.userId === userId);
+
+  if (userRecord?.status === "CONFIRMED") return "Confirmed early turn-in";
+  if (userRecord?.status === "PENDING") return "Early turn-in queued for officer review";
+  if (item.attendanceSessions?.some((session) => session.isActive)) return "Window open for early turn-in";
+  return "Awaiting kill verification";
+}
+
 const AdvanceCheckInBanner = memo(function AdvanceCheckInBanner({
   schedules,
   myGuildId,
+  userId,
   checkingInId,
   onCheckIn,
 }: {
   schedules: BossScheduleData[];
   myGuildId: string;
+  userId: string;
   checkingInId: string | null;
   onCheckIn: (item: BossScheduleData) => void;
 }) {
   const eligible = useMemo(
     () =>
       schedules
-        .filter(
-          (s) =>
-            s.status !== "KILLED" &&
-            s.guildTurnGuildId === myGuildId &&
-            (!s.attendanceSessions || s.attendanceSessions.length === 0),
-        )
+        .filter((s) => isAdvanceTurnInSchedule(s, myGuildId))
         .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime()),
     [schedules, myGuildId],
   );
@@ -760,17 +835,25 @@ const AdvanceCheckInBanner = memo(function AdvanceCheckInBanner({
                           </div>
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-bold text-white">{item.bossName}</p>
-                            <p className="mt-0.5 text-[10px] text-white/40">Awaiting kill verification</p>
+                            <p className="mt-0.5 text-[10px] text-white/40">
+                              {getAdvanceCheckInLabel(item, userId)}
+                            </p>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onCheckIn(item)}
-                          disabled={checkingInId === item.id}
-                          className="shrink-0 rounded-lg bg-violet-600 px-3.5 py-2 text-[11px] font-bold text-white transition-all hover:bg-violet-700 active:scale-95 disabled:opacity-50 cursor-pointer"
-                        >
-                          {checkingInId === item.id ? "Checking in..." : "Check In Early"}
-                        </button>
+                        {hasUserCheckedInEarly(item, userId) ? (
+                          <span className="shrink-0 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3.5 py-2 text-[11px] font-bold text-amber-300">
+                            {getAdvanceCheckInActionLabel(item, userId)}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onCheckIn(item)}
+                            disabled={checkingInId === item.id}
+                            className="shrink-0 rounded-lg bg-violet-600 px-3.5 py-2 text-[11px] font-bold text-white transition-all hover:bg-violet-700 active:scale-95 disabled:opacity-50 cursor-pointer"
+                          >
+                            {checkingInId === item.id ? "Checking in..." : "Check In Early"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

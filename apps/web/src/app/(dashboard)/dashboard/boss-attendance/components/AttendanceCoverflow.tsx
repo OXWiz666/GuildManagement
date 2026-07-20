@@ -1,13 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type AttendanceSessionSummary } from "@/lib/api";
+import { type AttendanceSessionSummary, type BossScheduleData } from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getBossImageUrl } from "@guild/shared";
 
+const SCHEDULE_DATE_TIME_ZONE = "Asia/Singapore";
+const scheduleDateParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: SCHEDULE_DATE_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 export interface AttendanceCoverflowProps {
   sessions: AttendanceSessionSummary[];
+  schedules?: BossScheduleData[];
   isLoading: boolean;
+  myGuildId?: string;
+  userId?: string;
+  checkingInId?: string | null;
+  onCheckIn?: (schedule: BossScheduleData) => void;
   onSelect: (session: AttendanceSessionSummary) => void;
 }
 
@@ -31,13 +44,69 @@ function formatRemaining(expiresAt: string, now: number) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function activeScheduleSession(schedule: BossScheduleData, now: number) {
+  return schedule.attendanceSessions?.find(
+    (session) => session.isActive && new Date(session.expiresAt).getTime() > now,
+  ) ?? null;
+}
+
+function userScheduleRecord(schedule: BossScheduleData, userId?: string) {
+  if (!userId) return null;
+  return schedule.attendanceSessions
+    ?.flatMap((session) => session.records ?? [])
+    .find((record) => record.userId === userId) ?? null;
+}
+
+function scheduleDayLabel(spawnTime: string) {
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const key = (value: Date) => {
+    const parts = scheduleDateParts.formatToParts(value);
+    const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+    const month = parts.find((part) => part.type === "month")?.value ?? "00";
+    const day = parts.find((part) => part.type === "day")?.value ?? "00";
+    return `${year}-${month}-${day}`;
+  };
+  const spawn = new Date(spawnTime);
+  if (key(spawn) === key(today)) return "Today";
+  if (key(spawn) === key(tomorrow)) return "Tomorrow";
+  return spawn.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: SCHEDULE_DATE_TIME_ZONE });
+}
+
+function scheduleStatus(schedule: BossScheduleData, userId: string | undefined, now: number) {
+  const record = userScheduleRecord(schedule, userId);
+  if (record?.status === "CONFIRMED") {
+    return { label: "Confirmed", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25", pulse: false };
+  }
+  if (record?.status === "PENDING") {
+    return { label: "Pending", color: "text-amber-400 bg-amber-500/10 border-amber-500/25", pulse: false };
+  }
+  if (activeScheduleSession(schedule, now)) {
+    return { label: "Open", color: "text-violet-300 bg-violet-500/10 border-violet-500/25", pulse: true };
+  }
+  if (schedule.status === "SPAWNED") {
+    return { label: "Spawned", color: "text-amber-300 bg-amber-500/10 border-amber-500/25", pulse: true };
+  }
+  return { label: scheduleDayLabel(schedule.spawnTime), color: "text-cyan-300 bg-cyan-500/10 border-cyan-500/20", pulse: false };
+}
+
 /**
  * Netflix-row / coverflow-style browse of every boss attendance window, open
  * or closed — cards peek past the edge of the container and scroll/snap
  * horizontally. Tapping a card opens AttendanceSessionModal for the full
  * picture (your status, and for officers: roster + verification + reopen).
  */
-export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: AttendanceCoverflowProps) {
+export default function AttendanceCoverflow({
+  sessions,
+  schedules = [],
+  isLoading,
+  myGuildId,
+  userId,
+  checkingInId,
+  onCheckIn,
+  onSelect,
+}: AttendanceCoverflowProps) {
   const trackRef = useRef<HTMLDivElement>(null);
 
   // Ticks on its own — this used to come from the page's shared per-second
@@ -52,6 +121,18 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
   const visibleSessions = sessions.filter(
     (session) => session.isActive && new Date(session.expiresAt).getTime() > now,
   );
+  const visibleSessionScheduleIds = new Set(
+    visibleSessions
+      .map((session) => session.bossScheduleId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const visibleSchedules = schedules
+    .filter((schedule) => {
+      if (visibleSessionScheduleIds.has(schedule.id)) return false;
+      return schedule.status !== "KILLED" || Boolean(activeScheduleSession(schedule, now));
+    })
+    .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
+  const visibleCount = visibleSessions.length + visibleSchedules.length;
 
   function scrollBy(delta: number) {
     trackRef.current?.scrollBy({ left: delta, behavior: "smooth" });
@@ -63,11 +144,11 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
         <div>
           <h3 className="text-xs font-bold text-white uppercase tracking-wider">Boss Attendance</h3>
           <p className="text-xs text-white/40 mt-0.5">
-            Current check-in windows for today - tap a boss to claim, verify, or review.
+            Today and tomorrow boss windows - view upcoming spawns, check in early, or review open attendance.
           </p>
         </div>
         <span className="text-[10px] font-mono font-bold bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded text-white/55 shrink-0">
-          {visibleSessions.length}
+          {visibleCount}
         </span>
       </div>
 
@@ -75,9 +156,9 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
         <div className="flex gap-3">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[188px] w-[160px] rounded-2xl shrink-0" />)}
         </div>
-      ) : visibleSessions.length === 0 ? (
+      ) : visibleCount === 0 ? (
         <div className="text-center py-12 text-xs text-zinc-650 italic">
-          No killed boss has an open attendance window right now.
+          No boss spawns or open attendance windows for today or tomorrow.
         </div>
       ) : (
         <div className="relative">
@@ -135,6 +216,70 @@ export default function AttendanceCoverflow({ sessions, isLoading, onSelect }: A
                     {boss?.location && <p className="text-[9px] text-white/35 truncate">📍 {boss.location}</p>}
                   </div>
                 </button>
+              );
+            })}
+
+            {visibleSchedules.map((schedule) => {
+              const imageSrc = schedule.bossImageUrl || getBossImageUrl(schedule.bossName);
+              const status = scheduleStatus(schedule, userId, now);
+              const session = activeScheduleSession(schedule, now);
+              const record = userScheduleRecord(schedule, userId);
+              const remaining = session ? formatRemaining(session.expiresAt, now) : null;
+              const canCheckIn =
+                Boolean(onCheckIn) &&
+                Boolean(myGuildId) &&
+                schedule.guildTurnGuildId === myGuildId &&
+                schedule.status !== "KILLED" &&
+                !record;
+
+              return (
+                <div
+                  key={`schedule-${schedule.id}`}
+                  className="group relative shrink-0 w-[160px] snap-center rounded-2xl border border-white/[0.08] bg-[#0c0d12] overflow-hidden text-left shadow-lg shadow-black/40 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.04] hover:z-10 hover:border-cyan-300/35 hover:shadow-2xl hover:shadow-black/60"
+                >
+                  <div className="relative h-[100px] w-full bg-zinc-950 border-b border-white/[0.06]">
+                    <img src={imageSrc} alt={schedule.bossName} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
+                    <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/80 to-transparent" />
+                    <p className="absolute bottom-1.5 left-2 right-2 text-[12px] font-bold text-white truncate">{schedule.bossName}</p>
+                    {status.pulse && (
+                      <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.9)] animate-pulse" />
+                    )}
+                  </div>
+
+                  <div className="p-2.5 space-y-1.5">
+                    <p className="text-[10px] text-white/60 font-semibold">
+                      {scheduleDayLabel(schedule.spawnTime)} / {new Date(schedule.spawnTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </p>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${status.color}`}>
+                      {status.label}
+                    </span>
+                    {remaining && (
+                      <span className="inline-flex items-center rounded-md border border-[var(--forge-gold)]/20 bg-[var(--forge-gold)]/[0.08] px-1.5 py-0.5 font-mono text-[9px] font-bold text-[var(--forge-gold)]">
+                        {remaining}
+                      </span>
+                    )}
+                    {schedule.guildTurnGuildName && (
+                      <p className="text-[9px] text-white/35 truncate">Turn: {schedule.guildTurnGuildName}</p>
+                    )}
+                    <p className="text-[9px] text-white/35 truncate">Location: {schedule.location}</p>
+                    {record ? (
+                      <p className="pt-1 text-[9px] font-bold uppercase tracking-wider text-white/45">
+                        {record.status === "CONFIRMED" ? "Attendance verified" : "Awaiting officer"}
+                      </p>
+                    ) : canCheckIn ? (
+                      <button
+                        type="button"
+                        onClick={() => onCheckIn?.(schedule)}
+                        disabled={checkingInId === schedule.id}
+                        className="mt-1 w-full rounded-md bg-violet-600 px-2 py-1.5 text-[10px] font-bold text-white transition-all hover:bg-violet-700 active:scale-95 disabled:opacity-50 cursor-pointer"
+                      >
+                        {checkingInId === schedule.id ? "Checking..." : "Check In Early"}
+                      </button>
+                    ) : (
+                      <p className="pt-1 text-[9px] text-white/30">Viewable schedule</p>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>

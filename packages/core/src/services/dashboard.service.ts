@@ -682,7 +682,7 @@ async function syncNextRotationSchedule(
 }
 
 /**
- * Open a code-free, single-active check-in window tied to a freshly-killed boss.
+ * Open a code-free check-in window tied to a boss schedule.
  * Members claim attendance via `checkInToBoss` (no code typing); officers verify
  * through the existing `confirmAttendanceRecord` flow. A `code` is still stored
  * internally to satisfy the unique constraint but is never surfaced.
@@ -700,9 +700,7 @@ async function openBossCheckInSession(
   // An advance check-in (see checkInToBoss) may have already opened this
   // exact boss's session for this guild — reuse + extend it instead of
   // creating a duplicate, so those early PENDING records carry into the
-  // real post-kill verification window instead of being orphaned. The
-  // "single active session per guild" invariant below means this can only
-  // be the guild's own still-open session if it's still active.
+  // real post-kill verification window instead of being orphaned.
   const existing = await prisma.attendanceSession.findFirst({
     where: { guildId, bossScheduleId, isActive: true },
   });
@@ -719,11 +717,6 @@ async function openBossCheckInSession(
     });
     return reopened;
   }
-
-  await prisma.attendanceSession.updateMany({
-    where: { guildId, isActive: true },
-    data: { isActive: false },
-  });
 
   const randomPin = crypto.randomBytes(3).toString("hex").toUpperCase();
   const code = `ATT-${randomPin.substring(0, 4)}`;
@@ -1086,10 +1079,20 @@ async function buildSessionAttendanceView(
 
   const pendingRecords = records.filter((r) => r.status === AttendanceRecordStatus.PENDING);
   const confirmedRecords = records.filter((r) => r.status === AttendanceRecordStatus.CONFIRMED);
+  const memberIgnByUserId = new Map(activeMembers.map((member) => [member.userId, member.ign]));
+  const withIgn = <T extends { userId: string }>(record: T) => ({
+    ...record,
+    ign: memberIgnByUserId.get(record.userId) ?? null,
+  });
   const checkedInUserIds = new Set(records.map((r) => r.userId));
   const notCheckedInMembers = activeMembers.filter((m) => !checkedInUserIds.has(m.userId));
 
-  return { bossSchedule, pendingRecords, confirmedRecords, notCheckedInMembers };
+  return {
+    bossSchedule,
+    pendingRecords: pendingRecords.map(withIgn),
+    confirmedRecords: confirmedRecords.map(withIgn),
+    notCheckedInMembers,
+  };
 }
 
 export async function getGuildPendingAttendance(guildId: string, actorId: string) {
@@ -1352,40 +1355,58 @@ export async function markMembersPresent(
 
   const { currencyCode, pointsByUserId } = await getAttendanceAwardContext(guildId, session, membersToMark);
 
+  const targetUserIds = membersToMark.map((member) => member.userId);
+  const existingTargetIds = membersToMark
+    .map((member) => existingByUserId.get(member.userId)?.id)
+    .filter((id): id is string => Boolean(id));
+  const newTargetUserIds = membersToMark
+    .filter((member) => !existingByUserId.has(member.userId))
+    .map((member) => member.userId);
+
   const records = await prisma.$transaction(async (tx) => {
-    const changed = [];
-    for (const member of membersToMark) {
-      const existing = existingByUserId.get(member.userId);
-      const record = existing
-        ? await tx.attendanceRecord.update({
-            where: { id: existing.id },
-            data: { status: AttendanceRecordStatus.CONFIRMED },
-          })
-        : await tx.attendanceRecord.create({
-            data: { sessionId, userId: member.userId, status: AttendanceRecordStatus.CONFIRMED },
-          });
-      changed.push(record);
+    if (existingTargetIds.length > 0) {
+      await tx.attendanceRecord.updateMany({
+        where: { id: { in: existingTargetIds } },
+        data: { status: AttendanceRecordStatus.CONFIRMED },
+      });
     }
 
-    await tx.ledgerEntry.createMany({
-      data: changed.map((record) => {
-        const points = pointsByUserId.get(record.userId) ?? 10;
-        return {
-          guildId,
-          accountType: "MEMBER",
-          accountId: record.userId,
-          currency: currencyCode,
-          amount: BigInt(points),
-          entryType: "CREDIT",
-          referenceType: "ATTENDANCE",
-          referenceId: record.id,
-          idempotencyKey: `ATT-${record.id}`,
-          actorId,
-          description: `Manually marked present in session: ${session.title}`,
-        };
-      }),
-      skipDuplicates: true,
+    if (newTargetUserIds.length > 0) {
+      await tx.attendanceRecord.createMany({
+        data: newTargetUserIds.map((userId) => ({
+          sessionId,
+          userId,
+          status: AttendanceRecordStatus.CONFIRMED,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const changed = await tx.attendanceRecord.findMany({
+      where: { sessionId, userId: { in: targetUserIds } },
     });
+
+    if (changed.length > 0) {
+      await tx.ledgerEntry.createMany({
+        data: changed.map((record) => {
+          const points = pointsByUserId.get(record.userId) ?? 10;
+          return {
+            guildId,
+            accountType: "MEMBER",
+            accountId: record.userId,
+            currency: currencyCode,
+            amount: BigInt(points),
+            entryType: "CREDIT",
+            referenceType: "ATTENDANCE",
+            referenceId: record.id,
+            idempotencyKey: `ATT-${record.id}`,
+            actorId,
+            description: `Manually marked present in session: ${session.title}`,
+          };
+        }),
+        skipDuplicates: true,
+      });
+    }
 
     return changed;
   });

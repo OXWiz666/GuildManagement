@@ -741,6 +741,7 @@ export interface AttendanceRecordData {
   id: string;
   sessionId: string;
   userId: string;
+  ign?: string | null;
   status: "PENDING" | "CONFIRMED";
   joinedAt: string;
   user?: {

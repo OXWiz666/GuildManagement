@@ -82,7 +82,7 @@ export async function handleMessage(
     // Bootstrap commands must run before a server is bound. `!link` is needed
     // before `!bindguild`, and `!commands` explains that flow.
     if (!server) {
-      if (!BOOTSTRAP_COMMANDS.has(command.name)) throw new ServerNotBoundError();
+      if (!BOOTSTRAP_COMMANDS.has(command.name)) throw new ServerNotBoundError(message.guildId);
 
       await services.rateLimiter.enforce("command", message.author.id);
 

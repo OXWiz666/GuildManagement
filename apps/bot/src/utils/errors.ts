@@ -51,10 +51,15 @@ export class NotGuildMemberError extends UserFacingError {
 }
 
 export class ServerNotBoundError extends UserFacingError {
-  constructor() {
+  constructor(discordGuildId?: string | null) {
     super(
       "This Discord server isn't bound to a ForgeKeep guild.",
-      "A Guild Leader must run `!bindguild <invite-code>` here first.",
+      [
+        "A Guild Leader must run `!bindguild <invite-code>` here first.",
+        discordGuildId ? `Discord server id: \`${discordGuildId}\`.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
     );
     this.name = "ServerNotBoundError";
   }

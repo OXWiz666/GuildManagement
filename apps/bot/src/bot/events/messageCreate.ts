@@ -52,13 +52,6 @@ export async function handleMessage(
   const command = findCommand(keyword);
   if (!command) return; // Unknown keyword — stay silent rather than nagging.
 
-  const claimed = await redisCache.setIfAbsent(
-    cacheKeys.discordMessageClaim(message.id),
-    true,
-    cacheTtl.discordMessageClaim,
-  );
-  if (!claimed) return;
-
   const startedAt = Date.now();
   const log = logger.child({
     command: command.name,
@@ -67,20 +60,32 @@ export async function handleMessage(
   });
 
   try {
-    let server = await services.repositories.discordServer.findByDiscordGuildId(message.guildId);
-    if (!server) {
-      server = await services.repositories.discordServer.refreshByDiscordGuildId(message.guildId);
-    }
     const dbClaimed = await services.repositories.notification.claimCommandMessage({
       messageId: message.id,
       command: command.name,
       discordGuildId: message.guildId,
-      discordServerId: server?.discordServerId ?? null,
-      guildId: server?.guildId ?? null,
       channelId: message.channelId,
       authorDiscordId: message.author.id,
     });
     if (!dbClaimed) return;
+
+    await redisCache.setIfAbsent(
+      cacheKeys.discordMessageClaim(message.id),
+      true,
+      cacheTtl.discordMessageClaim,
+    );
+
+    let server = await services.repositories.discordServer.findByDiscordGuildId(message.guildId);
+    if (!server) {
+      server = await services.repositories.discordServer.refreshByDiscordGuildId(message.guildId);
+    }
+    if (server) {
+      await services.repositories.notification.attachCommandMessageContext({
+        messageId: message.id,
+        discordServerId: server.discordServerId,
+        guildId: server.guildId,
+      });
+    }
 
     // Bootstrap commands must run before a server is bound. `!link` is needed
     // before `!bindguild`, and `!commands` explains that flow.

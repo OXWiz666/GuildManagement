@@ -1,8 +1,52 @@
-import { prisma } from "@guild/db";
+import { prisma, Prisma } from "@guild/db";
 import { redisCache, cacheKeys, cacheTtl } from "@guild/core";
 import type { ServerContext } from "../types/command.js";
 
 export type ChannelPurpose = "NOTIFICATION" | "COMMAND" | "THREAD";
+
+let pingRoleColumnAvailable: boolean | null = null;
+
+async function hasPingRoleColumn(): Promise<boolean> {
+  if (pingRoleColumnAvailable !== null) return pingRoleColumnAvailable;
+
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'discord_servers'
+        AND column_name = 'ping_role_id'
+    ) AS "exists"
+  `;
+
+  pingRoleColumnAvailable = rows[0]?.exists ?? false;
+  return pingRoleColumnAvailable;
+}
+
+async function getPingRoleId(discordServerId: string): Promise<string | null> {
+  if (!(await hasPingRoleColumn())) return null;
+
+  const rows = await prisma.$queryRaw<Array<{ pingRoleId: string | null }>>`
+    SELECT ping_role_id AS "pingRoleId"
+    FROM "discord_servers"
+    WHERE id = ${discordServerId}
+    LIMIT 1
+  `;
+
+  return rows[0]?.pingRoleId ?? null;
+}
+
+async function getPingRoleIdMap(discordServerIds: string[]): Promise<Map<string, string | null>> {
+  if (discordServerIds.length === 0 || !(await hasPingRoleColumn())) return new Map();
+
+  const rows = await prisma.$queryRaw<Array<{ id: string; pingRoleId: string | null }>>`
+    SELECT id, ping_role_id AS "pingRoleId"
+    FROM "discord_servers"
+    WHERE id IN (${Prisma.join(discordServerIds)})
+  `;
+
+  return new Map(rows.map((row) => [row.id, row.pingRoleId]));
+}
 
 /**
  * Reads/writes the Discord↔ForgeKeep server binding.
@@ -47,7 +91,6 @@ export class DiscordServerRepository {
         discordGuildId: true,
         guildId: true,
         timezone: true,
-        pingRoleId: true,
         isActive: true,
         guild: { select: { name: true, deletedAt: true, suspendedAt: true } },
       },
@@ -64,7 +107,7 @@ export class DiscordServerRepository {
       guildId: row.guildId,
       guildName: row.guild.name,
       timezone: row.timezone,
-      pingRoleId: row.pingRoleId,
+      pingRoleId: await getPingRoleId(row.id),
     };
 
     await redisCache.set(key, context, cacheTtl.discordServer);
@@ -164,6 +207,10 @@ export class DiscordServerRepository {
     discordServerId: string;
     roleId: string | null;
   }): Promise<void> {
+    if (!(await hasPingRoleColumn())) {
+      throw new Error("Discord ping role storage is not ready. Apply the latest database migration first.");
+    }
+
     const row = await prisma.discordServer.update({
       where: { id: params.discordServerId },
       data: { pingRoleId: params.roleId },
@@ -214,12 +261,13 @@ export class DiscordServerRepository {
             id: true,
             guildId: true,
             timezone: true,
-            pingRoleId: true,
             guild: { select: { name: true } },
           },
         },
       },
     });
+
+    const pingRoleIds = await getPingRoleIdMap(rows.map((row) => row.discordServer.id));
 
     return rows.map((row) => ({
       discordServerId: row.discordServer.id,
@@ -227,7 +275,7 @@ export class DiscordServerRepository {
       guildName: row.discordServer.guild.name,
       timezone: row.discordServer.timezone,
       channelId: row.channelId,
-      pingRoleId: row.discordServer.pingRoleId,
+      pingRoleId: pingRoleIds.get(row.discordServer.id) ?? null,
     }));
   }
 }

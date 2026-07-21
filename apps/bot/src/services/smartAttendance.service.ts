@@ -11,6 +11,13 @@ interface RosterMember {
   names: string[];
 }
 
+interface NameCandidate {
+  source: string;
+  normalized: string;
+  confidence: number;
+  bbox: OcrWord["bbox"];
+}
+
 interface PixelImage {
   data: Buffer;
   width: number;
@@ -43,6 +50,10 @@ const DEFAULT_MINUTES = 30;
 const MAX_MINUTES = 240;
 const MIN_WORD_CONFIDENCE = 0.35;
 const MIN_MATCH_SCORE = 0.78;
+const ATTENDANCE_OCR_SCALE = 2;
+const ATTENDANCE_OCR_MAX_WIDTH = 2200;
+const PHRASE_MAX_WORDS = 4;
+const PHRASE_MAX_GAP_PX = 54;
 const IGNORED_WORDS = new Set([
   "manage",
   "rally",
@@ -73,9 +84,9 @@ export class SmartAttendanceService {
   }): Promise<SmartAttendanceResult> {
     const started = Date.now();
     const image = await this.ocr.fetchImage(params.imageUrl, params.imageSize, params.contentType);
-    const [layout, pixels, roster] = await Promise.all([
-      this.ocr.recognizeLayout(image, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
-      decodeImage(image),
+    const prepared = await prepareAttendanceImages(image);
+    const [layout, roster] = await Promise.all([
+      this.ocr.recognizeLayout(prepared.ocrImage, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
       loadRoster(params.guildId),
     ]);
 
@@ -94,7 +105,7 @@ export class SmartAttendanceService {
       forceNewSession: params.forceNewSession,
     });
 
-    const detected = detectMembers(layout.words, pixels, roster);
+    const detected = detectMembers(layout.words, prepared.signalImage, roster);
     if (detected.present.length === 0 && detected.absent.length === 0) {
       throw new UserFacingError(
         "I read the screenshot, but couldn't match any visible names to this guild's member.",
@@ -220,10 +231,9 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
   const absent = new Map<string, SmartAttendanceResult["absent"][number]>();
   const ambiguous: SmartAttendanceResult["ambiguous"] = [];
 
-  for (const word of words) {
-    const source = cleanWord(word.text);
-    const normalized = normalizeName(source);
-    if (word.confidence < MIN_WORD_CONFIDENCE || normalized.length < 2) continue;
+  for (const candidate of buildNameCandidates(words)) {
+    const source = candidate.source;
+    const normalized = candidate.normalized;
     if (IGNORED_WORDS.has(normalized)) continue;
 
     const match = bestRosterMatch(normalized, roster);
@@ -234,7 +244,7 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
         ambiguous.push({
           source,
           reason: "low roster match",
-          confidence: word.confidence,
+          confidence: candidate.confidence,
         });
       }
       continue;
@@ -244,24 +254,33 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
       ambiguous.push({
         source,
         reason: "matched more than one roster member",
-        confidence: word.confidence,
+        confidence: candidate.confidence,
       });
       continue;
     }
 
-    const signal = sampleWordSignal(pixels, word.bbox);
+    const signal = sampleWordSignal(pixels, candidate.bbox);
     const item = {
       userId: match.member.userId,
       name: match.member.label,
       source,
-      confidence: word.confidence,
+      confidence: candidate.confidence,
     };
 
     if (signal.active) {
-      present.set(item.userId, item);
+      const current = present.get(item.userId);
+      if (!current || normalizeName(current.source).length < normalized.length) {
+        present.set(item.userId, item);
+      }
       absent.delete(item.userId);
-    } else if (!present.has(item.userId)) {
-      absent.set(item.userId, item);
+      continue;
+    }
+
+    if (!present.has(item.userId)) {
+      const current = absent.get(item.userId);
+      if (!current || normalizeName(current.source).length < normalized.length) {
+        absent.set(item.userId, item);
+      }
     }
   }
 
@@ -296,41 +315,128 @@ async function loadRoster(guildId: string): Promise<RosterMember[]> {
   });
 }
 
-async function decodeImage(image: Buffer): Promise<PixelImage> {
-  const { data, info } = await sharp(image)
-    .rotate()
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+async function prepareAttendanceImages(image: Buffer): Promise<{ ocrImage: Buffer; signalImage: PixelImage }> {
+  const meta = await sharp(image).metadata();
+  const width = meta.width ?? 0;
+  const targetWidth = width > 0
+    ? Math.min(Math.round(width * ATTENDANCE_OCR_SCALE), ATTENDANCE_OCR_MAX_WIDTH)
+    : undefined;
+  const resize = targetWidth ? { width: targetWidth } : undefined;
+
+  const [ocrImage, signalRaw] = await Promise.all([
+    sharp(image).rotate().resize(resize).grayscale().normalize().sharpen().png().toBuffer(),
+    sharp(image).rotate().resize(resize).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+  ]);
 
   return {
-    data,
-    width: info.width,
-    height: info.height,
-    channels: info.channels,
+    ocrImage,
+    signalImage: {
+      data: signalRaw.data,
+      width: signalRaw.info.width,
+      height: signalRaw.info.height,
+      channels: signalRaw.info.channels,
+    },
+  };
+}
+
+export function buildNameCandidates(words: OcrWord[]): NameCandidate[] {
+  const rows = groupWordsByRow(
+    words
+      .filter((word) => word.confidence >= MIN_WORD_CONFIDENCE)
+      .map((word) => ({ ...word, text: cleanWord(word.text) }))
+      .filter((word) => normalizeName(word.text).length > 0),
+  );
+
+  const candidates: NameCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const sorted = [...row].sort((a, b) => a.bbox.x0 - b.bbox.x0);
+    for (let start = 0; start < sorted.length; start++) {
+      let source = "";
+      let confidence = 0;
+      let bbox = sorted[start]!.bbox;
+
+      for (let end = start; end < Math.min(sorted.length, start + PHRASE_MAX_WORDS); end++) {
+        const word = sorted[end]!;
+        if (end > start) {
+          const previous = sorted[end - 1]!;
+          const gap = word.bbox.x0 - previous.bbox.x1;
+          if (gap < 0 || gap > PHRASE_MAX_GAP_PX) break;
+        }
+
+        source += word.text;
+        confidence += word.confidence;
+        bbox = unionBox(bbox, word.bbox);
+
+        const normalized = normalizeName(source);
+        if (normalized.length < 2 || IGNORED_WORDS.has(normalized)) continue;
+
+        const key = normalized;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({
+          source,
+          normalized,
+          confidence: confidence / (end - start + 1),
+          bbox,
+        });
+      }
+    }
+  }
+
+  return candidates.sort((a, b) => b.normalized.length - a.normalized.length);
+}
+
+function groupWordsByRow(words: OcrWord[]): OcrWord[][] {
+  const rows: OcrWord[][] = [];
+  const sorted = [...words].sort((a, b) => wordCenterY(a) - wordCenterY(b));
+
+  for (const word of sorted) {
+    const centerY = wordCenterY(word);
+    const height = Math.max(1, word.bbox.y1 - word.bbox.y0);
+    const row = rows.find((items) => {
+      const first = items[0];
+      return first && Math.abs(wordCenterY(first) - centerY) <= Math.max(height, first.bbox.y1 - first.bbox.y0) * 0.65;
+    });
+
+    if (row) row.push(word);
+    else rows.push([word]);
+  }
+
+  return rows;
+}
+
+function wordCenterY(word: OcrWord): number {
+  return (word.bbox.y0 + word.bbox.y1) / 2;
+}
+
+function unionBox(a: OcrWord["bbox"], b: OcrWord["bbox"]): OcrWord["bbox"] {
+  return {
+    x0: Math.min(a.x0, b.x0),
+    y0: Math.min(a.y0, b.y0),
+    x1: Math.max(a.x1, b.x1),
+    y1: Math.max(a.y1, b.y1),
   };
 }
 
 function sampleWordSignal(image: PixelImage, bbox: OcrWord["bbox"]): WordSignal {
-  const box = clampBox(image, {
-    x0: bbox.x0 - 2,
-    y0: bbox.y0 - 2,
-    x1: bbox.x1 + 2,
-    y1: bbox.y1 + 2,
+  const textBox = clampBox(image, {
+    x0: Math.floor(bbox.x0) - 1,
+    y0: Math.floor(bbox.y0) - 1,
+    x1: Math.ceil(bbox.x1) + 1,
+    y1: Math.ceil(bbox.y1) + 1,
   });
-  const backdrop = clampBox(image, {
-    x0: bbox.x0 - 12,
-    y0: bbox.y0 - 8,
-    x1: bbox.x1 + 24,
-    y1: bbox.y1 + 8,
+  const backdropBox = clampBox(image, {
+    x0: Math.floor(bbox.x0) - 3,
+    y0: Math.floor(bbox.y0) - 3,
+    x1: Math.ceil(bbox.x1) + 3,
+    y1: Math.ceil(bbox.y1) + 3,
   });
 
-  const textStats = sampleStats(image, box);
-  const backdropStats = sampleStats(image, backdrop);
-  const blueLift = backdropStats.avgB - Math.max(backdropStats.avgR, backdropStats.avgG);
-
-  // White names have a meaningful high-luminance pixel ratio. Highlighted rally
-  // rows are blue-backed even when text antialiasing is not bright enough.
+  const textStats = sampleStats(image, textBox);
+  const backdropStats = sampleStats(image, backdropBox);
+  const blueLift = textStats.avgB - Math.max(textStats.avgR, textStats.avgG);
   const active =
     textStats.brightRatio >= 0.025 ||
     textStats.avgLum >= 118 ||
@@ -344,45 +450,57 @@ function sampleWordSignal(image: PixelImage, bbox: OcrWord["bbox"]): WordSignal 
   };
 }
 
-function sampleStats(image: PixelImage, box: { x0: number; y0: number; x1: number; y1: number }) {
-  let pixels = 0;
-  let lum = 0;
+function sampleStats(
+  image: PixelImage,
+  box: { x0: number; y0: number; x1: number; y1: number },
+): { avgR: number; avgG: number; avgB: number; avgLum: number; brightRatio: number } {
+  let count = 0;
   let bright = 0;
-  let rTotal = 0;
-  let gTotal = 0;
-  let bTotal = 0;
+  let totalR = 0;
+  let totalG = 0;
+  let totalB = 0;
+  let totalLum = 0;
 
   for (let y = box.y0; y < box.y1; y++) {
     for (let x = box.x0; x < box.x1; x++) {
-      const i = (y * image.width + x) * image.channels;
-      const r = image.data[i] ?? 0;
-      const g = image.data[i + 1] ?? 0;
-      const b = image.data[i + 2] ?? 0;
-      const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      pixels++;
-      lum += l;
-      rTotal += r;
-      gTotal += g;
-      bTotal += b;
-      if (l >= 150) bright++;
+      const offset = (y * image.width + x) * image.channels;
+      const r = image.data[offset] ?? 0;
+      const g = image.data[offset + 1] ?? 0;
+      const b = image.data[offset + 2] ?? 0;
+      const a = image.channels >= 4 ? (image.data[offset + 3] ?? 255) : 255;
+      if (a < 10) continue;
+
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      totalR += r;
+      totalG += g;
+      totalB += b;
+      totalLum += lum;
+      if (lum >= 145) bright++;
+      count++;
     }
   }
 
-  const safePixels = Math.max(pixels, 1);
+  if (count === 0) {
+    return { avgR: 0, avgG: 0, avgB: 0, avgLum: 0, brightRatio: 0 };
+  }
+
   return {
-    avgLum: lum / safePixels,
-    brightRatio: bright / safePixels,
-    avgR: rTotal / safePixels,
-    avgG: gTotal / safePixels,
-    avgB: bTotal / safePixels,
+    avgR: totalR / count,
+    avgG: totalG / count,
+    avgB: totalB / count,
+    avgLum: totalLum / count,
+    brightRatio: bright / count,
   };
 }
 
-function clampBox(image: PixelImage, box: { x0: number; y0: number; x1: number; y1: number }) {
-  const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(box.x0)));
-  const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(box.y0)));
-  const x1 = Math.max(x0 + 1, Math.min(image.width, Math.ceil(box.x1)));
-  const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(box.y1)));
+function clampBox(
+  image: PixelImage,
+  box: { x0: number; y0: number; x1: number; y1: number },
+): { x0: number; y0: number; x1: number; y1: number } {
+  const x0 = Math.max(0, Math.min(image.width - 1, box.x0));
+  const y0 = Math.max(0, Math.min(image.height - 1, box.y0));
+  const x1 = Math.max(x0 + 1, Math.min(image.width, box.x1));
+  const y1 = Math.max(y0 + 1, Math.min(image.height, box.y1));
   return { x0, y0, x1, y1 };
 }
 

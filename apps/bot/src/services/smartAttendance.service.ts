@@ -18,6 +18,20 @@ interface NameCandidate {
   bbox: OcrWord["bbox"];
 }
 
+interface PixelImage {
+  data: Buffer;
+  width: number;
+  height: number;
+  channels: number;
+}
+
+interface WordSignal {
+  active: boolean;
+  avgLum: number;
+  brightRatio: number;
+  blueLift: number;
+}
+
 export interface SmartAttendanceResult {
   session: {
     id: string;
@@ -70,9 +84,9 @@ export class SmartAttendanceService {
   }): Promise<SmartAttendanceResult> {
     const started = Date.now();
     const image = await this.ocr.fetchImage(params.imageUrl, params.imageSize, params.contentType);
-    const ocrImage = await prepareAttendanceOcrImage(image);
+    const prepared = await prepareAttendanceImages(image);
     const [layout, roster] = await Promise.all([
-      this.ocr.recognizeLayout(ocrImage, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
+      this.ocr.recognizeLayout(prepared.ocrImage, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
       loadRoster(params.guildId),
     ]);
 
@@ -91,15 +105,15 @@ export class SmartAttendanceService {
       forceNewSession: params.forceNewSession,
     });
 
-    const detected = detectMembers(layout.words, roster);
-    if (detected.present.length === 0) {
+    const detected = detectMembers(layout.words, prepared.signalImage, roster);
+    if (detected.present.length === 0 && detected.absent.length === 0) {
       throw new UserFacingError(
         "I read the screenshot, but couldn't match any visible names to this guild's member.",
         "Make sure member IGNs in ForgeKeep match the in-game names shown in the rally screen.",
       );
     }
 
-    const detectedUserIds = [...new Set(detected.present.map((m) => m.userId))];
+    const detectedUserIds = [...new Set([...detected.present, ...detected.absent].map((m) => m.userId))];
     const existing = detectedUserIds.length
       ? await prisma.attendanceRecord.findMany({
           where: {
@@ -112,9 +126,13 @@ export class SmartAttendanceService {
     const alreadyConfirmed = new Set(
       existing.filter((row) => row.status === "CONFIRMED").map((row) => row.userId),
     );
+    const alreadyPending = new Set(
+      existing.filter((row) => row.status === "PENDING").map((row) => row.userId),
+    );
 
     const confirmed: SmartAttendanceResult["confirmed"] = [];
     const alreadyPresent: SmartAttendanceResult["alreadyPresent"] = [];
+    const absent: SmartAttendanceResult["absent"] = [];
 
     for (const match of detected.present) {
       if (alreadyConfirmed.has(match.userId)) {
@@ -133,11 +151,30 @@ export class SmartAttendanceService {
       confirmed.push(match);
     }
 
+    for (const match of detected.absent) {
+      if (alreadyConfirmed.has(match.userId)) {
+        alreadyPresent.push(match);
+        continue;
+      }
+
+      if (!alreadyPending.has(match.userId)) {
+        await core.dashboard.markMemberPendingForReview(
+          params.guildId,
+          session.id,
+          match.userId,
+          params.actorId,
+          undefined,
+          "discord-bot-smart-attendance",
+        );
+      }
+      absent.push(match);
+    }
+
     return {
       session: { id: session.id, title: session.title, created: session.created },
       confirmed,
       alreadyPresent,
-      absent: [],
+      absent,
       ambiguous: detected.ambiguous,
       pageConfidence: layout.confidence,
       ms: Date.now() - started,
@@ -189,8 +226,9 @@ export class SmartAttendanceService {
   }
 }
 
-function detectMembers(words: OcrWord[], roster: RosterMember[]) {
+function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMember[]) {
   const present = new Map<string, SmartAttendanceResult["confirmed"][number]>();
+  const absent = new Map<string, SmartAttendanceResult["absent"][number]>();
   const ambiguous: SmartAttendanceResult["ambiguous"] = [];
 
   for (const candidate of buildNameCandidates(words)) {
@@ -221,6 +259,7 @@ function detectMembers(words: OcrWord[], roster: RosterMember[]) {
       continue;
     }
 
+    const signal = sampleWordSignal(pixels, candidate.bbox);
     const item = {
       userId: match.member.userId,
       name: match.member.label,
@@ -228,15 +267,26 @@ function detectMembers(words: OcrWord[], roster: RosterMember[]) {
       confidence: candidate.confidence,
     };
 
-    const current = present.get(item.userId);
-    if (!current || normalizeName(current.source).length < normalized.length) {
-      present.set(item.userId, item);
+    if (signal.active) {
+      const current = present.get(item.userId);
+      if (!current || normalizeName(current.source).length < normalized.length) {
+        present.set(item.userId, item);
+      }
+      absent.delete(item.userId);
+      continue;
+    }
+
+    if (!present.has(item.userId)) {
+      const current = absent.get(item.userId);
+      if (!current || normalizeName(current.source).length < normalized.length) {
+        absent.set(item.userId, item);
+      }
     }
   }
 
   return {
     present: [...present.values()],
-    absent: [],
+    absent: [...absent.values()],
     ambiguous: collapseAmbiguous(ambiguous),
   };
 }
@@ -265,21 +315,28 @@ async function loadRoster(guildId: string): Promise<RosterMember[]> {
   });
 }
 
-async function prepareAttendanceOcrImage(image: Buffer): Promise<Buffer> {
+async function prepareAttendanceImages(image: Buffer): Promise<{ ocrImage: Buffer; signalImage: PixelImage }> {
   const meta = await sharp(image).metadata();
   const width = meta.width ?? 0;
   const targetWidth = width > 0
     ? Math.min(Math.round(width * ATTENDANCE_OCR_SCALE), ATTENDANCE_OCR_MAX_WIDTH)
     : undefined;
+  const resize = targetWidth ? { width: targetWidth } : undefined;
 
-  return sharp(image)
-    .rotate()
-    .resize(targetWidth ? { width: targetWidth } : undefined)
-    .grayscale()
-    .normalize()
-    .sharpen()
-    .png()
-    .toBuffer();
+  const [ocrImage, signalRaw] = await Promise.all([
+    sharp(image).rotate().resize(resize).grayscale().normalize().sharpen().png().toBuffer(),
+    sharp(image).rotate().resize(resize).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+  ]);
+
+  return {
+    ocrImage,
+    signalImage: {
+      data: signalRaw.data,
+      width: signalRaw.info.width,
+      height: signalRaw.info.height,
+      channels: signalRaw.info.channels,
+    },
+  };
 }
 
 export function buildNameCandidates(words: OcrWord[]): NameCandidate[] {
@@ -361,6 +418,90 @@ function unionBox(a: OcrWord["bbox"], b: OcrWord["bbox"]): OcrWord["bbox"] {
     x1: Math.max(a.x1, b.x1),
     y1: Math.max(a.y1, b.y1),
   };
+}
+
+function sampleWordSignal(image: PixelImage, bbox: OcrWord["bbox"]): WordSignal {
+  const textBox = clampBox(image, {
+    x0: Math.floor(bbox.x0) - 1,
+    y0: Math.floor(bbox.y0) - 1,
+    x1: Math.ceil(bbox.x1) + 1,
+    y1: Math.ceil(bbox.y1) + 1,
+  });
+  const backdropBox = clampBox(image, {
+    x0: Math.floor(bbox.x0) - 3,
+    y0: Math.floor(bbox.y0) - 3,
+    x1: Math.ceil(bbox.x1) + 3,
+    y1: Math.ceil(bbox.y1) + 3,
+  });
+
+  const textStats = sampleStats(image, textBox);
+  const backdropStats = sampleStats(image, backdropBox);
+  const blueLift = textStats.avgB - Math.max(textStats.avgR, textStats.avgG);
+  const active =
+    textStats.brightRatio >= 0.025 ||
+    textStats.avgLum >= 118 ||
+    (blueLift >= 10 && backdropStats.avgB >= 42);
+
+  return {
+    active,
+    avgLum: textStats.avgLum,
+    brightRatio: textStats.brightRatio,
+    blueLift,
+  };
+}
+
+function sampleStats(
+  image: PixelImage,
+  box: { x0: number; y0: number; x1: number; y1: number },
+): { avgR: number; avgG: number; avgB: number; avgLum: number; brightRatio: number } {
+  let count = 0;
+  let bright = 0;
+  let totalR = 0;
+  let totalG = 0;
+  let totalB = 0;
+  let totalLum = 0;
+
+  for (let y = box.y0; y < box.y1; y++) {
+    for (let x = box.x0; x < box.x1; x++) {
+      const offset = (y * image.width + x) * image.channels;
+      const r = image.data[offset] ?? 0;
+      const g = image.data[offset + 1] ?? 0;
+      const b = image.data[offset + 2] ?? 0;
+      const a = image.channels >= 4 ? (image.data[offset + 3] ?? 255) : 255;
+      if (a < 10) continue;
+
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      totalR += r;
+      totalG += g;
+      totalB += b;
+      totalLum += lum;
+      if (lum >= 145) bright++;
+      count++;
+    }
+  }
+
+  if (count === 0) {
+    return { avgR: 0, avgG: 0, avgB: 0, avgLum: 0, brightRatio: 0 };
+  }
+
+  return {
+    avgR: totalR / count,
+    avgG: totalG / count,
+    avgB: totalB / count,
+    avgLum: totalLum / count,
+    brightRatio: bright / count,
+  };
+}
+
+function clampBox(
+  image: PixelImage,
+  box: { x0: number; y0: number; x1: number; y1: number },
+): { x0: number; y0: number; x1: number; y1: number } {
+  const x0 = Math.max(0, Math.min(image.width - 1, box.x0));
+  const y0 = Math.max(0, Math.min(image.height - 1, box.y0));
+  const x1 = Math.max(x0 + 1, Math.min(image.width, box.x1));
+  const y1 = Math.max(y0 + 1, Math.min(image.height, box.y1));
+  return { x0, y0, x1, y1 };
 }
 
 function bestRosterMatch(normalized: string, roster: RosterMember[]) {

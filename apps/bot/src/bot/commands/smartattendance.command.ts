@@ -130,7 +130,8 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
     [
       `Boss: **${bossName}**`,
       `Session: **${result.session.title}** ${result.session.created ? "(created)" : "(existing)"}`,
-      `Matched names: **${result.confirmed.length}** new, **${result.alreadyPresent.length}** already confirmed`,
+      `White names: **${result.confirmed.length}** new, **${result.alreadyPresent.length}** already confirmed`,
+      `Gray names: **${result.absent.length}** to verify`,
       `OCR confidence: **${Math.round(result.pageConfidence * 100)}%**`,
     ].join("\n"),
   ).setThumbnail(attachment.url);
@@ -142,6 +143,16 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
         [...result.confirmed, ...result.alreadyPresent].map(
           (m) => `\`${m.source}\` -> **${m.name}**${result.alreadyPresent.some((a) => a.userId === m.userId) ? " (already)" : ""}`,
         ),
+        1024,
+      ),
+    });
+  }
+
+  if (result.absent.length > 0) {
+    embed.addFields({
+      name: "Gray / To Verify",
+      value: clampDescription(
+        result.absent.map((m) => `\`${m.source}\` -> ${m.name}`),
         1024,
       ),
     });

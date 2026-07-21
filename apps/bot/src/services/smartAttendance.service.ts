@@ -49,6 +49,7 @@ export interface SmartAttendanceResult {
 const DEFAULT_MINUTES = 30;
 const MAX_MINUTES = 240;
 const MIN_WORD_CONFIDENCE = 0.35;
+const MIN_NON_LATIN_WORD_CONFIDENCE = 0.15;
 const MIN_MATCH_SCORE = 0.78;
 const ATTENDANCE_OCR_SCALE = 2;
 const ATTENDANCE_OCR_MAX_WIDTH = 2200;
@@ -345,7 +346,7 @@ async function prepareAttendanceImages(image: Buffer): Promise<{ ocrImage: Buffe
 export function buildNameCandidates(words: OcrWord[]): NameCandidate[] {
   const rows = groupWordsByRow(
     words
-      .filter((word) => word.confidence >= MIN_WORD_CONFIDENCE)
+      .filter((word) => word.confidence >= minWordConfidence(word.text))
       .map((word) => ({ ...word, text: cleanWord(word.text) }))
       .filter((word) => normalizeName(word.text).length > 0),
   );
@@ -354,6 +355,8 @@ export function buildNameCandidates(words: OcrWord[]): NameCandidate[] {
   const seen = new Set<string>();
 
   for (const row of rows) {
+    if (row.some((word) => isIgnoredUiText(normalizeName(word.text)))) continue;
+
     const sorted = [...row].sort((a, b) => a.bbox.x0 - b.bbox.x0);
     for (let start = 0; start < sorted.length; start++) {
       let source = "";
@@ -529,13 +532,19 @@ function bestRosterMatch(normalized: string, roster: RosterMember[]) {
 
 export function nameScore(a: string, b: string): number {
   if (a === b) return 1;
-  const substringMinLength = hasNonAscii(a) || hasNonAscii(b) ? 2 : 4;
-  if (a.length >= substringMinLength && b.includes(a)) return a.length / b.length;
-  if (b.length >= substringMinLength && a.includes(b)) return b.length / a.length;
+  const cjk = containsCjk(a) || containsCjk(b);
+  const substringMinLength = cjk ? 3 : hasNonAscii(a) || hasNonAscii(b) ? 2 : 4;
+  if (a.length >= substringMinLength && b.includes(a)) return substringNameScore(a.length, b.length, cjk);
+  if (b.length >= substringMinLength && a.includes(b)) return substringNameScore(b.length, a.length, cjk);
 
   const maxLen = Math.max(a.length, b.length);
   if (maxLen === 0) return 0;
   return 1 - levenshtein(a, b) / maxLen;
+}
+
+function substringNameScore(partLength: number, fullLength: number, cjk: boolean): number {
+  const score = partLength / fullLength;
+  return cjk ? Math.max(score, 0.82) : score;
 }
 
 function levenshtein(a: string, b: string): number {
@@ -564,8 +573,16 @@ export function normalizeName(input: string): string {
   return cleanWord(input).toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+function minWordConfidence(input: string): number {
+  return hasNonAscii(input) ? MIN_NON_LATIN_WORD_CONFIDENCE : MIN_WORD_CONFIDENCE;
+}
+
 function isIgnoredUiText(normalized: string): boolean {
   return IGNORED_WORDS.has(normalized) || IGNORED_UI_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
+function containsCjk(input: string): boolean {
+  return /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}/u.test(input);
 }
 
 function hasNonAscii(input: string): boolean {

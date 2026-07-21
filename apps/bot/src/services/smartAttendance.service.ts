@@ -3,6 +3,7 @@ import { AttendanceType, prisma } from "@guild/db";
 import { services as core } from "@guild/core";
 import type { OcrService, OcrWord } from "./ocr.service.js";
 import { UserFacingError } from "../utils/errors.js";
+import { env } from "../config/env.js";
 
 interface RosterMember {
   userId: string;
@@ -73,7 +74,7 @@ export class SmartAttendanceService {
     const started = Date.now();
     const image = await this.ocr.fetchImage(params.imageUrl, params.imageSize, params.contentType);
     const [layout, pixels, roster] = await Promise.all([
-      this.ocr.recognizeLayout(image),
+      this.ocr.recognizeLayout(image, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
       decodeImage(image),
       loadRoster(params.guildId),
     ]);
@@ -404,10 +405,11 @@ function bestRosterMatch(normalized: string, roster: RosterMember[]) {
   return best ? { ...best, tied: ties > 0 } : null;
 }
 
-function nameScore(a: string, b: string): number {
+export function nameScore(a: string, b: string): number {
   if (a === b) return 1;
-  if (a.length >= 4 && b.includes(a)) return a.length / b.length;
-  if (b.length >= 4 && a.includes(b)) return b.length / a.length;
+  const substringMinLength = hasNonAscii(a) || hasNonAscii(b) ? 2 : 4;
+  if (a.length >= substringMinLength && b.includes(a)) return a.length / b.length;
+  if (b.length >= substringMinLength && a.includes(b)) return b.length / a.length;
 
   const maxLen = Math.max(a.length, b.length);
   if (maxLen === 0) return 0;
@@ -436,8 +438,12 @@ function cleanWord(input: string): string {
   return input.replace(/[^\p{L}\p{N}_-]/gu, "").trim();
 }
 
-function normalizeName(input: string): string {
-  return cleanWord(input).toLowerCase().replace(/[^a-z0-9]/g, "");
+export function normalizeName(input: string): string {
+  return cleanWord(input).toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function hasNonAscii(input: string): boolean {
+  return /[^\x00-\x7F]/.test(input);
 }
 
 function collapseAmbiguous(items: SmartAttendanceResult["ambiguous"]) {

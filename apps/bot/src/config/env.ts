@@ -59,6 +59,10 @@ const envSchema = z.object({
   // Where tesseract caches its ~15MB language data. Must be writable; if it
   // isn't persisted, every cold start re-downloads it.
   OCR_CACHE_PATH: z.string().default("/tmp/tesseract"),
+  // CP scans stay on English for speed. Attendance screenshots may include
+  // player names written in several scripts, so it gets a broader language set.
+  OCR_CP_LANGUAGES: z.string().min(1).default("eng"),
+  OCR_ATTENDANCE_LANGUAGES: z.string().min(1).default("eng+chi_sim+chi_tra+jpn+kor"),
   // Hard cap on a downloaded screenshot. Discord allows up to 25MB (more with
   // Nitro); OCR on anything that large is slow and pointless for a HUD grab.
   OCR_MAX_IMAGE_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),

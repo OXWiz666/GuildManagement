@@ -37,4 +37,35 @@ describe("smart attendance name matching", () => {
 
     expect(candidates.map((candidate) => candidate.normalized)).toContain("\u8b19\u865a\u306a\u5973\u795e");
   });
+
+  it("filters rally UI phrases when OCR glues them into name-like text", () => {
+    const candidates = buildNameCandidates([
+      word("GatheringPointNotRegistered", 100, 280),
+      word("changethesquadslocation", 100, 260),
+      word("PointNotRegistered\u3093", 100, 250),
+      word("Nozeru", 100, 150),
+      word("ScaR-", 180, 230),
+    ]);
+
+    const normalized = candidates.map((candidate) => candidate.normalized);
+    expect(normalized).toContain("nozeru");
+    expect(normalized).toContain("scar");
+    expect(normalized).not.toContain("gatheringpointnotregistered");
+    expect(normalized).not.toContain("changethesquadslocation");
+    expect(normalized).not.toContain("pointnotregistered\u3093");
+  });
+
+  it("does not stitch footer UI words into fake IGN candidates", () => {
+    const candidates = buildNameCandidates([
+      word("player", 100, 150),
+      word("in", 154, 166),
+      word("rally", 170, 210),
+      word("squad", 214, 260),
+      word("Nozeru", 100, 150),
+    ]);
+
+    const normalized = candidates.map((candidate) => candidate.normalized);
+    expect(normalized).toContain("nozeru");
+    expect(normalized).not.toContain("playerinrallysquad");
+  });
 });

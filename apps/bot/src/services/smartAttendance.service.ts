@@ -11,18 +11,11 @@ interface RosterMember {
   names: string[];
 }
 
-interface PixelImage {
-  data: Buffer;
-  width: number;
-  height: number;
-  channels: number;
-}
-
-interface WordSignal {
-  active: boolean;
-  avgLum: number;
-  brightRatio: number;
-  blueLift: number;
+interface NameCandidate {
+  source: string;
+  normalized: string;
+  confidence: number;
+  bbox: OcrWord["bbox"];
 }
 
 export interface SmartAttendanceResult {
@@ -43,6 +36,10 @@ const DEFAULT_MINUTES = 30;
 const MAX_MINUTES = 240;
 const MIN_WORD_CONFIDENCE = 0.35;
 const MIN_MATCH_SCORE = 0.78;
+const ATTENDANCE_OCR_SCALE = 2;
+const ATTENDANCE_OCR_MAX_WIDTH = 2200;
+const PHRASE_MAX_WORDS = 4;
+const PHRASE_MAX_GAP_PX = 54;
 const IGNORED_WORDS = new Set([
   "manage",
   "rally",
@@ -73,9 +70,9 @@ export class SmartAttendanceService {
   }): Promise<SmartAttendanceResult> {
     const started = Date.now();
     const image = await this.ocr.fetchImage(params.imageUrl, params.imageSize, params.contentType);
-    const [layout, pixels, roster] = await Promise.all([
-      this.ocr.recognizeLayout(image, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
-      decodeImage(image),
+    const ocrImage = await prepareAttendanceOcrImage(image);
+    const [layout, roster] = await Promise.all([
+      this.ocr.recognizeLayout(ocrImage, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
       loadRoster(params.guildId),
     ]);
 
@@ -94,15 +91,15 @@ export class SmartAttendanceService {
       forceNewSession: params.forceNewSession,
     });
 
-    const detected = detectMembers(layout.words, pixels, roster);
-    if (detected.present.length === 0 && detected.absent.length === 0) {
+    const detected = detectMembers(layout.words, roster);
+    if (detected.present.length === 0) {
       throw new UserFacingError(
         "I read the screenshot, but couldn't match any visible names to this guild's member.",
         "Make sure member IGNs in ForgeKeep match the in-game names shown in the rally screen.",
       );
     }
 
-    const detectedUserIds = [...new Set([...detected.present, ...detected.absent].map((m) => m.userId))];
+    const detectedUserIds = [...new Set(detected.present.map((m) => m.userId))];
     const existing = detectedUserIds.length
       ? await prisma.attendanceRecord.findMany({
           where: {
@@ -115,13 +112,9 @@ export class SmartAttendanceService {
     const alreadyConfirmed = new Set(
       existing.filter((row) => row.status === "CONFIRMED").map((row) => row.userId),
     );
-    const alreadyPending = new Set(
-      existing.filter((row) => row.status === "PENDING").map((row) => row.userId),
-    );
 
     const confirmed: SmartAttendanceResult["confirmed"] = [];
     const alreadyPresent: SmartAttendanceResult["alreadyPresent"] = [];
-    const absent: SmartAttendanceResult["absent"] = [];
 
     for (const match of detected.present) {
       if (alreadyConfirmed.has(match.userId)) {
@@ -140,30 +133,11 @@ export class SmartAttendanceService {
       confirmed.push(match);
     }
 
-    for (const match of detected.absent) {
-      if (alreadyConfirmed.has(match.userId)) {
-        alreadyPresent.push(match);
-        continue;
-      }
-
-      if (!alreadyPending.has(match.userId)) {
-        await core.dashboard.markMemberPendingForReview(
-          params.guildId,
-          session.id,
-          match.userId,
-          params.actorId,
-          undefined,
-          "discord-bot-smart-attendance",
-        );
-      }
-      absent.push(match);
-    }
-
     return {
       session: { id: session.id, title: session.title, created: session.created },
       confirmed,
       alreadyPresent,
-      absent,
+      absent: [],
       ambiguous: detected.ambiguous,
       pageConfidence: layout.confidence,
       ms: Date.now() - started,
@@ -215,15 +189,13 @@ export class SmartAttendanceService {
   }
 }
 
-function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMember[]) {
+function detectMembers(words: OcrWord[], roster: RosterMember[]) {
   const present = new Map<string, SmartAttendanceResult["confirmed"][number]>();
-  const absent = new Map<string, SmartAttendanceResult["absent"][number]>();
   const ambiguous: SmartAttendanceResult["ambiguous"] = [];
 
-  for (const word of words) {
-    const source = cleanWord(word.text);
-    const normalized = normalizeName(source);
-    if (word.confidence < MIN_WORD_CONFIDENCE || normalized.length < 2) continue;
+  for (const candidate of buildNameCandidates(words)) {
+    const source = candidate.source;
+    const normalized = candidate.normalized;
     if (IGNORED_WORDS.has(normalized)) continue;
 
     const match = bestRosterMatch(normalized, roster);
@@ -234,7 +206,7 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
         ambiguous.push({
           source,
           reason: "low roster match",
-          confidence: word.confidence,
+          confidence: candidate.confidence,
         });
       }
       continue;
@@ -244,30 +216,27 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
       ambiguous.push({
         source,
         reason: "matched more than one roster member",
-        confidence: word.confidence,
+        confidence: candidate.confidence,
       });
       continue;
     }
 
-    const signal = sampleWordSignal(pixels, word.bbox);
     const item = {
       userId: match.member.userId,
       name: match.member.label,
       source,
-      confidence: word.confidence,
+      confidence: candidate.confidence,
     };
 
-    if (signal.active) {
+    const current = present.get(item.userId);
+    if (!current || normalizeName(current.source).length < normalized.length) {
       present.set(item.userId, item);
-      absent.delete(item.userId);
-    } else if (!present.has(item.userId)) {
-      absent.set(item.userId, item);
     }
   }
 
   return {
     present: [...present.values()],
-    absent: [...absent.values()],
+    absent: [],
     ambiguous: collapseAmbiguous(ambiguous),
   };
 }
@@ -296,94 +265,102 @@ async function loadRoster(guildId: string): Promise<RosterMember[]> {
   });
 }
 
-async function decodeImage(image: Buffer): Promise<PixelImage> {
-  const { data, info } = await sharp(image)
+async function prepareAttendanceOcrImage(image: Buffer): Promise<Buffer> {
+  const meta = await sharp(image).metadata();
+  const width = meta.width ?? 0;
+  const targetWidth = width > 0
+    ? Math.min(Math.round(width * ATTENDANCE_OCR_SCALE), ATTENDANCE_OCR_MAX_WIDTH)
+    : undefined;
+
+  return sharp(image)
     .rotate()
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  return {
-    data,
-    width: info.width,
-    height: info.height,
-    channels: info.channels,
-  };
+    .resize(targetWidth ? { width: targetWidth } : undefined)
+    .grayscale()
+    .normalize()
+    .sharpen()
+    .png()
+    .toBuffer();
 }
 
-function sampleWordSignal(image: PixelImage, bbox: OcrWord["bbox"]): WordSignal {
-  const box = clampBox(image, {
-    x0: bbox.x0 - 2,
-    y0: bbox.y0 - 2,
-    x1: bbox.x1 + 2,
-    y1: bbox.y1 + 2,
-  });
-  const backdrop = clampBox(image, {
-    x0: bbox.x0 - 12,
-    y0: bbox.y0 - 8,
-    x1: bbox.x1 + 24,
-    y1: bbox.y1 + 8,
-  });
+export function buildNameCandidates(words: OcrWord[]): NameCandidate[] {
+  const rows = groupWordsByRow(
+    words
+      .filter((word) => word.confidence >= MIN_WORD_CONFIDENCE)
+      .map((word) => ({ ...word, text: cleanWord(word.text) }))
+      .filter((word) => normalizeName(word.text).length > 0),
+  );
 
-  const textStats = sampleStats(image, box);
-  const backdropStats = sampleStats(image, backdrop);
-  const blueLift = backdropStats.avgB - Math.max(backdropStats.avgR, backdropStats.avgG);
+  const candidates: NameCandidate[] = [];
+  const seen = new Set<string>();
 
-  // White names have a meaningful high-luminance pixel ratio. Highlighted rally
-  // rows are blue-backed even when text antialiasing is not bright enough.
-  const active =
-    textStats.brightRatio >= 0.025 ||
-    textStats.avgLum >= 118 ||
-    (blueLift >= 10 && backdropStats.avgB >= 42);
+  for (const row of rows) {
+    const sorted = [...row].sort((a, b) => a.bbox.x0 - b.bbox.x0);
+    for (let start = 0; start < sorted.length; start++) {
+      let source = "";
+      let confidence = 0;
+      let bbox = sorted[start]!.bbox;
 
-  return {
-    active,
-    avgLum: textStats.avgLum,
-    brightRatio: textStats.brightRatio,
-    blueLift,
-  };
-}
+      for (let end = start; end < Math.min(sorted.length, start + PHRASE_MAX_WORDS); end++) {
+        const word = sorted[end]!;
+        if (end > start) {
+          const previous = sorted[end - 1]!;
+          const gap = word.bbox.x0 - previous.bbox.x1;
+          if (gap < 0 || gap > PHRASE_MAX_GAP_PX) break;
+        }
 
-function sampleStats(image: PixelImage, box: { x0: number; y0: number; x1: number; y1: number }) {
-  let pixels = 0;
-  let lum = 0;
-  let bright = 0;
-  let rTotal = 0;
-  let gTotal = 0;
-  let bTotal = 0;
+        source += word.text;
+        confidence += word.confidence;
+        bbox = unionBox(bbox, word.bbox);
 
-  for (let y = box.y0; y < box.y1; y++) {
-    for (let x = box.x0; x < box.x1; x++) {
-      const i = (y * image.width + x) * image.channels;
-      const r = image.data[i] ?? 0;
-      const g = image.data[i + 1] ?? 0;
-      const b = image.data[i + 2] ?? 0;
-      const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      pixels++;
-      lum += l;
-      rTotal += r;
-      gTotal += g;
-      bTotal += b;
-      if (l >= 150) bright++;
+        const normalized = normalizeName(source);
+        if (normalized.length < 2 || IGNORED_WORDS.has(normalized)) continue;
+
+        const key = normalized;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({
+          source,
+          normalized,
+          confidence: confidence / (end - start + 1),
+          bbox,
+        });
+      }
     }
   }
 
-  const safePixels = Math.max(pixels, 1);
-  return {
-    avgLum: lum / safePixels,
-    brightRatio: bright / safePixels,
-    avgR: rTotal / safePixels,
-    avgG: gTotal / safePixels,
-    avgB: bTotal / safePixels,
-  };
+  return candidates.sort((a, b) => b.normalized.length - a.normalized.length);
 }
 
-function clampBox(image: PixelImage, box: { x0: number; y0: number; x1: number; y1: number }) {
-  const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(box.x0)));
-  const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(box.y0)));
-  const x1 = Math.max(x0 + 1, Math.min(image.width, Math.ceil(box.x1)));
-  const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(box.y1)));
-  return { x0, y0, x1, y1 };
+function groupWordsByRow(words: OcrWord[]): OcrWord[][] {
+  const rows: OcrWord[][] = [];
+  const sorted = [...words].sort((a, b) => wordCenterY(a) - wordCenterY(b));
+
+  for (const word of sorted) {
+    const centerY = wordCenterY(word);
+    const height = Math.max(1, word.bbox.y1 - word.bbox.y0);
+    const row = rows.find((items) => {
+      const first = items[0];
+      return first && Math.abs(wordCenterY(first) - centerY) <= Math.max(height, first.bbox.y1 - first.bbox.y0) * 0.65;
+    });
+
+    if (row) row.push(word);
+    else rows.push([word]);
+  }
+
+  return rows;
+}
+
+function wordCenterY(word: OcrWord): number {
+  return (word.bbox.y0 + word.bbox.y1) / 2;
+}
+
+function unionBox(a: OcrWord["bbox"], b: OcrWord["bbox"]): OcrWord["bbox"] {
+  return {
+    x0: Math.min(a.x0, b.x0),
+    y0: Math.min(a.y0, b.y0),
+    x1: Math.max(a.x1, b.x1),
+    y1: Math.max(a.y1, b.y1),
+  };
 }
 
 function bestRosterMatch(normalized: string, roster: RosterMember[]) {

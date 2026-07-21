@@ -32,6 +32,12 @@ interface WordSignal {
   blueLift: number;
 }
 
+interface SmartAttendanceImageInput {
+  imageUrl: string;
+  imageSize: number;
+  contentType: string | null;
+}
+
 export interface SmartAttendanceResult {
   session: {
     id: string;
@@ -42,6 +48,7 @@ export interface SmartAttendanceResult {
   alreadyPresent: Array<{ userId: string; name: string; source: string; confidence: number }>;
   absent: Array<{ userId: string; name: string; source: string; confidence: number }>;
   ambiguous: Array<{ source: string; reason: string; confidence: number }>;
+  screenshots: number;
   pageConfidence: number;
   ms: number;
 }
@@ -93,18 +100,56 @@ export class SmartAttendanceService {
     minutes?: number;
     forceNewSession?: boolean;
   }): Promise<SmartAttendanceResult> {
+    return this.scanMany({
+      images: [
+        {
+          imageUrl: params.imageUrl,
+          imageSize: params.imageSize,
+          contentType: params.contentType,
+        },
+      ],
+      guildId: params.guildId,
+      actorId: params.actorId,
+      bossScheduleId: params.bossScheduleId,
+      minutes: params.minutes,
+      forceNewSession: params.forceNewSession,
+    });
+  }
+
+  async scanMany(params: {
+    images: SmartAttendanceImageInput[];
+    guildId: string;
+    actorId: string;
+    bossScheduleId: string;
+    minutes?: number;
+    forceNewSession?: boolean;
+  }): Promise<SmartAttendanceResult> {
     const started = Date.now();
-    const image = await this.ocr.fetchImage(params.imageUrl, params.imageSize, params.contentType);
-    const prepared = await prepareAttendanceImages(image);
-    const [layout, roster] = await Promise.all([
-      this.ocr.recognizeLayout(prepared.ocrImage, { languages: env.OCR_ATTENDANCE_LANGUAGES }),
+    if (params.images.length === 0) {
+      throw new UserFacingError(
+        "Attach at least one rally screenshot.",
+        "Upload the rally member list screenshots with `!attendance <boss> [minutes]`.",
+      );
+    }
+
+    const [scans, roster] = await Promise.all([
+      Promise.all(params.images.map((image) => this.scanImage(image))),
       loadRoster(params.guildId),
     ]);
 
-    if (layout.words.length === 0) {
+    const scansWithWords = scans.filter((scan) => scan.layout.words.length > 0);
+    if (scansWithWords.length === 0) {
       throw new UserFacingError(
-        "I couldn't find any names in that screenshot.",
+        "I couldn't find any names in those screenshots.",
         "Crop/zoom the rally list so member names are readable, then try again.",
+      );
+    }
+
+    const detected = mergeDetectedMembers(scansWithWords.map((scan) => detectMembers(scan.layout.words, scan.signalImage, roster)));
+    if (detected.present.length === 0 && detected.absent.length === 0) {
+      throw new UserFacingError(
+        "I read the screenshots, but couldn't match any visible names to this guild's member.",
+        "Make sure member IGNs in ForgeKeep match the in-game names shown in the rally screen.",
       );
     }
 
@@ -115,14 +160,6 @@ export class SmartAttendanceService {
       minutes: params.minutes,
       forceNewSession: params.forceNewSession,
     });
-
-    const detected = detectMembers(layout.words, prepared.signalImage, roster);
-    if (detected.present.length === 0 && detected.absent.length === 0) {
-      throw new UserFacingError(
-        "I read the screenshot, but couldn't match any visible names to this guild's member.",
-        "Make sure member IGNs in ForgeKeep match the in-game names shown in the rally screen.",
-      );
-    }
 
     const detectedUserIds = [...new Set([...detected.present, ...detected.absent].map((m) => m.userId))];
     const existing = detectedUserIds.length
@@ -187,9 +224,17 @@ export class SmartAttendanceService {
       alreadyPresent,
       absent,
       ambiguous: detected.ambiguous,
-      pageConfidence: layout.confidence,
+      screenshots: params.images.length,
+      pageConfidence: average(scans.map((scan) => scan.layout.confidence)),
       ms: Date.now() - started,
     };
+  }
+
+  private async scanImage(input: SmartAttendanceImageInput): Promise<{ layout: Awaited<ReturnType<OcrService["recognizeLayout"]>>; signalImage: PixelImage }> {
+    const image = await this.ocr.fetchImage(input.imageUrl, input.imageSize, input.contentType);
+    const prepared = await prepareAttendanceImages(image);
+    const layout = await this.ocr.recognizeLayout(prepared.ocrImage, { languages: env.OCR_ATTENDANCE_LANGUAGES });
+    return { layout, signalImage: prepared.signalImage };
   }
 
   private async resolveSession(params: {
@@ -235,6 +280,38 @@ export class SmartAttendanceService {
 
     return { id: session.id, title: session.title, created: true };
   }
+}
+
+function mergeDetectedMembers(items: Array<ReturnType<typeof detectMembers>>): ReturnType<typeof detectMembers> {
+  const present = new Map<string, SmartAttendanceResult["confirmed"][number]>();
+  const absent = new Map<string, SmartAttendanceResult["absent"][number]>();
+  const ambiguous: SmartAttendanceResult["ambiguous"] = [];
+
+  for (const detected of items) {
+    for (const item of detected.present) {
+      const current = present.get(item.userId);
+      if (!current || normalizeName(current.source).length < normalizeName(item.source).length) {
+        present.set(item.userId, item);
+      }
+      absent.delete(item.userId);
+    }
+
+    for (const item of detected.absent) {
+      if (present.has(item.userId)) continue;
+      const current = absent.get(item.userId);
+      if (!current || normalizeName(current.source).length < normalizeName(item.source).length) {
+        absent.set(item.userId, item);
+      }
+    }
+
+    ambiguous.push(...detected.ambiguous);
+  }
+
+  return {
+    present: [...present.values()],
+    absent: [...absent.values()],
+    ambiguous: collapseAmbiguous(ambiguous),
+  };
 }
 
 function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMember[]) {
@@ -545,6 +622,11 @@ export function nameScore(a: string, b: string): number {
 function substringNameScore(partLength: number, fullLength: number, cjk: boolean): number {
   const score = partLength / fullLength;
   return cjk ? Math.max(score, 0.82) : score;
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function levenshtein(a: string, b: string): number {

@@ -5,23 +5,25 @@ import { clampDescription, infoEmbed, successEmbed, warningEmbed } from "../../e
 import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 import { UserFacingError } from "../../utils/errors.js";
 
+const MAX_ATTENDANCE_SCREENSHOTS = 4;
+
 export const smartAttendanceCommand: Command = {
   name: "attendance",
   aliases: ["smartattendance", "smartatt", "rallyatt", "rallyattendance"],
   description: "View open killed-boss attendance windows, or scan a rally screenshot for one boss.",
-  usage: "!attendance [boss] OR !attendance <boss> [minutes] + screenshot",
+  usage: "!attendance [boss] OR !attendance <boss> [minutes] + one or more screenshots",
   category: "Attendance",
   requiresLink: true,
   minimumRole: null,
 
   async execute(ctx: CommandContext): Promise<void> {
-    const attachment = ctx.message.attachments.first();
-    if (!attachment) {
+    const attachments = [...ctx.message.attachments.values()];
+    if (attachments.length === 0) {
       if (ctx.args.length === 0) return listOpenAttendance(ctx);
       return showBossAttendance(ctx);
     }
 
-    return scanSmartAttendance(ctx, attachment);
+    return scanSmartAttendance(ctx, attachments);
   },
 };
 
@@ -79,7 +81,7 @@ async function showBossAttendance(ctx: CommandContext): Promise<void> {
   await ctx.message.reply({ embeds: [embed] });
 }
 
-async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment): Promise<void> {
+async function scanSmartAttendance(ctx: CommandContext, attachments: Attachment[]): Promise<void> {
   const actor = ctx.actor!;
 
   if (!hasMinimumRole(actor.role, OFFICER_MINIMUM)) {
@@ -89,16 +91,24 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
     );
   }
 
-  if (!attachment.contentType?.startsWith("image/")) {
+  if (attachments.length > MAX_ATTENDANCE_SCREENSHOTS) {
     throw new UserFacingError(
-      "That attachment isn't an image.",
-      "Attach a PNG, JPG, or WEBP screenshot of the rally member list.",
+      "Too many screenshots.",
+      `Attach up to ${MAX_ATTENDANCE_SCREENSHOTS} rally screenshots in one attendance scan.`,
+    );
+  }
+
+  const nonImage = attachments.find((attachment) => !attachment.contentType?.startsWith("image/"));
+  if (nonImage) {
+    throw new UserFacingError(
+      "One attachment isn't an image.",
+      "Attach only PNG, JPG, or WEBP screenshots of the rally member list.",
     );
   }
 
   const options = parseOptions(ctx.args);
   if (!options.bossQuery) {
-    throw new UserFacingError("Which boss?", "Usage: `!attendance <boss> [minutes]` plus the screenshot.");
+    throw new UserFacingError("Which boss?", "Usage: `!attendance <boss> [minutes]` plus one or more screenshots.");
   }
 
   const bossName = await ctx.services.boss.resolveBossName(options.bossQuery, ctx.server.discordServerId);
@@ -113,10 +123,12 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
   await ctx.services.rateLimiter.enforce("scan", actor.discordId);
   await ctx.message.channel.sendTyping().catch(() => {});
 
-  const result = await ctx.services.smartAttendance.scan({
-    imageUrl: attachment.url,
-    imageSize: attachment.size,
-    contentType: attachment.contentType,
+  const result = await ctx.services.smartAttendance.scanMany({
+    images: attachments.map((attachment) => ({
+      imageUrl: attachment.url,
+      imageSize: attachment.size,
+      contentType: attachment.contentType,
+    })),
     guildId: ctx.server.guildId,
     actorId: actor.userId,
     bossScheduleId: schedule.scheduleId,
@@ -130,11 +142,12 @@ async function scanSmartAttendance(ctx: CommandContext, attachment: Attachment):
     [
       `Boss: **${bossName}**`,
       `Session: **${result.session.title}** ${result.session.created ? "(created)" : "(existing)"}`,
+      `Screenshots: **${result.screenshots}**`,
       `White names: **${result.confirmed.length}** new, **${result.alreadyPresent.length}** already confirmed`,
       `Gray names: **${result.absent.length}** to verify`,
       `OCR confidence: **${Math.round(result.pageConfidence * 100)}%**`,
     ].join("\n"),
-  ).setThumbnail(attachment.url);
+  ).setThumbnail(attachments[0]?.url ?? null);
 
   if (presentCount > 0) {
     embed.addFields({

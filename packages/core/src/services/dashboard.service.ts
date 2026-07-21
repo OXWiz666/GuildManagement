@@ -2391,6 +2391,7 @@ async function finishSoloBossKill(params: {
     nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: null as string | null,
     factionId: null as string | null,
+    alreadyLogged: false,
   };
 }
 
@@ -2422,7 +2423,24 @@ export async function markBossRotationKilled(
     throw new NotFoundError("Boss schedule not found");
   }
   if (schedule.status === BossEventStatus.KILLED) {
-    throw new BadRequestError("This boss kill has already been logged");
+    const nextSchedule = await prisma.bossSchedule.findFirst({
+      where: {
+        bossName: schedule.bossName,
+        OR: [{ guildId: schedule.guildId }, { guildId: null }],
+        status: { not: BossEventStatus.KILLED },
+        spawnTime: { gt: schedule.killedAt ?? schedule.spawnTime },
+      },
+      include: { guildTurnGuild: { select: { name: true } } },
+      orderBy: { spawnTime: "asc" },
+    });
+
+    return {
+      schedule: serializeBossScheduleForApi(schedule),
+      nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
+      rotationId: null as string | null,
+      factionId: guild?.factionId ?? null,
+      alreadyLogged: true,
+    };
   }
 
   // No faction — nothing to rotate with. The guild just logs its own kill and
@@ -2470,15 +2488,46 @@ export async function markBossRotationKilled(
   // atomically — these three writes must land together or not at all, since a
   // partial failure here would either leave the boss KILLED with the queue
   // never advanced, or vice versa, corrupting whose turn it is faction-wide.
-  const { updatedEvent, rotation, nextSchedule } = await prisma.$transaction(async (tx) => {
-    const updatedEvent = await tx.bossSchedule.update({
-      where: { id: scheduleId },
+  const { updatedEvent, rotation, nextSchedule, alreadyLogged } = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.bossSchedule.updateMany({
+      where: { id: scheduleId, status: { not: BossEventStatus.KILLED } },
       data: {
         status: BossEventStatus.KILLED,
         killedAt: killedDate,
         guildTurn: takenGuild.name,
         guildTurnGuildId: takenGuild.id,
       },
+    });
+
+    if (claimed.count === 0) {
+      const alreadyKilled = await tx.bossSchedule.findUnique({
+        where: { id: scheduleId },
+        include: { guildTurnGuild: { select: { name: true } } },
+      });
+      if (!alreadyKilled) {
+        throw new NotFoundError("Boss schedule not found");
+      }
+      const nextSchedule = await tx.bossSchedule.findFirst({
+        where: {
+          bossName: schedule.bossName,
+          OR: [{ guildId: { in: activeGuildIds } }, { guildId: null }],
+          status: { not: BossEventStatus.KILLED },
+          spawnTime: { gt: alreadyKilled.killedAt ?? killedDate },
+        },
+        include: { guildTurnGuild: { select: { name: true } } },
+        orderBy: { spawnTime: "asc" },
+      });
+
+      return {
+        updatedEvent: alreadyKilled,
+        rotation: existingRotation,
+        nextSchedule,
+        alreadyLogged: true,
+      };
+    }
+
+    const updatedEvent = await tx.bossSchedule.findUniqueOrThrow({
+      where: { id: scheduleId },
     });
 
     const rotation = await tx.bossRotation.upsert({
@@ -2516,12 +2565,26 @@ export async function markBossRotationKilled(
       tx,
     );
 
-    return { updatedEvent, rotation, nextSchedule };
+    return { updatedEvent, rotation, nextSchedule, alreadyLogged: false };
   });
+
+  if (alreadyLogged) {
+    return {
+      schedule: serializeBossScheduleForApi(updatedEvent),
+      nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
+      rotationId: rotation?.id ?? null,
+      factionId,
+      alreadyLogged: true,
+    };
+  }
 
   // Every recorded drop is unconditionally vaulted for the taking guild —
   // best-effort, never blocks the kill from being logged, so it stays outside
   // the transaction above.
+  if (!updatedEvent || !rotation) {
+    throw new Error("Boss kill transaction did not return the claimed schedule");
+  }
+
   try {
     await addDropsToStorage(takenGuild.id, actorId, schedule.bossName, storedDrops);
   } catch (error) {
@@ -2633,6 +2696,7 @@ export async function markBossRotationKilled(
     nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
     factionId,
+    alreadyLogged: false,
   };
 }
 
@@ -2657,8 +2721,14 @@ export async function markBossRotationKilledByName(
   const guilds = await getActiveFactionGuilds(factionId, guildId);
   const factionGuildIds = guilds.map((g) => g.id);
 
-  // Load registry, active schedule, and existing rotation in parallel
-  const [bosses, activeSchedule, existingRotation] = await Promise.all([
+  const bossScope = [{ guildId: { in: factionGuildIds } }, { guildId: null }];
+
+  // Load registry, killable schedule, recent kill, and existing rotation in parallel.
+  // A future UPCOMING row is the next timer, not the boss that was just killed.
+  // If we let `!kill <boss>` select that row right after someone already logged
+  // the kill, every repeated command would roll the next timer forward again and
+  // create another killed-history entry.
+  const [bosses, activeSchedule, latestKilled, existingRotation] = await Promise.all([
     getBossRegistryForRotation(),
     // `guildId: null` = a faction-unified schedule row; must be included or a
     // kill on that row silently falls through to the "first kill ever"
@@ -2667,10 +2737,21 @@ export async function markBossRotationKilledByName(
     prisma.bossSchedule.findFirst({
       where: {
         bossName: bossName.trim(),
-        OR: [{ guildId: { in: factionGuildIds } }, { guildId: null }],
+        OR: bossScope,
         status: { not: BossEventStatus.KILLED },
+        spawnTime: { lte: killedDate },
       },
       orderBy: { spawnTime: "asc" },
+    }),
+    prisma.bossSchedule.findFirst({
+      where: {
+        bossName: bossName.trim(),
+        OR: bossScope,
+        status: BossEventStatus.KILLED,
+        killedAt: { not: null },
+      },
+      include: { guildTurnGuild: { select: { name: true } } },
+      orderBy: { killedAt: "desc" },
     }),
     factionId
       ? prisma.bossRotation.findUnique({
@@ -2695,6 +2776,27 @@ export async function markBossRotationKilledByName(
       userAgent,
       drops,
     );
+  }
+
+  if (latestKilled) {
+    const nextSchedule = await prisma.bossSchedule.findFirst({
+      where: {
+        bossName: latestKilled.bossName,
+        OR: bossScope,
+        status: { not: BossEventStatus.KILLED },
+        spawnTime: { gt: latestKilled.killedAt ?? latestKilled.spawnTime },
+      },
+      include: { guildTurnGuild: { select: { name: true } } },
+      orderBy: { spawnTime: "asc" },
+    });
+
+    return {
+      schedule: serializeBossScheduleForApi(latestKilled),
+      nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
+      rotationId: existingRotation?.id ?? null,
+      factionId,
+      alreadyLogged: true,
+    };
   }
 
   // No faction and no live schedule yet — first time this (unaffiliated)
@@ -2896,6 +2998,7 @@ export async function markBossRotationKilledByName(
     nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
     rotationId: rotation.id,
     factionId,
+    alreadyLogged: false,
   };
 }
 

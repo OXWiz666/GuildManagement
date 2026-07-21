@@ -21,6 +21,10 @@ export interface OcrLayoutOutput extends OcrOutput {
   words: OcrWord[];
 }
 
+interface RecognitionOptions {
+  languages?: string;
+}
+
 /** Content types Discord serves for images we can actually read. */
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/bmp"]);
 
@@ -45,6 +49,7 @@ const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/jpg", "image/web
 export class OcrService {
   private worker: Worker | null = null;
   private workerInit: Promise<Worker> | null = null;
+  private workerLanguages: string | null = null;
   /** Tail of the serialization chain; every scan links onto it. */
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -54,15 +59,33 @@ export class OcrService {
    * The in-flight promise is cached too, so several simultaneous first-scans
    * await one initialization instead of racing to create three workers.
    */
-  private async getWorker(): Promise<Worker> {
-    if (this.worker) return this.worker;
+  private async getWorker(languages: string): Promise<Worker> {
+    const desiredLanguages = normalizeLanguageList(languages);
+    if (this.worker) {
+      if (this.workerLanguages !== desiredLanguages) {
+        const started = Date.now();
+        logger.info("Switching OCR worker languages", {
+          from: this.workerLanguages,
+          to: desiredLanguages,
+        });
+        await this.worker.reinitialize(desiredLanguages);
+        this.workerLanguages = desiredLanguages;
+        logger.info("OCR worker language switch complete", {
+          languages: desiredLanguages,
+          ms: Date.now() - started,
+        });
+      }
+      return this.worker;
+    }
     if (this.workerInit) return this.workerInit;
 
     this.workerInit = (async () => {
       const started = Date.now();
-      logger.info("Initializing OCR worker (first scan downloads language data)");
+      logger.info("Initializing OCR worker (first scan downloads language data)", {
+        languages: desiredLanguages,
+      });
 
-      const worker = await createWorker("eng", undefined, {
+      const worker = await createWorker(desiredLanguages, undefined, {
         // Persist traineddata across restarts. In Docker this path should be on
         // a layer or volume; otherwise every cold start re-downloads ~15MB.
         cachePath: env.OCR_CACHE_PATH,
@@ -73,6 +96,7 @@ export class OcrService {
       });
 
       this.worker = worker;
+      this.workerLanguages = desiredLanguages;
       logger.info("OCR worker ready", { ms: Date.now() - started });
       return worker;
     })();
@@ -136,12 +160,13 @@ export class OcrService {
    * Recognize text in an image. Serialized behind the shared worker and
    * bounded by a timeout.
    */
-  async recognize(image: Buffer): Promise<OcrOutput> {
+  async recognize(image: Buffer, options: RecognitionOptions = {}): Promise<OcrOutput> {
     // Link onto the queue tail. `.then(noop, noop)` so a previous scan's
     // failure doesn't reject this one — each scan owns its own errors.
+    const languages = options.languages ?? env.OCR_CP_LANGUAGES;
     const run = this.queue.then(
-      () => this.recognizeNow(image),
-      () => this.recognizeNow(image),
+      () => this.recognizeNow(image, languages),
+      () => this.recognizeNow(image, languages),
     );
 
     // The queue tracks completion, not success.
@@ -153,10 +178,11 @@ export class OcrService {
     return run;
   }
 
-  async recognizeLayout(image: Buffer): Promise<OcrLayoutOutput> {
+  async recognizeLayout(image: Buffer, options: RecognitionOptions = {}): Promise<OcrLayoutOutput> {
+    const languages = options.languages ?? env.OCR_CP_LANGUAGES;
     const run = this.queue.then(
-      () => this.recognizeLayoutNow(image),
-      () => this.recognizeLayoutNow(image),
+      () => this.recognizeLayoutNow(image, languages),
+      () => this.recognizeLayoutNow(image, languages),
     );
 
     this.queue = run.then(
@@ -167,8 +193,8 @@ export class OcrService {
     return run;
   }
 
-  private async recognizeNow(image: Buffer): Promise<OcrOutput> {
-    const worker = await this.getWorker();
+  private async recognizeNow(image: Buffer, languages: string): Promise<OcrOutput> {
+    const worker = await this.getWorker(languages);
     const started = Date.now();
 
     try {
@@ -197,8 +223,8 @@ export class OcrService {
     }
   }
 
-  private async recognizeLayoutNow(image: Buffer): Promise<OcrLayoutOutput> {
-    const worker = await this.getWorker();
+  private async recognizeLayoutNow(image: Buffer, languages: string): Promise<OcrLayoutOutput> {
+    const worker = await this.getWorker(languages);
     const started = Date.now();
 
     try {
@@ -228,6 +254,7 @@ export class OcrService {
     const worker = this.worker;
     this.worker = null;
     this.workerInit = null;
+    this.workerLanguages = null;
     if (worker) {
       await worker.terminate().catch(() => {
         // Already dead — nothing to clean up.
@@ -239,6 +266,14 @@ export class OcrService {
   async dispose(): Promise<void> {
     await this.reset();
   }
+}
+
+function normalizeLanguageList(languages: string): string {
+  return languages
+    .split(/[+,]/)
+    .map((lang) => lang.trim())
+    .filter(Boolean)
+    .join("+") || "eng";
 }
 
 function extractWords(blocks: Tesseract.Block[] | null): OcrWord[] {

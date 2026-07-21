@@ -328,6 +328,8 @@ export class BossService {
   }): Promise<{
     nextSpawn: KillNextSpawn | null;
     drops: Array<{ itemName: string; matched: boolean; iconUrl: string | null }>;
+    alreadyLogged: boolean;
+    killedAt: Date;
   }> {
     // Which guild took the boss. Defaults to the actor's own guild — the
     // overwhelmingly common case for a kill reported from that guild's server.
@@ -360,7 +362,8 @@ export class BossService {
     // Typed item text that didn't match any catalog icon — vault each anyway
     // (best-effort, same as the catalog path above) instead of silently
     // losing the drops the officer just reported.
-    const unmatchedNames = names.filter((_, i) => !matches[i]);
+    const alreadyLogged = result.alreadyLogged === true;
+    const unmatchedNames = alreadyLogged ? [] : names.filter((_, i) => !matches[i]);
     if (unmatchedNames.length) {
       try {
         await core.storage.addDropsToStorage(
@@ -374,17 +377,20 @@ export class BossService {
       }
     }
 
-    const drops = names.map((name, i) => {
-      const matched = matches[i];
-      return {
-        itemName: matched?.itemName ?? name,
-        matched: !!matched,
-        iconUrl: matched?.iconUrl ?? null,
-      };
-    });
+    const drops = alreadyLogged
+      ? []
+      : names.map((name, i) => {
+          const matched = matches[i];
+          return {
+            itemName: matched?.itemName ?? name,
+            matched: !!matched,
+            iconUrl: matched?.iconUrl ?? null,
+          };
+        });
 
     const next = result.nextSchedule;
-    if (!next) return { nextSpawn: null, drops };
+    const killedAt = result.schedule.killedAt ? new Date(result.schedule.killedAt) : params.killedAt;
+    if (!next) return { nextSpawn: null, drops, alreadyLogged, killedAt };
 
     // Same live/countdown projection every other read uses — a freshly rolled
     // schedule can itself already be "live" (e.g. a fixed-schedule boss whose
@@ -402,6 +408,8 @@ export class BossService {
         live: timer.live,
       },
       drops,
+      alreadyLogged,
+      killedAt,
     };
   }
 

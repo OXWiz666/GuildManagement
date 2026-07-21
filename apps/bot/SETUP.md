@@ -156,6 +156,8 @@ Optional but recommended:
 | `RATE_LIMIT_COMMANDS_PER_MIN` | `20` | Per user |
 | `RATE_LIMIT_SCANS_PER_HOUR` | `10` | Per user; OCR is expensive — see Step 8 |
 | `OCR_CACHE_PATH` | `/tmp/tesseract` | Must be writable |
+| `OCR_CP_LANGUAGES` | `eng` | Tesseract language pack for `!cp` scans |
+| `OCR_ATTENDANCE_LANGUAGES` | `eng+chi_sim+chi_tra+jpn+kor` | Tesseract language packs for `!attendance` rally screenshots |
 | `CP_MAX_GROWTH_RATIO` | `0.3` | CP jump above +30% in one scan gets flagged |
 | `OCR_MIN_CONFIDENCE` | `0.6` | Below this, a scan is flagged for review |
 
@@ -315,9 +317,11 @@ WHERE guild_id = '<your-guild-id>';
 
 ### First scan is slow
 
-The first scan downloads ~15MB of OCR language data (~10s). Subsequent scans are
-fast. The worker is created once and reused; set `OCR_CACHE_PATH` to a persisted
-path so a restart doesn't re-download.
+The first CP scan downloads the English OCR language data (~15MB, often ~10s).
+The first attendance scan may download additional language packs configured by
+`OCR_ATTENDANCE_LANGUAGES`. Subsequent scans are fast. The worker is created
+once and reused; set `OCR_CACHE_PATH` to a persisted path so a restart doesn't
+re-download.
 
 ---
 

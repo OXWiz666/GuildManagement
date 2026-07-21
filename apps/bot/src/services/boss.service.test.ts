@@ -386,3 +386,31 @@ describe("listDropItemNames", () => {
     ]);
   });
 });
+
+describe("recordKill", () => {
+  it("does not add typed fallback drops when the boss kill was already logged", async () => {
+    vi.mocked(core.equipment.getDropsCatalog).mockResolvedValue({ items: [] });
+    vi.mocked(core.dashboard.markBossRotationKilledByName).mockResolvedValue({
+      schedule: {
+        id: "killed1",
+        bossName: "Livera",
+        killedAt: "2026-07-21T06:00:00.000Z",
+      },
+      nextSchedule: null,
+      alreadyLogged: true,
+    } as never);
+    const { service } = makeService();
+
+    const result = await service.recordKill({
+      guildId: "g1",
+      bossName: "Livera",
+      killedAt: new Date("2026-07-21T06:05:00.000Z"),
+      actorId: "u1",
+      itemDrops: ["Unmatched Drop"],
+    });
+
+    expect(result.alreadyLogged).toBe(true);
+    expect(result.drops).toEqual([]);
+    expect(core.storage.addDropsToStorage).not.toHaveBeenCalled();
+  });
+});

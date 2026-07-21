@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { buildNameCandidates, nameScore, normalizeName } from "./smartAttendance.service.js";
 import type { OcrWord } from "./ocr.service.js";
 
-function word(text: string, x0: number, x1: number): OcrWord {
+function word(text: string, x0: number, x1: number, confidence = 0.9, y0 = 10): OcrWord {
   return {
     text,
-    confidence: 0.9,
-    bbox: { x0, y0: 10, x1, y1: 24 },
+    confidence,
+    bbox: { x0, y0, x1, y1: y0 + 14 },
   };
 }
 
@@ -24,7 +24,7 @@ describe("smart attendance name matching", () => {
 
   it("allows partial matches for multi-language names without allowing single glyph hits", () => {
     expect(nameScore("\u8b19\u865a\u306a\u5973\u795e", "\u8b19\u865a\u306a\u5973\u795e")).toBe(1);
-    expect(nameScore("\u8b19\u865a\u306a", "\u8b19\u865a\u306a\u5973\u795e")).toBeGreaterThan(0.4);
+    expect(nameScore("\u8b19\u865a\u306a", "\u8b19\u865a\u306a\u5973\u795e")).toBeGreaterThan(0.78);
     expect(nameScore("\u795e", "\u8b19\u865a\u306a\u5973\u795e")).toBeLessThan(0.78);
   });
 
@@ -36,5 +36,61 @@ describe("smart attendance name matching", () => {
     ]);
 
     expect(candidates.map((candidate) => candidate.normalized)).toContain("\u8b19\u865a\u306a\u5973\u795e");
+  });
+
+  it("filters rally UI phrases when OCR glues them into name-like text", () => {
+    const candidates = buildNameCandidates([
+      word("GatheringPointNotRegistered", 100, 280),
+      word("changethesquadslocation", 100, 260),
+      word("PointNotRegistered\u3093", 100, 250),
+      word("Nozeru", 100, 150, 0.9, 40),
+      word("ScaR-", 180, 230, 0.9, 40),
+    ]);
+
+    const normalized = candidates.map((candidate) => candidate.normalized);
+    expect(normalized).toContain("nozeru");
+    expect(normalized).toContain("scar");
+    expect(normalized).not.toContain("gatheringpointnotregistered");
+    expect(normalized).not.toContain("changethesquadslocation");
+    expect(normalized).not.toContain("pointnotregistered\u3093");
+  });
+
+  it("keeps low-confidence CJK name text that Tesseract often under-scores", () => {
+    const candidates = buildNameCandidates([
+      word("\u8b19\u865a", 100, 132, 0.2),
+      word("\u306a", 136, 148, 0.18),
+      word("\u5973\u795e", 152, 184, 0.22),
+      word("blurry", 220, 260, 0.2),
+    ]);
+
+    const normalized = candidates.map((candidate) => candidate.normalized);
+    expect(normalized).toContain("\u8b19\u865a\u306a\u5973\u795e");
+    expect(normalized).not.toContain("blurry");
+  });
+
+  it("does not stitch footer UI words into fake IGN candidates", () => {
+    const candidates = buildNameCandidates([
+      word("player", 100, 150),
+      word("in", 154, 166),
+      word("rally", 170, 210),
+      word("squad", 214, 260),
+      word("Nozeru", 100, 150, 0.9, 60),
+    ]);
+
+    const normalized = candidates.map((candidate) => candidate.normalized);
+    expect(normalized).toContain("nozeru");
+    expect(normalized).not.toContain("playerinrallysquad");
+  });
+
+  it("skips whole OCR rows that contain rally UI labels", () => {
+    const candidates = buildNameCandidates([
+      { ...word("Gathering", 100, 160), bbox: { x0: 100, y0: 10, x1: 160, y1: 24 } },
+      { ...word("Point", 164, 204), bbox: { x0: 164, y0: 10, x1: 204, y1: 24 } },
+      { ...word("Nozeru", 840, 900), bbox: { x0: 840, y0: 10, x1: 900, y1: 24 } },
+      { ...word("Nozeru", 100, 160), bbox: { x0: 100, y0: 60, x1: 160, y1: 74 } },
+    ]);
+
+    const normalized = candidates.map((candidate) => candidate.normalized);
+    expect(normalized.filter((candidate) => candidate === "nozeru")).toHaveLength(1);
   });
 });

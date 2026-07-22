@@ -156,11 +156,17 @@ function normalizeQueue(rawQueue: unknown, activeGuildIds: string[]) {
  * master list. When `participantsConfigured` is set, the stored queue is the
  * authoritative participant list — only listed (still-active) guilds take the
  * boss, in order, with NO auto-inclusion of every active guild. Otherwise it
- * falls back to the default "all active faction guilds" behavior.
+ * falls back to `defaultGuildIds` — the faction's *founding* guild(s), NOT
+ * every currently-active guild (see `getFoundingFactionGuildIds`) — so a
+ * guild that joined later never gets pulled into a boss's rotation just
+ * because nobody has explicitly configured that boss's participant list yet.
+ * `defaultGuildIds` defaults to `activeGuildIds` only for callers that
+ * haven't been updated to pass the founding set explicitly.
  */
 function resolveQueue(
   existing: { queueGuildIds: unknown; participantsConfigured?: boolean } | null | undefined,
   activeGuildIds: string[],
+  defaultGuildIds: string[] = activeGuildIds,
 ) {
   if (existing?.participantsConfigured) {
     const activeSet = new Set(activeGuildIds);
@@ -169,7 +175,30 @@ function resolveQueue(
       : [];
     return raw.filter((id) => activeSet.has(id));
   }
-  return normalizeQueue(existing?.queueGuildIds, activeGuildIds);
+  return normalizeQueue(existing?.queueGuildIds, defaultGuildIds);
+}
+
+/**
+ * The guild(s) present when a faction was founded — i.e. the earliest
+ * `joinedAt` among its active `FactionGuildMembership` rows. Every guild that
+ * joins later via a faction invite code starts opted OUT of any boss
+ * rotation nobody has explicitly configured yet (see `resolveQueue` above
+ * and `lockRotationParticipantsExcluding` in faction.service.ts, which locks
+ * every *then-existing* boss at join time — this covers the gap for bosses
+ * added to the catalog afterward, which that one-time lock can never reach).
+ */
+async function getFoundingFactionGuildIds(factionId: string | null): Promise<string[]> {
+  if (!factionId) return [];
+  const memberships = await prisma.factionGuildMembership.findMany({
+    where: { factionId, status: "ACTIVE" },
+    select: { guildId: true, joinedAt: true },
+    orderBy: { joinedAt: "asc" },
+  });
+  if (memberships.length === 0) return [];
+  const earliest = memberships[0]!.joinedAt.getTime();
+  // Guard against near-simultaneous joins (e.g. a migration backfill) rather
+  // than requiring an exact-millisecond match.
+  return memberships.filter((m) => m.joinedAt.getTime() - earliest < 1000).map((m) => m.guildId);
 }
 
 async function requireActiveGuildMember(actorId: string, guildId: string) {
@@ -2219,10 +2248,16 @@ export async function getBossRotation(guildId: string, actorId: string) {
 }
 
 async function getBossRotationShared(factionId: string | null, guildId: string) {
-  const bosses = await getBossRegistryForRotation();
-  const guilds = await getActiveFactionGuilds(factionId, guildId);
+  const [bosses, guilds, foundingGuildIds] = await Promise.all([
+    getBossRegistryForRotation(),
+    getActiveFactionGuilds(factionId, guildId),
+    getFoundingFactionGuildIds(factionId),
+  ]);
 
   const activeGuildIds = guilds.map((g) => g.id);
+  const activeFoundingGuildIds = foundingGuildIds.length
+    ? foundingGuildIds.filter((id) => activeGuildIds.includes(id))
+    : activeGuildIds;
   const guildMap = new Map(guilds.map((g) => [g.id, g]));
 
   // Bulk-fetch all rotation, active schedule, and killed schedule data in 3 parallel queries
@@ -2273,7 +2308,7 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
   const rotations = [];
   for (const boss of bosses) {
     const existing = rotationMap.get(boss.name) || null;
-    const queueGuildIds = resolveQueue(existing, activeGuildIds);
+    const queueGuildIds = resolveQueue(existing, activeGuildIds, activeFoundingGuildIds);
     const currentIndex = queueGuildIds.length
       ? Math.min(existing?.currentIndex || 0, queueGuildIds.length - 1)
       : 0;
@@ -2576,8 +2611,14 @@ export async function markBossRotationKilled(
   }
 
   const factionId = guild.factionId;
-  const guilds = await getActiveFactionGuilds(factionId);
+  const [guilds, foundingGuildIds] = await Promise.all([
+    getActiveFactionGuilds(factionId),
+    getFoundingFactionGuildIds(factionId),
+  ]);
   const activeGuildIds = guilds.map((g) => g.id);
+  const activeFoundingGuildIds = foundingGuildIds.length
+    ? foundingGuildIds.filter((id) => activeGuildIds.includes(id))
+    : activeGuildIds;
   const guildMap = new Map(guilds.map((g) => [g.id, g]));
   const takenGuild = guildMap.get(takenGuildId);
 
@@ -2588,7 +2629,7 @@ export async function markBossRotationKilled(
   const existingRotation = await prisma.bossRotation.findUnique({
     where: { factionId_bossName: { factionId, bossName: schedule.bossName } },
   });
-  const queueGuildIds = resolveQueue(existingRotation, activeGuildIds);
+  const queueGuildIds = resolveQueue(existingRotation, activeGuildIds, activeFoundingGuildIds);
   const takenIndex = queueGuildIds.indexOf(takenGuildId);
   const nextIndex = queueGuildIds.length ? ((takenIndex >= 0 ? takenIndex : 0) + 1) % queueGuildIds.length : 0;
   const nextGuildId = queueGuildIds[nextIndex] || null;
@@ -2829,8 +2870,14 @@ export async function markBossRotationKilledByName(
   const storedDrops = await normalizeBossDrops(drops);
   const guild = await prisma.guild.findUnique({ where: { id: guildId }, select: { name: true, factionId: true } });
   const factionId = guild?.factionId ?? null;
-  const guilds = await getActiveFactionGuilds(factionId, guildId);
+  const [guilds, foundingGuildIds] = await Promise.all([
+    getActiveFactionGuilds(factionId, guildId),
+    getFoundingFactionGuildIds(factionId),
+  ]);
   const factionGuildIds = guilds.map((g) => g.id);
+  const activeFoundingGuildIds = foundingGuildIds.length
+    ? foundingGuildIds.filter((id) => factionGuildIds.includes(id))
+    : factionGuildIds;
 
   const bossScope = [{ guildId: { in: factionGuildIds } }, { guildId: null }];
 
@@ -2974,7 +3021,7 @@ export async function markBossRotationKilledByName(
   // attendance for a boss's first-ever kill.
   const checkInSession = await openBossCheckInSession(takenGuild.id, killedSchedule.id, registryBoss.name);
 
-  const queueGuildIds = resolveQueue(existingRotation, activeGuildIds);
+  const queueGuildIds = resolveQueue(existingRotation, activeGuildIds, activeFoundingGuildIds);
   const takenIndex = queueGuildIds.indexOf(takenGuildId);
   const nextIndex = queueGuildIds.length ? ((takenIndex >= 0 ? takenIndex : 0) + 1) % queueGuildIds.length : 0;
   const nextGuildId = queueGuildIds[nextIndex] || null;
@@ -3692,13 +3739,17 @@ export async function getBossMasterList(guildId: string, actorId: string) {
 }
 
 async function getBossMasterListShared(factionId: string | null, guildId: string) {
-  const [bosses, guilds, rotations] = await Promise.all([
+  const [bosses, guilds, rotations, foundingGuildIds] = await Promise.all([
     getBossRegistryForRotation(),
     getActiveFactionGuilds(factionId, guildId),
     factionId ? prisma.bossRotation.findMany({ where: { factionId } }) : Promise.resolve([]),
+    getFoundingFactionGuildIds(factionId),
   ]);
 
   const activeGuildIds = guilds.map((g) => g.id);
+  const activeFoundingGuildIds = foundingGuildIds.length
+    ? foundingGuildIds.filter((id) => activeGuildIds.includes(id))
+    : activeGuildIds;
   const rotationMap = new Map(rotations.map((r) => [r.bossName.toLowerCase(), r]));
 
   const bossEntries = bosses.map((boss) => {
@@ -3710,9 +3761,10 @@ async function getBossMasterListShared(factionId: string | null, guildId: string
       location: boss.location,
       cooldownHours: boss.cooldownHours ?? null,
       // A boss is "configured" once a faction leader has saved its participant
-      // list; until then it defaults to every active guild.
+      // list; until then it defaults to the faction's founding guild(s) only
+      // — a later joiner never appears here until explicitly added.
       configured: Boolean(rotation?.participantsConfigured),
-      participantGuildIds: resolveQueue(rotation, activeGuildIds),
+      participantGuildIds: resolveQueue(rotation, activeGuildIds, activeFoundingGuildIds),
     };
   });
 

@@ -25,6 +25,9 @@ export interface MemberRowProps {
   onRoleChange: (newRole: string) => void;
   customRoles?: CustomRoleData[];
   onAssignCustomRole?: (customRoleId: string) => void;
+  // Dual role: a Faction Leader who created the faction from this guild is
+  // still its Guild Leader unless a separate GUILD_LEADER member exists.
+  showDualLeaderBadge?: boolean;
 }
 
 export default function MemberRow({
@@ -37,6 +40,7 @@ export default function MemberRow({
   onRoleChange,
   customRoles = [],
   onAssignCustomRole,
+  showDualLeaderBadge = false,
 }: MemberRowProps) {
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const { resolveRoleName } = useRoleDisplayNames();
@@ -70,6 +74,7 @@ export default function MemberRow({
               </span>
             )}
             <Badge role={member.role} customName={member.customRole?.name} customColor={member.customRole?.color} />
+            {showDualLeaderBadge && member.role === "FACTION_LEADER" && <Badge role="GUILD_LEADER" />}
           </div>
           <p className="text-[11px] text-white/35 truncate mt-0.5">{member.user.displayName}</p>
         </div>

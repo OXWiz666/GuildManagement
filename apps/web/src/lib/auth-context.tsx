@@ -9,7 +9,7 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import type { PaymentMethodEntry } from "@guild/shared";
+import type { PaymentMethodEntry, GuildEmblemConfig } from "@guild/shared";
 import { authApi, setAccessToken } from "./api";
 import { createClient } from "@/utils/supabase/client";
 import { friendlyAuthError } from "./auth-errors";
@@ -36,6 +36,7 @@ interface Guild {
   guildName: string;
   guildSlug: string;
   guildAvatarUrl: string | null;
+  guildEmblem?: GuildEmblemConfig | null;
   factionId: string | null;
   factionName: string | null;
   role: string;

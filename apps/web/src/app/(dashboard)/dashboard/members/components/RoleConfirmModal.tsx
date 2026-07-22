@@ -15,6 +15,10 @@ export interface RoleConfirmModalProps {
   isUpdating: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  // True when the acting user holds the GUILD_LEADER seat themselves — the
+  // transfer demotes them. A Faction Leader/Admin appointing a Guild Leader
+  // keeps their own role (dual leadership).
+  actorStepsDown?: boolean;
 }
 
 export default function RoleConfirmModal({
@@ -22,6 +26,7 @@ export default function RoleConfirmModal({
   isUpdating,
   onClose,
   onConfirm,
+  actorStepsDown = true,
 }: RoleConfirmModalProps) {
   const { resolveRoleName } = useRoleDisplayNames();
 
@@ -46,12 +51,16 @@ export default function RoleConfirmModal({
               Transfer Guild Leadership
             </h3>
             <p className="text-sm text-white/50 text-center mb-1">
-              You are about to transfer Guild Leader to{" "}
+              You are about to {actorStepsDown ? "transfer" : "assign"} Guild Leader to{" "}
               <span className="text-white font-medium">{confirmModal.memberName}</span>.
             </p>
             <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-3 my-4">
               <p className="text-xs text-amber-400/90 text-center">
-                ⚠️ You will be demoted to <span className="font-semibold">{resolveRoleName("OFFICER")}</span>. This action cannot be undone by you.
+                {actorStepsDown ? (
+                  <>⚠️ You will be demoted to <span className="font-semibold">{resolveRoleName("OFFICER")}</span>. This action cannot be undone by you.</>
+                ) : (
+                  <>⚠️ You remain Faction Leader. If the guild already has a Guild Leader, they will be demoted to <span className="font-semibold">{resolveRoleName("OFFICER")}</span>.</>
+                )}
               </p>
             </div>
           </>

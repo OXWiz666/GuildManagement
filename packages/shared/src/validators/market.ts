@@ -25,6 +25,9 @@ export type ReviewRequestInput = z.infer<typeof reviewRequestSchema>;
 
 export const legendaryPrioritySchema = z.object({
   category: z.enum(LEGENDARY_CATEGORIES),
+  // Specific item within the category (WEAPON_TYPES / ACCESSORY_PIECES key);
+  // the service validates it belongs to the chosen category's catalog.
+  itemKey: z.string().trim().max(60).optional(),
   currentGear: z.string().trim().max(500).optional(),
   reason: z.string().trim().max(500).optional(),
 });

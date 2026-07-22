@@ -5,6 +5,8 @@ import SettingsCard from "../../settings/components/SettingsCard";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { guildApi, type GuildProfileData, type GuildSettingsData } from "@/lib/api";
+import GuildEmblem from "@/components/guild/GuildEmblem";
+import GuildEmblemCustomizerModal from "@/components/guild/GuildEmblemCustomizerModal";
 import { useAuth } from "@/lib/auth-context";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import { useToast } from "@/components/ui/Toast";
@@ -119,6 +121,7 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
   const { resolveRoleName } = useRoleDisplayNames();
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
+  const [showEmblemModal, setShowEmblemModal] = useState(false);
 
   // Form states
   const [guildName, setGuildName] = useState("");
@@ -402,6 +405,44 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
 
   return (
     <div className="space-y-6">
+      {(mode === "all" || mode === "general") && (
+      <SettingsCard
+        eyebrow="Guild Emblem"
+        title="Design your identity"
+        description="Your emblem replaces the guild avatar across the website — customize its shape, colors, icon, and banner."
+      >
+        <div className="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+          <GuildEmblem emblem={guildProfile?.emblem ?? null} name={guildProfile?.name || "Guild"} size={92} />
+          <div className="flex-1 min-w-0 text-center sm:text-left">
+            <p className="text-[13px] font-semibold text-white">
+              {guildProfile?.emblem ? "Current emblem" : "No emblem yet"}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-white/45">
+              {guildProfile?.emblem
+                ? "Members see this emblem wherever your guild appears. Leaders can change it at any time."
+                : "Your guild currently shows a plain initial. Forge an emblem to give it a real identity."}
+            </p>
+            <div className="mt-3">
+              <Magnetic strength={3}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowEmblemModal(true)}
+                  disabled={!canRenameGuild}
+                >
+                  {guildProfile?.emblem ? "Customize emblem" : "Create emblem"}
+                </Button>
+              </Magnetic>
+              {!canRenameGuild && (
+                <p className="mt-2 text-[10px] text-white/35">Only Guild Leaders can change the emblem.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </SettingsCard>
+      )}
+
       {(mode === "all" || mode === "general") && (
       <SettingsCard
         eyebrow="General Settings"
@@ -761,6 +802,15 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
         </form>
       </SettingsCard>
       )}
+
+      <GuildEmblemCustomizerModal
+        show={showEmblemModal}
+        guildId={guildId}
+        guildName={guildProfile?.name || "Guild"}
+        currentEmblem={guildProfile?.emblem ?? null}
+        onClose={() => setShowEmblemModal(false)}
+        onSaved={() => void refreshUser()}
+      />
     </div>
   );
 }

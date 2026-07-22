@@ -286,6 +286,19 @@ export const guilds = new Hono<AppEnv>()
     broadcastToGuild(guildId, "guild_profile_updated", profile);
     return ok(c, { profile });
   })
+  .patch("/:guildId/emblem", requireGuildRole("GUILD_LEADER"), async (c) => {
+    const guildId = c.req.param("guildId");
+    const user = c.get("user");
+    const { emblem } = await readJson<{ emblem?: unknown }>(c);
+    const { ipAddress, userAgent } = getClientInfo(c);
+    const profile = await services.guild.updateGuildEmblem(guildId, emblem ?? null, user.userId, ipAddress, userAgent);
+    await Promise.all([
+      cache.invalidatePattern(`guild-profile:${guildId}:*`),
+      cache.delete(`guild-members:${guildId}`),
+    ]);
+    broadcastToGuild(guildId, "guild_profile_updated", profile);
+    return ok(c, { profile });
+  })
   .get("/:guildId/settings", requireGuildRole("MEMBER"), async (c) => {
     const guildId = c.req.param("guildId");
     const cacheKey = `guild-settings:${guildId}`;

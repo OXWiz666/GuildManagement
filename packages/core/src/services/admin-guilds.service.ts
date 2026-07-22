@@ -103,7 +103,12 @@ export async function getGuildDetail(guildId: string) {
   });
   if (!guild) throw new NotFoundError("Guild not found");
 
-  const owner = guild.members.find((m) => m.role === "GUILD_LEADER") || null;
+  // A guild whose leader created a faction has a FACTION_LEADER member
+  // instead of a GUILD_LEADER one — they remain the guild's owner.
+  const owner =
+    guild.members.find((m) => m.role === "GUILD_LEADER") ||
+    guild.members.find((m) => m.role === "FACTION_LEADER") ||
+    null;
 
   return {
     id: guild.id,

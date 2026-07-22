@@ -7,7 +7,7 @@ import { useQuery } from "@/lib/query";
 // Prefer a "premium" representative icon for a category/slot.
 const RARITY_PREF = ["legend", "mythic", "epic", "rare", "uncommon", "common"];
 
-type IconItem = { rarity: string | null; iconUrl: string };
+type IconItem = { rarity: string | null; iconUrl: string; itemName?: string };
 
 function pickRep(items: IconItem[] | undefined, preferRarity?: string): string | null {
   if (!items || items.length === 0) return null;
@@ -22,11 +22,27 @@ function pickRep(items: IconItem[] | undefined, preferRarity?: string): string |
   return items[0]!.iconUrl;
 }
 
+// Wishlist weapon-type key → itemName matcher, so each weapon row shows ITS
+// weapon's icon instead of one shared representative. Names in the catalog
+// look like "Blue_Moonlight_Battle_Staff" / "Corrupted_Faith_Crossbow" —
+// normalize to bare letters before matching, and mind the substrings
+// ("staff" ⊂ "battlestaff", "bow" ⊂ "crossbow", "shield" ⊂ "battleshield").
+const normName = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+const WEAPON_NAME_MATCHERS: Record<string, (n: string) => boolean> = {
+  greatSword: (n) => n.includes("greatsword"),
+  battleStaff: (n) => n.includes("battlestaff"),
+  staff: (n) => n.includes("staff") && !n.includes("battlestaff"),
+  bow: (n) => n.includes("bow") && !n.includes("crossbow"),
+  swordShield: (n) => n.includes("swordandshield"),
+  crossbowBattleshield: (n) => n.includes("crossbow") || n.includes("battleshield"),
+};
+
 // Distribution slot key → equipment catalog slotType (gear icons).
 const SLOT_TO_EQUIP: Record<string, string> = {
   weapon: "weapon",
   secondWeapon: "weapon",
-  // Wishlist weapon types all resolve to the generic weapon gear icon.
+  // Wishlist weapon types resolve within the weapon slot via
+  // WEAPON_NAME_MATCHERS above (generic weapon icon as fallback).
   greatSword: "weapon",
   staff: "weapon",
   battleStaff: "weapon",
@@ -91,7 +107,7 @@ export function useGearIcons(): GearIconResolver {
   const equipBySlot = useMemo(() => {
     const m = new Map<string, IconItem[]>();
     for (const slot of equip || []) {
-      m.set(slot.slotType, slot.items.map((i) => ({ rarity: i.rarity, iconUrl: i.iconUrl })));
+      m.set(slot.slotType, slot.items.map((i) => ({ rarity: i.rarity, iconUrl: i.iconUrl, itemName: i.itemName })));
     }
     return m;
   }, [equip]);
@@ -109,7 +125,16 @@ export function useGearIcons(): GearIconResolver {
   return useMemo(() => {
     const iconForSlot = (slotKey: string): string | null => {
       const equipSlot = SLOT_TO_EQUIP[slotKey];
-      if (equipSlot) return pickRep(equipBySlot.get(equipSlot), "legend");
+      if (equipSlot) {
+        const pool = equipBySlot.get(equipSlot);
+        const matcher = WEAPON_NAME_MATCHERS[slotKey];
+        if (matcher && pool) {
+          const typed = pool.filter((i) => matcher(normName(i.itemName || "")));
+          const hit = pickRep(typed, "legend");
+          if (hit) return hit;
+        }
+        return pickRep(pool, "legend");
+      }
       const dropType = SLOT_TO_DROP_TYPE[slotKey];
       if (dropType) return pickRep(dropByType.get(dropType));
       return null;

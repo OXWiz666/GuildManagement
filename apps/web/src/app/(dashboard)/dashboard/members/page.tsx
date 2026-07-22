@@ -552,6 +552,7 @@ export default function MembersPage() {
                     }
                     customRoles={customRoles}
                     onAssignCustomRole={(customRoleId) => handleAssignCustomRole(member.id, customRoleId)}
+                    showDualLeaderBadge={!enrichedMembers.some((m) => m.role === "GUILD_LEADER")}
                   />
                 ))}
               </div>
@@ -593,6 +594,7 @@ export default function MembersPage() {
           isUpdating={isUpdating}
           onClose={() => setConfirmModal(null)}
           onConfirm={confirmRoleChange}
+          actorStepsDown={activeGuild.role === "GUILD_LEADER"}
         />
 
         {/* DISCORD STYLE STALK PROFILE CARD MODAL */}

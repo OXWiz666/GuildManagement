@@ -8,6 +8,8 @@ import {
   resolveRoleDisplayName,
   slugify,
   CUSTOMIZABLE_ROLES,
+  guildEmblemSchema,
+  type GuildEmblemConfig,
   type GuildRoleType,
 } from "@guild/shared";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
@@ -22,7 +24,10 @@ import { IAuditRepository, PrismaAuditRepository } from "../repositories/audit.r
 // Role changes invalidate the affected keys explicitly (see updateMemberRole);
 // worst-case staleness is bounded by this TTL.
 const MEMBERSHIP_CACHE_TTL = 15; // seconds
-const membershipCacheKey = (guildId: string, userId: string) =>
+// Exported so services that write member-row fields OTHER than role (e.g.
+// market.service persisting `marketWishlist`) can invalidate the cached row —
+// otherwise a read-through within the TTL re-caches the pre-write state.
+export const membershipCacheKey = (guildId: string, userId: string) =>
   `membership:${guildId}:${userId}`;
 const SELF_LEAVE_BLOCKED_ROLES = new Set(["GUILD_LEADER", "FACTION_LEADER"]);
 const ACTIVE_SUBSCRIPTION_STATES: SubscriptionStatus[] = [
@@ -75,6 +80,7 @@ export interface GuildProfile {
   isSubscribed: boolean;
   subscriptionStatus: string | null;
   planName: string | null;
+  emblem: GuildEmblemConfig | null;
 }
 
 function toGuildProfile(guild: {
@@ -82,6 +88,7 @@ function toGuildProfile(guild: {
   name: string;
   slug: string;
   nameChangeCount: number;
+  emblem?: unknown;
   subscriptions: Array<{ status: string; plan: { name: string } }>;
 }): GuildProfile {
   const activeSubscription = guild.subscriptions[0] ?? null;
@@ -99,6 +106,7 @@ function toGuildProfile(guild: {
     isSubscribed,
     subscriptionStatus: activeSubscription?.status ?? null,
     planName: activeSubscription?.plan.name ?? null,
+    emblem: (guild.emblem as GuildEmblemConfig | null) ?? null,
   };
 }
 
@@ -231,24 +239,45 @@ export class GuildService {
     const oldRole = targetMember.role;
     const oldRankName: string = targetMember.customRole?.name ?? resolveRoleDisplayName(oldRole, roleDisplayNames);
 
-    // Handle GUILD_LEADER transfer: promoting someone to GL means the actor demotes themselves
+    // Handle GUILD_LEADER assignment. A GUILD_LEADER actor is handing over
+    // their own seat (transfer: they step down to Officer). A FACTION_LEADER/
+    // ADMIN actor keeps their own role — a faction creator stays the guild's
+    // leadership too (dual role) — so the incumbent Guild Leader, if one
+    // exists, is the member who steps down instead; with no incumbent it's a
+    // plain promotion.
     if (newRole === "GUILD_LEADER") {
       if (targetMember.userId === actorId) {
         throw new ForbiddenError("You are already the Guild Leader");
       }
 
-      // Transfer: promote target to GL, demote actor to OFFICER
-      const [updatedTarget] = await this.guildRepo.transferLeadership(
-        guildId,
-        memberId,
-        actorMembership.id,
-        "GUILD_LEADER",
-        resolveRoleDisplayName("GUILD_LEADER", roleDisplayNames),
-        "OFFICER",
-        resolveRoleDisplayName("OFFICER", roleDisplayNames),
-      );
+      const incumbent =
+        actorMembership.role === "GUILD_LEADER"
+          ? actorMembership
+          : await this.guildRepo.getActiveGuildLeader(guildId);
 
-      // Audit: record both the promotion and self-demotion
+      let updatedTarget: any;
+      if (incumbent) {
+        // Transfer: promote target to GL, demote the incumbent to OFFICER
+        [updatedTarget] = await this.guildRepo.transferLeadership(
+          guildId,
+          memberId,
+          incumbent.id,
+          "GUILD_LEADER",
+          resolveRoleDisplayName("GUILD_LEADER", roleDisplayNames),
+          "OFFICER",
+          resolveRoleDisplayName("OFFICER", roleDisplayNames),
+        );
+      } else {
+        updatedTarget = await this.guildRepo.updateMemberRole(
+          memberId,
+          "GUILD_LEADER",
+          resolveRoleDisplayName("GUILD_LEADER", roleDisplayNames),
+          null,
+        );
+      }
+
+      // Audit: record the promotion, and the incumbent's demotion when a
+      // transfer actually happened.
       await this.auditRepo.create({
         actorId,
         guildId,
@@ -259,33 +288,35 @@ export class GuildService {
           oldRole,
           newRole: "GUILD_LEADER",
           displayName: targetMember.user.displayName,
-          transferredLeadership: true,
+          transferredLeadership: Boolean(incumbent),
         },
         ipAddress,
         userAgent,
       });
 
-      await this.auditRepo.create({
-        actorId,
-        guildId,
-        action: AUDIT_ACTIONS.MEMBER_DEMOTED,
-        target: "GuildMember",
-        targetId: actorId,
-        detail: {
-          oldRole: "GUILD_LEADER",
-          newRole: "OFFICER",
-          selfDemotion: true,
-          transferredTo: targetMember.user.displayName,
-        },
-        ipAddress,
-        userAgent,
-      });
+      if (incumbent) {
+        await this.auditRepo.create({
+          actorId,
+          guildId,
+          action: AUDIT_ACTIONS.MEMBER_DEMOTED,
+          target: "GuildMember",
+          targetId: incumbent.userId,
+          detail: {
+            oldRole: "GUILD_LEADER",
+            newRole: "OFFICER",
+            selfDemotion: incumbent.userId === actorId,
+            transferredTo: targetMember.user.displayName,
+          },
+          ipAddress,
+          userAgent,
+        });
+      }
 
-      // Both the promoted target and the demoted actor changed role — drop their
-      // cached membership so RBAC reflects the new roles immediately.
+      // Everyone whose role changed — drop their cached membership so RBAC
+      // reflects the new roles immediately.
       await Promise.all([
         cache.delete(membershipCacheKey(guildId, targetMember.userId)),
-        cache.delete(membershipCacheKey(guildId, actorId)),
+        ...(incumbent ? [cache.delete(membershipCacheKey(guildId, incumbent.userId))] : []),
       ]);
 
       await broadcastToGuild(guildId, "member_role_updated", {
@@ -293,11 +324,13 @@ export class GuildService {
         oldRole,
         newRole: "GUILD_LEADER",
       });
-      await broadcastToGuild(guildId, "member_role_updated", {
-        userId: actorId,
-        oldRole: "GUILD_LEADER",
-        newRole: "OFFICER",
-      });
+      if (incumbent) {
+        await broadcastToGuild(guildId, "member_role_updated", {
+          userId: incumbent.userId,
+          oldRole: "GUILD_LEADER",
+          newRole: "OFFICER",
+        });
+      }
 
       return {
         id: updatedTarget.id,
@@ -556,6 +589,59 @@ export class GuildService {
   }
 
   /**
+   * Set or clear the guild's emblem. Same leadership gate as renaming:
+   * Guild Leader, Faction Leader (dual role), or Admin.
+   */
+  async updateGuildEmblem(
+    guildId: string,
+    rawEmblem: unknown,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<GuildProfile> {
+    const actorMembership = await this.guildRepo.getMemberByUser(actorId, guildId);
+
+    if (
+      !actorMembership ||
+      !actorMembership.isActive ||
+      !["GUILD_LEADER", "FACTION_LEADER", "ADMIN"].includes(actorMembership.role)
+    ) {
+      throw new ForbiddenError("Only Guild Leaders can change the guild emblem");
+    }
+
+    let emblem: GuildEmblemConfig | null = null;
+    if (rawEmblem !== null && rawEmblem !== undefined) {
+      const parsed = guildEmblemSchema.safeParse(rawEmblem);
+      if (!parsed.success) {
+        throw new ValidationError(
+          parsed.error.issues[0]?.message || "Invalid emblem configuration",
+          parsed.error.flatten(),
+        );
+      }
+      emblem = parsed.data;
+    }
+
+    const updated = await prisma.guild.update({
+      where: { id: guildId },
+      data: { emblem: emblem === null ? Prisma.DbNull : (emblem as Prisma.InputJsonValue) },
+      include: GUILD_PROFILE_INCLUDE,
+    });
+
+    await this.auditRepo.create({
+      actorId,
+      guildId,
+      action: AUDIT_ACTIONS.GUILD_UPDATED,
+      target: "Guild",
+      targetId: guildId,
+      detail: { field: "emblem", cleared: emblem === null },
+      ipAddress,
+      userAgent,
+    });
+
+    return toGuildProfile(updated);
+  }
+
+  /**
    * Get guild settings.
    */
   async getGuildSettings(guildId: string): Promise<GuildSettings> {
@@ -733,6 +819,15 @@ export const renameGuild = (
   userAgent?: string,
 ): Promise<GuildProfile> =>
   guildService.renameGuild(guildId, name, actorId, ipAddress, userAgent);
+
+export const updateGuildEmblem = (
+  guildId: string,
+  emblem: unknown,
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+): Promise<GuildProfile> =>
+  guildService.updateGuildEmblem(guildId, emblem, actorId, ipAddress, userAgent);
 
 export const getGuildSettings = (guildId: string): Promise<GuildSettings> =>
   guildService.getGuildSettings(guildId);

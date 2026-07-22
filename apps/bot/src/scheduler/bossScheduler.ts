@@ -4,7 +4,7 @@ import type { NotificationDispatcher } from "../notifications/dispatcher.js";
 import { dedupeKeys } from "../notifications/dedupe.js";
 import { spawnEmbed, spawnWarningEmbed } from "../embeds/notifications.js";
 import { logger, errorFields } from "../utils/logger.js";
-import { pingRoleContent } from "../utils/pingRoles.js";
+import { pingRoleContent, buildSpawnCallToAction } from "../utils/pingRoles.js";
 
 /**
  * Boss spawn notifications.
@@ -113,7 +113,7 @@ export class BossScheduler {
             discordServerId: server.discordServerId,
             guildId: server.guildId,
             channelId: server.channelId,
-            content: pingRoleContent(server.pingRoleId),
+            content: buildSpawnCallToAction(spawn.bossName, server.pingRoleId),
             embeds: [
               spawnEmbed({
                 bossName: spawn.bossName,

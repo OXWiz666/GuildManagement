@@ -467,6 +467,7 @@ export function getBossImageUrl(bossName: string): string {
     "auraq":            `${BASE}/Auraq.png`,
     "icaruthia":        `${BASE}/Icaruthia.png`,
     "motti":            `${BASE}/Motti.png`,
+    "camalia":          `${BASE}/Camalia.png`,
     "nevaeh":           `${BASE}/Nevaeh.png`,
     "lucus":            `${BASE}/Lucus.png`,
   };

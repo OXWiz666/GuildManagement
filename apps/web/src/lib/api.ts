@@ -1,4 +1,6 @@
-import type { ApiResponse, PaymentMethodEntry } from "@guild/shared";
+import type { ApiResponse, PaymentMethodEntry, GuildEmblemConfig } from "@guild/shared";
+
+export type { GuildEmblemConfig };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 const JSON_CONTENT_TYPE = "application/json";
@@ -516,6 +518,7 @@ export interface GuildProfileData {
   isSubscribed: boolean;
   subscriptionStatus: string | null;
   planName: string | null;
+  emblem: GuildEmblemConfig | null;
 }
 
 export interface GuildSettingsData {
@@ -694,6 +697,10 @@ export const guildApi = {
 
   async updateProfile(guildId: string, payload: { name: string }) {
     return api.patch<{ profile: GuildProfileData }>(`/guilds/${guildId}/profile`, payload);
+  },
+
+  async updateEmblem(guildId: string, emblem: GuildEmblemConfig | null) {
+    return api.patch<{ profile: GuildProfileData }>(`/guilds/${guildId}/emblem`, { emblem });
   },
 
   async getActivityRules(guildId: string) {
@@ -1693,6 +1700,7 @@ export interface FactionOverviewGuild {
   name: string;
   slug: string;
   avatarUrl: string | null;
+  emblem: GuildEmblemConfig | null;
   memberCount: number;
   leaderName: string | null;
   isOwnGuild: boolean;
@@ -2181,6 +2189,7 @@ export interface LegendaryRequestData {
   guildId: string;
   memberId: string;
   category: string;
+  itemKey: string | null;
   currentGear: string | null;
   reason: string | null;
   prioritySeq: number | null;
@@ -2551,7 +2560,7 @@ export const marketApi = {
   // ─ Legendary priority ─
   async createLegendary(
     guildId: string,
-    payload: { category: string; currentGear?: string; reason?: string },
+    payload: { category: string; itemKey?: string; currentGear?: string; reason?: string },
   ) {
     return api.post<{ request: LegendaryRequestData }>(`/market/${guildId}/legendary`, payload);
   },

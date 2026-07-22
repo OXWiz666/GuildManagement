@@ -11,6 +11,7 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
+import GuildEmblem from "@/components/guild/GuildEmblem";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery, queryClient } from "@/lib/query";
 import AddGuildTab from "./AddGuildTab";
@@ -295,7 +296,11 @@ function GuildCard({
           onClick={() => canManage && setExpanded((v) => !v)}
           className={`flex items-center gap-3 min-w-0 text-left ${canManage ? "cursor-pointer" : "cursor-default"}`}
         >
-          <Avatar name={guild.name} src={guild.avatarUrl} size="md" />
+          {guild.emblem ? (
+            <GuildEmblem emblem={guild.emblem} name={guild.name} size={40} />
+          ) : (
+            <Avatar name={guild.name} src={guild.avatarUrl} size="md" />
+          )}
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-semibold text-white truncate">{guild.name}</p>

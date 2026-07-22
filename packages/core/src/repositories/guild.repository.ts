@@ -25,6 +25,7 @@ export interface IGuildRepository {
     actorRole: GuildRoleType,
     actorRankName: string,
   ): Promise<[any, any]>;
+  getActiveGuildLeader(guildId: string): Promise<GuildMember | null>;
   getSettings(guildId: string): Promise<GuildSettings | null>;
   updateSettings(guildId: string, data: any): Promise<GuildSettings>;
   getInviteCode(guildId: string): Promise<string | null>;
@@ -164,6 +165,12 @@ export class PrismaGuildRepository implements IGuildRepository {
         data: { role: actorRole as any, rankName: actorRankName, customRoleId: null },
       }),
     ]);
+  }
+
+  async getActiveGuildLeader(guildId: string): Promise<GuildMember | null> {
+    return prisma.guildMember.findFirst({
+      where: { guildId, role: "GUILD_LEADER", isActive: true },
+    });
   }
 
   async getSettings(guildId: string): Promise<GuildSettings | null> {

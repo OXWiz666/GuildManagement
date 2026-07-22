@@ -257,6 +257,26 @@ export type {
   ListInventoryTransactionsQueryInput,
 } from "./validators/factionInventory";
 
+// Guild Emblem validators
+export {
+  GUILD_EMBLEM_SHAPES,
+  GUILD_EMBLEM_COLORS,
+  GUILD_EMBLEM_ICONS,
+  GUILD_EMBLEM_ACCENTS,
+  GUILD_EMBLEM_BORDERS,
+  guildEmblemSchema,
+  updateGuildEmblemSchema,
+} from "./validators/emblem";
+export type {
+  GuildEmblemShape,
+  GuildEmblemColor,
+  GuildEmblemIcon,
+  GuildEmblemAccent,
+  GuildEmblemBorder,
+  GuildEmblemConfig,
+  UpdateGuildEmblemInput,
+} from "./validators/emblem";
+
 // Equipment validators (Item Screenshot Update)
 export {
   uploadScreenshotSchema,

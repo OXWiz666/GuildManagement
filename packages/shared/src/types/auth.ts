@@ -78,6 +78,9 @@ export interface GuildMembership {
   guildName: string;
   guildSlug: string;
   guildAvatarUrl: string | null;
+  // GuildEmblemConfig JSON (see validators/emblem.ts) — kept loose here to
+  // avoid a hard type dependency in every consumer.
+  guildEmblem?: object | null;
   factionId: string | null;
   factionName: string | null;
   role: string;

@@ -6,6 +6,8 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import Avatar from "../ui/Avatar";
 import Badge from "../ui/Badge";
+import GuildEmblem from "../guild/GuildEmblem";
+import type { GuildEmblemConfig } from "@guild/shared";
 import { useAuth } from "@/lib/auth-context";
 import { prefetchForRoute } from "@/lib/prefetch";
 
@@ -424,6 +426,7 @@ interface Guild {
   guildName: string;
   guildSlug: string;
   guildAvatarUrl: string | null;
+  guildEmblem?: GuildEmblemConfig | null;
   role: string;
   rankName: string;
   joinedAt: string;
@@ -457,9 +460,13 @@ function GuildSwitcher({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <div className="h-7 w-7 rounded-md bg-[var(--forge-glow)] border border-[var(--metal-border)] flex items-center justify-center text-[10px] font-semibold text-[var(--forge-gold)] shrink-0 transition-transform duration-300 group-hover:scale-[1.04]">
-          {active.guildName[0]}
-        </div>
+        {active.guildEmblem ? (
+          <GuildEmblem emblem={active.guildEmblem} name={active.guildName} size={28} className="transition-transform duration-300 group-hover:scale-[1.04]" />
+        ) : (
+          <div className="h-7 w-7 rounded-md bg-[var(--forge-glow)] border border-[var(--metal-border)] flex items-center justify-center text-[10px] font-semibold text-[var(--forge-gold)] shrink-0 transition-transform duration-300 group-hover:scale-[1.04]">
+            {active.guildName[0]}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-[12px] font-medium text-zinc-300 truncate">
             {active.guildName}
@@ -494,9 +501,13 @@ function GuildSwitcher({
               className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-colors text-left cursor-pointer
                 ${i === activeIndex ? "bg-[var(--forge-glow)] text-[var(--forge-gold-bright)]" : "text-white/50 hover:bg-white/[0.03] hover:text-white/85"}`}
             >
-              <div className="h-5 w-5 rounded bg-[var(--forge-glow)] flex items-center justify-center text-[9px] font-semibold text-[var(--forge-gold)] shrink-0">
-                {guild.guildName[0]}
-              </div>
+              {guild.guildEmblem ? (
+                <GuildEmblem emblem={guild.guildEmblem} name={guild.guildName} size={20} />
+              ) : (
+                <div className="h-5 w-5 rounded bg-[var(--forge-glow)] flex items-center justify-center text-[9px] font-semibold text-[var(--forge-gold)] shrink-0">
+                  {guild.guildName[0]}
+                </div>
+              )}
               <p className="text-[11px] truncate flex-1">{guild.guildName}</p>
               {i === activeIndex && (
                 <svg className="h-3 w-3 text-[var(--forge-gold)] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

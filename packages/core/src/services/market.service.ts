@@ -1,5 +1,6 @@
 import { prisma, Prisma } from "@guild/db";
-import { getGuildMemberByUser } from "./guild.service";
+import { getGuildMemberByUser, membershipCacheKey } from "./guild.service";
+import { cache as memoryCache } from "../lib/cache";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 import { writeAuditLog } from "./audit.service";
@@ -215,15 +216,33 @@ async function requireOfficer(guildId: string, userId: string) {
 
 // ─── Legendary Priority ──────────────────────────────────────────────
 
+// Which specific-item catalog each legendary category draws from. Categories
+// not listed here (cloak, ability books) have no per-item breakdown.
+const LEGENDARY_ITEM_CATALOGS: Record<string, Record<string, string>> = {
+  WEAPON: WEAPON_TYPES,
+  LEGEND_ACCESSORIES: ACCESSORY_PIECES,
+};
+
 export async function createLegendaryRequest(
   guildId: string,
   actorId: string,
-  payload: { category: string; currentGear?: string; reason?: string },
+  payload: { category: string; itemKey?: string; currentGear?: string; reason?: string },
 ) {
   const member = await requireActiveMember(guildId, actorId);
 
   if (!LEGENDARY_CATEGORIES.includes(payload.category as never)) {
     throw new BadRequestError("Invalid legendary category");
+  }
+
+  // A specific item is optional, but when given it must belong to the
+  // chosen category's catalog — a WEAPON request can't carry "ring".
+  let itemKey: string | null = null;
+  if (payload.itemKey) {
+    const catalog = LEGENDARY_ITEM_CATALOGS[payload.category];
+    if (!catalog || !catalog[payload.itemKey]) {
+      throw new BadRequestError("Invalid item for this category");
+    }
+    itemKey = payload.itemKey;
   }
 
   // One active (non-rejected) request per category per member
@@ -244,6 +263,7 @@ export async function createLegendaryRequest(
       guildId,
       memberId: member.id,
       category: payload.category,
+      itemKey,
       currentGear: payload.currentGear?.trim() || null,
       reason: payload.reason?.trim() || null,
       status: "PENDING",
@@ -257,7 +277,7 @@ export async function createLegendaryRequest(
     action: AUDIT_ACTIONS.LEGENDARY_PRIORITY_SUBMITTED,
     target: "LegendaryPriorityRequest",
     targetId: request.id,
-    detail: { category: payload.category, ign: member.ign },
+    detail: { category: payload.category, itemKey, ign: member.ign },
   });
 
   await notifyGuildOfficers(guildId, {
@@ -505,7 +525,15 @@ export async function createDistribution(
       targetId: target.id,
       detail: { ign: target.ign, items: wishlistFulfillment.fulfilled },
     });
-    await redisCache.del(cacheKeys.marketWishlistMaster(guildId));
+    // Same staleness trap as setWishlist: the target's cached membership row
+    // still carries the pre-fulfillment wishlist, and their "mine" view +
+    // the priority queue embed it.
+    await memoryCache.delete(membershipCacheKey(guildId, target.userId));
+    await redisCache.delMany([
+      cacheKeys.marketWishlistMaster(guildId),
+      cacheKeys.marketWishlistMine(guildId, target.userId),
+      cacheKeys.marketPriority(guildId),
+    ]);
     void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: target.id });
   }
 
@@ -749,9 +777,16 @@ export async function setWishlist(guildId: string, actorId: string, items: Wishl
     data: { marketWishlist: cleaned as object },
   });
 
+  // The membership row is read-through-cached (15s) and getMyWishlist reads
+  // `marketWishlist` FROM that cached row — without dropping it here, the
+  // client's immediate post-save refetch would rebuild from the stale row and
+  // re-cache the OLD wishlist for another 60s ("I saved but it shows empty").
+  // The priority queue embeds per-member wishlists too, so it goes as well.
+  await memoryCache.delete(membershipCacheKey(guildId, actorId));
   await redisCache.delMany([
     cacheKeys.marketWishlistMine(guildId, actorId),
     cacheKeys.marketWishlistMaster(guildId),
+    cacheKeys.marketPriority(guildId),
   ]);
   void broadcastToGuild(guildId, "market_wishlist_updated", { memberId: member.id });
   return { items: cleaned, tier, caps: wishlistCaps(rules, tier) };

@@ -55,11 +55,12 @@ function createPrismaClient(): PrismaClient {
 
   const client = new PrismaClient({
     adapter,
-    // Emit `query` as an event (not stdout) so we can measure duration and only
-    // surface the slow ones. `error`/`warn` still go to stdout.
+    // Emit both as events (not stdout) — `query` so we can measure duration
+    // and only surface the slow ones, `error` so we can filter out
+    // known-benign engine-level noise (see below) before it hits stdout.
     log: [
       { level: "query", emit: "event" },
-      { level: "error", emit: "stdout" },
+      { level: "error", emit: "event" },
       { level: "warn", emit: "stdout" },
     ],
   });
@@ -76,6 +77,24 @@ function createPrismaClient(): PrismaClient {
       } else if (isDev) {
         console.log(`[Prisma][${event.duration}ms] ${event.query}`);
       }
+    },
+  );
+
+  // Prisma's query engine logs at "error" level the instant a query fails —
+  // BEFORE the exception reaches application code, regardless of whether a
+  // caller catches it. That makes routine, intentionally-handled races (like
+  // notification_history's unique dedupe_key, used by the Discord bot to let
+  // Postgres arbitrate which of several concurrent claims wins — see
+  // apps/bot/src/repositories/notification.repository.ts) print as if they
+  // were uncaught crashes. Filter those specific, already-handled codes out;
+  // everything else still surfaces.
+  (client as unknown as { $on: (e: "error", cb: (ev: Prisma.LogEvent) => void) => void }).$on(
+    "error",
+    (event: Prisma.LogEvent) => {
+      const isHandledDedupeRace =
+        event.message.includes("Unique constraint failed") && event.message.includes("dedupe_key");
+      if (isHandledDedupeRace) return;
+      console.error(`[Prisma][error] ${event.message}`);
     },
   );
 

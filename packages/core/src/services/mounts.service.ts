@@ -1,8 +1,11 @@
 import { prisma } from "@guild/db";
-import { getGuildMemberByUser } from "./guild.service";
+import { getGuildMemberByUser, membershipCacheKey } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { createNotification } from "./notification.service";
 import { broadcastToGuild } from "../lib/socket";
+import { cache as memoryCache } from "../lib/cache";
+import { cache as redisCache } from "../lib/redis";
+import { cacheKeys } from "../lib/cache-keys";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import { AUDIT_ACTIONS, hasMinimumRole, type GuildRoleType } from "@guild/shared";
 import {
@@ -198,6 +201,15 @@ export async function distributeMount(
       where: { id: target.id },
       data: { marketWishlist: nextWishlist as object },
     });
+    // Wishlist lives on the member row, which is read-through-cached — drop
+    // the cached row plus every view that embeds the wishlist, or the target
+    // keeps seeing the mount as pending until the TTLs lapse.
+    await memoryCache.delete(membershipCacheKey(guildId, target.userId));
+    await redisCache.delMany([
+      cacheKeys.marketWishlistMine(guildId, target.userId),
+      cacheKeys.marketWishlistMaster(guildId),
+      cacheKeys.marketPriority(guildId),
+    ]);
   }
 
   await writeAuditLog({

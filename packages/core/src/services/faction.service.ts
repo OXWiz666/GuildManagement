@@ -436,7 +436,7 @@ export async function getFactionOverview(actorId: string) {
   const [guilds, activeSubscription] = await Promise.all([
     prisma.guild.findMany({
       where: { factionId, isActive: true },
-      select: { id: true, name: true, slug: true, avatarUrl: true },
+      select: { id: true, name: true, slug: true, avatarUrl: true, emblem: true },
       orderBy: { name: "asc" },
     }),
     getActiveFactionSubscription(factionId),
@@ -470,6 +470,7 @@ export async function getFactionOverview(actorId: string) {
     name: g.name,
     slug: g.slug,
     avatarUrl: g.avatarUrl,
+    emblem: (g.emblem as object | null) ?? null,
     memberCount: countMap.get(g.id) ?? 0,
     leaderName: leaderMap.get(g.id) ?? null,
     isOwnGuild: ownGuildIds.has(g.id),
@@ -738,7 +739,7 @@ function serializeJoinRequest(r: any) {
 export async function listPendingForFaction(actorId: string) {
   const { factionId } = await requireManagedFaction(actorId);
   const requests = await prisma.factionJoinRequest.findMany({
-    where: { factionId, status: FactionJoinStatus.PENDING },
+    where: { factionId, status: FactionJoinStatus.PENDING, direction: FactionJoinDirection.CODE_REDEEMED },
     include: { guild: { select: { name: true, avatarUrl: true } } },
     orderBy: { createdAt: "asc" },
   });

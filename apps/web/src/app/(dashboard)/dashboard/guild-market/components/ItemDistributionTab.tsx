@@ -263,7 +263,7 @@ export default function ItemDistributionTab({ guildId, isOfficer }: Props) {
                 view === v ? "bg-white/[0.08] text-white" : "text-white/45 hover:text-white/80"
               }`}
             >
-              {v === "queue" ? "Priority Queue" : "Master List"}
+              {v === "queue" ? "Priority Queue" : "Guild Wishlists"}
             </button>
           ))}
         </div>
@@ -615,22 +615,51 @@ function MyWishlistCard({ guildId }: { guildId: string }) {
   const refresh = () => queryClient.invalidateQueries(key);
 
   const items = (data?.items || []) as WishlistItem[];
+  const receivedCount = items.filter((w) => w.status === "DISTRIBUTED").length;
+  const pendingCount = items.length - receivedCount;
 
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-[#0c0d12]/40 backdrop-blur p-5">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div>
-          <h3 className="text-sm font-bold text-white flex items-center gap-2"><span aria-hidden>🎯</span> My wishlist</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <span aria-hidden>🎯</span> My wishlist
+            {data?.tier && <RankTierBadge tier={data.tier} />}
+          </h3>
           <p className="text-[11px] text-white/45 mt-0.5">Wish the exact gear, logs, temporal pieces &amp; materials you want. Officers see your picks when distributing.</p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => setShowModal(true)}>Edit wishlist</Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {items.length > 0 && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold">
+              <span className="rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-amber-200">{pendingCount} pending</span>
+              <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200">{receivedCount} received</span>
+            </span>
+          )}
+          <Button variant="primary" size="sm" onClick={() => setShowModal(true)}>
+            {items.length === 0 ? "Build wishlist" : "Edit wishlist"}
+          </Button>
+        </div>
       </div>
       {isLoading && items.length === 0 ? (
         <p className="text-xs text-white/40 py-2">Loading…</p>
       ) : items.length === 0 ? (
-        <p className="text-xs text-white/35 py-2 border border-dashed border-white/[0.06] rounded-xl text-center">You haven&apos;t wished for anything yet.</p>
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="w-full text-xs text-white/40 py-5 border border-dashed border-white/[0.08] rounded-xl text-center hover:border-cyan-500/30 hover:text-white/60 transition-colors cursor-pointer"
+        >
+          You haven&apos;t wished for anything yet — pick the gear and resources you want.
+        </button>
       ) : (
         <div className="space-y-3">
+          {items.length > 0 && (
+            <div className="h-1 rounded-full bg-white/[0.05] overflow-hidden" aria-hidden>
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500/70 to-emerald-400/70 transition-all"
+                style={{ width: `${items.length === 0 ? 0 : Math.round((receivedCount / items.length) * 100)}%` }}
+              />
+            </div>
+          )}
           {WISHLIST_GROUP_ORDER.map((cat) => {
             const group = items.filter((w) => w.category === cat);
             if (group.length === 0) return null;
@@ -638,10 +667,11 @@ function MyWishlistCard({ guildId }: { guildId: string }) {
               <div key={cat}>
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35 mb-1.5">
                   {WISHLIST_CATEGORY_LABELS[cat]}
+                  <span className="ml-1.5 text-white/25 font-mono normal-case tracking-normal">{group.length}</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {group.map((w) => (
-                    <WishChip key={keyOf(w)} item={w} iconSrc={gearIcons.iconForSlot(w.key)} />
+                    <WishChip key={keyOf(w)} item={w} iconSrc={gearIcons.iconForSlot(w.key)} distributed={w.status === "DISTRIBUTED"} />
                   ))}
                 </div>
               </div>
@@ -743,14 +773,15 @@ function WishlistModal({
     });
   };
 
-  const setQty = (category: WishlistItem["category"], key: string, cap: number, value: string) => {
+  // Resources are toggles, not free inputs: the quantity is the member's
+  // tier allowance from the guild's Distribution Rules (caps), so a member
+  // just picks WHAT they want — how many comes from their rank.
+  const toggleResource = (category: WishlistItem["category"], key: string, cap: number) => {
     const id = `${category}:${key}`;
-    const raw = parseInt(value, 10);
-    const qty = isNaN(raw) ? 0 : Math.max(0, Math.min(raw, cap));
     setSelected((prev) => {
       const next = { ...prev };
-      if (qty <= 0) delete next[id];
-      else next[id] = { category, key, quantity: qty };
+      if (next[id]) delete next[id];
+      else if (cap > 0) next[id] = { category, key, quantity: cap };
       return next;
     });
   };
@@ -779,128 +810,252 @@ function WishlistModal({
 
   const selectedCount = Object.keys(selected).length;
 
+  // ── Filters ──
+  const [filter, setFilter] = useState<WishFilterTab>("ALL");
+  const [search, setSearch] = useState("");
+  const [selectedOnly, setSelectedOnly] = useState(false);
+
+  const q = search.trim().toLowerCase();
+  const matches = (label: string) => q === "" || label.toLowerCase().includes(q);
+  const showTab = (tab: Exclude<WishFilterTab, "ALL">) => filter === "ALL" || filter === tab;
+  const passes = (label: string, id: string) => matches(label) && (!selectedOnly || !!selected[id]);
+
+  const countIn = (cat: WishlistCategory) => Object.values(selected).filter((i) => i.category === cat).length;
+  const tabCounts: Record<Exclude<WishFilterTab, "ALL">, number> = {
+    WEAPON: countIn("WEAPON"),
+    ARMOR: countIn("ARMOR"),
+    ACCESSORY: countIn("ACCESSORY"),
+    RESOURCES: countIn("LOGS") + countIn("TEMPORAL") + countIn("MATERIALS"),
+    MOUNT: countIn("MOUNT"),
+  };
+
+  const weaponRows = Object.entries(WEAPON_TYPES).filter(([key, label]) => passes(label, `WEAPON:${key}`));
+  const armorRows = Object.entries(ARMOR_PIECES).filter(([key, label]) => passes(label, `ARMOR:${key}`));
+  const accessoryRows = Object.entries(ACCESSORY_PIECES).filter(([key, label]) => passes(label, `ACCESSORY:${key}`));
+  const materialRows = Object.entries(MATERIAL_TYPES).filter(([key, label]) => passes(label, `MATERIALS:${key}`));
+  const showLogs = passes("Logs", "LOGS:logs");
+  const showTemporal = passes("Temporal Pieces", "TEMPORAL:temporalPieces");
+  const mountRows = mounts.filter((m) => passes(m.name, `MOUNT:${m.id}`));
+
+  const nothingVisible =
+    (!showTab("WEAPON") || weaponRows.length === 0) &&
+    (!showTab("ARMOR") || armorRows.length === 0) &&
+    (!showTab("ACCESSORY") || accessoryRows.length === 0) &&
+    (!showTab("RESOURCES") || (!showLogs && !showTemporal && materialRows.length === 0)) &&
+    (!showTab("MOUNT") || mountRows.length === 0);
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => !isSaving && onClose()} />
-      <div className="relative glass-strong w-full max-w-2xl rounded-3xl border border-white/[0.08] animate-scale-in z-50 overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="relative glass-strong w-full max-w-3xl rounded-3xl border border-white/[0.08] animate-scale-in z-50 overflow-hidden max-h-[90vh] flex flex-col">
         <div aria-hidden className="absolute top-0 inset-x-0 h-24 pointer-events-none bg-gradient-to-b from-cyan-500/[0.06] to-transparent" />
-        <div className="relative z-10 p-6 pb-4 shrink-0">
-          <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">Member Wishlist</p>
-          <h3 className="text-lg font-extrabold text-white tracking-tight mt-1 flex items-center gap-2">
-            Build your wishlist <RankTierBadge tier={tier} />
-          </h3>
-          <p className="text-xs text-white/50 mt-1">Pick a rarity for each gear piece, and a quantity for logs / temporal pieces / materials.</p>
-        </div>
 
-        <div className="relative z-10 overflow-y-auto px-6 flex-1 space-y-5 pb-4">
-          {/* Weapons */}
-          <WishSection title="Weapon" hint="Legend / Epic">
-            {Object.entries(WEAPON_TYPES).map(([key, label]) => (
-              <GearRow
-                key={key}
-                label={label}
-                iconSrc={gearIcons.iconForSlot(key)}
-                rarities={WEAPON_RARITIES}
-                active={selected[`WEAPON:${key}`]?.rarity ?? null}
-                onSet={(r) => setGear("WEAPON", key, r)}
-              />
-            ))}
-          </WishSection>
+        {/* Header */}
+        <div className="relative z-10 px-6 pt-6 pb-3 shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">Member Wishlist</p>
+              <h3 className="text-lg font-extrabold text-white tracking-tight mt-1 flex items-center gap-2">
+                Build your wishlist <RankTierBadge tier={tier} />
+              </h3>
+              <p className="text-xs text-white/50 mt-1">
+                Pick a rarity for each gear piece. Resource quantities are set automatically by your rank&apos;s distribution rules.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className="h-8 w-8 shrink-0 rounded-lg hover:bg-white/[0.06] text-white/50 hover:text-white transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
 
-          {/* Armor */}
-          <WishSection title="Armor" hint="Legend / Epic / Mythic · Cloth / Leather / Plate">
-            {Object.entries(ARMOR_PIECES).map(([key, label]) => (
-              <GearRow
-                key={key}
-                label={label}
-                iconSrc={gearIcons.iconForSlot(key)}
-                rarities={GEAR_RARITIES}
-                active={selected[`ARMOR:${key}`]?.rarity ?? null}
-                onSet={(r) => setGear("ARMOR", key, r)}
-                armorTypeActive={selected[`ARMOR:${key}`]?.armorType ?? null}
-                onSetArmorType={(t) => setArmorType(key, t)}
-              />
-            ))}
-          </WishSection>
-
-          {/* Accessories */}
-          <WishSection title="Accessories" hint="Legend / Epic / Mythic">
-            {Object.entries(ACCESSORY_PIECES).map(([key, label]) => (
-              <GearRow
-                key={key}
-                label={label}
-                iconSrc={gearIcons.iconForSlot(key)}
-                rarities={GEAR_RARITIES}
-                active={selected[`ACCESSORY:${key}`]?.rarity ?? null}
-                onSet={(r) => setGear("ACCESSORY", key, r)}
-              />
-            ))}
-          </WishSection>
-
-          {/* Resources */}
-          <WishSection title="Logs & Temporal Pieces" hint="Quantity">
-            <QtyRow
-              label="Logs"
-              iconSrc={gearIcons.iconForSlot("logs")}
-              cap={caps.logs}
-              value={(selected["LOGS:logs"]?.quantity as number) ?? 0}
-              onChange={(v) => setQty("LOGS", "logs", caps.logs, v)}
-            />
-            <QtyRow
-              label="Temporal Pieces"
-              iconSrc={gearIcons.iconForSlot("temporalPieces")}
-              cap={caps.temporalPieces}
-              value={(selected["TEMPORAL:temporalPieces"]?.quantity as number) ?? 0}
-              onChange={(v) => setQty("TEMPORAL", "temporalPieces", caps.temporalPieces, v)}
-            />
-          </WishSection>
-
-          {/* Materials */}
-          <WishSection title="Materials" hint={`Quantity · max ${caps.materials} each`}>
-            {Object.entries(MATERIAL_TYPES).map(([key, label]) => (
-              <QtyRow
-                key={key}
-                label={label}
-                iconSrc={gearIcons.iconForSlot(key)}
-                cap={caps.materials}
-                value={(selected[`MATERIALS:${key}`]?.quantity as number) ?? 0}
-                onChange={(v) => setQty("MATERIALS", key, caps.materials, v)}
-              />
-            ))}
-          </WishSection>
-
-          {/* Mounts — leader-defined catalog */}
-          {mounts.length > 0 && (
-            <WishSection title="Mounts" hint="Set by your guild leader">
-              {mounts.map((mount) => {
-                const on = !!selected[`MOUNT:${mount.id}`];
-                const soldOut = mount.remaining <= 0;
+          {/* Filter bar */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/[0.07] bg-black/25 p-1">
+              {WISH_FILTER_TABS.map((tab) => {
+                const active = filter === tab.value;
+                const count = tab.value === "ALL" ? selectedCount : tabCounts[tab.value];
                 return (
                   <button
+                    key={tab.value}
                     type="button"
-                    key={mount.id}
-                    onClick={() => (!soldOut || on) && toggleMount(mount)}
-                    disabled={soldOut && !on}
-                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
-                      on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02]"
+                    onClick={() => setFilter(tab.value)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                      active ? "bg-cyan-500/15 text-cyan-200 border border-cyan-500/30" : "text-white/45 hover:text-white/80 border border-transparent"
                     }`}
                   >
-                    <span className="flex items-center gap-2 min-w-0">
-                      <GearIcon src={mount.iconUrl} size={22} />
-                      <span className={`truncate text-xs font-medium ${on ? "text-white" : "text-white/60"}`}>{mount.name}</span>
-                    </span>
-                    <span className="text-[10px] text-white/40 shrink-0">
-                      {mount.remaining}/{mount.maxSlots} slots
-                    </span>
+                    {tab.label}
+                    {count > 0 && (
+                      <span className={`ml-1.5 rounded px-1 text-[9px] font-mono ${active ? "bg-cyan-400/20 text-cyan-100" : "bg-white/[0.07] text-white/50"}`}>
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
+            </div>
+            <div className="relative flex-1 min-w-[140px]">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search items…"
+                className="w-full rounded-xl border border-white/[0.07] bg-black/25 pl-8 pr-3 py-2 text-xs text-white placeholder:text-white/25 focus:border-cyan-500/40 focus:outline-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedOnly((v) => !v)}
+              className={`px-2.5 py-2 rounded-xl text-[11px] font-semibold border transition-all cursor-pointer shrink-0 ${
+                selectedOnly ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200" : "border-white/[0.07] bg-black/25 text-white/45 hover:text-white/80"
+              }`}
+            >
+              Selected only
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="relative z-10 overflow-y-auto px-6 flex-1 space-y-5 py-4 border-t border-white/[0.05]">
+          {showTab("WEAPON") && weaponRows.length > 0 && (
+            <WishSection title="Weapon" hint="Legend / Epic">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                {weaponRows.map(([key, label]) => (
+                  <GearRow
+                    key={key}
+                    label={label}
+                    iconSrc={gearIcons.iconForSlot(key)}
+                    rarities={WEAPON_RARITIES}
+                    active={selected[`WEAPON:${key}`]?.rarity ?? null}
+                    onSet={(r) => setGear("WEAPON", key, r)}
+                  />
+                ))}
+              </div>
             </WishSection>
+          )}
+
+          {showTab("ARMOR") && armorRows.length > 0 && (
+            <WishSection title="Armor" hint="Legend / Epic / Mythic · Cloth / Leather / Plate">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                {armorRows.map(([key, label]) => (
+                  <GearRow
+                    key={key}
+                    label={label}
+                    iconSrc={gearIcons.iconForSlot(key)}
+                    rarities={GEAR_RARITIES}
+                    active={selected[`ARMOR:${key}`]?.rarity ?? null}
+                    onSet={(r) => setGear("ARMOR", key, r)}
+                    armorTypeActive={selected[`ARMOR:${key}`]?.armorType ?? null}
+                    onSetArmorType={(t) => setArmorType(key, t)}
+                  />
+                ))}
+              </div>
+            </WishSection>
+          )}
+
+          {showTab("ACCESSORY") && accessoryRows.length > 0 && (
+            <WishSection title="Accessories" hint="Legend / Epic / Mythic">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                {accessoryRows.map(([key, label]) => (
+                  <GearRow
+                    key={key}
+                    label={label}
+                    iconSrc={gearIcons.iconForSlot(key)}
+                    rarities={GEAR_RARITIES}
+                    active={selected[`ACCESSORY:${key}`]?.rarity ?? null}
+                    onSet={(r) => setGear("ACCESSORY", key, r)}
+                  />
+                ))}
+              </div>
+            </WishSection>
+          )}
+
+          {showTab("RESOURCES") && (showLogs || showTemporal || materialRows.length > 0) && (
+            <WishSection
+              title="Resources"
+              hint="Quantities follow your rank's distribution rules"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                {showLogs && (
+                  <ResourceRow
+                    label="Logs"
+                    iconSrc={gearIcons.iconForSlot("logs")}
+                    allowance={caps.logs}
+                    on={!!selected["LOGS:logs"]}
+                    onToggle={() => toggleResource("LOGS", "logs", caps.logs)}
+                  />
+                )}
+                {showTemporal && (
+                  <ResourceRow
+                    label="Temporal Pieces"
+                    iconSrc={gearIcons.iconForSlot("temporalPieces")}
+                    allowance={caps.temporalPieces}
+                    on={!!selected["TEMPORAL:temporalPieces"]}
+                    onToggle={() => toggleResource("TEMPORAL", "temporalPieces", caps.temporalPieces)}
+                  />
+                )}
+                {materialRows.map(([key, label]) => (
+                  <ResourceRow
+                    key={key}
+                    label={label}
+                    iconSrc={gearIcons.iconForSlot(key)}
+                    allowance={caps.materials}
+                    on={!!selected[`MATERIALS:${key}`]}
+                    onToggle={() => toggleResource("MATERIALS", key, caps.materials)}
+                  />
+                ))}
+              </div>
+            </WishSection>
+          )}
+
+          {showTab("MOUNT") && mountRows.length > 0 && (
+            <WishSection title="Mounts" hint="Set by your guild leader">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                {mountRows.map((mount) => {
+                  const on = !!selected[`MOUNT:${mount.id}`];
+                  const soldOut = mount.remaining <= 0;
+                  return (
+                    <button
+                      type="button"
+                      key={mount.id}
+                      onClick={() => (!soldOut || on) && toggleMount(mount)}
+                      disabled={soldOut && !on}
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+                        on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02]"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <GearIcon src={mount.iconUrl} size={22} />
+                        <span className={`truncate text-xs font-medium ${on ? "text-white" : "text-white/60"}`}>{mount.name}</span>
+                      </span>
+                      <span className="text-[10px] text-white/40 shrink-0">
+                        {mount.remaining}/{mount.maxSlots} slots
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </WishSection>
+          )}
+
+          {nothingVisible && (
+            <p className="text-xs text-white/35 py-8 text-center border border-dashed border-white/[0.06] rounded-xl">
+              {selectedOnly ? "Nothing selected matches this view." : "No items match your search."}
+            </p>
           )}
         </div>
 
+        {/* Footer */}
         <div className="relative z-10 flex items-center justify-between gap-3 border-t border-white/[0.06] px-6 py-4 shrink-0">
-          <span className="text-[11px] text-white/40">{selectedCount} item{selectedCount === 1 ? "" : "s"} wished</span>
+          <span className="text-[11px] text-white/40">
+            <span className="font-bold text-white/70">{selectedCount}</span> item{selectedCount === 1 ? "" : "s"} wished
+          </span>
           <div className="flex gap-3">
             <Button variant="ghost" size="sm" onClick={onClose} disabled={isSaving} className="text-xs uppercase font-bold text-white/60">Cancel</Button>
             <Button variant="primary" size="sm" onClick={save} isLoading={isSaving} className="text-xs uppercase font-bold min-w-[120px]">Save wishlist</Button>
@@ -914,6 +1069,16 @@ function WishlistModal({
 
 // ─── Wishlist builder building blocks ─────────────────────────────────
 
+type WishFilterTab = "ALL" | "WEAPON" | "ARMOR" | "ACCESSORY" | "RESOURCES" | "MOUNT";
+const WISH_FILTER_TABS: Array<{ value: WishFilterTab; label: string }> = [
+  { value: "ALL", label: "All" },
+  { value: "WEAPON", label: "Weapons" },
+  { value: "ARMOR", label: "Armor" },
+  { value: "ACCESSORY", label: "Accessories" },
+  { value: "RESOURCES", label: "Resources" },
+  { value: "MOUNT", label: "Mounts" },
+];
+
 function WishSection({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
@@ -921,7 +1086,7 @@ function WishSection({ title, hint, children }: { title: string; hint?: string; 
         <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/55">{title}</h4>
         {hint && <span className="text-[10px] text-white/30">{hint}</span>}
       </div>
-      <div className="space-y-1.5">{children}</div>
+      {children}
     </div>
   );
 }
@@ -999,41 +1164,61 @@ function GearRow({
   );
 }
 
-function QtyRow({
+/**
+ * A resource wish is a toggle, not a quantity input — the amount a member
+ * receives is their rank's allowance from the guild's Distribution Rules.
+ * An allowance of 0 means the leader hasn't granted this tier any, so the
+ * row is shown disabled rather than hidden (members see WHY it's off-limits).
+ */
+function ResourceRow({
   label,
   iconSrc,
-  cap,
-  value,
-  onChange,
+  allowance,
+  on,
+  onToggle,
 }: {
   label: string;
   iconSrc: string | null;
-  cap: number;
-  value: number;
-  onChange: (value: string) => void;
+  allowance: number;
+  on: boolean;
+  onToggle: () => void;
 }) {
-  const on = value > 0;
+  const unavailable = allowance <= 0 && !on;
   return (
-    <div
-      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all ${
-        on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02]"
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={unavailable}
+      className={`flex w-full items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 ${
+        on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16]"
       }`}
     >
       <span className="flex items-center gap-2 min-w-0">
         <GearIcon src={iconSrc} size={22} />
         <span className={`truncate text-xs font-medium ${on ? "text-white" : "text-white/60"}`}>{label}</span>
-        <span className="text-[10px] text-white/30 shrink-0">max {cap}</span>
       </span>
-      <input
-        type="number"
-        min={0}
-        max={cap}
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="0"
-        className="w-16 shrink-0 rounded-lg border border-white/[0.1] bg-black/30 px-2 py-1 text-right text-xs text-white focus:border-cyan-500/50 focus:outline-none"
-      />
-    </div>
+      <span className="flex items-center gap-1.5 shrink-0">
+        {unavailable ? (
+          <span className="text-[9px] uppercase tracking-wide text-white/30">Not for your rank</span>
+        ) : (
+          <span
+            className={`rounded-md border px-1.5 py-0.5 text-[10px] font-mono font-bold ${
+              on ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200" : "border-white/[0.08] bg-white/[0.03] text-white/45"
+            }`}
+          >
+            ×{allowance}
+          </span>
+        )}
+        <span
+          aria-hidden
+          className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
+            on ? "border-cyan-400/60 bg-cyan-500/25 text-cyan-100" : "border-white/[0.14] text-transparent"
+          }`}
+        >
+          ✓
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -1240,15 +1425,44 @@ function WishlistDetailModal({
     }
   }
 
+  const receivedCount = items.filter((w) => w.status === "DISTRIBUTED").length;
+  const progressPct = items.length === 0 ? 0 : Math.round((receivedCount / items.length) * 100);
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={onClose} />
       <div className="relative glass-strong w-full max-w-lg rounded-3xl border border-white/[0.08] animate-scale-in z-50 overflow-hidden max-h-[90vh] flex flex-col">
         <div className="relative z-10 p-6 pb-4 shrink-0 border-b border-white/[0.06]">
-          <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">Member Wishlist</p>
-          <h3 className="text-lg font-extrabold text-white tracking-tight mt-1 flex items-center gap-2">
-            {member.ign} <RankTierBadge tier={member.tier} />
-          </h3>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-[0.24em]">Member Wishlist</p>
+              <h3 className="text-lg font-extrabold text-white tracking-tight mt-1 flex items-center gap-2">
+                {member.ign} <RankTierBadge tier={member.tier} />
+              </h3>
+              <p className="text-[11px] text-white/40 mt-0.5">{member.rankName}</p>
+            </div>
+            <div className="flex items-center gap-4 shrink-0 text-right">
+              <div>
+                <p className="text-[9px] uppercase tracking-wider text-white/30">CP</p>
+                <p className="text-xs font-mono font-semibold text-white/80">{member.cp.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase tracking-wider text-white/30">Points</p>
+                <p className="text-xs font-mono font-semibold text-white/80">{member.dkp.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+          {items.length > 0 && (
+            <div className="mt-3 flex items-center gap-2.5">
+              <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500/70 to-emerald-400/70 transition-all"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-mono text-white/45 shrink-0">{receivedCount}/{items.length} received</span>
+            </div>
+          )}
         </div>
         <div className="relative z-10 overflow-y-auto px-6 py-4 flex-1 space-y-4">
           {items.length === 0 ? (
@@ -1261,6 +1475,7 @@ function WishlistDetailModal({
                 <div key={cat}>
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35 mb-1.5">
                     {WISHLIST_CATEGORY_LABELS[cat]}
+                    <span className="ml-1.5 text-white/25 font-mono normal-case tracking-normal">{group.length}</span>
                   </p>
                   <div className="space-y-2">
                     {group.map((w) => {
@@ -1268,9 +1483,13 @@ function WishlistDetailModal({
                       return (
                         <div
                           key={keyOf(w)}
-                          className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                          className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 transition-colors ${
+                            status === "DISTRIBUTED"
+                              ? "border-emerald-500/15 bg-emerald-500/[0.03]"
+                              : "border-white/[0.06] bg-white/[0.02]"
+                          }`}
                         >
-                          <WishChip item={w} iconSrc={gearIcons.iconForSlot(w.key)} />
+                          <WishChip item={w} iconSrc={gearIcons.iconForSlot(w.key)} distributed={status === "DISTRIBUTED"} />
                           <span className="flex items-center gap-2 shrink-0">
                             <ItemStatusPill status={status} />
                             {isOfficer && w.category === "MOUNT" && status === "PENDING" && (

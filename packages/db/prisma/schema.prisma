@@ -503,6 +503,10 @@ model Guild {
   description String?
   avatarUrl   String?  @map("avatar_url")
   bannerUrl   String?  @map("banner_url")
+  // Customizable guild emblem (shape/color/icon/accent/border/banner config
+  // rendered as SVG client-side — see guildEmblemSchema in @guild/shared).
+  // Shown in place of the avatar wherever the guild is displayed.
+  emblem      Json?    @map("emblem")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -846,6 +850,8 @@ model LegendaryPriorityRequest {
 
   // WEAPON | LEGEND_ACCESSORIES | LEGEND_CLOAK | ABILITY_REROLL | ABILITY_PASSIVE
   category    String
+  // Optional specific item within the category (WEAPON_TYPES / ACCESSORY_PIECES key)
+  itemKey     String? @map("item_key")
   currentGear String? @map("current_gear") // Current gear status / context
   reason      String? // Reason for priority
   prioritySeq Int?    @map("priority_seq") // Officer-assigned sequence

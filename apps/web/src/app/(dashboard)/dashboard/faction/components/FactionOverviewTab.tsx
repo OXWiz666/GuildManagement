@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   factionApi,
@@ -14,6 +14,8 @@ import Avatar from "@/components/ui/Avatar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery, queryClient } from "@/lib/query";
 import AddGuildTab from "./AddGuildTab";
+
+const EMPTY_MEMBERS: FactionMemberData[] = [];
 
 /**
  * Faction Overview — a one-stop snapshot of the faction the active guild
@@ -50,6 +52,20 @@ export default function FactionOverviewTab({
     { persist: true, staleTime: 30000 },
   );
   const members = membersRaw || [];
+
+  // Grouped once per members-list change instead of re-filtering the full
+  // roster for every rendered GuildCard on every render.
+  const membersByGuildId = useMemo(() => {
+    const map = new Map<string, FactionMemberData[]>();
+    for (const m of members) {
+      const guildId = m.guild?.id;
+      if (!guildId) continue;
+      const list = map.get(guildId);
+      if (list) list.push(m);
+      else map.set(guildId, [m]);
+    }
+    return map;
+  }, [members]);
 
   if (isLoading) {
     return (
@@ -98,7 +114,7 @@ export default function FactionOverviewTab({
               guild={guild}
               canManage={canManage}
               canLeaveFaction={canLeaveFaction}
-              members={members.filter((m) => m.guild?.id === guild.id)}
+              members={membersByGuildId.get(guild.id) ?? EMPTY_MEMBERS}
               onOwnGuildLeft={refreshUser}
             />
           ))}
@@ -111,7 +127,7 @@ export default function FactionOverviewTab({
           <div className="px-1">
             <h3 className="text-sm font-semibold text-white/80">Grow the faction</h3>
             <p className="text-[11px] text-white/40 mt-0.5">
-              Invite an unaffiliated guild directly, or share your faction code for a Guild Leader to redeem.
+              Share your faction invite code with a Guild Leader — there's no search, only invite-code redemption.
             </p>
           </div>
           <AddGuildTab />

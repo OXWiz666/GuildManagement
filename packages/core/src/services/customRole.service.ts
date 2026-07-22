@@ -72,16 +72,18 @@ export async function createCustomRole(
     throw new BadRequestError("Role band must be one of OFFICER, CORE_MEMBER, ELITE_MEMBER, MEMBER");
   }
 
-  const existing = await prisma.guildRoleDefinition.findFirst({ where: { guildId, name } });
+  // Independent reads — neither depends on the other's result.
+  const [existing, last] = await Promise.all([
+    prisma.guildRoleDefinition.findFirst({ where: { guildId, name } }),
+    prisma.guildRoleDefinition.findFirst({
+      where: { guildId },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true },
+    }),
+  ]);
   if (existing) {
     throw new BadRequestError("A role with that name already exists");
   }
-
-  const last = await prisma.guildRoleDefinition.findFirst({
-    where: { guildId },
-    orderBy: { sortOrder: "desc" },
-    select: { sortOrder: true },
-  });
 
   const definition = await prisma.guildRoleDefinition.create({
     data: {

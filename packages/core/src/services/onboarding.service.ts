@@ -110,7 +110,7 @@ export async function createOrgForUser(
         settings: {
           create: {
             rankMultipliers: DEFAULT_RANK_MULTIPLIERS,
-            marketRules: DEFAULT_MARKET_RULES,
+            marketRules: DEFAULT_MARKET_RULES as object,
             activeShareModel: "EQUAL",
           },
         },

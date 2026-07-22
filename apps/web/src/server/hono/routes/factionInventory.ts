@@ -64,6 +64,7 @@ export const factionInventory = new Hono<AppEnv>()
       userAgent,
     );
     await cache.invalidatePattern("faction-inventory-items:*");
+    await cache.invalidatePattern("faction-inventory-transactions:*");
     return ok(c, result);
   })
   .post("/items/:itemId/contribution", requireAuth, zBody(recordAdditionSchema), async (c) => {
@@ -82,6 +83,7 @@ export const factionInventory = new Hono<AppEnv>()
       userAgent,
     );
     await cache.invalidatePattern("faction-inventory-items:*");
+    await cache.invalidatePattern("faction-inventory-transactions:*");
     return ok(c, result);
   })
   .post("/items/:itemId/adjust", requireAuth, zBody(adjustQuantitySchema), async (c) => {
@@ -96,34 +98,46 @@ export const factionInventory = new Hono<AppEnv>()
       userAgent,
     );
     await cache.invalidatePattern("faction-inventory-items:*");
+    await cache.invalidatePattern("faction-inventory-transactions:*");
     return ok(c, result);
   })
 
   // ─── Transactions (ledger) ──────────────────────────────────────
   .get("/transactions", requireAuth, async (c) => {
-    const result = await services.factionInventory.listInventoryTransactions(c.get("user").userId, {
+    const userId = c.get("user").userId;
+    const filters = {
       itemId: c.req.query("itemId") || undefined,
       transactionType: c.req.query("transactionType") || undefined,
       from: c.req.query("from") || undefined,
       to: c.req.query("to") || undefined,
       page: c.req.query("page") ? Number(c.req.query("page")) : undefined,
       pageSize: c.req.query("pageSize") ? Number(c.req.query("pageSize")) : undefined,
-    });
+    };
+    const cacheKey = `faction-inventory-transactions:${userId}:${JSON.stringify(filters)}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, cached);
+    const result = await services.factionInventory.listInventoryTransactions(userId, filters);
+    await cache.set(cacheKey, result, 15);
     return ok(c, result);
   })
 
   // ─── Requests (guild asking the faction pool for items) ─────────
   .get("/requests", requireAuth, async (c) => {
-    const requests = await services.factionInventory.listInventoryRequests(c.get("user").userId, {
-      mine: c.req.query("mine") === "true",
-      guildId: c.req.query("guildId") || undefined,
-    });
+    const userId = c.get("user").userId;
+    const mine = c.req.query("mine") === "true";
+    const guildId = c.req.query("guildId") || undefined;
+    const cacheKey = `faction-inventory-requests:${userId}:${mine}:${guildId ?? ""}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { requests: cached });
+    const requests = await services.factionInventory.listInventoryRequests(userId, { mine, guildId });
+    await cache.set(cacheKey, requests, 15);
     return ok(c, { requests });
   })
   .post("/requests", requireAuth, zBody(submitInventoryRequestSchema), async (c) => {
     const { guildId, ...payload } = c.req.valid("json");
     const { ipAddress, userAgent } = getClientInfo(c);
     const request = await services.factionInventory.submitInventoryRequest(c.get("user").userId, guildId, payload, ipAddress, userAgent);
+    await cache.invalidatePattern("faction-inventory-requests:*");
     return ok(c, { request }, 201);
   })
   .post("/requests/:id/review", requireAuth, zBody(reviewInventoryRequestSchema), async (c) => {
@@ -138,17 +152,20 @@ export const factionInventory = new Hono<AppEnv>()
       userAgent,
     );
     await cache.invalidatePattern("faction-inventory-items:*");
+    await cache.invalidatePattern("faction-inventory-requests:*");
     return ok(c, { request });
   })
   .post("/requests/:id/distribute", requireAuth, async (c) => {
     const { ipAddress, userAgent } = getClientInfo(c);
     const request = await services.factionInventory.distributeInventoryRequest(c.get("user").userId, c.req.param("id"), ipAddress, userAgent);
     await cache.invalidatePattern("faction-inventory-items:*");
+    await cache.invalidatePattern("faction-inventory-requests:*");
+    await cache.invalidatePattern("faction-inventory-transactions:*");
     return ok(c, { request });
   })
   .post("/requests/:id/cancel", requireAuth, async (c) => {
     const { ipAddress, userAgent } = getClientInfo(c);
     const request = await services.factionInventory.cancelInventoryRequest(c.get("user").userId, c.req.param("id"), ipAddress, userAgent);
-    await cache.invalidatePattern("faction-inventory-items:*");
+    await cache.invalidatePattern("faction-inventory-requests:*");
     return ok(c, { request });
   });

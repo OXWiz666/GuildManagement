@@ -99,7 +99,9 @@ export default function MarketNav({
                 key={tab.value}
                 onClick={() => onChange(tab.value)}
                 aria-current={isActive ? "page" : undefined}
-                className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold transition-all duration-300 cursor-pointer ${
+                className={`group relative flex shrink-0 items-center justify-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold transition-all duration-300 cursor-pointer ${
+                  tab.value === "rankings" ? "min-w-[132px] px-4" : ""
+                } ${
                   isActive
                     ? "bg-white/[0.07] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                     : "text-white/45 hover:text-white/85 hover:bg-white/[0.03]"

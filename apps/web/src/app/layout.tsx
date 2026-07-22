@@ -25,9 +25,51 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const SITE_URL = "https://forgekeep.io";
+const SITE_TITLE = "ForgeKeep — Guild Command Center for MMORPG Guilds";
+const SITE_DESCRIPTION =
+  "Live boss spawn timers, tamper-proof attendance verification, and an audited guild treasury — the command center competitive MMORPG guilds run on. Track boss rotations, guild points, and DKP loot distribution in one place.";
+
 export const metadata: Metadata = {
-  title: "ForgeKeep",
-  description: "Manage your gaming guild.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_TITLE,
+    template: "%s | ForgeKeep",
+  },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "guild management software",
+    "MMORPG guild manager",
+    "boss spawn timer tracker",
+    "guild attendance tracker",
+    "DKP loot distribution",
+    "guild treasury ledger",
+    "raid attendance verification",
+    "Discord guild bot",
+  ],
+  applicationName: "ForgeKeep",
+  authors: [{ name: "ForgeKeep" }],
+  category: "Gaming",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "ForgeKeep",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
   icons: {
     icon: "/icon.png",
   },

@@ -79,6 +79,23 @@ const envSchema = z.object({
   // OCR is CPU-heavy and serialized behind one worker — budgeted separately and
   // far more tightly, or one member could starve the whole guild's scans.
   RATE_LIMIT_SCANS_PER_HOUR: z.coerce.number().int().positive().default(10),
+
+  // ─── Public API (read-only, API-key auth) ──────
+  // Off by default — this is a separate surface for external tools/scripts,
+  // deliberately not exposed anywhere in the website or its docs. Enabling it
+  // just runs a small HTTP server alongside the Discord gateway in this same
+  // process; nothing here is wired into apps/web.
+  PUBLIC_API_ENABLED: z
+    .preprocess((v) => (v === "false" || v === "0" ? false : v === "true" || v === "1" ? true : v), z.boolean())
+    .default(false),
+  // Bearer token external callers must send. Required only when the API is
+  // enabled (checked below) — there is deliberately no per-guild key
+  // management UI; this is one shared secret for whoever you hand it to.
+  PUBLIC_API_KEY: z.string().min(16, "PUBLIC_API_KEY must be at least 16 characters").optional(),
+  // Railway/Fly inject PORT for services that should be reachable; this is the
+  // fallback for running it standalone (e.g. locally).
+  PUBLIC_API_PORT: z.coerce.number().int().positive().default(8080),
+  RATE_LIMIT_API_PER_MIN: z.coerce.number().int().positive().default(60),
 });
 
 function validateEnv() {
@@ -89,6 +106,13 @@ function validateEnv() {
     const formatted = JSON.stringify(result.error.format(), null, 2);
     throw new Error(`Invalid bot environment variables:\n${formatted}`);
   }
+
+  if (result.data.PUBLIC_API_ENABLED && !result.data.PUBLIC_API_KEY) {
+    throw new Error(
+      "Invalid bot environment variables:\nPUBLIC_API_ENABLED=true requires PUBLIC_API_KEY to be set.",
+    );
+  }
+
   return result.data;
 }
 

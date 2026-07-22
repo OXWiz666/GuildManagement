@@ -2,6 +2,8 @@ import { prisma } from "@guild/db";
 import { getGuildMemberByUser } from "./guild.service";
 import { writeAuditLog } from "./audit.service";
 import { getEffectiveActivityPointRules } from "./activityPoints.service";
+import { cache as redisCache } from "../lib/redis";
+import { cacheKeys, ttl as cacheTtl } from "../lib/cache-keys";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../utils/errors";
 
 // ─── Guild Activities (Guild Boss / Guild War / PK War / custom) ─────────
@@ -66,7 +68,11 @@ function optText(value: unknown, max = 500): string | null {
   return trimmed ? trimmed.slice(0, max) : null;
 }
 
-function serializeActivity(
+// Split in two so the expensive, NOT-viewer-specific half (everything except
+// `myStatus`) can be cached and shared across every member reading this
+// guild's activities — only `myStatus` is derived fresh per request, from
+// the (already viewer-independent) `attendees` array in the shared payload.
+function serializeActivityShared(
   activity: {
     id: string;
     type: string;
@@ -85,7 +91,6 @@ function serializeActivity(
     attendees: Array<{ userId: string; status: string }>;
   },
   userMap: Map<string, { displayName: string; avatarUrl: string | null }>,
-  viewerId: string,
 ) {
   const attendees = activity.attendees.map((a) => ({
     userId: a.userId,
@@ -93,7 +98,6 @@ function serializeActivity(
     avatarUrl: userMap.get(a.userId)?.avatarUrl ?? null,
     status: a.status,
   }));
-  const mine = activity.attendees.find((a) => a.userId === viewerId);
   return {
     id: activity.id,
     type: activity.type,
@@ -112,9 +116,16 @@ function serializeActivity(
     createdAt: activity.createdAt.toISOString(),
     attendeeCount: attendees.length,
     confirmedCount: attendees.filter((a) => a.status === "CONFIRMED").length,
-    myStatus: mine ? mine.status : "NONE",
     attendees,
   };
+}
+
+function withViewerStatus<T extends { attendees: Array<{ userId: string; status: string }> }>(
+  activity: T,
+  viewerId: string,
+) {
+  const mine = activity.attendees.find((a) => a.userId === viewerId);
+  return { ...activity, myStatus: mine ? mine.status : "NONE" };
 }
 
 async function hydrateUsers(userIds: string[]) {
@@ -134,9 +145,7 @@ async function hydrateUsers(userIds: string[]) {
 // older activities stop appearing in the calendar/search past this point.
 const ACTIVITY_LIST_WINDOW_DAYS = 90;
 
-export async function listActivities(guildId: string, actorId: string) {
-  const membership = await requireActiveMember(actorId, guildId);
-
+async function listActivitiesShared(guildId: string) {
   const cutoff = new Date(Date.now() - ACTIVITY_LIST_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const activities = await prisma.guildActivity.findMany({
     where: { guildId, scheduledAt: { gte: cutoff } },
@@ -151,10 +160,27 @@ export async function listActivities(guildId: string, actorId: string) {
   }
   const userMap = await hydrateUsers(userIds);
 
+  return activities.map((a) => serializeActivityShared(a, userMap));
+}
+
+async function invalidateActivitiesCache(guildId: string): Promise<void> {
+  await redisCache.del(cacheKeys.guildActivities(guildId));
+}
+
+export async function listActivities(guildId: string, actorId: string) {
+  const membership = await requireActiveMember(actorId, guildId);
+
+  // Auth checked fresh every call, cache or no cache — canManage/viewerRole
+  // and each activity's myStatus are specific to THIS caller and are always
+  // derived outside the cached (shared) payload.
+  const shared = await redisCache.getOrSet(cacheKeys.guildActivities(guildId), cacheTtl.guildActivities, () =>
+    listActivitiesShared(guildId),
+  );
+
   return {
     canManage: OFFICER_ROLES.includes(membership.role),
     viewerRole: membership.role,
-    activities: activities.map((a) => serializeActivity(a, userMap, actorId)),
+    activities: shared.map((a) => withViewerStatus(a, actorId)),
   };
 }
 
@@ -212,6 +238,7 @@ export async function createActivity(
     userAgent,
   });
 
+  await invalidateActivitiesCache(guildId);
   return listActivities(guildId, actorId);
 }
 
@@ -301,6 +328,7 @@ export async function updateActivity(
     userAgent,
   });
 
+  await invalidateActivitiesCache(guildId);
   return listActivities(guildId, actorId);
 }
 
@@ -328,6 +356,7 @@ export async function deleteActivity(
     userAgent,
   });
 
+  await invalidateActivitiesCache(guildId);
   return listActivities(guildId, actorId);
 }
 
@@ -346,6 +375,7 @@ export async function setCheckIn(guildId: string, actorId: string, activityId: s
     await prisma.guildActivityAttendee.deleteMany({ where: { activityId, userId: actorId } });
   }
 
+  await invalidateActivitiesCache(guildId);
   return listActivities(guildId, actorId);
 }
 
@@ -366,5 +396,6 @@ export async function setAttendeeConfirmation(
     update: { status: confirmed ? "CONFIRMED" : "PENDING" },
   });
 
+  await invalidateActivitiesCache(guildId);
   return listActivities(guildId, actorId);
 }

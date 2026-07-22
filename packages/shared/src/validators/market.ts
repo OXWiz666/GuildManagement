@@ -161,10 +161,20 @@ const tierLimitSchema = z.object({
   logs: z.number().int().min(0).max(9999),
   temporalPieces: z.number().int().min(0).max(9999),
   materials: z.number().int().min(0).max(9999),
+  // Distribution Rules settings only — see MarketRules doc comment in constants.ts.
+  mountIds: z.array(z.string().trim().max(60)).max(50).optional(),
+  materialKeys: z.array(z.string().trim().max(60)).max(50).optional(),
+  logKeys: z.array(z.string().trim().max(60)).max(50).optional(),
+});
+
+const marketCatalogItemSchema = z.object({
+  key: z.string().trim().min(1).max(60),
+  label: z.string().trim().min(1).max(120),
 });
 
 export const marketRulesSchema = z.object({
   cpTiers: z.object({
+    coreMinCp: z.number().int().min(0).optional(),
     eliteMinCp: z.number().int().min(0),
     upperMinCp: z.number().int().min(0),
   }),
@@ -189,5 +199,7 @@ export const marketRulesSchema = z.object({
     })
     .partial()
     .optional(),
+  logCatalog: z.array(marketCatalogItemSchema).max(100).optional(),
+  materialCatalog: z.array(marketCatalogItemSchema).max(100).optional(),
 });
 export type MarketRulesInput = z.infer<typeof marketRulesSchema>;

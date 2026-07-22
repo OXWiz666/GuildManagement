@@ -621,6 +621,10 @@ export async function listInventoryRequests(actorId: string, filters: { mine?: b
     where,
     include: REQUEST_INCLUDE,
     orderBy: { createdAt: "desc" },
+    // No pagination UI exists for this list (unlike listInventoryTransactions,
+    // which is properly paginated) — a bare cap keeps a long-lived faction's
+    // full request history from being fetched on every read.
+    take: 200,
   });
   return requests.map(serializeRequest);
 }

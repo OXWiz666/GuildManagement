@@ -18,6 +18,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { type RoleSelection } from "./RoleList";
 
 const ROLE_COLORS = ["slate", "amber", "cyan", "emerald", "violet", "rose", "sky", "orange"] as const;
+const PERMISSION_LEVELS = ["OFFICER", "MEMBER"] as const;
 const SWATCH_CLASS: Record<string, string> = {
   slate: "bg-zinc-400",
   amber: "bg-amber-400",
@@ -35,9 +36,9 @@ interface Props {
   customRoles: CustomRoleData[];
   roleDisplayOverrides: Partial<Record<GuildRoleType, string>>;
   members: GuildMemberData[];
-  cpTiers: { eliteMinCp: number; upperMinCp: number };
-  onCpTierChange: (key: "eliteMinCp" | "upperMinCp", value: string) => void;
-  onSaveCpThresholds: () => void;
+  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number };
+  onCpTierChange: (key: "coreMinCp" | "eliteMinCp" | "upperMinCp", value: string) => void;
+  onSaveCpThresholds: () => Promise<void> | void;
   isCpThresholdDirty: boolean;
   isSavingCpThresholds: boolean;
   onDirtyChange: (isDirty: boolean) => void;
@@ -54,6 +55,18 @@ interface Props {
 /** Right-hand editor — Discord's "role detail" panel. Remounted (via a `key`
  *  at the call site) every time `selection` changes so draft state never
  *  leaks between roles. */
+function memberMatchesCpRank(
+  cp: number,
+  band: GuildRoleType | null,
+  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number },
+) {
+  const coreMinCp = cpTiers.coreMinCp ?? Number.POSITIVE_INFINITY;
+  if (band === "CORE_MEMBER") return cp >= coreMinCp;
+  if (band === "ELITE_MEMBER") return cp >= cpTiers.eliteMinCp && cp < coreMinCp;
+  if (band === "MEMBER") return cp < cpTiers.eliteMinCp;
+  return false;
+}
+
 export default function RoleEditorPanel({
   guildId,
   selection,
@@ -101,7 +114,7 @@ export default function RoleEditorPanel({
   }
 
   const roleMembers = isBand
-    ? members.filter((m) => m.role === bandValue && !m.customRole)
+    ? members.filter((m) => memberMatchesCpRank(m.cp ?? 0, bandValue, cpTiers))
     : existingCustom
       ? members.filter((m) => m.customRole?.id === existingCustom.id)
       : [];
@@ -136,7 +149,10 @@ export default function RoleEditorPanel({
       }
       const result = await guildApi.updateSettings(guildId, { roleDisplayNames });
       if (result.success) {
-        addToast("success", "Role name updated");
+        if (isCpThresholdDirty) {
+          await onSaveCpThresholds();
+        }
+        addToast("success", "Rank settings updated");
         refresh();
         onSaved();
       } else {
@@ -216,26 +232,27 @@ export default function RoleEditorPanel({
   const previewCustomName = isBand ? undefined : name.trim() || "New Role";
   const previewCustomColor = isBand ? undefined : color;
   const cpThreshold =
-    bandValue === "ELITE_MEMBER"
+    bandValue === "CORE_MEMBER"
+      ? {
+          label: `${resolveRoleName("CORE_MEMBER")} min CP`,
+          value: cpTiers.coreMinCp ?? 0,
+          key: "coreMinCp" as const,
+          help: "Members at or above this Combat Power automatically qualify for the Core rank.",
+        }
+      : bandValue === "ELITE_MEMBER"
       ? {
           label: `${resolveRoleName("ELITE_MEMBER")} min CP`,
           value: cpTiers.eliteMinCp,
           key: "eliteMinCp" as const,
-          help: "Members at or above this Combat Power use the Elite distribution tier.",
+          help: "Members at or above this Combat Power automatically qualify for the Elite rank unless they meet Core.",
         }
       : bandValue === "MEMBER"
         ? {
-            label: "Upper Member min CP",
-            value: cpTiers.upperMinCp,
+            label: "Member rank",
+            value: 0,
             key: "upperMinCp" as const,
-            help: "Members below this Combat Power use the Lower distribution tier.",
+            help: "Member is the default rank for active members below the Elite CP requirement.",
           }
-        : null;
-  const assignedTierNote =
-    bandValue === "OFFICER"
-      ? "Officer access is assigned by role and counts as Core tier or above for distribution limits."
-      : bandValue === "CORE_MEMBER"
-        ? "Core access is assigned by role and does not need a Combat Power threshold."
         : null;
 
   return (
@@ -290,32 +307,22 @@ export default function RoleEditorPanel({
                         </label>
                         <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">CP Threshold</span>
                       </div>
-                      <div className="mt-2 flex gap-2">
+                      {cpThreshold.key !== "upperMinCp" && (
                         <input
                           type="number"
                           min={0}
                           value={cpThreshold.value}
                           onChange={(e) => onCpTierChange(cpThreshold.key, e.target.value)}
-                          className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-black/25 border border-white/[0.08] text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-primary-500/40"
+                          className="mt-2 w-full px-3.5 py-2.5 rounded-xl bg-black/25 border border-white/[0.08] text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-primary-500/40"
                         />
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={onSaveCpThresholds}
-                          isLoading={isSavingCpThresholds}
-                          disabled={!isCpThresholdDirty}
-                          className="shrink-0"
-                        >
-                          Save CP
-                        </Button>
-                      </div>
+                      )}
                       <p className="mt-2 text-[10px] leading-relaxed text-white/35">{cpThreshold.help}</p>
                     </>
                   ) : (
                     <>
                       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">CP Threshold</p>
-                      <p className="mt-2 text-sm font-semibold text-white/80">Assigned role</p>
-                      <p className="mt-1.5 text-[10px] leading-relaxed text-white/35">{assignedTierNote}</p>
+                      <p className="mt-2 text-sm font-semibold text-white/80">Permission role</p>
+                      <p className="mt-1.5 text-[10px] leading-relaxed text-white/35">Permissions are managed separately from CP ranks.</p>
                     </>
                   )}
                 </div>
@@ -324,8 +331,7 @@ export default function RoleEditorPanel({
 
             {isBand ? (
               <p className="text-[11px] text-white/40 leading-relaxed">
-                This is one of the four built-in rank tiers. Renaming it only changes the label shown across the app —
-                permissions stay exactly the same, and it can&apos;t be deleted.
+                This is one of the built-in CP rank tiers. Renaming it changes the label shown across the app, and CP requirements decide which members qualify.
               </p>
             ) : (
               <>
@@ -350,7 +356,7 @@ export default function RoleEditorPanel({
                   <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">Permission level</label>
                   {isNew ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {CUSTOMIZABLE_ROLES.map((b) => (
+                      {PERMISSION_LEVELS.map((b) => (
                         <button
                           key={b}
                           type="button"
@@ -404,7 +410,7 @@ export default function RoleEditorPanel({
                   variant="primary"
                   size="sm"
                   onClick={isBand ? saveBand : isNew ? createRole : saveCustom}
-                  isLoading={saving}
+                  isLoading={saving || isSavingCpThresholds}
                   disabled={!name.trim()}
                 >
                   {isNew ? "Create Role" : "Save changes"}

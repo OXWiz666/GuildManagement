@@ -15,6 +15,7 @@ import { getDropCatalogMap } from "./equipment.service";
 import { getGuildMemberByUser } from "./guild.service";
 import { addDropsToStorage } from "./storage.service";
 import { getEffectiveActivityPointRules } from "./activityPoints.service";
+import { getEffectiveMarketRules, resolveDistributionTier } from "./market.service";
 import { publicUrl } from "../lib/supabaseStorage";
 import { findGuildSettingsByGuildId } from "../lib/guild-settings-schema";
 
@@ -37,7 +38,7 @@ const BOSS_KILL_AUDIT_ACTIONS = ["BOSS_ROTATION_KILLED", "BOSS_KILLED_LOGGED", "
 const SCHEDULE_CREATOR_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN", "OFFICER"];
 
 // How long the self check-in window stays open after a boss kill is logged.
-const CHECK_IN_WINDOW_MINUTES = 30;
+const CHECK_IN_WINDOW_MINUTES = 120;
 
 // How long an advance check-in's auto-opened session stays open while
 // waiting for the boss to actually die — generous, since the real kill (and
@@ -242,6 +243,12 @@ async function invalidateBossRotationCache(guildId: string): Promise<void> {
   await redisCache.delMany([
     cacheKeys.bossRotationByFaction(scopeKey),
     cacheKeys.bossSchedules(scopeKey),
+    // Master list / low-rotation config both read the same bossRotation /
+    // bossLowRotation rows this helper's callers just wrote — without this,
+    // getBossMasterList/getLowBossRotation could serve a stale queue for up
+    // to their own TTL right after a rotation-affecting mutation.
+    cacheKeys.bossMasterList(scopeKey),
+    cacheKeys.bossLowRotation(scopeKey),
   ]);
 }
 
@@ -285,6 +292,17 @@ async function invalidateAttendanceAndFinanceCacheForUsers(
   userIds: string[],
 ): Promise<void> {
   await invalidateAttendanceAndFinanceCache(guildId, sessionId);
+  await redisCache.delMany(userIds.map((userId) => cacheKeys.attendStats(guildId, userId)));
+}
+
+// Same as above but for mutations that don't touch the ledger (e.g. queuing
+// a member for review) — skips the finance-cache keys entirely.
+async function invalidateAttendanceCacheForUsers(
+  guildId: string,
+  sessionId: string,
+  userIds: string[],
+): Promise<void> {
+  await invalidateAttendanceCache(guildId, sessionId);
   await redisCache.delMany(userIds.map((userId) => cacheKeys.attendStats(guildId, userId)));
 }
 
@@ -1013,7 +1031,7 @@ async function assertAttendanceOfficer(guildId: string, actorId: string, action:
 async function getAttendanceAwardContext(
   guildId: string,
   session: { bossScheduleId: string | null },
-  members: Array<{ userId: string; role: string }>,
+  members: Array<{ userId: string; role: string; cp: number | null }>,
 ): Promise<{ currencyCode: string; pointsByUserId: Map<string, number> }> {
   const settings = await findGuildSettingsByGuildId(guildId);
   const currencyCode = settings?.currencyCode || "PHP";
@@ -1024,12 +1042,17 @@ async function getAttendanceAwardContext(
     return { currencyCode, pointsByUserId };
   }
 
-  const rules = await getEffectiveActivityPointRules(guildId);
+  const [rules, marketRules] = await Promise.all([
+    getEffectiveActivityPointRules(guildId),
+    getEffectiveMarketRules(guildId),
+  ]);
   const bossActivity = rules.activities.find((activity) => activity.key === "BOSS");
   if (!bossActivity) return { currencyCode, pointsByUserId };
 
   for (const member of members) {
-    const multiplier = (bossActivity.multipliers as Record<string, number>)[member.role] ?? 1;
+    const rank = resolveDistributionTier(member, marketRules);
+    const multiplierKey = rank === "CORE" ? "CORE_MEMBER" : rank === "ELITE" ? "ELITE_MEMBER" : "MEMBER";
+    const multiplier = (bossActivity.multipliers as Record<string, number>)[multiplierKey] ?? 1;
     pointsByUserId.set(member.userId, Math.round(bossActivity.basePoints * multiplier));
   }
 
@@ -1263,7 +1286,7 @@ export async function markMemberPresent(
   }
 
   const { currencyCode, pointsByUserId } = await getAttendanceAwardContext(guildId, session, [
-    { userId: member.userId, role: member.role },
+    { userId: member.userId, role: member.role, cp: member.cp },
   ]);
   const attendancePoints = pointsByUserId.get(userId) ?? 10;
 
@@ -1334,7 +1357,7 @@ export async function markMembersPresent(
 
   const members = await prisma.guildMember.findMany({
     where: { guildId, userId: { in: uniqueUserIds }, isActive: true },
-    select: { userId: true, role: true },
+    select: { userId: true, role: true, cp: true },
   });
   const activeUserIds = new Set(members.map((member) => member.userId));
   const inactiveCount = uniqueUserIds.length - activeUserIds.size;
@@ -1468,9 +1491,9 @@ export async function confirmAttendanceRecords(
 
   const members = await prisma.guildMember.findMany({
     where: { guildId, userId: { in: pendingRecords.map((record) => record.userId) } },
-    select: { userId: true, role: true },
+    select: { userId: true, role: true, cp: true },
   });
-  const roleByUserId = new Map(members.map((member) => [member.userId, member.role]));
+  const memberByUserId = new Map(members.map((member) => [member.userId, member]));
   const recordsBySession = new Map<string, typeof pendingRecords>();
   for (const record of pendingRecords) {
     const group = recordsBySession.get(record.sessionId) ?? [];
@@ -1487,7 +1510,8 @@ export async function confirmAttendanceRecords(
       session,
       group.map((record) => ({
         userId: record.userId,
-        role: roleByUserId.get(record.userId) ?? "MEMBER",
+        role: memberByUserId.get(record.userId)?.role ?? "MEMBER",
+        cp: memberByUserId.get(record.userId)?.cp ?? 0,
       })),
     );
     for (const record of group) {
@@ -1602,6 +1626,80 @@ export async function markMemberPendingForReview(
 
   await invalidateAttendanceCache(guildId, sessionId, userId);
   return { success: true, record, created: true, alreadyConfirmed: false };
+}
+
+// Batched counterpart to markMemberPendingForReview — the smart-attendance
+// OCR scanner (apps/bot) used to call the singular version once per detected
+// member, turning one rally screenshot with 30-50 visible members into
+// hundreds of sequential DB round trips. Same shape as markMembersPresent:
+// one member/existing-record lookup for the whole batch, one createMany.
+export async function markMembersPendingForReview(
+  guildId: string,
+  sessionId: string,
+  userIds: string[],
+  actorId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) {
+  await assertAttendanceOfficer(guildId, actorId, "queue attendance for review");
+
+  const uniqueUserIds = [...new Set(userIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueUserIds.length === 0) {
+    return { success: true, created: 0, skipped: 0 };
+  }
+  if (uniqueUserIds.length > 200) {
+    throw new BadRequestError("You can queue up to 200 members for review at once");
+  }
+
+  const session = await prisma.attendanceSession.findUnique({ where: { id: sessionId } });
+  if (!session || session.guildId !== guildId) {
+    throw new NotFoundError("Attendance session not found");
+  }
+
+  const [members, existingRecords] = await Promise.all([
+    prisma.guildMember.findMany({
+      where: { guildId, userId: { in: uniqueUserIds }, isActive: true },
+      select: { userId: true },
+    }),
+    prisma.attendanceRecord.findMany({
+      where: { sessionId, userId: { in: uniqueUserIds } },
+      select: { userId: true },
+    }),
+  ]);
+  const activeUserIds = new Set(members.map((m) => m.userId));
+  const inactiveCount = uniqueUserIds.length - activeUserIds.size;
+  if (inactiveCount > 0) {
+    throw new BadRequestError(`${inactiveCount} selected member(s) are no longer active in this guild`);
+  }
+
+  // Existing records (of any status) are left alone — a later scan must
+  // never downgrade attendance an officer already confirmed.
+  const existingUserIds = new Set(existingRecords.map((r) => r.userId));
+  const targetUserIds = uniqueUserIds.filter((userId) => !existingUserIds.has(userId));
+  const skipped = uniqueUserIds.length - targetUserIds.length;
+
+  if (targetUserIds.length === 0) {
+    return { success: true, created: 0, skipped };
+  }
+
+  await prisma.attendanceRecord.createMany({
+    data: targetUserIds.map((userId) => ({ sessionId, userId, status: AttendanceRecordStatus.PENDING })),
+    skipDuplicates: true,
+  });
+
+  await writeAuditLog({
+    actorId,
+    guildId,
+    action: "MEMBER_ATTENDANCE_QUEUED_FOR_REVIEW",
+    target: "AttendanceSession",
+    targetId: sessionId,
+    detail: { sessionTitle: session.title, count: targetUserIds.length, userIds: targetUserIds },
+    ipAddress,
+    userAgent,
+  });
+
+  await invalidateAttendanceCacheForUsers(guildId, sessionId, targetUserIds);
+  return { success: true, created: targetUserIds.length, skipped };
 }
 
 // Inverse of confirm/markMemberPresent: removes a member's attendance record
@@ -1910,7 +2008,10 @@ export async function confirmAttendanceRecord(
     ]);
     const bossActivity = rules.activities.find((a) => a.key === "BOSS");
     if (bossActivity && member) {
-      const multiplier = (bossActivity.multipliers as Record<string, number>)[member.role] ?? 1;
+      const marketRules = await getEffectiveMarketRules(guildId);
+      const rank = resolveDistributionTier(member, marketRules);
+      const multiplierKey = rank === "CORE" ? "CORE_MEMBER" : rank === "ELITE" ? "ELITE_MEMBER" : "MEMBER";
+      const multiplier = (bossActivity.multipliers as Record<string, number>)[multiplierKey] ?? 1;
       attendancePoints = Math.round(bossActivity.basePoints * multiplier);
     }
   }
@@ -2000,16 +2101,26 @@ export async function getBossSchedules(guildId: string, requestingUserId?: strin
   return scoped;
 }
 
+// This view only ever reads the single MOST RECENT killed row per boss (see
+// `latestKilled` in boss-rotation/page.tsx's fallback rotation builder) — real
+// kill history lives in the separately-paginated getBossKilledHistory. So a
+// KILLED row here is only useful for a little while; without a bound this
+// query (plus its nested attendanceSessions.records) grows every kill,
+// forever, for the life of the guild/faction — same bug class as
+// ACTIVITY_LIST_WINDOW_DAYS.
+const BOSS_SCHEDULE_KILLED_WINDOW_DAYS = 30;
+
 async function getBossSchedulesShared(guildId: string, factionId: string | null) {
   // Faction-wide view: this guild's own schedules plus every other guild's
   // in the SAME faction (never another faction's rotation state).
   const factionGuilds = factionId ? await getActiveFactionGuilds(factionId) : [];
   const visibleGuildIds = Array.from(new Set([guildId, ...factionGuilds.map((g) => g.id)]));
+  const killedCutoff = new Date(Date.now() - BOSS_SCHEDULE_KILLED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const schedules = await prisma.bossSchedule.findMany({
     where: {
-      OR: [
-        { guildId: { in: visibleGuildIds } },
-        { guildId: null },
+      AND: [
+        { OR: [{ guildId: { in: visibleGuildIds } }, { guildId: null }] },
+        { OR: [{ status: { not: BossEventStatus.KILLED } }, { killedAt: { gte: killedCutoff } }] },
       ],
     },
     include: {
@@ -2025,9 +2136,9 @@ async function getBossSchedulesShared(guildId: string, factionId: string | null)
 
   // Defensive dedup: legacy rows from before the per-guild seeding fix (or
   // any other write path) can still leave two live rows for the same boss.
-  // Keep every KILLED row (real history), but collapse UPCOMING/SPAWNED rows
-  // to one per boss name — `schedules` is sorted by spawnTime ascending, so
-  // the first (soonest) row encountered wins.
+  // Keep every (recent) KILLED row, but collapse UPCOMING/SPAWNED rows to one
+  // per boss name — `schedules` is sorted by spawnTime ascending, so the
+  // first (soonest) row encountered wins.
   const seenLive = new Set<string>();
   const dedupedSchedules = schedules.filter((s) => {
     if (s.status === BossEventStatus.KILLED) return true;
@@ -3561,12 +3672,28 @@ export async function maintenanceResetBossTimers(
 // the faction can read the list; only Faction Leaders / Admins can edit it.
 
 export async function getBossMasterList(guildId: string, actorId: string) {
-  const [membership, factionId, bosses] = await Promise.all([
+  // Auth checked fresh every call, cache or no cache — canManage/viewerRole
+  // below are specific to THIS caller and never come from the shared cache
+  // (same principle as getBossRotation).
+  const [membership, factionId] = await Promise.all([
     requireActiveGuildMember(actorId, guildId),
     getGuildFactionId(guildId),
-    getBossRegistryForRotation(),
   ]);
-  const [guilds, rotations] = await Promise.all([
+  const scopeKey = factionId ? factionId : `solo:${guildId}`;
+  const shared = await redisCache.getOrSet(cacheKeys.bossMasterList(scopeKey), cacheTtl.bossMasterList, () =>
+    getBossMasterListShared(factionId, guildId),
+  );
+
+  return {
+    canManage: isFactionLevelRole(membership.role),
+    viewerRole: membership.role,
+    ...shared,
+  };
+}
+
+async function getBossMasterListShared(factionId: string | null, guildId: string) {
+  const [bosses, guilds, rotations] = await Promise.all([
+    getBossRegistryForRotation(),
     getActiveFactionGuilds(factionId, guildId),
     factionId ? prisma.bossRotation.findMany({ where: { factionId } }) : Promise.resolve([]),
   ]);
@@ -3590,8 +3717,6 @@ export async function getBossMasterList(guildId: string, actorId: string) {
   });
 
   return {
-    canManage: isFactionLevelRole(membership.role),
-    viewerRole: membership.role,
     factionId,
     guilds,
     bosses: bossEntries,
@@ -3686,6 +3811,9 @@ export async function updateBossMasterList(
     userAgent,
   });
 
+  // This write changes the same bossRotation rows getBossRotation's own
+  // cache is keyed on, plus getBossMasterList's own cache below.
+  await invalidateBossRotationCache(guildId);
   return getBossMasterList(guildId, actorId);
 }
 
@@ -3713,12 +3841,27 @@ function parseStringArray(value: unknown): string[] {
 }
 
 export async function getLowBossRotation(guildId: string, actorId: string) {
-  const [membership, factionId, bosses] = await Promise.all([
+  // Auth checked fresh every call, cache or no cache — same principle as
+  // getBossRotation/getBossMasterList.
+  const [membership, factionId] = await Promise.all([
     requireActiveGuildMember(actorId, guildId),
     getGuildFactionId(guildId),
-    getBossRegistryForRotation(),
   ]);
-  const [guilds, config] = await Promise.all([
+  const scopeKey = factionId ? factionId : `solo:${guildId}`;
+  const shared = await redisCache.getOrSet(cacheKeys.bossLowRotation(scopeKey), cacheTtl.bossLowRotation, () =>
+    getLowBossRotationShared(factionId, guildId),
+  );
+
+  return {
+    canManage: isFactionLevelRole(membership.role),
+    viewerRole: membership.role,
+    ...shared,
+  };
+}
+
+async function getLowBossRotationShared(factionId: string | null, guildId: string) {
+  const [bosses, guilds, config] = await Promise.all([
+    getBossRegistryForRotation(),
     getActiveFactionGuilds(factionId, guildId),
     factionId ? prisma.bossLowRotation.findUnique({ where: { factionId } }) : Promise.resolve(null),
   ]);
@@ -3739,8 +3882,6 @@ export async function getLowBossRotation(guildId: string, actorId: string) {
   const lowBossNames = parseStringArray(config?.lowBossNames).filter((n) => bossNameSet.has(n.toLowerCase()));
 
   return {
-    canManage: isFactionLevelRole(membership.role),
-    viewerRole: membership.role,
     factionId,
     mode: resolveLowRotationMode(config?.mode),
     lowBossNames,
@@ -3858,6 +3999,7 @@ export async function updateLowBossRotation(
     userAgent,
   });
 
+  await invalidateBossRotationCache(guildId);
   return getLowBossRotation(guildId, actorId);
 }
 
@@ -4017,11 +4159,23 @@ async function getBossKilledHistoryUncached(guildId: string, month?: string) {
  */
 export async function getBossDropsForBoss(actorId: string, guildId: string, bossName: string) {
   await requireActiveGuildMember(actorId, guildId);
-  const target = bossName.trim().toLowerCase();
-  if (!target) return { bossName: bossName.trim(), drops: [] as Array<{
+  const trimmedName = bossName.trim();
+  const target = trimmedName.toLowerCase();
+  if (!target) return { bossName: trimmedName, drops: [] as Array<{
     itemName: string; type: string | null; category: string | null; rarity: string | null; iconUrl: string;
   }> };
 
+  // Not viewer-specific — actorId above is only for the membership check.
+  // TTL-only (no active invalidation): the drop set only grows as new kills
+  // are logged, so a couple minutes of staleness just means a brand-new drop
+  // type takes a moment to appear in the loot picker — same tradeoff already
+  // accepted for the equipment/drops catalog cache.
+  return redisCache.getOrSet(cacheKeys.bossDrops(guildId, target), cacheTtl.bossDrops, () =>
+    getBossDropsForBossUncached(guildId, trimmedName, target),
+  );
+}
+
+async function getBossDropsForBossUncached(guildId: string, bossName: string, target: string) {
   const logs = await prisma.auditLog.findMany({
     where: { guildId, action: { in: BOSS_KILL_AUDIT_ACTIONS } },
     orderBy: { createdAt: "desc" },
@@ -4494,13 +4648,21 @@ function attendanceSessionTimelineMs(session: { bossSchedule: { spawnTime: Date 
   return (session.bossSchedule?.spawnTime ?? session.createdAt).getTime();
 }
 
+// Same unbounded-growth bug class as ACTIVITY_LIST_WINDOW_DAYS (activity.service.ts):
+// an established guild accumulates one attendanceSession per boss check-in
+// forever, so a bare `findMany({ where: { guildId } })` gets slower every kill.
+// Bounding to a trailing window trades "lifetime" presence rate/streak for
+// "recent" — same tradeoff the user already accepted for Guild Activities.
+const ATTENDANCE_STATS_WINDOW_DAYS = 90;
+
 async function getMemberAttendanceStatsUncached(guildId: string, userId: string) {
   const now = new Date();
+  const statsCutoff = new Date(now.getTime() - ATTENDANCE_STATS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   // Sessions and the ledger points sum are independent reads — run them
   // concurrently instead of one after another.
   const [sessions, ledgerSum] = await Promise.all([
     prisma.attendanceSession.findMany({
-      where: { guildId },
+      where: { guildId, createdAt: { gte: statsCutoff } },
       include: {
         records: {
           where: { userId }

@@ -1,10 +1,11 @@
 "use client";
 
-import { CUSTOMIZABLE_ROLES, type GuildRoleType } from "@guild/shared";
+import { type GuildRoleType } from "@guild/shared";
 import { type CustomRoleData } from "@/lib/api";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 
 export type RoleSelection = { kind: "band"; band: GuildRoleType } | { kind: "custom"; id: string } | { kind: "new" };
+const DEFAULT_RANK_BANDS = ["CORE_MEMBER", "ELITE_MEMBER", "MEMBER"] as const;
 
 export function selectionKey(sel: RoleSelection): string {
   return sel.kind === "band" ? `band:${sel.band}` : sel.kind === "custom" ? `custom:${sel.id}` : "new";
@@ -74,7 +75,7 @@ export default function RoleList({
       <div>
         <p className="px-1 mb-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">Default ranks</p>
         <div className="space-y-0.5">
-          {CUSTOMIZABLE_ROLES.map((band) => {
+          {DEFAULT_RANK_BANDS.map((band) => {
             const sel: RoleSelection = { kind: "band", band };
             const isActive = selKey === selectionKey(sel);
             return (

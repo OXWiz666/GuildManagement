@@ -1,6 +1,8 @@
 import { prisma } from "@guild/db";
 import { getGuildMemberByUser } from "./guild.service";
 import { broadcastToGuild } from "../lib/socket";
+import { cache as redisCache } from "../lib/redis";
+import { cacheKeys, ttl as cacheTtl } from "../lib/cache-keys";
 import { ForbiddenError, NotFoundError } from "../utils/errors";
 
 const MEMBER_SELECT = {
@@ -11,12 +13,40 @@ const MEMBER_SELECT = {
   userId: true,
 } as const;
 
+type CommitmentMember = { id: string; ign: string | null; role: string; rankName: string | null; userId: string };
+
 async function requireActiveMember(guildId: string, actorId: string) {
   const member = await getGuildMemberByUser(actorId, guildId);
   if (!member || !member.isActive) {
     throw new ForbiddenError("You must be an active guild member");
   }
   return member;
+}
+
+function toCommitmentMember(row: { member: CommitmentMember }): CommitmentMember {
+  return {
+    id: row.member.id,
+    ign: row.member.ign,
+    role: row.member.role,
+    rankName: row.member.rankName,
+    userId: row.member.userId,
+  };
+}
+
+/** Shared (not viewer-specific) committed-member rows for one schedule —
+ * cached, since `!spawn`/the boss-rotation grid re-reads this far more often
+ * than members actually commit. `getBossCommitments`/`getBossCommitmentsBatch`
+ * derive their per-viewer `committed` flag from this at request time, never
+ * baking one viewer's flag into the shared cache entry. */
+async function getBossCommitmentRows(guildId: string, scheduleId: string): Promise<CommitmentMember[]> {
+  return redisCache.getOrSet(cacheKeys.bossCommitments(guildId, scheduleId), cacheTtl.bossCommitments, async () => {
+    const rows = await prisma.bossCommitment.findMany({
+      where: { guildId, scheduleId },
+      include: { member: { select: MEMBER_SELECT } },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(toCommitmentMember);
+  });
 }
 
 /** Headcount + roster for a specific boss spawn, scoped to the caller's own
@@ -28,21 +58,12 @@ export async function getBossCommitments(guildId: string, actorId: string, sched
   const schedule = await prisma.bossSchedule.findUnique({ where: { id: scheduleId } });
   if (!schedule) throw new NotFoundError("Boss schedule not found");
 
-  const rows = await prisma.bossCommitment.findMany({
-    where: { guildId, scheduleId },
-    include: { member: { select: MEMBER_SELECT } },
-    orderBy: { createdAt: "asc" },
-  });
+  const members = await getBossCommitmentRows(guildId, scheduleId);
 
   return {
-    count: rows.length,
-    committed: rows.some((r) => r.member.userId === actorId),
-    members: rows.map((r) => ({
-      id: r.member.id,
-      ign: r.member.ign,
-      role: r.member.role,
-      rankName: r.member.rankName,
-    })),
+    count: members.length,
+    committed: members.some((m) => m.userId === actorId),
+    members: members.map(({ id, ign, role, rankName }) => ({ id, ign, role, rankName })),
   };
 }
 
@@ -50,7 +71,10 @@ export async function getBossCommitments(guildId: string, actorId: string, sched
  *  used by the boss-rotation grid, which otherwise fires one request per
  *  visible card. Skips the per-schedule existence check `getBossCommitments`
  *  does (a stale/foreign scheduleId just comes back with the zero-state
- *  instead of a 404, which is fine for a bulk read). */
+ *  instead of a 404, which is fine for a bulk read). Cache-misses across the
+ *  batch are still fetched in a single query — only the already-cached
+ *  schedules skip the DB entirely, so this never regresses to one query per
+ *  card even on a cold cache. */
 export async function getBossCommitmentsBatch(
   guildId: string,
   actorId: string,
@@ -64,23 +88,41 @@ export async function getBossCommitmentsBatch(
   }
   if (scheduleIds.length === 0) return result;
 
-  const rows = await prisma.bossCommitment.findMany({
-    where: { guildId, scheduleId: { in: scheduleIds } },
-    include: { member: { select: MEMBER_SELECT } },
-    orderBy: { createdAt: "asc" },
-  });
+  const byScheduleId = new Map<string, CommitmentMember[]>();
+  const cachedEntries = await Promise.all(
+    scheduleIds.map(async (id) => [id, await redisCache.get<CommitmentMember[]>(cacheKeys.bossCommitments(guildId, id))] as const),
+  );
+  const missingIds: string[] = [];
+  for (const [id, cached] of cachedEntries) {
+    if (cached) byScheduleId.set(id, cached);
+    else missingIds.push(id);
+  }
 
-  for (const row of rows) {
-    const bucket = result[row.scheduleId];
-    if (!bucket) continue;
-    bucket.count += 1;
-    if (row.member.userId === actorId) bucket.committed = true;
-    bucket.members.push({
-      id: row.member.id,
-      ign: row.member.ign,
-      role: row.member.role,
-      rankName: row.member.rankName,
+  if (missingIds.length > 0) {
+    const rows = await prisma.bossCommitment.findMany({
+      where: { guildId, scheduleId: { in: missingIds } },
+      include: { member: { select: MEMBER_SELECT } },
+      orderBy: { createdAt: "asc" },
     });
+    const grouped = new Map<string, CommitmentMember[]>();
+    for (const id of missingIds) grouped.set(id, []);
+    for (const row of rows) {
+      grouped.get(row.scheduleId)?.push(toCommitmentMember(row));
+    }
+    await Promise.all(
+      [...grouped.entries()].map(([id, members]) => {
+        byScheduleId.set(id, members);
+        return redisCache.set(cacheKeys.bossCommitments(guildId, id), members, cacheTtl.bossCommitments);
+      }),
+    );
+  }
+
+  for (const [scheduleId, members] of byScheduleId) {
+    result[scheduleId] = {
+      count: members.length,
+      committed: members.some((m) => m.userId === actorId),
+      members: members.map(({ id, ign, role, rankName }) => ({ id, ign, role, rankName })),
+    };
   }
 
   return result;
@@ -110,6 +152,7 @@ export async function setBossCommitment(
   }
 
   const count = await prisma.bossCommitment.count({ where: { guildId, scheduleId } });
+  await redisCache.del(cacheKeys.bossCommitments(guildId, scheduleId));
   void broadcastToGuild(guildId, "boss_commitment_updated", { scheduleId, count });
   return { committed: committing, count };
 }

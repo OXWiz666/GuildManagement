@@ -223,6 +223,18 @@ export class BossService {
     return { bucket: best.bucket, path: best.path, itemName: best.itemName, iconUrl: best.iconUrl };
   }
 
+  /**
+   * Resolve a trailing `!kill <boss> [...] <guild>` token to one of this
+   * server's faction-mates, for logging a kill on behalf of a guild that
+   * didn't run the command itself (e.g. it forgot to `!kill` its own spawn).
+   * Returns null for no match — including plain item-drop text, which is the
+   * overwhelmingly common case, so the caller falls back to treating the
+   * token as normal input.
+   */
+  async resolveTakingGuild(guildId: string, token: string) {
+    return core.dashboard.resolveTakingGuildByToken(guildId, token);
+  }
+
   /** Human-readable item catalog for Discord (`!items`) and operator audits. */
   async listDropItemNames(query?: string): Promise<DropCatalogNameItem[]> {
     const needle = normalizeItemText(query ?? "");

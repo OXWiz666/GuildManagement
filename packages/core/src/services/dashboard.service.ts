@@ -9,7 +9,7 @@ import { writeAuditLog } from "./audit.service";
 import { createLedgerEntry } from "./ledger.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import * as crypto from "crypto";
-import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, SHORT_CYCLE_MAX_HOURS } from "@guild/shared";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, SHORT_CYCLE_MAX_HOURS, DEFAULT_LOW_BOSS_MAX_LEVEL } from "@guild/shared";
 import { broadcastToGuild, broadcastToUser } from "../lib/socket";
 import { getDropCatalogMap } from "./equipment.service";
 import { getGuildMemberByUser } from "./guild.service";
@@ -356,6 +356,27 @@ async function getActiveFactionGuilds(factionId: string | null, soloGuildId?: st
     select: { id: true, name: true, slug: true, avatarUrl: true },
     orderBy: { name: "asc" },
   });
+}
+
+/**
+ * Resolve a freeform guild-name token (from `!kill <boss> <guild>`) to one of
+ * `guildId`'s faction-mates — case-insensitive, matched against name or slug.
+ * Used to let an officer log a kill on behalf of a guild that didn't run the
+ * command from its own Discord server. Returns null for no match (including
+ * a guild with no faction, or a token that isn't any faction-mate's name) so
+ * the caller can fall back to treating the token as ordinary item-drop text.
+ */
+export async function resolveTakingGuildByToken(
+  guildId: string,
+  token: string,
+): Promise<{ id: string; name: string } | null> {
+  const guild = await prisma.guild.findUnique({ where: { id: guildId }, select: { factionId: true } });
+  if (!guild?.factionId) return null;
+  const needle = token.trim().toLowerCase();
+  if (!needle) return null;
+  const guilds = await getActiveFactionGuilds(guild.factionId);
+  const match = guilds.find((g) => g.name.toLowerCase() === needle || g.slug.toLowerCase() === needle);
+  return match ? { id: match.id, name: match.name } : null;
 }
 
 function serializeBossScheduleForApi(schedule: any) {
@@ -2248,11 +2269,17 @@ export async function getBossRotation(guildId: string, actorId: string) {
 }
 
 async function getBossRotationShared(factionId: string | null, guildId: string) {
-  const [bosses, guilds, foundingGuildIds] = await Promise.all([
+  const [allBosses, guilds, foundingGuildIds] = await Promise.all([
     getBossRegistryForRotation(),
     getActiveFactionGuilds(factionId, guildId),
     getFoundingFactionGuildIds(factionId),
   ]);
+
+  // Low Bosses are scheduled through the day-based Low Boss rotation
+  // (Faction Schedule tab), not this per-boss turn queue — exclude them so
+  // the two systems never disagree about whose turn a boss is.
+  const lowBossNamesLower = await getResolvedLowBossNames(factionId, allBosses);
+  const bosses = allBosses.filter((b) => !lowBossNamesLower.has(b.name.toLowerCase()));
 
   const activeGuildIds = guilds.map((g) => g.id);
   const activeFoundingGuildIds = foundingGuildIds.length
@@ -2272,7 +2299,11 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
     prisma.bossSchedule.findMany({
       where: {
         bossName: { in: bossNames },
-        guildId: { in: activeGuildIds },
+        // `guildId: null` rows are faction-unified schedules — SQL `IN` never
+        // matches NULL, so omitting this silently hid a shared row's active
+        // schedule from the rotation grid entirely. See the same pitfall
+        // called out on `bossScope` in markBossRotationKilledByName.
+        OR: [{ guildId: { in: activeGuildIds } }, { guildId: null }],
         status: { not: BossEventStatus.KILLED },
       },
       include: { guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
@@ -2281,7 +2312,7 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
     prisma.bossSchedule.findMany({
       where: {
         bossName: { in: bossNames },
-        guildId: { in: activeGuildIds },
+        OR: [{ guildId: { in: activeGuildIds } }, { guildId: null }],
         status: BossEventStatus.KILLED,
       },
       include: { guildTurnGuild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
@@ -2316,11 +2347,22 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
     const activeSchedule = activeScheduleMap.get(boss.name) || null;
     const latestKilled = killedScheduleMap.get(boss.name) || null;
 
-    const currentGuildId = queueGuildIds[currentIndex] || null;
+    // The live schedule row's own `guildTurnGuild` is the ground truth for
+    // who currently holds this boss — it's written directly by the kill that
+    // took it. `queueGuildIds[currentIndex]` is only a fallback for a boss
+    // that's never been scheduled yet. Deriving "holder" from the queue
+    // position alone (ignoring the schedule row) let the two drift apart
+    // whenever a guild outside that boss's configured queue took the kill
+    // (allowed — takenGuildId is only checked against "any active faction
+    // guild", not "is in this boss's queue") — the rotation grid kept
+    // showing the queue's guild while `!spawn`/the schedule itself correctly
+    // showed whoever actually took it.
+    const currentGuildId = activeSchedule?.guildTurnGuildId || queueGuildIds[currentIndex] || null;
     const nextGuildId = queueGuildIds.length
       ? queueGuildIds[(currentIndex + 1) % queueGuildIds.length] || currentGuildId
       : null;
-    const currentGuild = currentGuildId ? guildMap.get(currentGuildId) || null : null;
+    const currentGuild =
+      activeSchedule?.guildTurnGuild || (currentGuildId ? guildMap.get(currentGuildId) || null : null);
     const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
     // A cycle boss with no active schedule, no established rotation cadence,
     // and no prior kill has simply never been taken — it has no real spawn
@@ -3739,12 +3781,17 @@ export async function getBossMasterList(guildId: string, actorId: string) {
 }
 
 async function getBossMasterListShared(factionId: string | null, guildId: string) {
-  const [bosses, guilds, rotations, foundingGuildIds] = await Promise.all([
+  const [allBosses, guilds, rotations, foundingGuildIds] = await Promise.all([
     getBossRegistryForRotation(),
     getActiveFactionGuilds(factionId, guildId),
     factionId ? prisma.bossRotation.findMany({ where: { factionId } }) : Promise.resolve([]),
     getFoundingFactionGuildIds(factionId),
   ]);
+
+  // Low Bosses live on the Faction Schedule's day-based rotation, not this
+  // per-boss queue — see the matching exclusion in getBossRotationShared.
+  const lowBossNamesLower = await getResolvedLowBossNames(factionId, allBosses);
+  const bosses = allBosses.filter((b) => !lowBossNamesLower.has(b.name.toLowerCase()));
 
   const activeGuildIds = guilds.map((g) => g.id);
   const activeFoundingGuildIds = foundingGuildIds.length
@@ -3911,6 +3958,34 @@ export async function getLowBossRotation(guildId: string, actorId: string) {
   };
 }
 
+/**
+ * A boss is either a per-boss BossRotation/Master List entry ("High Boss") or
+ * a day-based BossLowRotation entry ("Low Boss") — never both, so the two
+ * scheduling systems never fight over the same boss. A faction leader
+ * chooses explicitly via `BossLowRotation.lowBossNames`; until they've picked
+ * anything (the row doesn't exist yet, or exists but that list is still
+ * empty — e.g. they've only touched `mode`/`weekly`/`days` so far), it
+ * defaults to every boss at or below `DEFAULT_LOW_BOSS_MAX_LEVEL`, so a fresh
+ * faction isn't stuck with zero Low Bosses until someone finds the picker.
+ */
+async function getResolvedLowBossNames(
+  factionId: string | null,
+  bosses: Array<{ name: string; level: number }>,
+  config?: { lowBossNames: unknown } | null,
+): Promise<Set<string>> {
+  if (!factionId) return new Set();
+  const resolvedConfig =
+    config !== undefined ? config : await prisma.bossLowRotation.findUnique({ where: { factionId }, select: { lowBossNames: true } });
+  // The row's mere existence is the "explicitly configured" signal — even an
+  // empty list is a deliberate choice (a leader who wants zero Low Bosses),
+  // not "never touched this". Only a genuinely absent row falls back to the
+  // level-based default.
+  if (resolvedConfig) return new Set(parseStringArray(resolvedConfig.lowBossNames).map((n) => n.toLowerCase()));
+  return new Set(
+    bosses.filter((b) => b.level <= DEFAULT_LOW_BOSS_MAX_LEVEL).map((b) => b.name.toLowerCase()),
+  );
+}
+
 async function getLowBossRotationShared(factionId: string | null, guildId: string) {
   const [bosses, guilds, config] = await Promise.all([
     getBossRegistryForRotation(),
@@ -3930,8 +4005,11 @@ async function getLowBossRotationShared(factionId: string | null, guildId: strin
     if (activeIds.has(v)) cleanDays[k] = v;
   }
 
-  const bossNameSet = new Set(bosses.map((b) => b.name.toLowerCase()));
-  const lowBossNames = parseStringArray(config?.lowBossNames).filter((n) => bossNameSet.has(n.toLowerCase()));
+  const bossNameByLower = new Map(bosses.map((b) => [b.name.toLowerCase(), b.name]));
+  const resolvedLower = await getResolvedLowBossNames(factionId, bosses, config);
+  const lowBossNames = Array.from(resolvedLower)
+    .map((n) => bossNameByLower.get(n))
+    .filter((n): n is string => Boolean(n));
 
   return {
     factionId,

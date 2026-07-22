@@ -298,9 +298,11 @@ export {
   getRealtimeBossTimer,
   getBossCycleCategory,
   getDailyRotationIndex,
+  getDefaultBossCategory,
   SHORT_CYCLE_MAX_HOURS,
+  DEFAULT_LOW_BOSS_MAX_LEVEL,
 } from "./types/bosses";
-export type { PredefinedBoss, RealtimeBossTimer, BossCycleCategory } from "./types/bosses";
+export type { PredefinedBoss, RealtimeBossTimer, BossCycleCategory, BossCategory } from "./types/bosses";
 
 // CP screenshot parsing (shared by the web scanner and the Discord bot —
 // same interpretation regardless of which OCR engine produced the text)

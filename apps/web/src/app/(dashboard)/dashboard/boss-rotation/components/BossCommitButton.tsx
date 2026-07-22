@@ -81,6 +81,15 @@ export default function BossCommitButton({ guildId, scheduleId, bossName, initia
       const res = await dashboardApi.setBossCommitment(guildId, scheduleId, !committed);
       if (res.success) {
         queryClient.invalidateQueries(key);
+      } else if (res.error?.message === "Boss schedule not found") {
+        // This card's scheduleId no longer exists — the boss was killed,
+        // rolled to a new spawn, or this row got cleaned up as a duplicate
+        // since the page loaded. Refreshing the rotation list (rather than
+        // just erroring) replaces the stale card instead of leaving a dead
+        // button the user would otherwise keep re-clicking.
+        addToast("info", "This boss's schedule has changed — refreshing.");
+        queryClient.invalidateQueries(`boss_rotation_v2:${guildId}`);
+        queryClient.invalidateQueries(`boss_commitments_batch:${guildId}`);
       } else {
         addToast("error", res.error?.message || "Failed to update commitment");
       }

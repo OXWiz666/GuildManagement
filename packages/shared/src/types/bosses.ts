@@ -192,6 +192,13 @@ export const PREDEFINED_BOSSES: PredefinedBoss[] = [
     fixedSpawns: [{ day: 6, hour: 22, minute: 0 }],
     location: "Kransia",
   },
+  {
+    name: "Camalia",
+    level: 135,
+    type: "FIXED_SCHEDULE",
+    fixedSpawns: [{ day: 4, hour: 21, minute: 0 }],
+    location: "Hidden Laboratory",
+  },
 ];
 
 /**
@@ -364,6 +371,20 @@ export function getRealtimeBossTimer(
     liveSinceMs: 0,
     liveElapsedText: "",
   };
+}
+
+// ─── High Boss / Low Boss categorisation ────────────────────
+// "Low Boss" bosses are scheduled via the faction's day-based Low Boss
+// rotation (BossLowRotation — guild-of-the-day, not a per-boss turn queue)
+// instead of the standalone per-boss BossRotation/Master List queue; a boss
+// is one or the other, never both. A faction leader can override the
+// category per boss (BossLowRotation.lowBossNames); until they've picked
+// anything explicitly, it defaults from level.
+export type BossCategory = "HIGH" | "LOW";
+export const DEFAULT_LOW_BOSS_MAX_LEVEL = 75;
+
+export function getDefaultBossCategory(level: number): BossCategory {
+  return level <= DEFAULT_LOW_BOSS_MAX_LEVEL ? "LOW" : "HIGH";
 }
 
 // ─── Boss cycle categorisation (for rotation filters) ───────

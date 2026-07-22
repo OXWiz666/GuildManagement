@@ -8,7 +8,7 @@ import { discordTimestamp, resolveWallClock } from "../../utils/time.js";
 import { UserFacingError } from "../../utils/errors.js";
 import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 
-const USAGE = "!kill <boss> [item drop, item drop, ...] [HH:MM]";
+const USAGE = "!kill <boss> [item drop, item drop, ...] [HH:MM] [guild]";
 
 // A boss realistically drops a handful of items. This guards against a pasted
 // wall of text creating dozens of storage rows.
@@ -35,10 +35,23 @@ export const killCommand: Command = {
       throw new UserFacingError("Which boss?", `Usage: \`${USAGE}\``);
     }
 
-    const last = ctx.args[ctx.args.length - 1]!;
+    // Trailing guild override — `!kill <boss> <guild>` or
+    // `!kill <boss> <time> <guild>` — so an officer in any faction guild's
+    // server can log a kill on behalf of a guild that didn't run the command
+    // itself. Only strips when the last token is an exact (case-insensitive)
+    // match for one of this server's faction-mates; anything else (item
+    // text, a typo) is left alone and flows into the normal parsing below.
+    let tokens = ctx.args;
+    let takenGuild: { id: string; name: string } | null = null;
+    if (tokens.length > 1) {
+      takenGuild = await ctx.services.boss.resolveTakingGuild(ctx.server.guildId, tokens[tokens.length - 1]!);
+      if (takenGuild) tokens = tokens.slice(0, -1);
+    }
+
+    const last = tokens[tokens.length - 1]!;
     const hasTime = /^\d{1,2}:\d{2}$/.test(last);
 
-    const rest = hasTime ? ctx.args.slice(0, -1) : ctx.args;
+    const rest = hasTime ? tokens.slice(0, -1) : tokens;
     if (rest.length === 0) {
       throw new UserFacingError("Which boss?", `Usage: \`${USAGE}\``);
     }
@@ -62,6 +75,7 @@ export const killCommand: Command = {
       bossName,
       killedAt: requestedKilledAt,
       actorId: actor.userId,
+      ...(takenGuild ? { takenGuildId: takenGuild.id } : {}),
       itemDrops,
     });
 
@@ -76,6 +90,10 @@ export const killCommand: Command = {
           inline: true,
         },
       );
+
+    if (takenGuild && !alreadyLogged) {
+      embed.addFields({ name: "Taken By", value: takenGuild.name, inline: true });
+    }
 
     if (drops.length) {
       embed.addFields({

@@ -5,6 +5,7 @@ import { spawnEmbed } from "../../embeds/notifications.js";
 import { BrandColor } from "../../embeds/theme.js";
 import { dedupeKeys } from "../../notifications/dedupe.js";
 import { discordTimestamp } from "../../utils/time.js";
+import { buildSpawnCallToAction } from "../../utils/pingRoles.js";
 import { UserFacingError } from "../../utils/errors.js";
 import { OFFICER_MINIMUM } from "../../middleware/permissions.js";
 
@@ -79,6 +80,7 @@ export const forceSpawnCommand: Command = {
         .notify({
           dedupeKey: dedupeKeys.spawn(ctx.server.discordServerId, spawn.scheduleId),
           kind: "SPAWN",
+          content: buildSpawnCallToAction(bossName, ctx.server.pingRoleId),
           embeds: [
             spawnEmbed({
               bossName,

@@ -12,6 +12,41 @@ export interface UpcomingSpawn {
   guildId: string | null;
 }
 
+type DedupableSchedule = {
+  bossName: string;
+  spawnTime: Date;
+  guildId: string | null;
+};
+
+/**
+ * Collapse multiple open BossSchedule rows for the same bossName down to
+ * one. Legacy/duplicate rows — one per guild instead of the single
+ * faction-unified row the design intends (see the "Seed as a shared,
+ * faction-wide row" comment on `syncNextRotationSchedule`/schedule seeding
+ * in @guild/core) — can still exist for older factions. Without this,
+ * `!spawn` shows the same boss twice with a different guild label, which
+ * reads as "rotation isn't working" even though the timers underneath are
+ * otherwise fine.
+ *
+ * Rows arrive sorted by spawnTime ascending, so the first row seen per
+ * bossName is the soonest — kept by default. A later `guildId: null` row
+ * (the canonical faction-unified schedule) always wins over an earlier
+ * guild-scoped leftover, since that's the row future writes will actually
+ * keep in sync going forward.
+ */
+function dedupeByBossName<T extends DedupableSchedule>(rows: T[]): T[] {
+  const byName = new Map<string, T>();
+  for (const row of rows) {
+    const existing = byName.get(row.bossName);
+    if (!existing) {
+      byName.set(row.bossName, row);
+    } else if (existing.guildId !== null && row.guildId === null) {
+      byName.set(row.bossName, row);
+    }
+  }
+  return Array.from(byName.values()).sort((a, b) => a.spawnTime.getTime() - b.spawnTime.getTime());
+}
+
 export interface UpcomingActivity {
   id: string;
   type: string;
@@ -87,11 +122,15 @@ export class BossRepository {
         guildTurn: true,
         guildTurnGuild: { select: { name: true } },
       },
+      // Take a bit more than `limit` before deduping — several leftover rows
+      // can share one bossName (see dedupeByBossName below), so a plain
+      // `take: limit` here could exhaust the page on duplicates and under-fill
+      // the deduped result.
       orderBy: { spawnTime: "asc" },
-      take: limit,
+      take: limit * 3,
     });
 
-    return rows.map((row) => ({
+    return dedupeByBossName(rows).slice(0, limit).map((row) => ({
       scheduleId: row.id,
       bossName: row.bossName,
       spawnTime: row.spawnTime,

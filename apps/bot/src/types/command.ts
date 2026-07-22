@@ -55,6 +55,7 @@ export interface CommandContext {
     dedupeKey: string;
     kind: NotificationKind;
     embeds: EmbedBuilder[];
+    content?: string;
   }) => Promise<boolean>;
 }
 

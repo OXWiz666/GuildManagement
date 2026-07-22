@@ -182,7 +182,7 @@ function buildContext(
     actor,
     services,
 
-    async notify({ dedupeKey, kind, embeds }) {
+    async notify({ dedupeKey, kind, embeds, content }) {
       const channelId = await services.repositories.discordServer.getChannel(
         server.discordServerId,
         "NOTIFICATION",
@@ -202,6 +202,7 @@ function buildContext(
         guildId: server.guildId,
         channelId,
         embeds,
+        ...(content ? { content } : {}),
       });
 
       return outcome === "sent";

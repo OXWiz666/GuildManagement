@@ -43,11 +43,6 @@ export function spawnEmbed(input: SpawnEmbedInput): EmbedBuilder {
     embed.addFields({ name: "Guild Turn", value: `🛡 ${input.guildTurn}`, inline: true });
   }
 
-  embed.addFields({
-    name: "​",
-    value: "Log it with `!kill " + input.bossName + "` once it's down.",
-  });
-
   return embed;
 }
 

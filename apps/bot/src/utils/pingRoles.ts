@@ -33,6 +33,19 @@ export function pingRoleContent(value: string | null | undefined): string | unde
   return mentions || undefined;
 }
 
+/**
+ * The "boss is live" message content — call-to-action text plus whatever
+ * ping roles are configured, in one message. Discord embeds can't trigger a
+ * role-mention notification (only message `content` can), so the roles have
+ * to live in `content` regardless — this just puts them on the same line as
+ * the reason for the ping instead of a bare, context-free list of mentions.
+ */
+export function buildSpawnCallToAction(bossName: string, pingRoleIdValue: string | null | undefined): string {
+  const callToAction = "Log it with `!kill " + bossName + "` once it's down.";
+  const mentions = pingRoleContent(pingRoleIdValue);
+  return mentions ? `${callToAction} ${mentions}` : callToAction;
+}
+
 function uniquePingRoleIds(roleIds: string[]): string[] {
   const seen = new Set<string>();
   const unique: string[] = [];

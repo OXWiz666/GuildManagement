@@ -16,6 +16,18 @@ interface RoleManagementSectionProps {
   onDirtyChange?: (isDirty: boolean) => void;
 }
 
+function memberMatchesCpRank(
+  cp: number,
+  band: string,
+  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number },
+) {
+  const coreMinCp = cpTiers.coreMinCp ?? Number.POSITIVE_INFINITY;
+  if (band === "CORE_MEMBER") return cp >= coreMinCp;
+  if (band === "ELITE_MEMBER") return cp >= cpTiers.eliteMinCp && cp < coreMinCp;
+  if (band === "MEMBER") return cp < cpTiers.eliteMinCp;
+  return false;
+}
+
 /** Discord Server Settings-style role management: a role list on the left
  *  (built-in rank bands + guild-created custom roles) and a detail editor on
  *  the right — replaces the old two-button/two-modal flow. */
@@ -23,7 +35,7 @@ export default function RoleManagementSection({ guildId, onDirtyChange }: RoleMa
   const { socket } = useSocket();
   const { addToast } = useToast();
   const { overrides: roleDisplayOverrides } = useRoleDisplayNames();
-  const [selection, setSelection] = useState<RoleSelection>({ kind: "band", band: "OFFICER" });
+  const [selection, setSelection] = useState<RoleSelection>({ kind: "band", band: "CORE_MEMBER" });
   const [busyRoleId, setBusyRoleId] = useState<string | null>(null);
   const [rules, setRules] = useState<MarketRulesData>(DEFAULT_MARKET_RULES as MarketRulesData);
   const [savedRules, setSavedRules] = useState<MarketRulesData>(DEFAULT_MARKET_RULES as MarketRulesData);
@@ -101,12 +113,12 @@ export default function RoleManagementSection({ guildId, onDirtyChange }: RoleMa
   // dead selection.
   useEffect(() => {
     if (selection.kind === "custom" && !customRoles.some((r) => r.id === selection.id)) {
-      setSelection({ kind: "band", band: "OFFICER" });
+      setSelection({ kind: "band", band: "CORE_MEMBER" });
     }
   }, [customRoles, selection]);
 
   function memberCount(sel: RoleSelection): number {
-    if (sel.kind === "band") return members.filter((m) => m.role === sel.band && !m.customRole).length;
+    if (sel.kind === "band") return members.filter((m) => memberMatchesCpRank(m.cp ?? 0, sel.band, rules.cpTiers)).length;
     if (sel.kind === "custom") return members.filter((m) => m.customRole?.id === sel.id).length;
     return 0;
   }
@@ -118,7 +130,7 @@ export default function RoleManagementSection({ guildId, onDirtyChange }: RoleMa
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const setCpTier = (key: "eliteMinCp" | "upperMinCp", value: string) =>
+  const setCpTier = (key: "coreMinCp" | "eliteMinCp" | "upperMinCp", value: string) =>
     setRules((current) => ({
       ...current,
       cpTiers: { ...current.cpTiers, [key]: parseInt(value, 10) || 0 },
@@ -163,8 +175,8 @@ export default function RoleManagementSection({ guildId, onDirtyChange }: RoleMa
     <div className="space-y-6">
       <SettingsCard
         eyebrow="Guild Settings"
-        title="Roles"
-        description="Rename built-in rank tiers, set CP thresholds beside each rank, or create custom roles that inherit a fixed permission level."
+        title="Moderator & Permissions"
+        description="Manage permission roles separately from CP-based ranks. Core, Elite, and Member ranks are assigned automatically from Combat Power thresholds."
       >
       <div className="flex flex-col lg:flex-row gap-4">
         <RoleList
@@ -190,12 +202,12 @@ export default function RoleManagementSection({ guildId, onDirtyChange }: RoleMa
           isSavingCpThresholds={isSavingThresholds}
           onDirtyChange={setRoleEditorDirty}
           onSaved={() => {}}
-          onDeleted={() => setSelection({ kind: "band", band: "OFFICER" })}
+          onDeleted={() => setSelection({ kind: "band", band: "CORE_MEMBER" })}
           onCreated={(role) => {
             setPendingRole(role);
             setSelection({ kind: "custom", id: role.id });
           }}
-          onCancelNew={() => setSelection({ kind: "band", band: "OFFICER" })}
+          onCancelNew={() => setSelection({ kind: "band", band: "CORE_MEMBER" })}
         />
       </div>
       </SettingsCard>

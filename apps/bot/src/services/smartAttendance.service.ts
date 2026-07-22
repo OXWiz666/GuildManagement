@@ -53,7 +53,7 @@ export interface SmartAttendanceResult {
   ms: number;
 }
 
-const DEFAULT_MINUTES = 30;
+const DEFAULT_MINUTES = 120;
 const MAX_MINUTES = 240;
 const MIN_WORD_CONFIDENCE = 0.35;
 const MIN_NON_LATIN_WORD_CONFIDENCE = 0.15;
@@ -182,40 +182,48 @@ export class SmartAttendanceService {
     const alreadyPresent: SmartAttendanceResult["alreadyPresent"] = [];
     const absent: SmartAttendanceResult["absent"] = [];
 
+    // Batched instead of one markMemberPresent/markMemberPendingForReview call
+    // per detected member — a single rally screenshot can carry 30-50 visible
+    // members, and each singular call is ~6-8 sequential DB round trips on
+    // its own (200-400 round trips for one scan otherwise). Chunked at 200
+    // (the batch endpoints' own cap) since multi-screenshot scans can exceed
+    // it for a large guild.
+    const presentToMark = detected.present.filter((match) => !alreadyConfirmed.has(match.userId));
     for (const match of detected.present) {
-      if (alreadyConfirmed.has(match.userId)) {
-        alreadyPresent.push(match);
-        continue;
-      }
-
-      await core.dashboard.markMemberPresent(
+      if (alreadyConfirmed.has(match.userId)) alreadyPresent.push(match);
+    }
+    for (const chunk of chunk200(presentToMark.map((match) => match.userId))) {
+      await core.dashboard.markMembersPresent(
         params.guildId,
         session.id,
-        match.userId,
+        chunk,
         params.actorId,
         undefined,
         "discord-bot-smart-attendance",
       );
-      confirmed.push(match);
     }
+    confirmed.push(...presentToMark);
 
+    const absentToQueue: typeof detected.absent = [];
     for (const match of detected.absent) {
       if (alreadyConfirmed.has(match.userId)) {
         alreadyPresent.push(match);
         continue;
       }
-
-      if (!alreadyPending.has(match.userId)) {
-        await core.dashboard.markMemberPendingForReview(
-          params.guildId,
-          session.id,
-          match.userId,
-          params.actorId,
-          undefined,
-          "discord-bot-smart-attendance",
-        );
-      }
       absent.push(match);
+      if (!alreadyPending.has(match.userId)) {
+        absentToQueue.push(match);
+      }
+    }
+    for (const chunk of chunk200(absentToQueue.map((match) => match.userId))) {
+      await core.dashboard.markMembersPendingForReview(
+        params.guildId,
+        session.id,
+        chunk,
+        params.actorId,
+        undefined,
+        "discord-bot-smart-attendance",
+      );
     }
 
     return {
@@ -627,6 +635,15 @@ function substringNameScore(partLength: number, fullLength: number, cjk: boolean
 function average(values: number[]): number {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** Splits into groups of ≤200 — the batch attendance endpoints' own per-call cap. */
+function chunk200<T>(items: T[]): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += 200) {
+    chunks.push(items.slice(i, i + 200));
+  }
+  return chunks;
 }
 
 function levenshtein(a: string, b: string): number {

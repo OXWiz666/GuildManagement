@@ -371,7 +371,7 @@ OCR needs headroom: 512MB is the configured minimum. If scans OOM, raise it.
 | `An invalid token was provided` | `DISCORD_TOKEN` is wrong or was rotated. Reset it in the portal (Step 1). |
 | Bot online, ignores everything | A `!cmdhere` restriction pointing at another channel, or the server isn't bound (Step 6). |
 | "There's no Discord section in Guild Settings" | Your personal link is in **Settings** (`/dashboard/settings`), not Guild Settings. Guild Settings → Integrations → Discord is the *guild-level* panel, and is Guild Leader-only. |
-| "This Discord server isn't bound to a ForgeKeep guild" | Run `!bindguild <invite-code>` (Step 6) |
+| "This Discord server isn't bound to a ForgeKeep guild" | Run `!bindguild <invite-code>` (Step 6). If the guild **is** already bound and you're only seeing this on *some* replies (e.g. one correct `!cp` reply plus one "not bound" reply to the same message), you have two bot processes answering the same Discord token — commonly a local dev instance pointed at a different database than the deployed one. See "Run exactly one instance" above; only ever run one instance per Discord bot token. |
 | "Your Discord account isn't linked" | Member needs `!link <code>` (Step 7) |
 | Bot boots then exits with "Invalid bot environment variables" | Missing env var — the message names it |
 | Commands work in one channel only | `!cmdhere` was set. Re-run it in the channel you want. |
@@ -459,6 +459,34 @@ message would leave the bot silently wrong. As an invalidation hint, a lost
 message is merely a delay — the cache TTL is still the backstop, and correctness
 never depends on delivery. Realtime failing to connect degrades to TTL staleness
 and logs; it never takes the bot down.
+
+## Public API (optional, unlisted)
+
+A small read-only HTTP API can run alongside the Discord gateway in this same
+process, for external tools/scripts that want guild data without going through
+Discord. It is **off by default**, uses its own bearer-key auth (nothing to do
+with the website's login/session), and is not linked or documented anywhere on
+forgekeep.io — the only way to reach it is to already have the key.
+
+Enable it:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PUBLIC_API_ENABLED` | `false` | Set `true` to start the HTTP server |
+| `PUBLIC_API_KEY` | — | Required when enabled. One shared bearer token, min 16 chars — treat it like an admin credential; it can read **any** guild, not just one. Rotate by changing this and restarting. |
+| `PUBLIC_API_PORT` | `8080` | Falls back to the platform's `PORT` env var when set (Railway/Fly convention) |
+| `RATE_LIMIT_API_PER_MIN` | `60` | Per API key, fixed-window |
+
+Routes (all under `/v1`, `Authorization: Bearer <PUBLIC_API_KEY>` required except `/health`):
+
+```
+GET /health                                  # no auth — for platform health checks
+GET /v1/guilds/:guildId/cp/leaderboard       # ?page=&pageSize=
+GET /v1/guilds/:guildId/bosses/upcoming
+GET /v1/guilds/:guildId/members              # ign/class/role/cp only — never email
+```
+
+`:guildId` is the ForgeKeep guild id (not the Discord server id).
 
 ## What's not built yet
 

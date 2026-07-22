@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { marketApi, type ItemRequestData } from "@/lib/api";
 import { useQuery, queryClient } from "@/lib/query";
 import { useToast } from "@/components/ui/Toast";
@@ -65,7 +65,7 @@ export default function RequestItemPanel({ guildId, isOfficer }: Props) {
   }
 
   const officerRequests = (officerData || []) as ItemRequestData[];
-  const pending = officerRequests.filter((r) => r.status === "PENDING");
+  const pending = useMemo(() => officerRequests.filter((r) => r.status === "PENDING"), [officerRequests]);
   const myRequests = mineData?.requests || [];
   const specificNameFor = (request: ItemRequestData) => {
     const name = request.itemName?.trim();

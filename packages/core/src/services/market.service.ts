@@ -33,8 +33,6 @@ import {
 } from "@guild/shared";
 
 const OFFICER_ROLES = ["OFFICER", "GUILD_LEADER", "FACTION_LEADER", "ADMIN"];
-// Roles that always receive the detailed "Core" distribution form
-const CORE_FORM_ROLES = ["CORE_MEMBER", ...OFFICER_ROLES];
 
 // All audit actions that belong to the Guild Market module (for the audit tab)
 const MARKET_AUDIT_ACTIONS = [
@@ -117,19 +115,38 @@ function distributionCoversWish(item: WishlistItem, dist: Record<string, unknown
 
 /** Deep-merge stored market rules over the spec defaults so missing keys are filled. */
 export function mergeMarketRules(raw: unknown): MarketRules {
-  const stored = (raw && typeof raw === "object" ? raw : {}) as Partial<MarketRules>;
+  // `any` here is deliberate: this also has to read the short-lived
+  // single-select shape (mountId/materialKey, string not string[]) that
+  // predates today's multi-select fields, which isn't part of MarketRules
+  // anymore.
+  const stored = (raw && typeof raw === "object" ? raw : {}) as any;
   const limits = { ...DEFAULT_MARKET_RULES.limits } as MarketRules["limits"];
   if (stored.limits) {
     for (const tier of DISTRIBUTION_TIERS) {
-      if (stored.limits[tier]) {
-        limits[tier] = { ...DEFAULT_MARKET_RULES.limits[tier], ...stored.limits[tier] };
+      const storedTier = stored.limits[tier];
+      if (!storedTier) continue;
+
+      const merged: Record<string, unknown> = { ...DEFAULT_MARKET_RULES.limits[tier], ...storedTier };
+      // Migrate the short-lived single-select shape (mountId/materialKey) from
+      // just before this became multi-select — only when the caller hadn't
+      // already saved the new array field.
+      if (storedTier.mountIds === undefined && storedTier.mountId) {
+        merged["mountIds"] = [storedTier.mountId];
       }
+      if (storedTier.materialKeys === undefined && storedTier.materialKey) {
+        merged["materialKeys"] = [storedTier.materialKey];
+      }
+      delete merged["mountId"];
+      delete merged["materialKey"];
+      limits[tier] = merged as MarketRules["limits"][typeof tier];
     }
   }
   return {
     cpTiers: { ...DEFAULT_MARKET_RULES.cpTiers, ...(stored.cpTiers || {}) },
     limits,
     weights: { ...DEFAULT_MARKET_RULES.weights, ...(stored.weights || {}) },
+    logCatalog: stored.logCatalog?.length ? stored.logCatalog : DEFAULT_MARKET_RULES.logCatalog,
+    materialCatalog: stored.materialCatalog?.length ? stored.materialCatalog : DEFAULT_MARKET_RULES.materialCatalog,
   };
 }
 
@@ -138,13 +155,13 @@ export async function getEffectiveMarketRules(guildId: string): Promise<MarketRu
   return mergeMarketRules(settings?.marketRules);
 }
 
-/** Resolve a member's distribution tier: CORE by role, else ELITE/UPPER/LOWER by CP. */
+/** Resolve a member's distribution tier from CP-based ranks. */
 export function resolveDistributionTier(
   member: { role: string; cp: number | null },
   rules: MarketRules,
 ): DistributionTier {
-  if (CORE_FORM_ROLES.includes(member.role)) return "CORE";
   const cp = member.cp ?? 0;
+  if (cp >= (rules.cpTiers.coreMinCp ?? Number.POSITIVE_INFINITY)) return "CORE";
   if (cp >= rules.cpTiers.eliteMinCp) return "ELITE";
   if (cp >= rules.cpTiers.upperMinCp) return "UPPER";
   return "LOWER";

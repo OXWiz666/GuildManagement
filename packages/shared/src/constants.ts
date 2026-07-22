@@ -476,14 +476,29 @@ export const WISHLIST_LABELS: Record<string, string> = {
   temporalPieces: "Temporal Pieces",
 };
 
+// A named, guild-editable catalog entry (Distribution Rules' Logs/Materials
+// item lists). `key` is a stable id — renaming `label` never disturbs which
+// tiers already have the item checked.
+export interface MarketCatalogItem {
+  key: string;
+  label: string;
+}
+
 // Default market rules — seeded from the product spec when a guild has none configured.
-export const DEFAULT_MARKET_RULES = {
-  cpTiers: { eliteMinCp: 9000, upperMinCp: 6000 },
+// `mountIds` (Distribution Rules "Mount" column) references GuildMount catalog rows — the
+// mounts that tier is allowed to request — independent of the `temporalPieces` quantity cap,
+// which still governs the "Temporal Pieces" wishlist resource elsewhere. Mounts are managed
+// entirely in the existing Mount Data section, not `logCatalog`/`materialCatalog` below.
+// `logKeys` / `materialKeys` reference entries in the guild-wide `logCatalog` /
+// `materialCatalog` — which named log/material items that tier can be given. The `logs` /
+// `materials` numbers stay a single shared threshold across whichever items are checked.
+export const DEFAULT_MARKET_RULES: MarketRules = {
+  cpTiers: { coreMinCp: 12000, eliteMinCp: 9000, upperMinCp: 0 },
   limits: {
-    CORE: { logs: 8, temporalPieces: 3, materials: 5 },
-    ELITE: { logs: 7, temporalPieces: 7, materials: 5 },
-    UPPER: { logs: 5, temporalPieces: 4, materials: 5 },
-    LOWER: { logs: 5, temporalPieces: 3, materials: 5 },
+    CORE: { logs: 8, temporalPieces: 3, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
+    ELITE: { logs: 7, temporalPieces: 7, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
+    UPPER: { logs: 5, temporalPieces: 4, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
+    LOWER: { logs: 5, temporalPieces: 3, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
   },
   weights: {
     rank: 0.15,
@@ -494,11 +509,26 @@ export const DEFAULT_MARKET_RULES = {
     previousReceived: -0.05,
     recency: 0.05,
   },
-} as const;
+  // Guild-wide, editable/addable from the Distribution Rules table itself.
+  // Materials starts seeded from the long-standing MATERIAL_TYPES catalog so
+  // existing labels/keys carry over; Logs starts empty for the leader to define.
+  logCatalog: [],
+  materialCatalog: Object.entries(MATERIAL_TYPES).map(([key, label]) => ({ key, label })),
+};
 
 export type MarketRules = {
-  cpTiers: { eliteMinCp: number; upperMinCp: number };
-  limits: Record<DistributionTier, { logs: number; temporalPieces: number; materials: number }>;
+  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number };
+  limits: Record<
+    DistributionTier,
+    {
+      logs: number;
+      temporalPieces: number;
+      materials: number;
+      mountIds?: string[];
+      materialKeys?: string[];
+      logKeys?: string[];
+    }
+  >;
   weights: {
     rank: number;
     dkp: number;
@@ -508,6 +538,8 @@ export type MarketRules = {
     previousReceived: number;
     recency: number;
   };
+  logCatalog?: MarketCatalogItem[];
+  materialCatalog?: MarketCatalogItem[];
 };
 
 // ─── Activity Point Rules (Leader's Panel — Register Activity) ──────
@@ -544,7 +576,7 @@ const DEFAULT_MULTIPLIERS: Record<CustomizableRoleType, number> = CUSTOMIZABLE_R
 // mergeActivityPointRules). Each has a distinct default color swatch.
 export const DEFAULT_ACTIVITY_POINT_RULES: ActivityPointRules = {
   activities: [
-    { key: "FIELD_BOSS", label: "Field Boss", basePoints: 5, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "amber" },
+    { key: "BOSS", label: "Boss Attendance", basePoints: 5, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "amber" },
     { key: "GUILD_BOSS", label: "Guild Boss", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "violet" },
     { key: "GUILD_ARENA", label: "Guild Arena", basePoints: 10, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "red" },
     { key: "PVP", label: "PVP", basePoints: 5, multipliers: { ...DEFAULT_MULTIPLIERS }, color: "sky" },

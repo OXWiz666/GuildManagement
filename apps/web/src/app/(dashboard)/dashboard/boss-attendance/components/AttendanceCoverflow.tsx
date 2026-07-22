@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type AttendanceSessionData, type AttendanceSessionSummary, type BossScheduleData } from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getBossImageUrl } from "@guild/shared";
@@ -152,20 +152,29 @@ export default function AttendanceCoverflow({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const visibleSessions = sessions.filter(
-    (session) => session.isActive && new Date(session.expiresAt).getTime() > now,
-  );
-  const visibleSessionScheduleIds = new Set(
-    visibleSessions
-      .map((session) => session.bossScheduleId)
-      .filter((id): id is string => Boolean(id)),
-  );
-  const visibleSchedules = schedules
-    .filter((schedule) => {
-      if (visibleSessionScheduleIds.has(schedule.id)) return false;
-      return schedule.status !== "KILLED" || Boolean(activeScheduleSession(schedule, now));
-    })
-    .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
+
+  // Which sessions/schedules are "visible" only changes when one crosses its
+  // expiry — a per-minute check is plenty (the live mm:ss countdown text
+  // below still updates every second via `now` directly). Without this, the
+  // filter/sort chain over the full sessions+schedules list reran 60x/minute
+  // for no visible difference in output.
+  const nowMinuteBucket = Math.floor(now / 60_000);
+  const { visibleSessions, visibleSchedules } = useMemo(() => {
+    const bucketNow = nowMinuteBucket * 60_000;
+    const sessionsVisible = sessions.filter(
+      (session) => session.isActive && new Date(session.expiresAt).getTime() > bucketNow,
+    );
+    const sessionScheduleIds = new Set(
+      sessionsVisible.map((session) => session.bossScheduleId).filter((id): id is string => Boolean(id)),
+    );
+    const schedulesVisible = schedules
+      .filter((schedule) => {
+        if (sessionScheduleIds.has(schedule.id)) return false;
+        return schedule.status !== "KILLED" || Boolean(activeScheduleSession(schedule, bucketNow));
+      })
+      .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
+    return { visibleSessions: sessionsVisible, visibleSchedules: schedulesVisible };
+  }, [sessions, schedules, nowMinuteBucket]);
   const visibleCount = visibleSessions.length + visibleSchedules.length;
 
   function scrollBy(delta: number) {

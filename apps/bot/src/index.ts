@@ -1,5 +1,8 @@
+import type { ServerType } from "@hono/node-server";
 import { prisma } from "@guild/db";
 import { createBot } from "./bot/client.js";
+import { createApiServer } from "./api/server.js";
+import { env } from "./config/env.js";
 import { logger, errorFields } from "./utils/logger.js";
 import { explainStartupError } from "./utils/startupErrors.js";
 
@@ -13,6 +16,11 @@ import { explainStartupError } from "./utils/startupErrors.js";
 async function main(): Promise<void> {
   const bot = createBot();
 
+  // Opt-in only (see config/env.ts) — most deployments never set
+  // PUBLIC_API_ENABLED, so this stays a no-op for them.
+  const api = env.PUBLIC_API_ENABLED ? createApiServer(bot.services) : null;
+  let apiServer: ServerType | null = null;
+
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     // A second Ctrl-C shouldn't start a second teardown.
@@ -22,6 +30,7 @@ async function main(): Promise<void> {
     logger.info("Shutting down", { signal });
 
     try {
+      if (api && apiServer) await api.stop(apiServer);
       await bot.stop();
       await prisma.$disconnect();
       logger.info("Shutdown complete");
@@ -47,6 +56,7 @@ async function main(): Promise<void> {
   });
 
   await bot.start();
+  if (api) apiServer = api.start();
 }
 
 main().catch((error: unknown) => {

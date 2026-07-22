@@ -160,8 +160,16 @@ export const guilds = new Hono<AppEnv>()
   })
 
   // ─── Custom roles ────────────────────────────────────────────
+  // requireGuildRole runs (and checks membership) before the handler body,
+  // cache or no cache — safe to cache the read itself. Rarely edited
+  // (GUILD_LEADER only), so a generous TTL plus active invalidation on write.
   .get("/:guildId/custom-roles", requireGuildRole("MEMBER"), async (c) => {
-    const roles = await services.customRole.listCustomRoles(c.req.param("guildId"));
+    const guildId = c.req.param("guildId");
+    const cacheKey = `custom-roles:${guildId}`;
+    const cached = await cache.get<unknown>(cacheKey);
+    if (cached) return ok(c, { roles: cached });
+    const roles = await services.customRole.listCustomRoles(guildId);
+    await cache.set(cacheKey, roles, 180);
     return ok(c, { roles });
   })
   .post("/:guildId/custom-roles", requireGuildRole("GUILD_LEADER"), async (c) => {
@@ -170,6 +178,7 @@ export const guilds = new Hono<AppEnv>()
     const body = await readJson<{ name?: string; color?: string; band?: string }>(c);
     const { ipAddress, userAgent } = getClientInfo(c);
     const role = await services.customRole.createCustomRole(user.userId, guildId, body, ipAddress, userAgent);
+    await cache.invalidatePattern(`custom-roles:${guildId}`);
     broadcastToGuild(guildId, "custom_roles_updated", { guildId });
     return ok(c, { role });
   })
@@ -180,6 +189,7 @@ export const guilds = new Hono<AppEnv>()
     const body = await readJson<{ name?: string; color?: string; sortOrder?: number }>(c);
     const { ipAddress, userAgent } = getClientInfo(c);
     const role = await services.customRole.updateCustomRole(user.userId, guildId, roleId, body, ipAddress, userAgent);
+    await cache.invalidatePattern(`custom-roles:${guildId}`);
     broadcastToGuild(guildId, "custom_roles_updated", { guildId });
     broadcastToGuild(guildId, "member_role_updated", { guildId });
     return ok(c, { role });
@@ -190,6 +200,7 @@ export const guilds = new Hono<AppEnv>()
     const user = c.get("user");
     const { ipAddress, userAgent } = getClientInfo(c);
     const result = await services.customRole.deleteCustomRole(user.userId, guildId, roleId, ipAddress, userAgent);
+    await cache.invalidatePattern(`custom-roles:${guildId}`);
     broadcastToGuild(guildId, "custom_roles_updated", { guildId });
     broadcastToGuild(guildId, "member_role_updated", { guildId });
     return ok(c, result);

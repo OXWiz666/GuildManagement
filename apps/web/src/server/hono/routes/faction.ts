@@ -97,16 +97,9 @@ export const faction = new Hono<AppEnv>()
   })
 
   // ─── Guilds within the faction ───────────────────────────────
-  .post("/guilds/invite", requireAuth, async (c) => {
-    const { guildId } = await readJson<{ guildId?: string }>(c);
-    if (!guildId) throw new BadRequestError("guildId is required");
-    const { ipAddress, userAgent } = getClientInfo(c);
-    return ok(c, await services.faction.inviteGuildToFaction(c.get("user").userId, guildId, ipAddress, userAgent));
-  })
-  .get("/guilds/search", requireAuth, async (c) => {
-    const guilds = await services.faction.searchGuilds(c.get("user").userId, c.req.query("q") ?? "");
-    return ok(c, { guilds });
-  })
+  // No search/direct-invite route on purpose — a guild only joins by
+  // redeeming the faction's invite code (see /invite-code* and
+  // /join-requests/redeem below).
   .post("/guilds/:guildId/remove", requireAuth, async (c) => {
     const { ipAddress, userAgent } = getClientInfo(c);
     return ok(c, await services.faction.removeGuildFromFaction(c.get("user").userId, c.req.param("guildId"), ipAddress, userAgent));

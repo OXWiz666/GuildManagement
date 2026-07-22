@@ -6,7 +6,7 @@ import Badge from "@/components/ui/Badge";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 
 const ROLE_FILTER_VALUES = ["ALL", "GUILD_LEADER", "OFFICER", "CORE_MEMBER", "ELITE_MEMBER", "MEMBER"] as const;
-const SORT_VALUES = ["GUILD_POINTS", "ROLE", "RANK"] as const;
+const SORT_VALUES = ["CURRENT_GUILD_POINTS", "ALL_TIME_GUILD_POINTS", "ROLE", "RANK"] as const;
 
 type RankingSort = (typeof SORT_VALUES)[number];
 type RankingRow = {
@@ -17,6 +17,8 @@ type RankingRow = {
   customRole?: { name?: string | null; color?: string | null } | null;
   cp: number;
   dkp: number;
+  currentDkp?: number;
+  allTimeDkp?: number;
   class: string;
 };
 type RankingAccounting = {
@@ -29,8 +31,20 @@ const ROLE_SORT_ORDER = new Map(
   ),
 );
 
-function compareByGuildPoints(a: RankingRow, b: RankingRow) {
-  return b.dkp - a.dkp || b.cp - a.cp || a.ign.localeCompare(b.ign);
+function currentGuildPoints(row: RankingRow) {
+  return row.currentDkp ?? row.dkp;
+}
+
+function allTimeGuildPoints(row: RankingRow) {
+  return row.allTimeDkp ?? row.dkp;
+}
+
+function compareByCurrentGuildPoints(a: RankingRow, b: RankingRow) {
+  return currentGuildPoints(b) - currentGuildPoints(a) || b.cp - a.cp || a.ign.localeCompare(b.ign);
+}
+
+function compareByAllTimeGuildPoints(a: RankingRow, b: RankingRow) {
+  return allTimeGuildPoints(b) - allTimeGuildPoints(a) || b.cp - a.cp || a.ign.localeCompare(b.ign);
 }
 
 function compareRankings(a: RankingRow, b: RankingRow, sortBy: RankingSort) {
@@ -39,16 +53,20 @@ function compareRankings(a: RankingRow, b: RankingRow, sortBy: RankingSort) {
       (ROLE_SORT_ORDER.get(a.role) ?? ROLE_SORT_ORDER.size) -
       (ROLE_SORT_ORDER.get(b.role) ?? ROLE_SORT_ORDER.size);
     if (roleDelta !== 0) return roleDelta;
-    return compareByGuildPoints(a, b);
+    return compareByCurrentGuildPoints(a, b);
   }
 
   if (sortBy === "RANK") {
     const aRank = (a.customRole?.name || a.rankName || "").toLowerCase();
     const bRank = (b.customRole?.name || b.rankName || "").toLowerCase();
-    return aRank.localeCompare(bRank) || compareByGuildPoints(a, b);
+    return aRank.localeCompare(bRank) || compareByCurrentGuildPoints(a, b);
   }
 
-  return compareByGuildPoints(a, b);
+  if (sortBy === "ALL_TIME_GUILD_POINTS") {
+    return compareByAllTimeGuildPoints(a, b);
+  }
+
+  return compareByCurrentGuildPoints(a, b);
 }
 
 interface RankingsTabProps {
@@ -58,7 +76,8 @@ interface RankingsTabProps {
 }
 
 const SORT_LABELS: Record<RankingSort, string> = {
-  GUILD_POINTS: "Sort: All-Time Guild Points",
+  CURRENT_GUILD_POINTS: "Sort: Current Guild Points",
+  ALL_TIME_GUILD_POINTS: "Sort: All-Time Guild Points",
   ROLE: "Sort: Role",
   RANK: "Sort: Rank",
 };
@@ -99,13 +118,13 @@ export default function RankingsTab({
   onSearchChange,
 }: RankingsTabProps) {
   const [roleFilter, setRoleFilter] = useState("ALL");
-  const [sortBy, setSortBy] = useState<RankingSort>("GUILD_POINTS");
+  const [sortBy, setSortBy] = useState<RankingSort>("CURRENT_GUILD_POINTS");
   const { resolveRoleName } = useRoleDisplayNames();
 
   // Full sorted ladder (unfiltered) — drives ranks, podium and bar scale
   const sortedAll = useMemo(() => {
     if (!accounting?.memberBalances) return [] as RankingRow[];
-    return [...accounting.memberBalances].sort((a: RankingRow, b: RankingRow) => compareByGuildPoints(a, b));
+    return [...accounting.memberBalances].sort((a: RankingRow, b: RankingRow) => compareByCurrentGuildPoints(a, b));
   }, [accounting]);
 
   const rankMap = useMemo(() => {
@@ -114,7 +133,7 @@ export default function RankingsTab({
     return m;
   }, [sortedAll]);
 
-  const maxDkp = sortedAll[0]?.dkp || 1;
+  const maxCurrentDkp = currentGuildPoints(sortedAll[0] ?? ({ dkp: 0 } as RankingRow)) || 1;
 
   const filtered = useMemo(() => {
     const byRole = roleFilter === "ALL" ? sortedAll : sortedAll.filter((m) => m.role === roleFilter);
@@ -138,7 +157,7 @@ export default function RankingsTab({
     return [...searched].sort((a, b) => compareRankings(a, b, sortBy));
   }, [sortedAll, rankingSearch, roleFilter, sortBy, resolveRoleName]);
 
-  const showPodium = !rankingSearch.trim() && roleFilter === "ALL" && sortBy === "GUILD_POINTS" && sortedAll.length >= 3;
+  const showPodium = !rankingSearch.trim() && roleFilter === "ALL" && sortBy === "CURRENT_GUILD_POINTS" && sortedAll.length >= 3;
   const podium = sortedAll.slice(0, 3);
 
   return (
@@ -170,10 +189,13 @@ export default function RankingsTab({
                 <div className="relative z-10 mt-4 flex items-end justify-between gap-2">
                   <div>
                     <p className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
-                      All-Time Guild Points
+                      Current Guild Points
                     </p>
                     <p className={`font-mono text-2xl font-bold ${p.accent}`}>
-                      {row.dkp.toLocaleString()}
+                      {currentGuildPoints(row).toLocaleString()}
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-mono text-white/35">
+                      All-time {allTimeGuildPoints(row).toLocaleString()}
                     </p>
                   </div>
                   <p className="font-mono text-[11px] text-cyan-400/90">
@@ -184,7 +206,7 @@ export default function RankingsTab({
                   <div
                     className={`bar-grow h-full rounded-full ${p.bar}`}
                     style={{
-                      width: `${Math.max((row.dkp / maxDkp) * 100, 4)}%`,
+                      width: `${Math.max((currentGuildPoints(row) / maxCurrentDkp) * 100, 4)}%`,
                       animationDelay: `${i * 90 + 200}ms`,
                     }}
                   />
@@ -200,10 +222,10 @@ export default function RankingsTab({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-4 mb-4">
           <div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <span aria-hidden>🏆</span> All-Time Guild Points Leaderboard
+              <span aria-hidden>🏆</span> Current Guild Points Leaderboard
             </h3>
             <p className="text-[10px] text-white/40 mt-1">
-              Lifetime Guild Points from attendance, used for long-term ranking.
+              Current Guild Points follow your reset cycle. All-Time Guild Points stay visible for lifetime totals.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -252,13 +274,14 @@ export default function RankingsTab({
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Class</th>
                   <th className="px-4 py-3 text-center">Combat Power</th>
-                  <th className="px-4 py-3 min-w-[180px]">All-Time Guild Points</th>
+                  <th className="px-4 py-3 min-w-[180px]">Current Guild Points</th>
+                  <th className="px-4 py-3 text-right min-w-[140px]">All-Time Guild Points</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
                 {filtered.map((row, index) => {
                   const rank = rankMap.get(row.memberId) ?? index + 1;
-                  const pct = Math.max((row.dkp / maxDkp) * 100, 3);
+                  const pct = Math.max((currentGuildPoints(row) / maxCurrentDkp) * 100, 3);
                   const isTop3 = rank <= 3;
                   return (
                     <tr
@@ -295,9 +318,12 @@ export default function RankingsTab({
                             />
                           </div>
                           <span className="w-12 shrink-0 text-right font-mono font-bold text-amber-400">
-                            {row.dkp.toLocaleString()}
+                            {currentGuildPoints(row).toLocaleString()}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-white/65">
+                        {allTimeGuildPoints(row).toLocaleString()}
                       </td>
                     </tr>
                   );

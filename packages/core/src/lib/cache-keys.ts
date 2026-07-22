@@ -22,11 +22,15 @@ export const ttl = {
   factionEvents: 60,
   factionInviteCode: 3600,
   factionJoinRequests: 30,
+  guildActivities: 20,
   bossRotation: 30,
   bossSchedules: 15,
   bossAudit: 30,
   bossKilledHistory: 60,
   bossCommitments: 20,
+  bossMasterList: 60,
+  bossLowRotation: 60,
+  bossDrops: 120,
   bossRegistry: 3600,
   marketRequests: 30,
   marketLegendary: 30,
@@ -87,6 +91,7 @@ export const cacheKeys = {
   factionEvents: (factionId: string) => `${NS}:faction:events:${factionId}`,
   factionInviteCode: (factionId: string) => `${NS}:faction:invite-code:${factionId}`,
   factionJoinRequests: (factionId: string) => `${NS}:faction:join-requests:${factionId}`,
+  guildActivities: (guildId: string) => `${NS}:guild:activities:${guildId}`,
 
   // ─── 4. Boss Rotation ───
   /** Recommended target shape — cache the faction-wide computation once. */
@@ -99,6 +104,10 @@ export const cacheKeys = {
   bossAuditPage1: (guildId: string) => `${NS}:boss:audit:${guildId}:p1`,
   bossKilledHistory: (guildId: string, yyyyMm: string) => `${NS}:boss:killed-history:${guildId}:${yyyyMm}`,
   bossCommitments: (guildId: string, scheduleId: string) => `${NS}:boss:commitments:${guildId}:${scheduleId}`,
+  /** `scope` is a factionId, or `solo:${guildId}` with no faction — same convention as bossRotationByFaction. */
+  bossMasterList: (scope: string) => `${NS}:boss:master-list:${scope}`,
+  bossLowRotation: (scope: string) => `${NS}:boss:low-rotation:${scope}`,
+  bossDrops: (guildId: string, bossName: string) => `${NS}:boss:drops:${guildId}:${bossName.trim().toLowerCase()}`,
   bossRegistry: () => `${NS}:boss:registry`,
 
   // ─── 5. Marketplace ───
@@ -146,4 +155,8 @@ export const cacheKeys = {
   /** `window` is the epoch-minute/hour bucket — see the bot's RateLimiter. */
   discordRateCommands: (discordId: string, window: number) => `${NS}:discord:rl:cmd:${discordId}:${window}`,
   discordRateScans: (discordId: string, window: number) => `${NS}:discord:rl:scan:${discordId}:${window}`,
+
+  // ─── 13. Discord bot public API (read-only, API-key auth — see apps/bot/src/api) ───
+  /** `key` is the caller's API key (or its hash) — never the Discord/user id. */
+  botApiRate: (key: string, window: number) => `${NS}:bot:rl:api:${key}:${window}`,
 } as const;

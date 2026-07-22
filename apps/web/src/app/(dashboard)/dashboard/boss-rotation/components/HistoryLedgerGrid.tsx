@@ -1,8 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
 import type { BossKilledHistoryDay, BossKilledHistoryEntry } from "@/lib/api";
 import { getBossImageUrl } from "@guild/shared";
 import { getGuildColor } from "../utils/helpers";
+
+const EMPTY_KILLS: BossKilledHistoryEntry[] = [];
 
 interface HistoryLedgerGridProps {
   /** Newest-day-first, each day's kills already newest-first. */
@@ -35,6 +38,26 @@ function isToday(dateKey: string) {
 // for that boss on that date (time + taking guild), so a busy day shows every
 // hand-off instead of collapsing to a single "last kill" entry.
 export default function HistoryLedgerGrid({ days, bossNames, onSelectKill, canEdit = false, onEditKill }: HistoryLedgerGridProps) {
+  // Precomputed once per days/bossNames change instead of a filter+sort over
+  // every day's full kill list for every (day × boss) cell on every render.
+  const killsByDayAndBoss = useMemo(() => {
+    const byDay = new Map<string, Map<string, BossKilledHistoryEntry[]>>();
+    for (const day of days) {
+      const byBoss = new Map<string, BossKilledHistoryEntry[]>();
+      for (const kill of day.kills) {
+        const key = kill.bossName.toLowerCase();
+        const list = byBoss.get(key);
+        if (list) list.push(kill);
+        else byBoss.set(key, [kill]);
+      }
+      for (const list of byBoss.values()) {
+        list.sort((a, b) => new Date(b.killedAt).getTime() - new Date(a.killedAt).getTime());
+      }
+      byDay.set(day.date, byBoss);
+    }
+    return byDay;
+  }, [days]);
+
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       <div className="max-h-[560px] overflow-auto custom-scrollbar">
@@ -93,9 +116,7 @@ export default function HistoryLedgerGrid({ days, bossNames, onSelectKill, canEd
                     </div>
                   </td>
                   {bossNames.map((bossName) => {
-                    const kills = day.kills
-                      .filter((kill) => kill.bossName.toLowerCase() === bossName.toLowerCase())
-                      .sort((a, b) => new Date(b.killedAt).getTime() - new Date(a.killedAt).getTime());
+                    const kills = killsByDayAndBoss.get(day.date)?.get(bossName.toLowerCase()) ?? EMPTY_KILLS;
                     return (
                       <td key={bossName} className="px-2 py-2.5 border-l border-white/[0.04] first:border-l-0 text-center">
                         {kills.length === 0 ? (

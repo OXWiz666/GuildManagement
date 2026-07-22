@@ -110,7 +110,7 @@ export default function GuildSettingsPage() {
   }
 
   return (
-    <div className="relative max-w-6xl mx-auto w-full pb-10">
+    <div className="relative max-w-7xl mx-auto w-full pb-10">
       <DashboardDecor />
 
       <div className="relative z-10 space-y-6 text-white/85">

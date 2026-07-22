@@ -10,6 +10,8 @@ import { Magnetic } from "@/components/dashboard/DashboardHelpers";
 import SettingsCard from "../../settings/components/SettingsCard";
 import { ACTIVITY_COLOR_OPTIONS, ACTIVITY_COLOR_IDS } from "@/lib/activityTypeMeta";
 
+const RANK_MULTIPLIER_ROLES = ["CORE_MEMBER", "ELITE_MEMBER", "MEMBER"] as const;
+
 interface Props {
   guildId: string;
 }
@@ -79,7 +81,14 @@ export default function RegisterActivitySection({ guildId }: Props) {
   }
 
   async function save() {
-    const trimmed = activities.map((a) => ({ ...a, label: a.label.trim() }));
+    const trimmed = activities.map((a) => ({
+      ...a,
+      label: a.label.trim(),
+      multipliers: {
+        ...a.multipliers,
+        OFFICER: 1,
+      },
+    }));
     if (trimmed.some((a) => !a.label)) {
       addToast("error", "Every activity needs a name");
       return;
@@ -104,7 +113,7 @@ export default function RegisterActivitySection({ guildId }: Props) {
     <SettingsCard
       eyebrow="Guild Settings"
       title="Register Activity"
-      description="Define the activities members earn Guild Points for, a base point value, and a customizable multiplier per rank. Add as many custom activities as you need."
+      description="Define the activities members earn Guild Points for, a base point value, and CP-rank multipliers. Boss Attendance is awarded from confirmed boss attendance."
     >
       {isLoading ? (
         <p className="text-xs text-white/40 py-4">Loading activities…</p>
@@ -117,8 +126,16 @@ export default function RegisterActivitySection({ guildId }: Props) {
                   <th className="py-2 pr-3">Activity</th>
                   <th className="py-2 px-2">Color</th>
                   <th className="py-2 px-2">Base</th>
-                  <th colSpan={CUSTOMIZABLE_ROLES.length} className="py-1 px-2 text-center text-[9px] text-[var(--forge-gold-bright)] tracking-[0.18em]">
-                    Multiplier · Customizable
+                  <th colSpan={RANK_MULTIPLIER_ROLES.length} className="py-1 px-2 text-center text-[9px] text-[var(--forge-gold-bright)] tracking-[0.18em]">
+                    Rank Multiplier
+                    <button
+                      type="button"
+                      title="Points awarded = base points multiplied by the member's CP-based rank. Officer and Leader are permission roles, not rank multipliers."
+                      aria-label="Rank multiplier help"
+                      className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-white/15 text-[10px] text-white/45 hover:text-white hover:border-white/35"
+                    >
+                      ?
+                    </button>
                   </th>
                   <th className="py-2 pl-2" />
                 </tr>
@@ -126,7 +143,7 @@ export default function RegisterActivitySection({ guildId }: Props) {
                   <th className="pb-2 pr-3" />
                   <th className="pb-2 px-2" />
                   <th className="pb-2 px-2" />
-                  {CUSTOMIZABLE_ROLES.map((role) => (
+                  {RANK_MULTIPLIER_ROLES.map((role) => (
                     <th key={role} className="pb-2 px-2 text-center whitespace-nowrap">
                       {resolveRoleName(role)}
                     </th>
@@ -172,7 +189,7 @@ export default function RegisterActivitySection({ guildId }: Props) {
                         className="w-16 rounded-lg bg-surface-100 border border-white/8 text-white px-2 py-1.5 text-sm focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20"
                       />
                     </td>
-                    {CUSTOMIZABLE_ROLES.map((role) => (
+                    {RANK_MULTIPLIER_ROLES.map((role) => (
                       <td key={role} className="py-1.5 px-2">
                         <input
                           type="number"
@@ -204,7 +221,7 @@ export default function RegisterActivitySection({ guildId }: Props) {
           </button>
 
           <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/[0.06]">
-            <p className="text-[10px] text-white/35">Multiplier default is 1x — points awarded = base × multiplier for the member's rank.</p>
+            <p className="text-[10px] text-white/35">Multiplier default is 1x. Points awarded = base points multiplied by the member's CP-based rank.</p>
             <Magnetic strength={4}>
               <Button variant="primary" size="sm" onClick={save} isLoading={isSaving}>
                 Save activities

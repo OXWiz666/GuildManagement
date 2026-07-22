@@ -50,13 +50,24 @@ export function mergeActivityPointRules(raw: unknown): ActivityPointRules {
     return { activities: DEFAULT_ACTIVITY_POINT_RULES.activities.map((a) => ({ ...a, multipliers: { ...a.multipliers } })) };
   }
   const activities = stored.activities.slice(0, MAX_ACTIVITIES).map((a) => ({
-    key: typeof a?.key === "string" && a.key.trim() ? a.key.trim() : `ACTIVITY_${Math.random().toString(36).slice(2, 8)}`,
-    label: typeof a?.label === "string" && a.label.trim() ? a.label.trim() : "Activity",
+    key: normalizeActivityKey(typeof a?.key === "string" ? a.key : ""),
+    label:
+      typeof a?.label === "string" && a.label.trim()
+        ? a.key === "FIELD_BOSS" && a.label.trim() === "Field Boss"
+          ? "Boss Attendance"
+          : a.label.trim()
+        : "Activity",
     basePoints: typeof a?.basePoints === "number" && Number.isFinite(a.basePoints) ? a.basePoints : 0,
     multipliers: { ...defaultMultipliers(), ...(a?.multipliers && typeof a.multipliers === "object" ? a.multipliers : {}) },
     color: typeof a?.color === "string" && a.color.trim() ? a.color.trim().slice(0, 20) : undefined,
   }));
   return { activities };
+}
+
+function normalizeActivityKey(key: string): string {
+  const trimmed = key.trim();
+  if (trimmed === "FIELD_BOSS") return "BOSS";
+  return trimmed || `ACTIVITY_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export async function getEffectiveActivityPointRules(guildId: string): Promise<ActivityPointRules> {

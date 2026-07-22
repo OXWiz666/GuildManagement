@@ -131,11 +131,10 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
   const [currencyCode, setCurrencyCode] = useState("PHP");
   const [currencySymbol, setCurrencySymbol] = useState("₱");
   const [secondaryCurrencyCode, setSecondaryCurrencyCode] = useState("DIAMOND");
+  const [activeShareModel, setActiveShareModel] = useState("EQUAL");
   const [secondaryCurrencySymbol, setSecondaryCurrencySymbol] = useState("💎");
 
   // Rank Multipliers
-  const [multGL, setMultGL] = useState("2.0");
-  const [multOfficer, setMultOfficer] = useState("1.5");
   const [multCore, setMultCore] = useState("1.2");
   const [multElite, setMultElite] = useState("1.1");
   const [multMember, setMultMember] = useState("1.0");
@@ -185,12 +184,11 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
       setCurrencyCode(guildSettings.currencyCode);
       setCurrencySymbol(isPrimaryCurrencySymbol(guildSettings.currencySymbol) ? guildSettings.currencySymbol : "₱");
       setSecondaryCurrencyCode(guildSettings.secondaryCurrencyCode || "DIAMOND");
+      setActiveShareModel(guildSettings.activeShareModel || "EQUAL");
       setSecondaryCurrencySymbol(isGameCurrencySymbol(guildSettings.secondaryCurrencySymbol) ? guildSettings.secondaryCurrencySymbol : "💎");
 
       // Multipliers
       const mult = guildSettings.rankMultipliers || {};
-      setMultGL((mult.GUILD_LEADER ?? 2.0).toString());
-      setMultOfficer((mult.OFFICER ?? 1.5).toString());
       setMultCore((mult.CORE_MEMBER ?? 1.2).toString());
       setMultElite((mult.ELITE_MEMBER ?? 1.1).toString());
       setMultMember((mult.MEMBER ?? 1.0).toString());
@@ -218,8 +216,7 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
     currencySymbol !== (isPrimaryCurrencySymbol(guildSettings?.currencySymbol) ? guildSettings?.currencySymbol : "₱") ||
     secondaryCurrencyCode.trim() !== (guildSettings?.secondaryCurrencyCode || "DIAMOND") ||
     secondaryCurrencySymbol.trim() !== (guildSettings?.secondaryCurrencySymbol || "💎") ||
-    multGL !== (guildSettings?.rankMultipliers?.GUILD_LEADER ?? 2.0).toString() ||
-    multOfficer !== (guildSettings?.rankMultipliers?.OFFICER ?? 1.5).toString() ||
+    activeShareModel !== (guildSettings?.activeShareModel ?? "EQUAL") ||
     multCore !== (guildSettings?.rankMultipliers?.CORE_MEMBER ?? 1.2).toString() ||
     multElite !== (guildSettings?.rankMultipliers?.ELITE_MEMBER ?? 1.1).toString() ||
     multMember !== (guildSettings?.rankMultipliers?.MEMBER ?? 1.0).toString();
@@ -279,9 +276,10 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
         currencySymbol,
         secondaryCurrencyCode: secondaryCurrencyCode.trim() || "DIAMOND",
         secondaryCurrencySymbol: secondaryCurrencySymbol.trim() || "💎",
+        activeShareModel,
         rankMultipliers: {
-          GUILD_LEADER: parseFloat(multGL),
-          OFFICER: parseFloat(multOfficer),
+          GUILD_LEADER: 1,
+          OFFICER: 1,
           CORE_MEMBER: parseFloat(multCore),
           ELITE_MEMBER: parseFloat(multElite),
           MEMBER: parseFloat(multMember),
@@ -311,8 +309,8 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
     secondaryCurrencyCode: template.secondaryCurrencyCode,
     secondaryCurrencySymbol: GAME_CURRENCY_SYMBOL_OPTIONS[0].symbol,
     rankMultipliers: {
-      GUILD_LEADER: parseFloat(template.multipliers.gl),
-      OFFICER: parseFloat(template.multipliers.officer),
+      GUILD_LEADER: 1,
+      OFFICER: 1,
       CORE_MEMBER: parseFloat(template.multipliers.core),
       ELITE_MEMBER: parseFloat(template.multipliers.elite),
       MEMBER: parseFloat(template.multipliers.member),
@@ -322,14 +320,14 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
   const buildCustomPresetPayload = (name: string) => ({
     settingsTemplateName: name,
     taxRatePercent: parseInt(taxRatePercent, 10),
-    activeShareModel: guildSettings?.activeShareModel ?? "EQUAL",
+    activeShareModel,
     currencyCode,
     currencySymbol,
     secondaryCurrencyCode: secondaryCurrencyCode.trim() || "DIAMOND",
     secondaryCurrencySymbol: secondaryCurrencySymbol.trim() || "💎",
     rankMultipliers: {
-      GUILD_LEADER: parseFloat(multGL),
-      OFFICER: parseFloat(multOfficer),
+      GUILD_LEADER: 1,
+      OFFICER: 1,
       CORE_MEMBER: parseFloat(multCore),
       ELITE_MEMBER: parseFloat(multElite),
       MEMBER: parseFloat(multMember),
@@ -343,8 +341,7 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
     setCurrencySymbol(PRIMARY_CURRENCY_SYMBOL_OPTIONS[0].symbol);
     setSecondaryCurrencyCode(template.secondaryCurrencyCode);
     setSecondaryCurrencySymbol(GAME_CURRENCY_SYMBOL_OPTIONS[0].symbol);
-    setMultGL(template.multipliers.gl);
-    setMultOfficer(template.multipliers.officer);
+    setActiveShareModel(template.activeShareModel);
     setMultCore(template.multipliers.core);
     setMultElite(template.multipliers.elite);
     setMultMember(template.multipliers.member);
@@ -636,6 +633,24 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
                   </tr>
                   <tr>
                     <td className="px-4 py-3.5 text-[12px] font-medium text-white/60 align-middle">
+                      Default Share Model
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <select
+                        value={activeShareModel}
+                        onChange={(e) => setActiveShareModel(e.target.value)}
+                        className="w-full max-w-[280px] px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13px] text-white focus:outline-none focus:border-white/20 transition-colors"
+                      >
+                        <option className="bg-[#0b0c10]" value="EQUAL">EQUAL split among attendees</option>
+                        <option className="bg-[#0b0c10]" value="PRO_RATA">PRO RATA based on Guild Points</option>
+                      </select>
+                      <p className="mt-1.5 text-[10px] text-white/35">
+                        Used as the default loot dividend split for sold boss drops.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3.5 text-[12px] font-medium text-white/60 align-middle">
                       Primary Currency
                     </td>
                     <td className="px-4 py-2.5">
@@ -709,23 +724,9 @@ export default function GuildSettingsSection({ guildId, mode = "all", onDirtyCha
               Rank share multipliers
             </h4>
             <p className="mb-3 text-[11px] leading-relaxed text-white/40">
-              Multipliers weight rank influence when a pro-rata loot split uses Guild Points. Keep values near 1.0 for even weighting.
+              Multipliers apply to CP-based ranks only. Leader, Faction Leader, and Officer are permissions, not rank tiers.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              <Input
-                label={resolveRoleName("GUILD_LEADER")}
-                type="number"
-                step="0.1"
-                value={multGL}
-                onChange={(e) => setMultGL(e.target.value)}
-              />
-              <Input
-                label={resolveRoleName("OFFICER")}
-                type="number"
-                step="0.1"
-                value={multOfficer}
-                onChange={(e) => setMultOfficer(e.target.value)}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Input
                 label={resolveRoleName("CORE_MEMBER")}
                 type="number"

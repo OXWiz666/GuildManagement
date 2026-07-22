@@ -499,88 +499,13 @@ export async function getFactionOverview(actorId: string) {
 }
 
 // ═══════════════════════════════════════════════════
-// FACTION GUILD INVITES
-// Faction Leaders can search for unaffiliated guilds to invite (Multi-Guild
-// join requests are created in `inviteGuildToFaction` below).
-// ═══════════════════════════════════════════════════
-
-export async function searchGuilds(actorId: string, query: string) {
-  const memberships = await requireFactionManagerMemberships(actorId);
-  const ownGuildIds = new Set(memberships.map((m) => m.guildId));
-
-  const term = (query || "").trim();
-  if (term.length < 2) {
-    throw new BadRequestError("Search query must be at least 2 characters");
-  }
-
-  const guilds = await prisma.guild.findMany({
-    where: {
-      isActive: true,
-      // Only guilds not already in a faction can be invited/join — a guild
-      // belongs to at most one faction at a time.
-      factionId: null,
-      OR: [
-        { name: { contains: term, mode: "insensitive" } },
-        { slug: { contains: term, mode: "insensitive" } },
-      ],
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      description: true,
-      avatarUrl: true,
-    },
-    orderBy: { name: "asc" },
-    take: 20,
-  });
-
-  if (guilds.length === 0) return [];
-
-  const guildIds = guilds.map((g) => g.id);
-
-  // Active member counts per guild
-  const counts = await prisma.guildMember.groupBy({
-    by: ["guildId"],
-    where: { guildId: { in: guildIds }, isActive: true },
-    _count: { _all: true },
-  });
-  const countMap = new Map(counts.map((c) => [c.guildId, c._count._all]));
-
-  // Resolve a representative leader name per guild
-  const leaders = await prisma.guildMember.findMany({
-    where: {
-      guildId: { in: guildIds },
-      isActive: true,
-      role: { in: ["GUILD_LEADER", "FACTION_LEADER"] },
-    },
-    select: { guildId: true, user: { select: { displayName: true } } },
-    orderBy: { role: "asc" },
-  });
-  const leaderMap = new Map<string, string>();
-  for (const l of leaders) {
-    if (!leaderMap.has(l.guildId)) leaderMap.set(l.guildId, l.user.displayName);
-  }
-
-  return guilds.map((g) => ({
-    id: g.id,
-    name: g.name,
-    slug: g.slug,
-    description: g.description,
-    avatarUrl: g.avatarUrl,
-    memberCount: countMap.get(g.id) ?? 0,
-    leaderName: leaderMap.get(g.id) ?? null,
-    isOwnGuild: ownGuildIds.has(g.id),
-  }));
-}
-
-// ═══════════════════════════════════════════════════
 // MULTI-GUILD: FACTION JOIN REQUESTS
-// A guild joins a faction one of two ways, both two-sided/pending:
-//  - CODE_REDEEMED: a Guild Leader redeems the Faction's invite code; the
-//    Faction Leader approves.
-//  - DIRECT_INVITE: a Faction Leader invites a specific unaffiliated guild;
-//    that guild's OWN leadership approves.
+// A guild joins a faction exactly one way: a Guild Leader redeems the
+// Faction's invite code (CODE_REDEEMED), and the Faction Leader approves.
+// There is deliberately no guild search / direct-invite path — a faction
+// cannot pull in a guild that hasn't chosen to request joining. DIRECT_INVITE
+// remains in FactionJoinDirection only to keep historical rows readable; no
+// code path creates new ones.
 // Approval never auto-enrolls the new guild into any boss rotation — see
 // `lockRotationParticipantsExcluding` below.
 // ═══════════════════════════════════════════════════
@@ -794,64 +719,6 @@ export async function redeemFactionInviteCode(
   });
 
   return { requestId: request.id, factionName: faction.name };
-}
-
-export async function inviteGuildToFaction(
-  actorId: string,
-  guildId: string,
-  ipAddress?: string,
-  userAgent?: string,
-) {
-  const { membership, factionId } = await requireManagedFaction(actorId);
-
-  if (!guildId?.trim()) {
-    throw new BadRequestError("A target guild is required");
-  }
-
-  const guild = await assertGuildJoinable(guildId);
-
-  const request = await prisma.factionJoinRequest.create({
-    data: {
-      factionId,
-      guildId: guild.id,
-      invitedByUserId: actorId,
-      direction: FactionJoinDirection.DIRECT_INVITE,
-      status: FactionJoinStatus.PENDING,
-    },
-  });
-
-  const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { displayName: true } });
-  const actorName = actor?.displayName || "A Faction Leader";
-
-  const leaders = await prisma.guildMember.findMany({
-    where: { guildId: guild.id, isActive: true, role: { in: [...GUILD_LEADERSHIP_ROLES_LOCAL] } },
-    select: { userId: true },
-  });
-  const uniqueLeaderIds = [...new Set(leaders.map((l) => l.userId))];
-  if (uniqueLeaderIds.length > 0) {
-    await createNotifications(
-      uniqueLeaderIds.map((userId) => ({
-        userId,
-        type: "FACTION_GUILD_INVITE",
-        title: "Faction invitation",
-        body: `${actorName} invited ${guild.name} to join the faction.`,
-        metadata: { requestId: request.id, guildId: guild.id, guildName: guild.name, invitedBy: actorId },
-      })),
-    );
-  }
-
-  await writeAuditLog({
-    actorId,
-    guildId: membership.guildId,
-    action: "FACTION_GUILD_INVITED",
-    target: "FactionJoinRequest",
-    targetId: request.id,
-    detail: { guildId: guild.id, guildName: guild.name, notifiedLeaders: uniqueLeaderIds.length },
-    ipAddress,
-    userAgent,
-  });
-
-  return { requestId: request.id, guildId: guild.id, guildName: guild.name, notifiedLeaders: uniqueLeaderIds.length };
 }
 
 function serializeJoinRequest(r: any) {
@@ -1478,6 +1345,9 @@ export async function listAnnouncements(actorId: string) {
     where: { status: { not: "DELETED" } },
     include: { creator: { select: { id: true, displayName: true, avatarUrl: true } } },
     orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
+    // No pagination UI exists for this list — a bare cap keeps a long-lived
+    // faction's full announcement history from being fetched on every read.
+    take: 200,
   });
   return announcements.map(serializeAnnouncement);
 }
@@ -1588,6 +1458,9 @@ export async function listEvents(actorId: string) {
     where: { status: { not: "DELETED" } },
     include: { creator: { select: { id: true, displayName: true, avatarUrl: true } } },
     orderBy: { startsAt: "asc" },
+    // No pagination UI exists for this list — a bare cap keeps a long-lived
+    // faction's full event history from being fetched on every read.
+    take: 200,
   });
   return events.map(serializeEvent);
 }

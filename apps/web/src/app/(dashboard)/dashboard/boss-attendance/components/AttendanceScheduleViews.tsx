@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { getBossImageUrl } from "@guild/shared";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
@@ -237,14 +237,17 @@ function statusStyle(event: AttendanceBossEvent, now: number) {
   };
 }
 
-function EventCard({
+// Self-ticking leaf: each card refreshes its own "is my session still open"
+// status independently, so a 60s tick never re-renders the whole calendar
+// grid / timeline — only the (typically one or two) cards whose status text
+// actually changed re-render at all.
+const EventCard = memo(function EventCard({
   event,
   compact = false,
   myGuildId,
   checkingInId,
   onCheckIn,
   onSelectSession,
-  now,
 }: {
   event: AttendanceBossEvent;
   compact?: boolean;
@@ -252,8 +255,13 @@ function EventCard({
   checkingInId: string | null;
   onCheckIn: (item: BossScheduleData) => void;
   onSelectSession: (session: AttendanceSessionSummary) => void;
-  now: number;
 }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const style = statusStyle(event, now);
   const canAdvanceCheckIn =
     event.schedule &&
@@ -330,7 +338,7 @@ function EventCard({
       )}
     </div>
   );
-}
+});
 
 export function AttendanceCalendarView({
   schedules,
@@ -342,11 +350,6 @@ export function AttendanceCalendarView({
   onSelectSession,
 }: AttendanceScheduleViewProps) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60 * 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const events = useMemo(() => buildEvents(schedules, sessions), [schedules, sessions]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
@@ -442,7 +445,6 @@ export function AttendanceCalendarView({
                         checkingInId={checkingInId}
                         onCheckIn={onCheckIn}
                         onSelectSession={onSelectSession}
-                        now={now}
                       />
                     ))}
                   </div>
@@ -465,9 +467,14 @@ export function AttendanceTimelineView({
   onCheckIn,
   onSelectSession,
 }: AttendanceScheduleViewProps) {
+  // Only used to decide the upcoming-vs-past split/order below — unlike the
+  // per-card "is my session still open" status text (now self-ticked inside
+  // EventCard), that split doesn't need minute-level precision, so this ticks
+  // far slower to avoid re-rendering (and re-sorting) the whole timeline
+  // every 60s.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60 * 1000);
+    const timer = setInterval(() => setNow(Date.now()), 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, []);
   const events = useMemo(() => buildEvents(schedules, sessions), [schedules, sessions]);
@@ -533,7 +540,6 @@ export function AttendanceTimelineView({
                           checkingInId={checkingInId}
                           onCheckIn={onCheckIn}
                           onSelectSession={onSelectSession}
-                          now={now}
                         />
                       </div>
                     ))}

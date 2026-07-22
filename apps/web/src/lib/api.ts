@@ -1833,24 +1833,6 @@ export interface FactionAccountingData {
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
-export interface FactionGuildSearchResult {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  avatarUrl: string | null;
-  memberCount: number;
-  leaderName: string | null;
-  isOwnGuild: boolean;
-}
-
-export interface FactionGuildInviteResult {
-  success: boolean;
-  guildId: string;
-  guildName: string;
-  notifiedLeaders: number;
-}
-
 export interface FactionJoinRequestData {
   id: string;
   factionId: string;
@@ -1870,16 +1852,6 @@ export const factionApi = {
 
   async getMembers() {
     return api.get<{ members: FactionMemberData[] }>(`/faction/members`);
-  },
-
-  async searchGuilds(query: string) {
-    return api.get<{ guilds: FactionGuildSearchResult[] }>(
-      `/faction/guilds/search?q=${encodeURIComponent(query)}`,
-    );
-  },
-
-  async inviteGuild(guildId: string) {
-    return api.post<FactionGuildInviteResult>(`/faction/guilds/invite`, { guildId });
   },
 
   async createFromGuild(guildId: string, factionName: string) {
@@ -2379,10 +2351,27 @@ export interface ItemDistributionData {
   member?: { user?: { displayName: string; avatarUrl: string | null } };
 }
 
+export interface MarketCatalogItem {
+  key: string;
+  label: string;
+}
+
 export interface MarketRulesData {
-  cpTiers: { eliteMinCp: number; upperMinCp: number };
-  limits: Record<"CORE" | "ELITE" | "UPPER" | "LOWER", { logs: number; temporalPieces: number; materials: number }>;
+  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number };
+  limits: Record<
+    "CORE" | "ELITE" | "UPPER" | "LOWER",
+    {
+      logs: number;
+      temporalPieces: number;
+      materials: number;
+      mountIds?: string[];
+      materialKeys?: string[];
+      logKeys?: string[];
+    }
+  >;
   weights: Record<string, number>;
+  logCatalog?: MarketCatalogItem[];
+  materialCatalog?: MarketCatalogItem[];
 }
 
 interface Paginated {

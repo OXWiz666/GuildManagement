@@ -9,7 +9,7 @@ import { writeAuditLog } from "./audit.service";
 import { createLedgerEntry } from "./ledger.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import * as crypto from "crypto";
-import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, SHORT_CYCLE_MAX_HOURS, DEFAULT_LOW_BOSS_MAX_LEVEL } from "@guild/shared";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, SHORT_CYCLE_MAX_HOURS, DEFAULT_LOW_BOSS_MAX_LEVEL, getDailyRotationIndex } from "@guild/shared";
 import { broadcastToGuild, broadcastToUser } from "../lib/socket";
 import { getDropCatalogMap } from "./equipment.service";
 import { getGuildMemberByUser } from "./guild.service";
@@ -40,10 +40,12 @@ const SCHEDULE_CREATOR_ROLES = ["GUILD_LEADER", "FACTION_LEADER", "ADMIN", "OFFI
 // How long the self check-in window stays open after a boss kill is logged.
 const CHECK_IN_WINDOW_MINUTES = 120;
 
-// How long an advance check-in's auto-opened session stays open while
-// waiting for the boss to actually die — generous, since the real kill (and
-// the standard short CHECK_IN_WINDOW_MINUTES window) reopens/extends it.
-const ADVANCE_CHECK_IN_WINDOW_HOURS = 12;
+// Attendance credits/debits/pending-reversals share the same LedgerEntry
+// table, accountType, and currency code as real PHP transactions — the only
+// thing distinguishing "this is points, not money" is referenceType. Any
+// balance/treasury total computed from ledger rows must exclude these or
+// guild points silently get folded into the cash figure.
+const GUILD_POINT_REFERENCE_TYPES = ["ATTENDANCE", "ATTENDANCE_REVOKE", "ATTENDANCE_STATUS_PENDING"];
 
 // Process-level guard so we reconcile the boss registry at most once per server boot.
 let registrySynced = false;
@@ -754,10 +756,6 @@ async function syncNextRotationSchedule(
  * Members claim attendance via `checkInToBoss` (no code typing); officers verify
  * through the existing `confirmAttendanceRecord` flow. A `code` is still stored
  * internally to satisfy the unique constraint but is never surfaced.
- *
- * `expiresAt` defaults to the standard short post-kill window, but
- * `checkInToBoss`'s advance check-in path (see below) passes a longer one
- * when opening a session ahead of the actual kill.
  */
 async function openBossCheckInSession(
   guildId: string,
@@ -765,10 +763,10 @@ async function openBossCheckInSession(
   bossName: string,
   expiresAt: Date = new Date(Date.now() + CHECK_IN_WINDOW_MINUTES * 60 * 1000),
 ) {
-  // An advance check-in (see checkInToBoss) may have already opened this
-  // exact boss's session for this guild — reuse + extend it instead of
-  // creating a duplicate, so those early PENDING records carry into the
-  // real post-kill verification window instead of being orphaned.
+  // This guild may already have an active session open for this exact boss
+  // schedule (e.g. `!attendance` re-run after `!editkilltime`) — reuse +
+  // extend it instead of creating a duplicate, so earlier PENDING records
+  // carry forward instead of being orphaned.
   const existing = await prisma.attendanceSession.findFirst({
     where: { guildId, bossScheduleId, isActive: true },
   });
@@ -983,11 +981,10 @@ export async function submitAttendanceCode(userId: string, code: string) {
  * member as PENDING for officer verification. Mirrors `submitAttendanceCode`
  * without the code-entry / anti-spam machinery (the boss id is the key).
  *
- * Also covers "advance" check-in: if no officer has opened a window yet but
- * the boss hasn't been fought and it's currently this guild's rotation turn,
- * a member can stake their attendance early — the session is opened on
- * demand and officers still verify the record the normal way once the boss
- * actually dies (see openBossCheckInSession's reuse-on-kill behavior).
+ * Only works once an officer has opened a window (normally via a kill log —
+ * see openBossCheckInSession). Advance/early check-in before the boss is
+ * fought was removed; a schedule with no open session simply isn't checkable
+ * in yet.
  */
 export async function checkInToBoss(userId: string, guildId: string, bossScheduleId: string) {
   const now = new Date();
@@ -997,7 +994,7 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
     throw new ForbiddenError("You must be an active member of the guild to check in");
   }
 
-  let session = await prisma.attendanceSession.findFirst({
+  const session = await prisma.attendanceSession.findFirst({
     where: {
       bossScheduleId,
       isActive: true,
@@ -1006,22 +1003,6 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
     select: { id: true, title: true, guildId: true, guild: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
-
-  if (!session) {
-    const schedule = await prisma.bossSchedule.findUnique({ where: { id: bossScheduleId } });
-    const isAdvanceEligible =
-      schedule && schedule.status !== BossEventStatus.KILLED && schedule.guildTurnGuildId === guildId;
-    if (isAdvanceEligible) {
-      const advanceExpiresAt = new Date(
-        Math.max(schedule.spawnTime.getTime(), now.getTime()) + ADVANCE_CHECK_IN_WINDOW_HOURS * 60 * 60 * 1000,
-      );
-      const opened = await openBossCheckInSession(guildId, bossScheduleId, schedule.bossName, advanceExpiresAt);
-      session = await prisma.attendanceSession.findUnique({
-        where: { id: opened.id },
-        select: { id: true, title: true, guildId: true, guild: { select: { name: true } } },
-      });
-    }
-  }
 
   if (!session) {
     throw new BadRequestError("Check-in is closed for this boss");
@@ -2268,24 +2249,54 @@ export async function getBossRotation(guildId: string, actorId: string) {
   return { ...shared, canManage, viewerRole: membership.role };
 }
 
+/**
+ * Current holder-guild name per boss, keyed by bossName — reuses the exact
+ * same ground-truth resolution (and Redis cache entry) as getBossRotation:
+ * the schedule row's own guildTurnGuildId, falling back to the rotation
+ * queue's current turn. No membership check, unlike getBossRotation — this
+ * is a read-only, non-sensitive projection meant for internal callers (the
+ * Discord bot, the scheduler) that don't have a per-request acting member to
+ * authorize against, only a verified guild context.
+ *
+ * Exists because the bot's own `BossSchedule.guildTurn` column is a legacy
+ * denormalized text snapshot that's only ever written once and never updated
+ * when the rotation queue advances — trusting it directly (as the bot used
+ * to) shows a stale guild long after the real turn has moved on. Routing
+ * through this shared resolver instead keeps the bot and website from
+ * silently disagreeing about who currently holds a boss.
+ */
+export async function getBossHolderNames(guildId: string): Promise<Map<string, string | null>> {
+  const factionId = await getGuildFactionId(guildId);
+  const scopeKey = factionId ? cacheKeys.bossRotationByFaction(factionId) : cacheKeys.bossRotationByFaction(`solo:${guildId}`);
+  const shared = await redisCache.getOrSet(scopeKey, cacheTtl.bossRotation, () =>
+    getBossRotationShared(factionId, guildId),
+  );
+  return new Map(shared.rotations.map((r) => [r.bossName, r.currentGuild?.name ?? null]));
+}
+
 async function getBossRotationShared(factionId: string | null, guildId: string) {
-  const [allBosses, guilds, foundingGuildIds] = await Promise.all([
+  const [allBosses, guilds, foundingGuildIds, lowBossConfig] = await Promise.all([
     getBossRegistryForRotation(),
     getActiveFactionGuilds(factionId, guildId),
     getFoundingFactionGuildIds(factionId),
+    factionId ? prisma.bossLowRotation.findUnique({ where: { factionId } }) : Promise.resolve(null),
   ]);
 
-  // Low Bosses are scheduled through the day-based Low Boss rotation
-  // (Faction Schedule tab), not this per-boss turn queue — exclude them so
-  // the two systems never disagree about whose turn a boss is.
-  const lowBossNamesLower = await getResolvedLowBossNames(factionId, allBosses);
-  const bosses = allBosses.filter((b) => !lowBossNamesLower.has(b.name.toLowerCase()));
+  // Low Bosses still spawn/respawn/get killed like any other boss — only
+  // *whose turn it is* differs (the day-based Faction Schedule assigns one
+  // guild to ALL flagged Low Bosses on a given day, instead of a per-boss
+  // turn queue). They used to be excluded from this grid entirely; now they
+  // stay in it with their real timer, and only their holder resolution
+  // below branches to the day-based assignment instead of a queue.
+  const lowBossNamesLower = await getResolvedLowBossNames(factionId, allBosses, lowBossConfig);
+  const bosses = allBosses;
 
   const activeGuildIds = guilds.map((g) => g.id);
   const activeFoundingGuildIds = foundingGuildIds.length
     ? foundingGuildIds.filter((id) => activeGuildIds.includes(id))
     : activeGuildIds;
   const guildMap = new Map(guilds.map((g) => [g.id, g]));
+  const lowBossTodayGuildId = resolveLowBossGuildForToday(lowBossConfig, activeGuildIds, new Date());
 
   // Bulk-fetch all rotation, active schedule, and killed schedule data in 3 parallel queries
   // instead of 3 sequential queries per boss (N+1 elimination). Schedules are
@@ -2338,8 +2349,11 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
 
   const rotations = [];
   for (const boss of bosses) {
+    const isLowBoss = lowBossNamesLower.has(boss.name.toLowerCase());
     const existing = rotationMap.get(boss.name) || null;
-    const queueGuildIds = resolveQueue(existing, activeGuildIds, activeFoundingGuildIds);
+    // Low Bosses have no per-boss turn queue at all — their holder comes
+    // from the day-based Faction Schedule (lowBossTodayGuildId) below.
+    const queueGuildIds = isLowBoss ? [] : resolveQueue(existing, activeGuildIds, activeFoundingGuildIds);
     const currentIndex = queueGuildIds.length
       ? Math.min(existing?.currentIndex || 0, queueGuildIds.length - 1)
       : 0;
@@ -2348,21 +2362,29 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
     const latestKilled = killedScheduleMap.get(boss.name) || null;
 
     // The live schedule row's own `guildTurnGuild` is the ground truth for
-    // who currently holds this boss — it's written directly by the kill that
-    // took it. `queueGuildIds[currentIndex]` is only a fallback for a boss
-    // that's never been scheduled yet. Deriving "holder" from the queue
-    // position alone (ignoring the schedule row) let the two drift apart
-    // whenever a guild outside that boss's configured queue took the kill
-    // (allowed — takenGuildId is only checked against "any active faction
-    // guild", not "is in this boss's queue") — the rotation grid kept
-    // showing the queue's guild while `!spawn`/the schedule itself correctly
-    // showed whoever actually took it.
-    const currentGuildId = activeSchedule?.guildTurnGuildId || queueGuildIds[currentIndex] || null;
-    const nextGuildId = queueGuildIds.length
-      ? queueGuildIds[(currentIndex + 1) % queueGuildIds.length] || currentGuildId
-      : null;
-    const currentGuild =
-      activeSchedule?.guildTurnGuild || (currentGuildId ? guildMap.get(currentGuildId) || null : null);
+    // who currently holds a per-queue boss — it's written directly by the
+    // kill that took it, and can legitimately point at a guild outside the
+    // configured queue (takenGuildId is only checked against "any active
+    // faction guild", not "is in this boss's queue"), so trusting the queue
+    // position alone let the two drift apart. `queueGuildIds[currentIndex]`
+    // is only a fallback for a boss that's never been scheduled yet.
+    //
+    // A Low Boss has no such per-kill assignment at all — its holder is
+    // *entirely* the day-based Faction Schedule, every day, regardless of
+    // who last killed it (a schedule row's leftover guildTurnGuildId here
+    // could be a stale queue-era value, or just whichever guild happened to
+    // log the kill — neither reflects "whose day it is"). So for a Low Boss,
+    // lowBossTodayGuildId is the ground truth and the schedule row is not
+    // consulted at all; this is the reverse priority from every other boss.
+    const currentGuildId = isLowBoss
+      ? lowBossTodayGuildId
+      : activeSchedule?.guildTurnGuildId || queueGuildIds[currentIndex] || null;
+    const nextGuildId = isLowBoss || !queueGuildIds.length
+      ? null
+      : queueGuildIds[(currentIndex + 1) % queueGuildIds.length] || currentGuildId;
+    const currentGuild = isLowBoss
+      ? (currentGuildId ? guildMap.get(currentGuildId) || null : null)
+      : activeSchedule?.guildTurnGuild || (currentGuildId ? guildMap.get(currentGuildId) || null : null);
     const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
     // A cycle boss with no active schedule, no established rotation cadence,
     // and no prior kill has simply never been taken — it has no real spawn
@@ -2385,8 +2407,15 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
       type: boss.type,
       cooldownHours: boss.cooldownHours,
       location: boss.location,
+      isLowBoss,
       currentIndex,
-      queue: queueGuildIds.map((id) => guildMap.get(id)).filter(Boolean),
+      // A Low Boss's "queue" is just today's single assigned guild (or empty
+      // if nothing's configured for today) — one element renders as a
+      // "Holder" chip on the card, same as any other single-guild boss,
+      // without the card needing a Low-Boss-specific layout.
+      queue: isLowBoss
+        ? (currentGuild ? [currentGuild] : [])
+        : queueGuildIds.map((id) => guildMap.get(id)).filter(Boolean),
       currentGuild,
       nextGuild,
       everTaken,
@@ -2622,6 +2651,17 @@ export async function markBossRotationKilled(
       orderBy: { spawnTime: "asc" },
     });
 
+    // Self-heal: this kill already happened, so this "already logged" reply
+    // is the only remaining chance to notice no attendance window ever got
+    // opened for it (or one opened and has since expired unattended) —
+    // otherwise this exact kill stays permanently unattendable. Reuses
+    // openBossCheckInSession's own reuse-and-extend logic.
+    if (schedule.guildTurnGuildId) {
+      await openBossCheckInSession(schedule.guildTurnGuildId, schedule.id, schedule.bossName).catch((error) => {
+        console.error("[Boss Rotation]: Failed to self-heal missing attendance window for an already-logged kill", error);
+      });
+    }
+
     return {
       schedule: serializeBossScheduleForApi(schedule),
       nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
@@ -2763,6 +2803,18 @@ export async function markBossRotationKilled(
   });
 
   if (alreadyLogged) {
+    // Same self-heal as the pre-transaction "already KILLED" check above —
+    // this branch is reached when two near-simultaneous `!kill` calls raced
+    // and this one lost the claim, which is exactly the kind of case that
+    // could otherwise leave the winning claim's attendance window unopened.
+    if (updatedEvent?.guildTurnGuildId) {
+      await openBossCheckInSession(updatedEvent.guildTurnGuildId, updatedEvent.id, schedule.bossName).catch(
+        (error) => {
+          console.error("[Boss Rotation]: Failed to self-heal missing attendance window for an already-logged kill", error);
+        },
+      );
+    }
+
     return {
       schedule: serializeBossScheduleForApi(updatedEvent),
       nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
@@ -2989,6 +3041,20 @@ export async function markBossRotationKilledByName(
       include: { guildTurnGuild: { select: { name: true } } },
       orderBy: { spawnTime: "asc" },
     });
+
+    // The kill itself already happened; this "already logged" reply is the
+    // only remaining chance to notice no attendance window ever got opened
+    // for it (or one opened and has since expired unattended) and self-heal
+    // it — otherwise this exact kill stays permanently unattendable. Reuses
+    // openBossCheckInSession's own reuse-and-extend logic, so a window
+    // that's already open just gets extended instead of duplicated.
+    if (latestKilled.guildTurnGuildId) {
+      await openBossCheckInSession(latestKilled.guildTurnGuildId, latestKilled.id, latestKilled.bossName).catch(
+        (error) => {
+          console.error("[Boss Rotation]: Failed to self-heal missing attendance window for an already-logged kill", error);
+        },
+      );
+    }
 
     return {
       schedule: serializeBossScheduleForApi(latestKilled),
@@ -3430,6 +3496,16 @@ export async function editBossKillTime(
   await invalidateBossRotationCache(guildId);
   await invalidateBossKilledHistoryCache(guildId, [previousKilledAt, killedDate]);
 
+  // Correcting a kill's timestamp is another point where a kill that never
+  // got an attendance window opened for it (see the "already logged"
+  // self-heal in markBossRotationKilled/markBossRotationKilledByName) can
+  // still be noticed and fixed, instead of staying permanently unattendable.
+  if (result.updatedEvent.guildTurnGuildId) {
+    await openBossCheckInSession(result.updatedEvent.guildTurnGuildId, killed.id, killed.bossName).catch((error) => {
+      console.error("[Boss Rotation]: Failed to self-heal missing attendance window after editing kill time", error);
+    });
+  }
+
   return {
     bossName: killed.bossName,
     previousKilledAt,
@@ -3789,9 +3865,12 @@ async function getBossMasterListShared(factionId: string | null, guildId: string
   ]);
 
   // Low Bosses live on the Faction Schedule's day-based rotation, not this
-  // per-boss queue — see the matching exclusion in getBossRotationShared.
+  // per-boss participant queue — but they still need to be visible here,
+  // just non-editable, so a guild leader browsing "By Boss" can see which
+  // bosses follow the day rotation instead of the boss silently vanishing
+  // (see the matching isLowBoss handling in getBossRotationShared).
   const lowBossNamesLower = await getResolvedLowBossNames(factionId, allBosses);
-  const bosses = allBosses.filter((b) => !lowBossNamesLower.has(b.name.toLowerCase()));
+  const bosses = allBosses;
 
   const activeGuildIds = guilds.map((g) => g.id);
   const activeFoundingGuildIds = foundingGuildIds.length
@@ -3800,6 +3879,7 @@ async function getBossMasterListShared(factionId: string | null, guildId: string
   const rotationMap = new Map(rotations.map((r) => [r.bossName.toLowerCase(), r]));
 
   const bossEntries = bosses.map((boss) => {
+    const isLowBoss = lowBossNamesLower.has(boss.name.toLowerCase());
     const rotation = rotationMap.get(boss.name.toLowerCase()) || null;
     return {
       bossName: boss.name,
@@ -3807,11 +3887,16 @@ async function getBossMasterListShared(factionId: string | null, guildId: string
       type: boss.type,
       location: boss.location,
       cooldownHours: boss.cooldownHours ?? null,
+      isLowBoss,
       // A boss is "configured" once a faction leader has saved its participant
       // list; until then it defaults to the faction's founding guild(s) only
-      // — a later joiner never appears here until explicitly added.
-      configured: Boolean(rotation?.participantsConfigured),
-      participantGuildIds: resolveQueue(rotation, activeGuildIds, activeFoundingGuildIds),
+      // — a later joiner never appears here until explicitly added. Not a
+      // meaningful concept for a Low Boss (it has no participant queue), so
+      // it's just reported as already "configured" — nothing to prompt here.
+      configured: isLowBoss ? true : Boolean(rotation?.participantsConfigured),
+      // A Low Boss has no per-boss participant queue to toggle — its guilds
+      // come from the Faction Schedule's day pattern instead.
+      participantGuildIds: isLowBoss ? [] : resolveQueue(rotation, activeGuildIds, activeFoundingGuildIds),
     };
   });
 
@@ -3986,6 +4071,58 @@ async function getResolvedLowBossNames(
   );
 }
 
+const LOW_BOSS_DAY_TIME_ZONE = "Asia/Singapore";
+const lowBossDayParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: LOW_BOSS_DAY_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  weekday: "short",
+});
+const WEEKDAY_SHORT_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * "Today", for Low Boss day-rotation purposes — same Asia/Singapore day
+ * boundary the rest of the app's day-keyed features use (see
+ * ATTENDANCE_STATS_TIME_ZONE), so a Low Boss's holder doesn't flip at a
+ * different moment than the Faction Schedule tab that configures it.
+ */
+function lowBossToday(now: Date): { dateKey: string; weekday: number } {
+  const parts = lowBossDayParts.formatToParts(now);
+  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const month = parts.find((p) => p.type === "month")?.value ?? "00";
+  const day = parts.find((p) => p.type === "day")?.value ?? "00";
+  const weekdayShort = parts.find((p) => p.type === "weekday")?.value ?? "Sun";
+  const weekday = WEEKDAY_SHORT_NAMES.indexOf(weekdayShort);
+  return { dateKey: `${year}-${month}-${day}`, weekday: weekday < 0 ? 0 : weekday };
+}
+
+/**
+ * The guild that currently holds every flagged Low Boss, under whichever
+ * cadence (DAILY/WEEKLY/MONTHLY) the faction has configured — mirrors the
+ * frontend's buildGuildOfDayResolver (apps/web boss-rotation/utils/
+ * calendarChips.ts), ported server-side so the Guild Rotation grid can show
+ * a Low Boss's real holder instead of hiding the boss entirely (see
+ * getBossRotationShared, which used to exclude Low Bosses outright).
+ */
+function resolveLowBossGuildForToday(
+  config: { mode: string; weekly: unknown; days: unknown } | null,
+  orderedGuildIds: string[],
+  now: Date,
+): string | null {
+  if (!config) return null;
+  const mode = resolveLowRotationMode(config.mode);
+  if (mode === "DAILY") {
+    const idx = getDailyRotationIndex(orderedGuildIds.length, now);
+    return idx >= 0 ? orderedGuildIds[idx] ?? null : null;
+  }
+  const { dateKey, weekday } = lowBossToday(now);
+  if (mode === "WEEKLY") {
+    return parseStringMap(config.weekly)[String(weekday)] ?? null;
+  }
+  return parseStringMap(config.days)[dateKey] ?? null;
+}
+
 async function getLowBossRotationShared(factionId: string | null, guildId: string) {
   const [bosses, guilds, config] = await Promise.all([
     getBossRegistryForRotation(),
@@ -4148,9 +4285,17 @@ export async function getBossKilledHistory(guildId: string, actorId: string, mon
 async function getBossKilledHistoryUncached(guildId: string, month?: string) {
   const { key, start, end } = parseBossHistoryMonth(month);
 
+  // Boss kills are faction-shared — any guild's officer can log a kill for a
+  // faction-scoped boss, and the audit log row's guildId reflects THEIR
+  // guild's context at the time, not necessarily the viewer's. Scoping this
+  // query to just the viewer's own `guildId` silently hid every kill a
+  // faction-mate logged instead of showing "who actually took it".
+  const factionId = await getGuildFactionId(guildId);
+  const factionGuildIds = (await getActiveFactionGuilds(factionId, guildId)).map((g) => g.id);
+
   const logs = await prisma.auditLog.findMany({
     where: {
-      guildId,
+      guildId: { in: factionGuildIds },
       action: { in: [...BOSS_KILL_AUDIT_ACTIONS, "BOSS_KILL_TIME_EDITED"] },
     },
     include: {
@@ -5219,10 +5364,14 @@ export async function getDashboardSummary(guildId: string, userId: string) {
     }),
   ]);
 
-  // Compute balance (credits - debits) and total points in Javascript
+  // Compute balance (credits - debits) and total points in Javascript.
+  // Guild-point reference types are excluded here — this is the real PHP
+  // treasury balance, not a mix of cash and attendance points (see
+  // GUILD_POINT_REFERENCE_TYPES).
   let credits = 0n;
   let debits = 0n;
   for (const row of ledgerAggregates) {
+    if (GUILD_POINT_REFERENCE_TYPES.includes(row.referenceType ?? "")) continue;
     if (row.entryType === "CREDIT") {
       credits += row._sum.amount ?? 0n;
     } else {
@@ -5238,8 +5387,12 @@ export async function getDashboardSummary(guildId: string, userId: string) {
     .reduce((sum, row) => sum + Number(row._sum.amount ?? 0n), 0);
   const guildPointsValue = totalPoints.toLocaleString();
 
-  // Compute weekly stats from weeklyCredits in JS
-  const weeklyCredit = weeklyCredits.reduce((sum, entry) => sum + Number(entry.amount), 0) / 100;
+  // Compute weekly stats from weeklyCredits in JS — same guild-point
+  // exclusion as the lifetime balance above, so the "+X this week" delta
+  // doesn't count attendance points as cash either.
+  const weeklyCredit = weeklyCredits
+    .filter((entry) => !GUILD_POINT_REFERENCE_TYPES.includes(entry.referenceType ?? ""))
+    .reduce((sum, entry) => sum + Number(entry.amount), 0) / 100;
   const balanceSub = `+${currencySymbol}${weeklyCredit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this week`;
 
   const weeklyPoints = weeklyCredits
@@ -5480,10 +5633,9 @@ async function getAccountingDashboardUncached(guildId: string, page: number, lim
   const secondarySymbol = settings?.secondaryCurrencySymbol || "💎";
   const secondaryCode = settings?.secondaryCurrencyCode || "DIAMOND";
   const pointsCutoff = getGuildPointsCutoff(settings?.pointsResetCycle);
-  const guildPointReferenceTypes = ["ATTENDANCE", "ATTENDANCE_REVOKE", "ATTENDANCE_STATUS_PENDING"];
   const treasuryLedgerWhere = {
     guildId,
-    referenceType: { notIn: guildPointReferenceTypes },
+    referenceType: { notIn: GUILD_POINT_REFERENCE_TYPES },
   };
   const skip = (page - 1) * limit;
   const take = limit;

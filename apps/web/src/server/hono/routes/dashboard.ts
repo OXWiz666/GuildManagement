@@ -78,9 +78,9 @@ export const dashboard = new Hono<AppEnv>()
       cache.invalidatePattern(`boss-schedule:${result.guildId}:*`),
       cache.invalidatePattern(`attendance:pending:${result.guildId}:*`),
       cache.invalidatePattern(`attendance:stats:${result.guildId}:*`),
-      // An advance check-in (see checkInToBoss) can open a brand-new session
-      // instead of attaching to an existing one — refresh the sessions list
-      // too so it shows up immediately instead of waiting on cache TTL.
+      // The check-in changes this session's confirmed/pending counts, which
+      // the sessions list also caches — refresh it too instead of waiting on
+      // cache TTL.
       cache.invalidatePattern(`attendance:sessions:${result.guildId}*`),
     ]);
     const serializedRecord = { ...result.record, joinedAt: result.record.joinedAt.toISOString() };

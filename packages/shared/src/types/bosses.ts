@@ -4,25 +4,17 @@ export interface PredefinedBoss {
   type: "LONG_CYCLE" | "FIXED_SCHEDULE";
   cooldownHours?: number;
   fixedSpawns?: Array<{ day: number; hour: number; minute: number }>; // 0=Sunday, 1=Monday...
-  /**
-   * Optional active-spawn window in Singapore wall-clock hours (24h). When set,
-   * a cooldown-based (LONG_CYCLE) respawn that lands outside [startHour, endHour)
-   * is pushed to the next day's startHour. Used for the "short cycle" bosses
-   * (Venatus / Viorent / Ego) whose 10:00–21:00 window the game enforces.
-   */
-  window?: { startHour: number; endHour: number };
   location: string;
 }
 
 // Singapore is UTC+8 with no daylight saving, so a fixed millisecond offset is exact.
 const SGT_OFFSET_MS = 8 * 60 * 60 * 1000;
-const SHORT_CYCLE_WINDOW = { startHour: 10, endHour: 21 } as const;
 
 export const PREDEFINED_BOSSES: PredefinedBoss[] = [
   // ─── Long Cycle Bosses ─────────────────────────────
-  { name: "Venatus", level: 60, type: "LONG_CYCLE", cooldownHours: 10, window: SHORT_CYCLE_WINDOW, location: "Corrupted Basin" },
-  { name: "Viorent", level: 65, type: "LONG_CYCLE", cooldownHours: 10, window: SHORT_CYCLE_WINDOW, location: "Crescent Lake" },
-  { name: "Ego", level: 70, type: "LONG_CYCLE", cooldownHours: 21, window: SHORT_CYCLE_WINDOW, location: "Ulan Canyon" },
+  { name: "Venatus", level: 60, type: "LONG_CYCLE", cooldownHours: 10, location: "Corrupted Basin" },
+  { name: "Viorent", level: 65, type: "LONG_CYCLE", cooldownHours: 10, location: "Crescent Lake" },
+  { name: "Ego", level: 70, type: "LONG_CYCLE", cooldownHours: 21, location: "Ulan Canyon" },
   { name: "Livera", level: 90, type: "LONG_CYCLE", cooldownHours: 24, location: "Protector's Ruins" },
   { name: "Araneo", level: 83, type: "LONG_CYCLE", cooldownHours: 24, location: "Lower Tomb of Tyriosa 1F" },
   { name: "Undomiel", level: 85, type: "LONG_CYCLE", cooldownHours: 24, location: "Secret Laboratory" },
@@ -201,36 +193,6 @@ export const PREDEFINED_BOSSES: PredefinedBoss[] = [
   },
 ];
 
-/**
- * Clamp a cooldown-based respawn to a boss's daily spawn window, evaluated in
- * Singapore wall-clock time. If the instant already falls inside the window it
- * is returned unchanged; otherwise it is moved to the next window opening.
- */
-function clampToWindowSGT(date: Date, window: { startHour: number; endHour: number }): Date {
-  const sgt = new Date(date.getTime() + SGT_OFFSET_MS); // SGT wall clock as UTC fields
-  const decimalHour = sgt.getUTCHours() + sgt.getUTCMinutes() / 60;
-
-  if (decimalHour >= window.startHour && decimalHour < window.endHour) {
-    return date; // already within the active window
-  }
-
-  // After the window closes, jump to the *next* day's opening; before it opens, same day.
-  const targetDay = decimalHour >= window.endHour
-    ? new Date(sgt.getTime() + 24 * 60 * 60 * 1000)
-    : sgt;
-
-  const openSgtMs = Date.UTC(
-    targetDay.getUTCFullYear(),
-    targetDay.getUTCMonth(),
-    targetDay.getUTCDate(),
-    window.startHour,
-    0,
-    0,
-    0,
-  );
-  return new Date(openSgtMs - SGT_OFFSET_MS);
-}
-
 export function getNextBossSpawnTime(bossName: string, killedAt: Date): Date {
   const boss = PREDEFINED_BOSSES.find((b) => b.name.toLowerCase() === bossName.toLowerCase());
   if (!boss) {
@@ -239,9 +201,7 @@ export function getNextBossSpawnTime(bossName: string, killedAt: Date): Date {
   }
 
   if (boss.type === "LONG_CYCLE" && boss.cooldownHours) {
-    const next = new Date(killedAt.getTime() + boss.cooldownHours * 60 * 60 * 1000);
-    // Short-cycle bosses only respawn inside their Singapore-time window.
-    return boss.window ? clampToWindowSGT(next, boss.window) : next;
+    return new Date(killedAt.getTime() + boss.cooldownHours * 60 * 60 * 1000);
   }
 
   if (boss.type === "FIXED_SCHEDULE" && boss.fixedSpawns && boss.fixedSpawns.length > 0) {
@@ -404,7 +364,7 @@ export function getBossCycleCategory(
   if (resolvedType === "FIXED_SCHEDULE") return "FIXED_SCHEDULE";
 
   const cooldown = cooldownHours ?? predef?.cooldownHours ?? null;
-  if (predef?.window || (cooldown !== null && cooldown <= SHORT_CYCLE_MAX_HOURS)) {
+  if (cooldown !== null && cooldown <= SHORT_CYCLE_MAX_HOURS) {
     return "SHORT_CYCLE";
   }
   return "LONG_CYCLE";

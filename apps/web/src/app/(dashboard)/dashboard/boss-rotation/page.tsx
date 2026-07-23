@@ -45,7 +45,7 @@ const BossKillSaleModal = dynamic(() => import("./components/BossKillSaleModal")
 import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, getBossCycleCategory, getRealtimeBossTimer } from "@guild/shared";
 
 type RotationTab = "LIVE" | "UPCOMING" | "ACTIVITIES" | "MASTER" | "HISTORY";
-type CycleFilter = "ALL" | "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE";
+type CycleFilter = "ALL" | "FIXED_SCHEDULE" | "SHORT_CYCLE" | "LONG_CYCLE" | "LOW_BOSS";
 type SortMode = "TIME" | "GUILD";
 type ViewMode = "GRID" | "TIMELINE" | "CALENDAR";
 type HistoryView = "TIMELINE" | "LEDGER";
@@ -77,6 +77,7 @@ const CYCLE_FILTERS: Array<{ id: CycleFilter; label: string }> = [
   { id: "FIXED_SCHEDULE", label: "Fixed Schedule" },
   { id: "LONG_CYCLE", label: "Long Cycle Boss" },
   { id: "SHORT_CYCLE", label: "Short Cycle Boss" },
+  { id: "LOW_BOSS", label: "Low Boss" },
 ];
 
 const SORT_OPTIONS: Array<{ id: SortMode; label: string }> = [
@@ -521,6 +522,10 @@ export default function BossRotationPage() {
         type: boss.type,
         cooldownHours: boss.cooldownHours || null,
         location: activeSchedule?.location || boss.location,
+        // This fallback path has no faction Low Boss config in scope; it
+        // only kicks in when the API returned nothing at all, so it's not
+        // the source of truth for this flag anyway.
+        isLowBoss: false,
         currentIndex,
         queue,
         currentGuild,
@@ -573,9 +578,16 @@ export default function BossRotationPage() {
         (selectedTakingGuildId === "UNASSIGNED" && !takingGuildId) ||
         takingGuildId === selectedTakingGuildId;
 
+      // Low Boss is a separate axis from cadence (a Low Boss can be
+      // SHORT_CYCLE or LONG_CYCLE underneath) — the "Low Boss" filter picks
+      // it out explicitly, and the cadence filters exclude it so they stay
+      // about the per-boss turn queue, not the day-based rotation.
       const matchesCycle =
         selectedCycle === "ALL" ||
-        getBossCycleCategory(rotation.bossName, rotation.type, rotation.cooldownHours) === selectedCycle;
+        (selectedCycle === "LOW_BOSS"
+          ? rotation.isLowBoss
+          : !rotation.isLowBoss &&
+            getBossCycleCategory(rotation.bossName, rotation.type, rotation.cooldownHours) === selectedCycle);
 
       return matchesSearch && matchesGuild && matchesCycle;
     });
@@ -1137,7 +1149,7 @@ export default function BossRotationPage() {
             ) : viewMode === "TIMELINE" ? (
               <TimelineView entries={upcomingBosses.map((schedule) => scheduleToViewEntry(schedule, serverNow))} />
             ) : viewMode === "CALENDAR" ? (
-              <WeeklyCalendar chipsByDate={upcomingCalendarChips} guildOfDay={guildOfDay} />
+              <WeeklyCalendar chipsByDate={upcomingCalendarChips} />
             ) : sortMode === "GUILD" ? (
               <div className="space-y-7">
                 {groupByGuild(upcomingBosses, (schedule) => schedule.guildTurnGuildName || schedule.guildTurn).map(([guildName, guildSchedules]) => (
@@ -1765,6 +1777,15 @@ const RotationCard = memo(function RotationCard({
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/[0.06] text-white/55 shrink-0">
                 Lvl {rotation.level}
               </span>
+              {rotation.isLowBoss ? (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 shrink-0">
+                  Low Boss
+                </span>
+              ) : (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 text-rose-300 shrink-0">
+                  High Boss
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1 text-white/40 mt-1">
               <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

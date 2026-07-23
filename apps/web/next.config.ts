@@ -2,16 +2,26 @@ import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Every avatar/icon/gear image the app renders is a Supabase Storage
-  // public object (see lib/storage.ts) — `*.supabase.co` (not a hardcoded
-  // project ref, which has already differed between this repo's .env and
-  // memory of the "production" ref) covers any project this app points at.
   images: {
     remotePatterns: [
+      // Every avatar/icon/gear image the app renders is a Supabase Storage
+      // public object (see lib/storage.ts) — `*.supabase.co` (not a
+      // hardcoded project ref, which has already differed between this
+      // repo's .env and memory of the "production" ref) covers any project
+      // this app points at.
       {
         protocol: "https",
         hostname: "*.supabase.co",
         pathname: "/storage/v1/object/public/**",
+      },
+      // ImageUrlField (components/dashboard/DashboardHelpers.tsx) falls back
+      // to a hardcoded Unsplash photo when a pasted wallpaper URL isn't a
+      // direct image link — without this, next/image rejects that fallback
+      // itself with "hostname not configured", crashing the exact field
+      // meant to be a safety net.
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
       },
     ],
   },

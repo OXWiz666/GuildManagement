@@ -281,11 +281,19 @@ export class BossService {
     const now = params.now ?? new Date();
     const factionGuildIds = await this.bosses.getFactionGuildIds(params.guildId);
 
-    const rows = await this.bosses.listUpcoming({
-      guildId: params.guildId,
-      factionGuildIds,
-      ...(params.bossName ? { bossName: params.bossName } : {}),
-    });
+    const [rows, holderNames] = await Promise.all([
+      this.bosses.listUpcoming({
+        guildId: params.guildId,
+        factionGuildIds,
+        ...(params.bossName ? { bossName: params.bossName } : {}),
+      }),
+      // The schedule row's own `guildTurn` text column is a legacy snapshot
+      // that never gets updated when the rotation queue advances — resolve
+      // the real current holder the same way the website does instead of
+      // trusting it. Best-effort: a lookup failure shouldn't take down
+      // `!spawn`, it just means this fallback keeps using the raw row data.
+      core.dashboard.getBossHolderNames(params.guildId).catch(() => null),
+    ]);
 
     return rows.map((row) => {
       const timer = getRealtimeBossTimer(row.bossName, row.spawnTime.toISOString(), now.getTime(), {
@@ -294,6 +302,7 @@ export class BossService {
 
       return {
         ...row,
+        guildTurn: holderNames?.has(row.bossName) ? holderNames.get(row.bossName)! : row.guildTurn,
         live: timer.live,
         timerText: timer.text,
         liveElapsedText: timer.liveElapsedText,
@@ -342,6 +351,8 @@ export class BossService {
     drops: Array<{ itemName: string; matched: boolean; iconUrl: string | null }>;
     alreadyLogged: boolean;
     killedAt: Date;
+    /** Who actually logged the kill — only meaningful when alreadyLogged is true. */
+    loggedBy: { id: string; displayName: string } | null;
   }> {
     // Which guild took the boss. Defaults to the actor's own guild — the
     // overwhelmingly common case for a kill reported from that guild's server.
@@ -402,7 +413,8 @@ export class BossService {
 
     const next = result.nextSchedule;
     const killedAt = result.schedule.killedAt ? new Date(result.schedule.killedAt) : params.killedAt;
-    if (!next) return { nextSpawn: null, drops, alreadyLogged, killedAt };
+    const loggedBy = result.loggedBy ?? null;
+    if (!next) return { nextSpawn: null, drops, alreadyLogged, killedAt, loggedBy };
 
     // Same live/countdown projection every other read uses — a freshly rolled
     // schedule can itself already be "live" (e.g. a fixed-schedule boss whose
@@ -422,6 +434,7 @@ export class BossService {
       drops,
       alreadyLogged,
       killedAt,
+      loggedBy,
     };
   }
 

@@ -122,14 +122,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function isAdvanceTurnInSchedule(schedule: BossScheduleData, myGuildId: string, now = new Date()) {
-  return (
-    schedule.status !== "KILLED" &&
-    schedule.guildTurnGuildId === myGuildId &&
-    isTodayOrTomorrowSchedule(schedule.spawnTime, now)
-  );
-}
-
 export default function BossAttendancePage() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -137,7 +129,7 @@ export default function BossAttendancePage() {
 
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
-  const [activeTab, setActiveTab] = useState<"overview" | "history" | "advance">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "history">("overview");
   const [overviewView, setOverviewView] = useState<"cards" | "calendar" | "timeline">("cards");
 
   // Smart one-click Check-in state (no codes — boss id is the key)
@@ -335,11 +327,6 @@ export default function BossAttendancePage() {
       if (item.status === "KILLED") {
         return { status: "EXPIRED_NO_SESSION", label: "No Session Run", color: "text-white/40 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-700" };
       }
-      // No officer-opened window yet, but it's this guild's rotation turn —
-      // members can stake their attendance early (see checkInToBoss).
-      if (activeGuild && item.guildTurnGuildId === activeGuild.guildId) {
-        return { status: "ADVANCE_ELIGIBLE", label: "Your Guild's Turn", color: "text-violet-300 bg-violet-500/5 border-violet-500/20", dotColor: "bg-violet-500 border border-violet-400/20" };
-      }
       return { status: "NONE", label: "Scheduled Spawn", color: "text-white/55 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-650" };
     }
 
@@ -375,13 +362,6 @@ export default function BossAttendancePage() {
 
     return { expired: false, text, warning };
   }, [currentTime]);
-
-  // Same eligibility rule AdvanceCheckInBanner applies internally — mirrored
-  // here just for the tab's count badge.
-  const advanceEligibleCount = useMemo(() => {
-    if (!activeGuild) return 0;
-    return schedules.filter((s) => isAdvanceTurnInSchedule(s, activeGuild.guildId)).length;
-  }, [schedules, activeGuild]);
 
   const selectedSession = useMemo(
     () => sessions.find((s) => s.id === selectedSessionId) || selectedSessionOverride,
@@ -457,7 +437,6 @@ export default function BossAttendancePage() {
           tabs={[
             { value: "overview", label: "Overview" },
             { value: "history", label: "Attendance History", count: stats?.history?.length ?? 0 },
-            { value: "advance", label: "Advance Turn-In", count: advanceEligibleCount },
           ]}
           active={activeTab}
           onChange={setActiveTab}
@@ -600,11 +579,8 @@ export default function BossAttendancePage() {
             sessions={overviewSessions}
             schedules={schedules.filter((schedule) => isTodayOrTomorrowSchedule(schedule.spawnTime))}
             isLoading={isLoadingSessions}
-            myGuildId={activeGuild.guildId}
             userId={user.id}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
-          onSelect={handleSelectSession}
+            onSelect={handleSelectSession}
           />
         )}
 
@@ -613,9 +589,6 @@ export default function BossAttendancePage() {
             sessions={sessions}
             schedules={schedules}
             isLoading={isLoadingSchedules || isLoadingSessions}
-            myGuildId={activeGuild.guildId}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
             onSelectSession={handleSelectSession}
           />
         )}
@@ -625,9 +598,6 @@ export default function BossAttendancePage() {
             sessions={sessions}
             schedules={schedules}
             isLoading={isLoadingSchedules || isLoadingSessions}
-            myGuildId={activeGuild.guildId}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
             onSelectSession={handleSelectSession}
           />
         )}
@@ -637,19 +607,6 @@ export default function BossAttendancePage() {
         {activeTab === "history" && (
           /* Personal attendance history */
           <AttendanceHistoryList history={stats?.history || []} />
-        )}
-
-        {activeTab === "advance" && (
-          /* Advance check-in: bosses that haven't been fought yet but are
-             currently this guild's rotation turn — stake attendance early,
-             officer verifies once the boss actually dies. */
-          <AdvanceCheckInBanner
-            schedules={schedules}
-            myGuildId={activeGuild.guildId}
-            userId={user.id}
-            checkingInId={checkingInId}
-            onCheckIn={handleCheckIn}
-          />
         )}
 
         {/* Modal: attendance session detail — your status + check-in
@@ -824,182 +781,3 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
   );
 });
 
-// ─── Advance Check-In Banner ───
-// Bosses that haven't been fought yet (no attendance session exists at all)
-// but are currently this guild's rotation turn — checkInToBoss on the server
-// opens the session on demand and logs a PENDING record; the officer still
-// verifies it the normal way once the boss actually dies.
-type AdvanceTimelineGroup = {
-  key: string;
-  label: string;
-  subtitle: string;
-  items: BossScheduleData[];
-};
-
-function buildAdvanceTimelineGroups(items: BossScheduleData[]): AdvanceTimelineGroup[] {
-  const groups = new Map<string, AdvanceTimelineGroup>();
-
-  for (const item of items) {
-    const spawn = new Date(item.spawnTime);
-    const key = `${spawn.getFullYear()}-${String(spawn.getMonth() + 1).padStart(2, "0")}-${String(spawn.getDate()).padStart(2, "0")}`;
-    const existing = groups.get(key);
-
-    if (existing) {
-      existing.items.push(item);
-      continue;
-    }
-
-    groups.set(key, {
-      key,
-      label: spawn.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }),
-      subtitle: spawn.toLocaleDateString("en-US", { year: "numeric" }),
-      items: [item],
-    });
-  }
-
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    items: group.items.sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime()),
-  }));
-}
-
-function formatTimelineTime(value: string) {
-  return new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-function hasUserCheckedInEarly(item: BossScheduleData, userId: string) {
-  return Boolean(
-    item.attendanceSessions?.some((session) =>
-      session.records?.some((record) => record.userId === userId),
-    ),
-  );
-}
-
-function getAdvanceCheckInActionLabel(item: BossScheduleData, userId: string) {
-  const userRecord = item.attendanceSessions
-    ?.flatMap((session) => session.records ?? [])
-    .find((record) => record.userId === userId);
-
-  return userRecord?.status === "CONFIRMED" ? "Confirmed" : "Pending";
-}
-
-function getAdvanceCheckInLabel(item: BossScheduleData, userId: string) {
-  const userRecord = item.attendanceSessions
-    ?.flatMap((session) => session.records ?? [])
-    .find((record) => record.userId === userId);
-
-  if (userRecord?.status === "CONFIRMED") return "Confirmed early turn-in";
-  if (userRecord?.status === "PENDING") return "Early turn-in queued for officer review";
-  if (item.attendanceSessions?.some((session) => session.isActive)) return "Window open for early turn-in";
-  return "Awaiting kill verification";
-}
-
-const AdvanceCheckInBanner = memo(function AdvanceCheckInBanner({
-  schedules,
-  myGuildId,
-  userId,
-  checkingInId,
-  onCheckIn,
-}: {
-  schedules: BossScheduleData[];
-  myGuildId: string;
-  userId: string;
-  checkingInId: string | null;
-  onCheckIn: (item: BossScheduleData) => void;
-}) {
-  const eligible = useMemo(
-    () =>
-      schedules
-        .filter((s) => isAdvanceTurnInSchedule(s, myGuildId))
-        .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime()),
-    [schedules, myGuildId],
-  );
-  const timelineGroups = useMemo(() => buildAdvanceTimelineGroups(eligible), [eligible]);
-
-  return (
-    <div className="rounded-2xl border border-violet-500/20 bg-[#09090d]/70 p-5 shadow-sm">
-      <div className="flex flex-col gap-4 border-b border-white/[0.06] pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/25 bg-violet-500/10">
-            <span className="h-2.5 w-2.5 rounded-full bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.45)]" />
-          </div>
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-widest text-violet-300">
-              Advance Turn-In Timeline
-            </span>
-            <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-white/55">
-              These bosses have not been fought yet, but it is your guild&apos;s turn. Check in early to stake your attendance;
-              officers still verify once the boss dies.
-            </p>
-          </div>
-        </div>
-        {eligible.length > 0 && (
-          <div className="rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1 text-[11px] font-bold text-violet-200">
-            {eligible.length} pending turn-in{eligible.length === 1 ? "" : "s"}
-          </div>
-        )}
-      </div>
-
-      {eligible.length === 0 ? (
-        <p className="px-1 py-8 text-center text-[12px] italic text-white/35">
-          Nothing to check in early for right now. This timeline fills in as soon as a boss becomes your guild&apos;s turn.
-        </p>
-      ) : (
-        <div className="max-h-[520px] overflow-y-auto pr-1 pt-5 custom-scrollbar">
-          <div className="space-y-6">
-            {timelineGroups.map((group) => (
-              <section key={group.key} className="relative grid gap-3 md:grid-cols-[150px_minmax(0,1fr)]">
-                <div className="md:sticky md:top-0 md:self-start">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/45">{group.label}</p>
-                  <p className="mt-1 text-[10px] font-mono text-violet-300/65">
-                    {group.subtitle} / {group.items.length} boss{group.items.length === 1 ? "" : "es"}
-                  </p>
-                </div>
-
-                <div className="relative space-y-2.5 border-l border-violet-400/15 pl-5">
-                  {group.items.map((item, index) => (
-                    <div key={item.id} className="relative">
-                      <span
-                        className={`absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full border border-violet-200/40 bg-violet-500 ${
-                          index === 0 ? "shadow-[0_0_16px_rgba(139,92,246,0.55)]" : ""
-                        }`}
-                      />
-                      <div className="flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-3 transition-colors hover:border-violet-400/25 hover:bg-violet-500/[0.035] sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-10 w-16 shrink-0 flex-col items-center justify-center rounded-lg border border-white/[0.06] bg-black/20 font-mono">
-                            <span className="text-[11px] font-bold text-white/80">{formatTimelineTime(item.spawnTime)}</span>
-                            <span className="mt-0.5 text-[8px] uppercase tracking-wider text-white/30">Spawn</span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-bold text-white">{item.bossName}</p>
-                            <p className="mt-0.5 text-[10px] text-white/40">
-                              {getAdvanceCheckInLabel(item, userId)}
-                            </p>
-                          </div>
-                        </div>
-                        {hasUserCheckedInEarly(item, userId) ? (
-                          <span className="shrink-0 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3.5 py-2 text-[11px] font-bold text-amber-300">
-                            {getAdvanceCheckInActionLabel(item, userId)}
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => onCheckIn(item)}
-                            disabled={checkingInId === item.id}
-                            className="shrink-0 rounded-lg bg-violet-600 px-3.5 py-2 text-[11px] font-bold text-white hover:bg-violet-700 disabled:opacity-50 cursor-pointer"
-                          >
-                            {checkingInId === item.id ? "Checking in..." : "Check In Early"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});

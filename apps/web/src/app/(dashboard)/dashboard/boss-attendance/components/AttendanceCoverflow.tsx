@@ -17,10 +17,7 @@ export interface AttendanceCoverflowProps {
   sessions: AttendanceSessionSummary[];
   schedules?: BossScheduleData[];
   isLoading: boolean;
-  myGuildId?: string;
   userId?: string;
-  checkingInId?: string | null;
-  onCheckIn?: (schedule: BossScheduleData) => void;
   onSelect: (session: AttendanceSessionSummary) => void;
 }
 
@@ -135,10 +132,7 @@ export default function AttendanceCoverflow({
   sessions,
   schedules = [],
   isLoading,
-  myGuildId,
   userId,
-  checkingInId,
-  onCheckIn,
   onSelect,
 }: AttendanceCoverflowProps) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -269,12 +263,6 @@ export default function AttendanceCoverflow({
               const sessionForModal = session ?? schedule.attendanceSessions?.[0] ?? null;
               const record = userScheduleRecord(schedule, userId);
               const remaining = session ? formatRemaining(session.expiresAt, now) : null;
-              const canCheckIn =
-                Boolean(onCheckIn) &&
-                Boolean(myGuildId) &&
-                schedule.guildTurnGuildId === myGuildId &&
-                schedule.status !== "KILLED" &&
-                !record;
               const openSession = () => {
                 if (!sessionForModal) return;
                 onSelect(scheduleSessionSummary(schedule, sessionForModal, now));
@@ -326,18 +314,6 @@ export default function AttendanceCoverflow({
                       <p className="pt-1 text-[9px] font-bold uppercase tracking-wider text-white/45">
                         {record.status === "CONFIRMED" ? "Attendance verified" : "Awaiting officer"}
                       </p>
-                    ) : canCheckIn ? (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onCheckIn?.(schedule);
-                        }}
-                        disabled={checkingInId === schedule.id}
-                        className="mt-1 w-full rounded-md bg-violet-600 px-2 py-1.5 text-[10px] font-bold text-white hover:bg-violet-700 disabled:opacity-50 cursor-pointer"
-                      >
-                        {checkingInId === schedule.id ? "Checking..." : "Check In Early"}
-                      </button>
                     ) : (
                       <p className="pt-1 text-[9px] text-white/30">Viewable schedule</p>
                     )}

@@ -861,6 +861,10 @@ export interface BossRotationItem {
   type: "LONG_CYCLE" | "FIXED_SCHEDULE" | string;
   cooldownHours: number | null;
   location: string;
+  // True when this boss is flagged in the Faction Schedule's day-based Low
+  // Boss rotation — its `currentGuild`/`queue` come from today's assigned
+  // guild rather than a per-boss turn queue.
+  isLowBoss: boolean;
   currentIndex: number;
   queue: FactionGuildData[];
   currentGuild: FactionGuildData | null;
@@ -890,6 +894,8 @@ export interface BossMasterListEntry {
   type: "LONG_CYCLE" | "FIXED_SCHEDULE" | string;
   location: string;
   cooldownHours: number | null;
+  /** Follows the Faction Schedule's day rotation instead of a participant queue. */
+  isLowBoss: boolean;
   /** True once a faction leader has explicitly saved this boss's participant list. */
   configured: boolean;
   participantGuildIds: string[];

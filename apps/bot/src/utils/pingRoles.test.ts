@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildSpawnCallToAction,
   parsePingRoleIds,
   pingRoleContent,
   pingRoleMentions,
@@ -31,15 +30,5 @@ describe("ping role helpers", () => {
     expect(pingRoleContent("111111111111111111,222222222222222222")).toBe(
       "<@&111111111111111111> <@&222222222222222222>",
     );
-  });
-
-  it("puts the call-to-action and the ping roles in one message", () => {
-    expect(buildSpawnCallToAction("Larba", "111111111111111111,222222222222222222")).toBe(
-      "Log it with `!kill Larba` once it's down. <@&111111111111111111> <@&222222222222222222>",
-    );
-  });
-
-  it("still shows the call-to-action with no roles configured", () => {
-    expect(buildSpawnCallToAction("Larba", null)).toBe("Log it with `!kill Larba` once it's down.");
   });
 });

@@ -161,7 +161,7 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
           {view === "BOSS" && (
             <p className="hidden sm:block text-[11px] text-white/40 max-w-xs">
               {canManage
-                ? "Toggle which guilds take each boss. Guilds left off don't rotate on it."
+                ? "Toggle which guilds take each boss. The number on each chip is its turn order — guilds left off don't rotate on it."
                 : "Read-only. Only faction leaders can edit the master list."}
             </p>
           )}
@@ -196,6 +196,42 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {filteredBosses.map((boss) => {
             const selected = draft[boss.bossName] ?? [];
+
+            // A Low Boss has no per-boss participant queue to toggle — its
+            // guild comes from the Faction Schedule's day pattern instead.
+            // Still shown here (rather than omitted, as before) so a leader
+            // browsing "By Boss" isn't left wondering why the boss vanished.
+            if (boss.isLowBoss) {
+              return (
+                <div key={boss.bossName} className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-zinc-950">
+                      <img src={getBossImageUrl(boss.bossName)} alt={boss.bossName} className="h-full w-full object-cover" loading="lazy" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-white truncate">{boss.bossName}</h3>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] shrink-0">
+                          Lvl {boss.level}
+                        </span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 shrink-0">
+                          Low Boss
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-0.5 truncate">{boss.location}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setView("SCHEDULE")}
+                    className="w-full rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left text-[11px] leading-relaxed text-white/50 hover:border-cyan-500/25 hover:text-white/75 cursor-pointer transition-all"
+                  >
+                    Follows the day-based Faction Schedule, not a per-boss queue — open the <span className="text-cyan-300 font-semibold">Schedule</span> tab to see or edit who takes it each day.
+                  </button>
+                </div>
+              );
+            }
+
             return (
               <div key={boss.bossName} className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
                 <div className="flex items-start gap-3 mb-3">
@@ -226,6 +262,12 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
                   {guilds.map((g) => {
                     const on = isParticipating(boss.bossName, g.id);
                     const color = getGuildColor(g.name);
+                    // Turn order is just array position — the guild added
+                    // first takes the boss first, then the queue cycles back
+                    // to the start. Surfacing that position is the whole
+                    // point of this view: without it there's no way to tell
+                    // who's up next just from a flat set of toggled chips.
+                    const sequence = on ? selected.indexOf(g.id) + 1 : null;
                     return (
                       <button
                         key={g.id}
@@ -236,6 +278,11 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
                         } ${canManage ? "cursor-pointer hover:opacity-90" : "cursor-default"}`}
                       >
                         <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: on ? color.dot : "rgba(255,255,255,0.2)" }} />
+                        {sequence !== null && (
+                          <span className="inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-black/25 px-1 text-[9px] font-bold leading-none">
+                            {sequence}
+                          </span>
+                        )}
                         {g.name}
                       </button>
                     );

@@ -786,6 +786,20 @@ function WishlistModal({
     });
   };
 
+  // Logs get a real quantity input instead of the all-or-nothing toggle
+  // above — a member can ask for fewer than their tier's cap. The backend
+  // (normalizeWishlist) already clamps to the cap regardless, so this only
+  // needs to mirror that clamp for the input itself.
+  const setResourceQuantity = (category: WishlistItem["category"], key: string, cap: number, quantity: number) => {
+    const id = `${category}:${key}`;
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (quantity <= 0) delete next[id];
+      else next[id] = { category, key, quantity: Math.min(quantity, Math.max(cap, 1)) };
+      return next;
+    });
+  };
+
   async function save() {
     const incomplete = Object.values(selected).filter((i) => i.category === "ARMOR" && !i.rarity);
     if (incomplete.length > 0) {
@@ -983,12 +997,12 @@ function WishlistModal({
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                 {showLogs && (
-                  <ResourceRow
+                  <ResourceQuantityRow
                     label="Logs"
                     iconSrc={gearIcons.iconForSlot("logs")}
-                    allowance={caps.logs}
-                    on={!!selected["LOGS:logs"]}
-                    onToggle={() => toggleResource("LOGS", "logs", caps.logs)}
+                    cap={caps.logs}
+                    quantity={selected["LOGS:logs"]?.quantity ?? 0}
+                    onChange={(quantity) => setResourceQuantity("LOGS", "logs", caps.logs, quantity)}
                   />
                 )}
                 {showTemporal && (
@@ -1219,6 +1233,59 @@ function ResourceRow({
         </span>
       </span>
     </button>
+  );
+}
+
+/**
+ * Like ResourceRow, but for a resource the member can request a partial
+ * quantity of (currently just Logs) instead of all-or-nothing — the cap
+ * from Distribution Rules is still the ceiling, just not the only option.
+ */
+function ResourceQuantityRow({
+  label,
+  iconSrc,
+  cap,
+  quantity,
+  onChange,
+}: {
+  label: string;
+  iconSrc: string | null;
+  cap: number;
+  quantity: number;
+  onChange: (quantity: number) => void;
+}) {
+  const unavailable = cap <= 0;
+  const on = quantity > 0;
+  return (
+    <div
+      className={`flex w-full items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all ${
+        on ? "border-cyan-500/40 bg-cyan-500/[0.06]" : "border-white/[0.08] bg-white/[0.02]"
+      } ${unavailable ? "opacity-45" : ""}`}
+    >
+      <span className="flex items-center gap-2 min-w-0">
+        <GearIcon src={iconSrc} size={22} />
+        <span className={`truncate text-xs font-medium ${on ? "text-white" : "text-white/60"}`}>{label}</span>
+      </span>
+      {unavailable ? (
+        <span className="text-[9px] uppercase tracking-wide text-white/30 shrink-0">Not for your rank</span>
+      ) : (
+        <span className="flex items-center gap-1 shrink-0">
+          <input
+            type="number"
+            min={0}
+            max={cap}
+            value={quantity}
+            onChange={(e) => {
+              const raw = Number(e.target.value);
+              const next = Number.isFinite(raw) ? Math.max(0, Math.min(cap, Math.floor(raw))) : 0;
+              onChange(next);
+            }}
+            className="w-12 rounded-md border border-white/[0.08] bg-black/30 px-1.5 py-0.5 text-center text-[11px] font-mono font-bold text-white focus:border-cyan-500/40 focus:outline-none"
+          />
+          <span className="text-[10px] font-mono text-white/35">/ {cap}</span>
+        </span>
+      )}
+    </div>
   );
 }
 

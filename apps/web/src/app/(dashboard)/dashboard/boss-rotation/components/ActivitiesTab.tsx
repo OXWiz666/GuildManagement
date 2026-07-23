@@ -4,12 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   activityApi,
   guildApi,
-  dashboardApi,
   type ActivityInput,
   type GuildActivitiesResponse,
   type GuildActivityData,
   type ActivityPointRulesData,
-  type LowBossRotationResponse,
 } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { useSocket } from "@/components/providers/socket-provider";
@@ -21,29 +19,22 @@ import { buildActivityTypeMeta } from "@/lib/activityTypeMeta";
 import ActivityModal from "./ActivityModal";
 import ActivityCard from "./ActivityCard";
 import WeeklyCalendar, { toDateKey } from "./WeeklyCalendar";
-import { buildWeeklyChips, buildGuildOfDayResolver } from "../utils/calendarChips";
+import { buildWeeklyChips } from "../utils/calendarChips";
 
 type TypeFilter = "ALL" | string;
 
 const EMPTY: GuildActivitiesResponse = { canManage: false, viewerRole: "MEMBER", activities: [] };
-const EMPTY_LOW_ROTATION: LowBossRotationResponse = {
-  canManage: false,
-  viewerRole: "MEMBER",
-  mode: "MONTHLY",
-  lowBossNames: [],
-  weekly: {},
-  days: {},
-  guilds: [],
-  bosses: [],
-};
 
 /**
  * Guild Activities, relocated from its own page (/dashboard/boss-schedule)
  * into a Boss Rotation tab. Self-contained like MasterListTab/LowBossSchedule
  * — takes only guildId and fetches everything itself. The calendar here
  * shows activities only (no boss spawns — those already have their own
- * Guild Rotation/Upcoming tabs) plus the Faction Schedule guild-of-day strip,
- * sharing the boss_low_rotation cache key so that costs no extra request.
+ * Guild Rotation/Upcoming tabs). It intentionally does NOT show the Faction
+ * Schedule's guild-of-day strip — that's a per-boss Low Boss holder, not an
+ * activity/event assignment, and showing it here read as "Guild Event has
+ * its own rotation" when it doesn't. That overlay's only real home is the
+ * Faction Schedule tab itself (see LowBossSchedule.tsx).
  */
 export default function ActivitiesTab({ guildId }: { guildId: string }) {
   const { addToast } = useToast();
@@ -83,18 +74,6 @@ export default function ActivitiesTab({ guildId }: { guildId: string }) {
   );
   const registeredActivities = useMemo(() => rulesData?.activities ?? [], [rulesData]);
   const typeMeta = useMemo(() => buildActivityTypeMeta(registeredActivities), [registeredActivities]);
-
-  // Same cache key the Faction Schedule tab uses — shares the cache instead
-  // of double-fetching, and is all the calendar needs for its guild-of-day
-  // overlay without prop-drilling.
-  const { data: lowRotationRaw } = useQuery<LowBossRotationResponse>(
-    `boss_low_rotation:${guildId}`,
-    async () => {
-      const res = await dashboardApi.getLowBossRotation(guildId);
-      return res.success && res.data ? res.data : EMPTY_LOW_ROTATION;
-    },
-    { persist: true, staleTime: 15000, enabled: !!guildId },
-  );
 
   useEffect(() => {
     if (!socket || !guildId) return;
@@ -147,8 +126,6 @@ export default function ActivitiesTab({ guildId }: { guildId: string }) {
       }),
     [filtered, typeMeta],
   );
-
-  const guildOfDay = useMemo(() => buildGuildOfDayResolver(lowRotationRaw), [lowRotationRaw]);
 
   function refresh() {
     queryClient.invalidateQueries(`guild_activities:${guildId}`);
@@ -319,7 +296,6 @@ export default function ActivitiesTab({ guildId }: { guildId: string }) {
 
       <WeeklyCalendar
         chipsByDate={chipsByDate}
-        guildOfDay={guildOfDay}
         onDayAdd={canManage ? (dateKey) => openCreate(dateKey) : undefined}
         addLabel="New activity"
       />

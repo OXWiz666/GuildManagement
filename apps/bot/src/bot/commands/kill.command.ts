@@ -70,7 +70,7 @@ export const killCommand: Command = {
 
     const requestedKilledAt = hasTime ? resolveWallClock(last, ctx.server.timezone) : new Date();
 
-    const { nextSpawn: spawn, drops, alreadyLogged, killedAt } = await ctx.services.boss.recordKill({
+    const { nextSpawn: spawn, drops, alreadyLogged, killedAt, loggedBy } = await ctx.services.boss.recordKill({
       guildId: ctx.server.guildId,
       bossName,
       killedAt: requestedKilledAt,
@@ -85,11 +85,15 @@ export const killCommand: Command = {
       .addFields(
         { name: "Killed At", value: discordTimestamp(killedAt, "f"), inline: true },
         {
-          name: alreadyLogged ? "Status" : "Logged By",
-          value: alreadyLogged ? "This boss kill was already recorded." : actor.ign ?? actor.displayName,
+          name: "Logged By",
+          value: alreadyLogged ? loggedBy?.displayName ?? "Unknown" : actor.ign ?? actor.displayName,
           inline: true,
         },
       );
+
+    if (alreadyLogged) {
+      embed.addFields({ name: "Status", value: "This boss kill was already recorded.", inline: true });
+    }
 
     if (takenGuild && !alreadyLogged) {
       embed.addFields({ name: "Taken By", value: takenGuild.name, inline: true });

@@ -2609,7 +2609,43 @@ async function finishSoloBossKill(params: {
     rotationId: null as string | null,
     factionId: null as string | null,
     alreadyLogged: false,
+    loggedBy: null as { id: string; displayName: string } | null,
   };
+}
+
+/**
+ * Who actually logged the most recent kill of a boss — used for the
+ * "already logged" reply, which otherwise has no way to say who recorded
+ * it. The kill-audit write's `targetId` isn't consistently the schedule
+ * row itself (some paths key it to the BossRotation row instead, which is
+ * one row per boss forever), so this matches on `detail.bossName` in the
+ * most recent kill-audit entries rather than trying to look up by id.
+ */
+async function findBossKillLogger(
+  factionGuildIds: string[],
+  bossName: string,
+): Promise<{ id: string; displayName: string } | null> {
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      guildId: { in: factionGuildIds },
+      action: { in: BOSS_KILL_AUDIT_ACTIONS },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    include: { actor: { select: { id: true, displayName: true } } },
+  });
+
+  const needle = bossName.trim().toLowerCase();
+  for (const log of logs) {
+    const detail = log.detail && typeof log.detail === "object" && !Array.isArray(log.detail)
+      ? (log.detail as Record<string, unknown>)
+      : null;
+    const loggedBossName = typeof detail?.["bossName"] === "string" ? (detail["bossName"] as string) : null;
+    if (loggedBossName && loggedBossName.trim().toLowerCase() === needle && log.actor) {
+      return { id: log.actor.id, displayName: log.actor.displayName };
+    }
+  }
+  return null;
 }
 
 export async function markBossRotationKilled(
@@ -2662,12 +2698,16 @@ export async function markBossRotationKilled(
       });
     }
 
+    const factionGuildIds = (await getActiveFactionGuilds(guild?.factionId ?? null, guildId)).map((g) => g.id);
+    const loggedBy = await findBossKillLogger(factionGuildIds, schedule.bossName);
+
     return {
       schedule: serializeBossScheduleForApi(schedule),
       nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
       rotationId: null as string | null,
       factionId: guild?.factionId ?? null,
       alreadyLogged: true,
+      loggedBy,
     };
   }
 
@@ -2815,12 +2855,15 @@ export async function markBossRotationKilled(
       );
     }
 
+    const loggedBy = await findBossKillLogger(activeGuildIds, schedule.bossName);
+
     return {
       schedule: serializeBossScheduleForApi(updatedEvent),
       nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
       rotationId: rotation?.id ?? null,
       factionId,
       alreadyLogged: true,
+      loggedBy,
     };
   }
 
@@ -2943,6 +2986,7 @@ export async function markBossRotationKilled(
     rotationId: rotation.id,
     factionId,
     alreadyLogged: false,
+    loggedBy: null,
   };
 }
 
@@ -3056,12 +3100,15 @@ export async function markBossRotationKilledByName(
       );
     }
 
+    const loggedBy = await findBossKillLogger(factionGuildIds, latestKilled.bossName);
+
     return {
       schedule: serializeBossScheduleForApi(latestKilled),
       nextSchedule: nextSchedule ? serializeBossScheduleForApi(nextSchedule) : null,
       rotationId: existingRotation?.id ?? null,
       factionId,
       alreadyLogged: true,
+      loggedBy,
     };
   }
 
@@ -3265,6 +3312,7 @@ export async function markBossRotationKilledByName(
     rotationId: rotation.id,
     factionId,
     alreadyLogged: false,
+    loggedBy: null,
   };
 }
 

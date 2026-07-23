@@ -351,6 +351,8 @@ export class BossService {
     drops: Array<{ itemName: string; matched: boolean; iconUrl: string | null }>;
     alreadyLogged: boolean;
     killedAt: Date;
+    /** Who actually logged the kill — only meaningful when alreadyLogged is true. */
+    loggedBy: { id: string; displayName: string } | null;
   }> {
     // Which guild took the boss. Defaults to the actor's own guild — the
     // overwhelmingly common case for a kill reported from that guild's server.
@@ -411,7 +413,8 @@ export class BossService {
 
     const next = result.nextSchedule;
     const killedAt = result.schedule.killedAt ? new Date(result.schedule.killedAt) : params.killedAt;
-    if (!next) return { nextSpawn: null, drops, alreadyLogged, killedAt };
+    const loggedBy = result.loggedBy ?? null;
+    if (!next) return { nextSpawn: null, drops, alreadyLogged, killedAt, loggedBy };
 
     // Same live/countdown projection every other read uses — a freshly rolled
     // schedule can itself already be "live" (e.g. a fixed-schedule boss whose
@@ -431,6 +434,7 @@ export class BossService {
       drops,
       alreadyLogged,
       killedAt,
+      loggedBy,
     };
   }
 

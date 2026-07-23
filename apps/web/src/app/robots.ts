@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://forgekeep.io";
+const SITE_URL = "https://forgekeep.vercel.app";
 
 // Everything under the dashboard/admin route groups requires auth and has no
 // SEO value — crawling it just wastes budget and risks indexing member data.

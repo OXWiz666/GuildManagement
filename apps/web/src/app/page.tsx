@@ -10,7 +10,7 @@ const structuredData = {
   operatingSystem: "Web",
   description:
     "Guild command center for competitive MMORPG teams — live boss spawn timers, verified raid attendance, guild points, and an audited treasury.",
-  url: "https://forgekeep.io",
+  url: "https://forgekeep.vercel.app",
   offers: {
     "@type": "Offer",
     price: "0",

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://forgekeep.io";
+const SITE_URL = "https://forgekeep.vercel.app";
 
 // Only genuinely public, indexable marketing/auth pages — dashboard/admin
 // routes require auth and are excluded via robots.ts.

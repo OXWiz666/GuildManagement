@@ -9,6 +9,8 @@ export interface SpawnEmbedInput {
   spawnTime: Date;
   location: string;
   guildTurn: string | null;
+  /** Bare role mention(s) (`<@&id>`), if this server has ping roles configured. */
+  pingRoleMention?: string;
 }
 
 /** Imminent-spawn warning (default: 5 minutes out). */
@@ -23,7 +25,7 @@ export function spawnWarningEmbed(input: SpawnEmbedInput, minutes: number): Embe
     );
 
   if (input.guildTurn) {
-    embed.addFields({ name: "Guild Turn", value: `🛡 ${input.guildTurn}`, inline: true });
+    embed.addFields({ name: "Guild Turn", value: `${input.guildTurn}`, inline: true });
   }
 
   return embed;
@@ -40,8 +42,19 @@ export function spawnEmbed(input: SpawnEmbedInput): EmbedBuilder {
     );
 
   if (input.guildTurn) {
-    embed.addFields({ name: "Guild Turn", value: `🛡 ${input.guildTurn}`, inline: true });
+    embed.addFields({ name: "Guild Turn", value: `${input.guildTurn}`, inline: true });
   }
+
+  // Discord only fires a role-mention notification from message `content`,
+  // never from an embed — so the bare mention still has to live in content
+  // for the ping to actually land. This field just makes the same "who got
+  // pinged and why" reasoning visible on the embed itself instead of being
+  // legible only from a separate content line above it.
+  const callToAction = "Log it with `!kill " + input.bossName + "` once it's down.";
+  embed.addFields({
+    name: "​",
+    value: input.pingRoleMention ? `${callToAction} ${input.pingRoleMention}` : callToAction,
+  });
 
   return embed;
 }
@@ -81,7 +94,7 @@ export function killEmbed(input: KillEmbedInput): EmbedBuilder {
     );
   }
   if (input.nextTurn) {
-    embed.addFields({ name: "Next Turn", value: `🛡 ${input.nextTurn}`, inline: true });
+    embed.addFields({ name: "Next Turn", value: `${input.nextTurn}`, inline: true });
   }
 
   return embed;

@@ -181,6 +181,17 @@ async function scanSmartAttendance(ctx: CommandContext, attachments: Attachment[
     });
   }
 
+  if (result.unmatched.length > 0) {
+    const hint = "\nRead in the screenshot but didn't match any roster member — check their IGN spelling in ForgeKeep, or check them in manually.";
+    embed.addFields({
+      name: "Not Recognized",
+      value: clampDescription(
+        result.unmatched.map((m) => `\`${m.source}\``),
+        1024 - hint.length,
+      ) + hint,
+    });
+  }
+
   await ctx.message.reply({ embeds: [embed] });
 }
 

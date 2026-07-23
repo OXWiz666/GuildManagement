@@ -48,6 +48,15 @@ export interface SmartAttendanceResult {
   alreadyPresent: Array<{ userId: string; name: string; source: string; confidence: number }>;
   absent: Array<{ userId: string; name: string; source: string; confidence: number }>;
   ambiguous: Array<{ source: string; reason: string; confidence: number }>;
+  /**
+   * Text the OCR read with reasonable confidence but that didn't score high
+   * enough against any roster member to auto-confirm. Previously these were
+   * silently dropped, which made a roster IGN typo or an unmatched name
+   * indistinguishable from "the screenshot just doesn't show them" — no
+   * signal ever reached the officer. Surfacing the raw text lets them tell
+   * the two apart (fix the IGN, or manually check the member in).
+   */
+  unmatched: Array<{ source: string; confidence: number }>;
   screenshots: number;
   pageConfidence: number;
   ms: number;
@@ -232,6 +241,7 @@ export class SmartAttendanceService {
       alreadyPresent,
       absent,
       ambiguous: detected.ambiguous,
+      unmatched: detected.unmatched,
       screenshots: params.images.length,
       pageConfidence: average(scans.map((scan) => scan.layout.confidence)),
       ms: Date.now() - started,
@@ -294,6 +304,7 @@ function mergeDetectedMembers(items: Array<ReturnType<typeof detectMembers>>): R
   const present = new Map<string, SmartAttendanceResult["confirmed"][number]>();
   const absent = new Map<string, SmartAttendanceResult["absent"][number]>();
   const ambiguous: SmartAttendanceResult["ambiguous"] = [];
+  const unmatched: SmartAttendanceResult["unmatched"] = [];
 
   for (const detected of items) {
     for (const item of detected.present) {
@@ -313,12 +324,14 @@ function mergeDetectedMembers(items: Array<ReturnType<typeof detectMembers>>): R
     }
 
     ambiguous.push(...detected.ambiguous);
+    unmatched.push(...detected.unmatched);
   }
 
   return {
     present: [...present.values()],
     absent: [...absent.values()],
     ambiguous: collapseAmbiguous(ambiguous),
+    unmatched: collapseUnmatched(unmatched, present, absent),
   };
 }
 
@@ -326,6 +339,12 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
   const present = new Map<string, SmartAttendanceResult["confirmed"][number]>();
   const absent = new Map<string, SmartAttendanceResult["absent"][number]>();
   const ambiguous: SmartAttendanceResult["ambiguous"] = [];
+  // Longest-candidate-first (buildNameCandidates' own sort order), so a
+  // shorter sub-phrase of a row already recorded here is noise, not a
+  // second distinct miss — e.g. a merged "NameMe" self-tag blob would
+  // otherwise also surface its "Name" and "Me" sub-candidates separately.
+  const unmatchedNormalized: string[] = [];
+  const unmatched: SmartAttendanceResult["unmatched"] = [];
 
   for (const candidate of buildNameCandidates(words)) {
     const source = candidate.source;
@@ -333,9 +352,12 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
     if (isIgnoredUiText(normalized)) continue;
 
     const match = bestRosterMatch(normalized, roster);
-    if (!match) continue;
 
-    if (match.score < MIN_MATCH_SCORE) {
+    if (!match || match.score < MIN_MATCH_SCORE) {
+      if (!unmatchedNormalized.some((seen) => seen.includes(normalized))) {
+        unmatchedNormalized.push(normalized);
+        unmatched.push({ source, confidence: candidate.confidence });
+      }
       continue;
     }
 
@@ -377,6 +399,7 @@ function detectMembers(words: OcrWord[], pixels: PixelImage, roster: RosterMembe
     present: [...present.values()],
     absent: [...absent.values()],
     ambiguous: collapseAmbiguous(ambiguous),
+    unmatched,
   };
 }
 
@@ -695,6 +718,30 @@ function collapseAmbiguous(items: SmartAttendanceResult["ambiguous"]) {
     const key = `${item.source}:${item.reason}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    out.push(item);
+  }
+  return out.slice(0, 10);
+}
+
+/**
+ * Drop an unmatched read from one screenshot if a later/better screenshot in
+ * the same scan actually matched that member — a blurry first crop and a
+ * sharp second crop of the same rally shouldn't both count as "one miss."
+ */
+function collapseUnmatched(
+  items: SmartAttendanceResult["unmatched"],
+  present: Map<string, SmartAttendanceResult["confirmed"][number]>,
+  absent: Map<string, SmartAttendanceResult["absent"][number]>,
+): SmartAttendanceResult["unmatched"] {
+  const matchedNormalized = [...present.values(), ...absent.values()].map((m) => normalizeName(m.name));
+
+  const seen: string[] = [];
+  const out: SmartAttendanceResult["unmatched"] = [];
+  for (const item of [...items].sort((a, b) => b.source.length - a.source.length)) {
+    const normalized = normalizeName(item.source);
+    if (matchedNormalized.some((name) => name.includes(normalized) || normalized.includes(name))) continue;
+    if (seen.some((existing) => existing.includes(normalized))) continue;
+    seen.push(normalized);
     out.push(item);
   }
   return out.slice(0, 10);

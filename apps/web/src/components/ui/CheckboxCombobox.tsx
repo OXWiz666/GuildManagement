@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface ComboboxItem {
   key: string;
@@ -21,11 +22,23 @@ interface CheckboxComboboxProps {
   className?: string;
 }
 
+const MENU_WIDTH = 224;
+
 /**
  * Dropdown-with-checkboxes: pick any number of catalog items, and — when
  * `onRename`/`onAdd` are supplied — rename an entry in place or add a new one
  * without leaving the control. Selection is by stable `key`, so renaming a
  * label never disturbs which tiers already have it checked.
+ *
+ * The popup renders through a portal at `position: fixed` instead of
+ * `absolute` inside the trigger — this control is used inside a
+ * horizontally-scrolling table (`overflow-x-auto`), and setting `overflow-x`
+ * to anything but `visible` makes the browser compute `overflow-y` as `auto`
+ * too (CSS overflow is only independent per-axis when both are `visible`).
+ * That silently clipped the popup's bottom edge against the table wrapper
+ * for any row not near the top. Portaling to `document.body` and positioning
+ * from the trigger's own `getBoundingClientRect()` sidesteps the ancestor's
+ * overflow entirely.
  */
 export default function CheckboxCombobox({
   items,
@@ -42,15 +55,30 @@ export default function CheckboxCombobox({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [newValue, setNewValue] = useState("");
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Positioned relative to the viewport, so it has to be (re)computed against
+  // the trigger's live position each time the menu opens.
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({
+      top: rect.bottom + 6,
+      left: Math.min(rect.left, window.innerWidth - MENU_WIDTH - 8),
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setEditingKey(null);
-      }
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
+      setEditingKey(null);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -58,11 +86,24 @@ export default function CheckboxCombobox({
         setEditingKey(null);
       }
     }
+    // The menu is `position: fixed` and doesn't track the trigger, so a
+    // scroll of any ancestor (capture: true catches the table's own
+    // scroll container, not just the window) would otherwise leave it
+    // floating over the wrong spot — closing it is simpler than re-tracking
+    // position on every scroll tick.
+    function onScroll() {
+      setOpen(false);
+      setEditingKey(null);
+    }
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
     return () => {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
     };
   }, [open]);
 
@@ -91,6 +132,7 @@ export default function CheckboxCombobox({
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between gap-2 rounded-lg bg-surface-100 border border-white/8 text-white px-2.5 py-1.5 text-sm text-left focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20"
@@ -109,8 +151,12 @@ export default function CheckboxCombobox({
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute z-50 mt-1.5 w-56 max-h-72 overflow-y-auto rounded-lg border border-white/[0.1] bg-[#0b0c10] shadow-xl shadow-black/40 p-1.5">
+      {open && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
+          className="z-50 max-h-72 overflow-y-auto rounded-lg border border-white/[0.1] bg-[#0b0c10] shadow-xl shadow-black/40 p-1.5"
+        >
           {items.length === 0 ? (
             <p className="px-2 py-2 text-[11px] text-white/40">{emptyHint || "Nothing here yet."}</p>
           ) : (
@@ -181,7 +227,8 @@ export default function CheckboxCombobox({
               </button>
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

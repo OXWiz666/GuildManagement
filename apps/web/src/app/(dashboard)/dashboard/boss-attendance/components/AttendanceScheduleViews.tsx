@@ -28,9 +28,6 @@ export interface AttendanceScheduleViewProps {
   schedules: BossScheduleData[];
   sessions: AttendanceSessionSummary[];
   isLoading: boolean;
-  myGuildId: string;
-  checkingInId: string | null;
-  onCheckIn: (item: BossScheduleData) => void;
   onSelectSession: (session: AttendanceSessionSummary) => void;
 }
 
@@ -107,10 +104,24 @@ function scheduleViewSessionPriority(session: AttendanceSessionSummary) {
   );
 }
 
+// Same boss name within the same minute is treated as the same kill for
+// display purposes — loose enough to absorb a duplicate/orphaned schedule
+// row whose timestamp is off by a few seconds, tight enough that two
+// genuine same-day kills of a fast-cycle boss won't get merged.
+function eventDedupeKey(bossName: string, spawnTime: string) {
+  return `${bossName.toLowerCase()}:${Math.floor(new Date(spawnTime).getTime() / 60_000)}`;
+}
+
 function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionSummary[]) {
   const sessionsBySchedule = new Map<string, AttendanceSessionSummary[]>();
   const usedSessionIds = new Set<string>();
-  const standaloneKeys = new Set<string>();
+  // Tracks every event already built (from the main, schedule-driven pass
+  // below), keyed the same way the standalone pass keys itself — so a
+  // session whose bossScheduleId points at a stale/orphaned schedule row
+  // (superseded by a newer row for the same kill, which does show up in
+  // `schedules`) doesn't render as a second card for the same boss/time,
+  // one with "Killed" and one with "Verified".
+  const eventKeys = new Set<string>();
 
   for (const session of sessions) {
     if (!session.bossScheduleId) continue;
@@ -129,6 +140,7 @@ function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionS
       null,
     );
     for (const scheduleSession of scheduleSessions) usedSessionIds.add(scheduleSession.id);
+    eventKeys.add(eventDedupeKey(schedule.bossName, schedule.spawnTime));
 
     const fallbackSession = schedule.attendanceSessions?.[0];
     const fallbackCounts = countRecords(fallbackSession);
@@ -153,9 +165,9 @@ function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionS
     if (usedSessionIds.has(session.id)) continue;
     const boss = session.bossSchedule;
     const bossName = boss?.bossName || session.title;
-    const standaloneKey = `${bossName}:${boss?.spawnTime || session.createdAt}`;
-    if (standaloneKeys.has(standaloneKey)) continue;
-    standaloneKeys.add(standaloneKey);
+    const standaloneKey = eventDedupeKey(bossName, boss?.spawnTime || session.createdAt);
+    if (eventKeys.has(standaloneKey)) continue;
+    eventKeys.add(standaloneKey);
 
     events.push({
       id: session.id,
@@ -206,20 +218,16 @@ function statusStyle(event: AttendanceBossEvent, now: number) {
     };
   }
 
-  if (event.confirmedCount > 0) {
-    return {
-      label: "Verified",
-      dot: "bg-emerald-300",
-      pill: "border-emerald-400/25 bg-emerald-500/10 text-emerald-300",
-    };
-  }
-
-  if (event.status === "KILLED") {
-    return {
-      label: "Killed",
-      dot: "bg-rose-300",
-      pill: "border-rose-400/20 bg-rose-500/10 text-rose-300",
-    };
+  // Once the boss is dead (or this is a standalone attendance session with
+  // no boss row at all) there's nothing left to report but the attendance
+  // outcome — this used to show the boss's own "Killed" state and the
+  // attendance's "Verified" state as if they were two different things,
+  // which is exactly what produced duplicate-looking cards for one kill.
+  // They're the same event: either someone got confirmed present, or not.
+  if (event.status === "KILLED" || event.status === "SESSION") {
+    return event.confirmedCount > 0
+      ? { label: "Present", dot: "bg-emerald-300", pill: "border-emerald-400/25 bg-emerald-500/10 text-emerald-300" }
+      : { label: "Missed", dot: "bg-rose-300", pill: "border-rose-400/20 bg-rose-500/10 text-rose-300" };
   }
 
   if (event.status === "SPAWNED") {
@@ -231,7 +239,7 @@ function statusStyle(event: AttendanceBossEvent, now: number) {
   }
 
   return {
-    label: event.status === "SESSION" ? "Session" : "Upcoming",
+    label: "Upcoming",
     dot: "bg-white/35",
     pill: "border-white/[0.08] bg-white/[0.035] text-white/55",
   };
@@ -244,16 +252,10 @@ function statusStyle(event: AttendanceBossEvent, now: number) {
 const EventCard = memo(function EventCard({
   event,
   compact = false,
-  myGuildId,
-  checkingInId,
-  onCheckIn,
   onSelectSession,
 }: {
   event: AttendanceBossEvent;
   compact?: boolean;
-  myGuildId: string;
-  checkingInId: string | null;
-  onCheckIn: (item: BossScheduleData) => void;
   onSelectSession: (session: AttendanceSessionSummary) => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -263,12 +265,6 @@ const EventCard = memo(function EventCard({
   }, []);
 
   const style = statusStyle(event, now);
-  const canAdvanceCheckIn =
-    event.schedule &&
-    event.status !== "KILLED" &&
-    event.guildTurnGuildId === myGuildId &&
-    !event.session &&
-    (!event.schedule.attendanceSessions || event.schedule.attendanceSessions.length === 0);
 
   const content = (
     <>
@@ -324,18 +320,6 @@ const EventCard = memo(function EventCard({
       }`}
     >
       {content}
-      {canAdvanceCheckIn && (
-        <button
-          type="button"
-          onClick={() => onCheckIn(event.schedule!)}
-          disabled={checkingInId === event.schedule!.id}
-          className={`shrink-0 rounded-lg border border-violet-400/20 bg-violet-500/10 px-2.5 py-1.5 text-[10px] font-bold text-violet-200 transition-colors hover:bg-violet-500/20 disabled:opacity-50 cursor-pointer ${
-            compact ? "w-full" : ""
-          }`}
-        >
-          {checkingInId === event.schedule!.id ? "Checking..." : "Turn In"}
-        </button>
-      )}
     </div>
   );
 });
@@ -344,9 +328,6 @@ export function AttendanceCalendarView({
   schedules,
   sessions,
   isLoading,
-  myGuildId,
-  checkingInId,
-  onCheckIn,
   onSelectSession,
 }: AttendanceScheduleViewProps) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
@@ -441,9 +422,6 @@ export function AttendanceCalendarView({
                         key={event.id}
                         event={event}
                         compact
-                        myGuildId={myGuildId}
-                        checkingInId={checkingInId}
-                        onCheckIn={onCheckIn}
                         onSelectSession={onSelectSession}
                       />
                     ))}
@@ -462,9 +440,6 @@ export function AttendanceTimelineView({
   schedules,
   sessions,
   isLoading,
-  myGuildId,
-  checkingInId,
-  onCheckIn,
   onSelectSession,
 }: AttendanceScheduleViewProps) {
   // Only used to decide the upcoming-vs-past split/order below — unlike the
@@ -536,9 +511,6 @@ export function AttendanceTimelineView({
                         <span className={`absolute -left-[25px] top-6 h-2.5 w-2.5 rounded-full border border-cyan-100/35 bg-cyan-300 ${index === 0 ? "shadow-[0_0_16px_rgba(103,232,249,0.45)]" : ""}`} />
                         <EventCard
                           event={event}
-                          myGuildId={myGuildId}
-                          checkingInId={checkingInId}
-                          onCheckIn={onCheckIn}
                           onSelectSession={onSelectSession}
                         />
                       </div>

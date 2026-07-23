@@ -1848,23 +1848,29 @@ const RotationCard = memo(function RotationCard({
           ) : (
             <div className="flex flex-wrap items-center gap-1.5">
               {displayQueue.map((guild, i) => {
+                // Always the guild's own identity color, current holder or
+                // not — a guild badge used to flip to a hardcoded gold when
+                // it happened to be "current", so the same guild rendered in
+                // two different colors depending on the card. "Current" is
+                // now a gold ring layered on top of the guild's real color
+                // instead of replacing it.
                 const color = getGuildColor(guild.name);
                 const isCurrent = rotation.currentGuild?.id === guild.id;
                 return (
                   <span
                     key={guild.id}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-semibold ${
-                      isCurrent
-                        ? "border-[var(--forge-gold)]/40 bg-[var(--forge-glow)] text-[var(--forge-gold-bright)]"
-                        : `${color.border} ${color.bg} ${color.text}`
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-semibold ${color.border} ${color.bg} ${color.text} ${
+                      isCurrent ? "ring-1 ring-[var(--forge-gold)]/60" : ""
                     }`}
                   >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full shrink-0"
-                      style={{ backgroundColor: isCurrent ? "var(--forge-gold)" : color.dot }}
-                    />
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
                     {showHandoff && <span className="font-mono text-[9px] opacity-60">{i + 1}</span>}
                     <span className="truncate max-w-[100px]">{guild.name}</span>
+                    {isCurrent && (
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--forge-gold-bright)]">
+                        ★
+                      </span>
+                    )}
                   </span>
                 );
               })}

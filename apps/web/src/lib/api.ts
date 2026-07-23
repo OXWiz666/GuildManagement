@@ -919,7 +919,7 @@ export interface LowBossRotationBoss {
 export interface LowBossRotationResponse {
   canManage: boolean;
   viewerRole: string;
-  mode: "WEEKLY" | "MONTHLY" | "DAILY";
+  mode: "WEEKLY" | "MONTHLY";
   /** Boss names flagged to follow the day rotation. */
   lowBossNames: string[];
   /** weekday index ("0"=Sun .. "6"=Sat) → guildId */
@@ -931,7 +931,7 @@ export interface LowBossRotationResponse {
 }
 
 export interface LowBossRotationUpdate {
-  mode?: "WEEKLY" | "MONTHLY" | "DAILY";
+  mode?: "WEEKLY" | "MONTHLY";
   lowBossNames?: string[];
   weekly?: Record<string, string>;
   /** date → guildId, or date → null to clear that day */

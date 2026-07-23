@@ -297,7 +297,6 @@ export {
   getBossImageUrl,
   getRealtimeBossTimer,
   getBossCycleCategory,
-  getDailyRotationIndex,
   getDefaultBossCategory,
   SHORT_CYCLE_MAX_HOURS,
   DEFAULT_LOW_BOSS_MAX_LEVEL,

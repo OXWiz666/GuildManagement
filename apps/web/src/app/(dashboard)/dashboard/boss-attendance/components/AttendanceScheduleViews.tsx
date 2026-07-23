@@ -28,6 +28,7 @@ export interface AttendanceScheduleViewProps {
   schedules: BossScheduleData[];
   sessions: AttendanceSessionSummary[];
   isLoading: boolean;
+  guildId?: string;
   onSelectSession: (session: AttendanceSessionSummary) => void;
 }
 
@@ -112,7 +113,7 @@ function eventDedupeKey(bossName: string, spawnTime: string) {
   return `${bossName.toLowerCase()}:${Math.floor(new Date(spawnTime).getTime() / 60_000)}`;
 }
 
-function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionSummary[]) {
+function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionSummary[], guildId?: string) {
   const sessionsBySchedule = new Map<string, AttendanceSessionSummary[]>();
   const usedSessionIds = new Set<string>();
   // Tracks every event already built (from the main, schedule-driven pass
@@ -132,7 +133,7 @@ function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionS
 
   const events: AttendanceBossEvent[] = schedules.map((schedule) => {
     const scheduleSessions = sessionsBySchedule.get(schedule.id) ?? [];
-    const session = scheduleSessions.reduce<AttendanceSessionSummary | null>(
+    const bestSession = scheduleSessions.reduce<AttendanceSessionSummary | null>(
       (best, candidate) =>
         !best || scheduleViewSessionPriority(candidate) > scheduleViewSessionPriority(best)
           ? candidate
@@ -142,7 +143,17 @@ function buildEvents(schedules: BossScheduleData[], sessions: AttendanceSessionS
     for (const scheduleSession of scheduleSessions) usedSessionIds.add(scheduleSession.id);
     eventKeys.add(eventDedupeKey(schedule.bossName, schedule.spawnTime));
 
-    const fallbackSession = schedule.attendanceSessions?.[0];
+    // A fixed-schedule boss reuses the same row every cycle — its spawnTime
+    // rolls forward in place rather than getting a fresh row, so a session
+    // tied to this schedule id can be a leftover from a PAST kill even
+    // though `schedule` now represents a brand new, not-yet-fought spawn.
+    // Only trust an attached session (guild-scoped, same reasoning as
+    // pickGuildSession elsewhere) once this row is actually KILLED.
+    const session = schedule.status === "KILLED" ? bestSession : null;
+    const fallbackSession =
+      schedule.status === "KILLED"
+        ? schedule.attendanceSessions?.find((s) => s.guildId === guildId) ?? schedule.attendanceSessions?.[0]
+        : undefined;
     const fallbackCounts = countRecords(fallbackSession);
 
     return {
@@ -328,11 +339,12 @@ export function AttendanceCalendarView({
   schedules,
   sessions,
   isLoading,
+  guildId,
   onSelectSession,
 }: AttendanceScheduleViewProps) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
 
-  const events = useMemo(() => buildEvents(schedules, sessions), [schedules, sessions]);
+  const events = useMemo(() => buildEvents(schedules, sessions, guildId), [schedules, sessions, guildId]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const weekEnd = weekDays[6]!;
   const eventsByDay = useMemo(() => {
@@ -440,6 +452,7 @@ export function AttendanceTimelineView({
   schedules,
   sessions,
   isLoading,
+  guildId,
   onSelectSession,
 }: AttendanceScheduleViewProps) {
   // Only used to decide the upcoming-vs-past split/order below — unlike the
@@ -452,7 +465,7 @@ export function AttendanceTimelineView({
     const timer = setInterval(() => setNow(Date.now()), 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, []);
-  const events = useMemo(() => buildEvents(schedules, sessions), [schedules, sessions]);
+  const events = useMemo(() => buildEvents(schedules, sessions, guildId), [schedules, sessions, guildId]);
   const timelineEvents = useMemo(() => sortTimelineEvents(events, now), [events, now]);
 
   const groups = useMemo(() => {

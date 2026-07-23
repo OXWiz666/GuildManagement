@@ -1,5 +1,5 @@
 import { getGuildColor } from "./helpers";
-import { getDailyRotationIndex, getBossImageUrl } from "@guild/shared";
+import { getBossImageUrl } from "@guild/shared";
 import type { GuildActivityData, LowBossRotationResponse } from "@/lib/api";
 import { resolveActivityTypeMeta, type ActivityTypeMeta } from "@/lib/activityTypeMeta";
 import type { CalendarChip, GuildOfDayInfo } from "../components/WeeklyCalendar";
@@ -92,24 +92,20 @@ export function buildWeeklyChips(opts: {
 
 /**
  * Resolves which guild "owns" a given date under the Faction Schedule's
- * active cadence — DAILY auto-rotates (getDailyRotationIndex), WEEKLY
- * repeats a fixed weekday pattern, MONTHLY is an explicit date map. Shared
- * by the read-only overlay on Live/Upcoming/Activities and the editable
- * strip on the Faction Schedule tab itself (same underlying config).
+ * active cadence — WEEKLY repeats a fixed weekday pattern, MONTHLY is an
+ * explicit date map. Shared by the read-only overlay on Live/Upcoming/
+ * Activities and the editable strip on the Faction Schedule tab itself
+ * (same underlying config).
  */
 export function buildGuildOfDayResolver(
   config: LowBossRotationResponse | null | undefined,
 ): ((dateKey: string) => GuildOfDayInfo | null) | undefined {
   if (!config || config.lowBossNames.length === 0 || config.guilds.length === 0) return undefined;
   const guildMap = new Map(config.guilds.map((g) => [g.id, g]));
-  const order = config.guilds.map((g) => g.id);
 
   return (dateKey: string) => {
     let guildId: string | undefined;
-    if (config.mode === "DAILY") {
-      const idx = getDailyRotationIndex(order.length, new Date(`${dateKey}T00:00:00`));
-      guildId = idx >= 0 ? order[idx] : undefined;
-    } else if (config.mode === "WEEKLY") {
+    if (config.mode === "WEEKLY") {
       const weekday = new Date(`${dateKey}T00:00:00`).getDay();
       guildId = config.weekly[String(weekday)];
     } else {

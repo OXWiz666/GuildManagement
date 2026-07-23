@@ -410,18 +410,6 @@ export function getBossCycleCategory(
   return "LONG_CYCLE";
 }
 
-// ─── Faction Schedule "Daily" cadence ────────────────────────
-// For sub-24h-cooldown bosses that can spawn more than once in a day, the
-// Faction Schedule's "Daily" mode auto-rotates the guild-of-the-day instead
-// of requiring a leader to fill in a calendar. Anchored to the Unix epoch so
-// it's a pure function of (guild count, date) — no per-day map to store or
-// keep refilling; the pattern only shifts if the guild roster itself changes.
-export function getDailyRotationIndex(guildCount: number, date: Date = new Date()): number {
-  if (guildCount <= 0) return -1;
-  const daysSinceEpoch = Math.floor(date.getTime() / 86400000);
-  return ((daysSinceEpoch % guildCount) + guildCount) % guildCount;
-}
-
 export function getBossImageUrl(bossName: string): string {
   const BASE = "https://tsjuckpzfuaozktqhior.supabase.co/storage/v1/object/public/Bosses";
 

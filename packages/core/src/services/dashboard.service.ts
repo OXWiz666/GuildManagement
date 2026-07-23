@@ -808,6 +808,27 @@ async function openBossCheckInSession(
   return created;
 }
 
+/**
+ * Open (or reuse) a check-in session for every guild in `guildIds` against
+ * the same shared boss kill. A rotation boss is one shared world-boss fight —
+ * the rotation only decides which guild's officer confirms the kill, not
+ * which guilds' members were actually there — so every faction guild gets an
+ * attendance window for it, not just the one credited with the turn.
+ * Best-effort per guild: one guild's failure doesn't block the others.
+ */
+async function openBossCheckInSessionsForGuilds(
+  guildIds: string[],
+  bossScheduleId: string,
+  bossName: string,
+) {
+  await Promise.all(
+    guildIds.map((id) =>
+      openBossCheckInSession(id, bossScheduleId, bossName).catch((error) => {
+        console.error(`[Boss Rotation]: Failed to open attendance session for guild ${id}`, error);
+      }),
+    ),
+  );
+}
 
 // ─── Attendance Systems ─────────────────────────
 
@@ -2147,23 +2168,40 @@ async function getBossSchedulesShared(guildId: string, factionId: string | null)
   const factionGuilds = factionId ? await getActiveFactionGuilds(factionId) : [];
   const visibleGuildIds = Array.from(new Set([guildId, ...factionGuilds.map((g) => g.id)]));
   const killedCutoff = new Date(Date.now() - BOSS_SCHEDULE_KILLED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const schedules = await prisma.bossSchedule.findMany({
-    where: {
-      AND: [
-        { OR: [{ guildId: { in: visibleGuildIds } }, { guildId: null }] },
-        { OR: [{ status: { not: BossEventStatus.KILLED } }, { killedAt: { gte: killedCutoff } }] },
-      ],
-    },
-    include: {
-      guildTurnGuild: {
-        select: { id: true, name: true, slug: true, avatarUrl: true },
+  const [schedules, allBosses, lowBossConfig] = await Promise.all([
+    prisma.bossSchedule.findMany({
+      where: {
+        AND: [
+          { OR: [{ guildId: { in: visibleGuildIds } }, { guildId: null }] },
+          { OR: [{ status: { not: BossEventStatus.KILLED } }, { killedAt: { gte: killedCutoff } }] },
+        ],
       },
-      attendanceSessions: {
-        include: { records: true },
+      include: {
+        guildTurnGuild: {
+          select: { id: true, name: true, slug: true, avatarUrl: true },
+        },
+        attendanceSessions: {
+          include: { records: true },
+        },
       },
-    },
-    orderBy: { spawnTime: "asc" },
-  });
+      orderBy: { spawnTime: "asc" },
+    }),
+    getBossRegistryForRotation(),
+    factionId ? prisma.bossLowRotation.findUnique({ where: { factionId } }) : Promise.resolve(null),
+  ]);
+
+  // A Low Boss's holder is the day-based Faction Schedule, resolved against
+  // THIS ROW'S OWN spawn date — not the schedule row's stored
+  // guildTurnGuildId, which is only ever refreshed by an actual kill (see the
+  // long comment on this in getBossRotationShared). Without this, two Low
+  // Boss rows both spawning tomorrow could disagree with each other and with
+  // the Faction Schedule tab simply because one of them happened to be killed
+  // more recently than the other. Only applies to still-open rows — a KILLED
+  // row's guildTurnGuildId is the real credited-kill record and must not be
+  // rewritten by a later day-pattern edit.
+  const lowBossNamesLower = await getResolvedLowBossNames(factionId, allBosses, lowBossConfig);
+  const activeGuildIds = factionGuilds.map((g) => g.id);
+  const guildMap = new Map(factionGuilds.map((g) => [g.id, g]));
 
   // Defensive dedup: legacy rows from before the per-guild seeding fix (or
   // any other write path) can still leave two live rows for the same boss.
@@ -2187,40 +2225,52 @@ async function getBossSchedulesShared(guildId: string, factionId: string | null)
   });
   const userMap = new Map(users.map((u) => [u.id, u.displayName]));
 
-  return dedupedSchedules.map((s) => ({
-    id: s.id,
-    guildId: s.guildId,
-    bossName: s.bossName,
-    bossImageUrl: s.bossImageUrl,
-    spawnTime: s.spawnTime.toISOString(),
-    location: s.location,
-    guildTurn: s.guildTurn,
-    guildTurnGuildId: s.guildTurnGuildId,
-    guildTurnGuildName: s.guildTurnGuild?.name || null,
-    status: s.status,
-    killedAt: s.killedAt ? s.killedAt.toISOString() : null,
-    creatorId: s.creatorId,
-    creatorName: userMap.get(s.creatorId) || "System / Officer",
-    createdAt: s.createdAt.toISOString(),
-    attendanceSessions: s.attendanceSessions.map(session => ({
-      id: session.id,
-      code: session.code,
-      title: session.title,
-      type: session.type,
-      // Computed at cache-write time, so it can read up to `cacheTtl.bossSchedules`
-      // seconds stale once a window crosses its expiresAt — callers needing
-      // exact freshness re-derive it from `expiresAt` against their own clock
-      // (the client already does, in getUserRecordStatus/getCountdownText).
-      isActive: session.isActive && new Date(session.expiresAt).getTime() > Date.now(),
-      expiresAt: session.expiresAt.toISOString(),
-      records: session.records.map(r => ({
-        id: r.id,
-        userId: r.userId,
-        status: r.status,
-        joinedAt: r.joinedAt.toISOString()
+  return dedupedSchedules.map((s) => {
+    const isLowBoss = s.status !== BossEventStatus.KILLED && lowBossNamesLower.has(s.bossName.toLowerCase());
+    const lowBossGuildId = isLowBoss
+      ? resolveLowBossGuildForToday(lowBossConfig, activeGuildIds, s.spawnTime)
+      : null;
+    const lowBossGuild = lowBossGuildId ? guildMap.get(lowBossGuildId) ?? null : null;
+
+    const guildTurnGuildId = isLowBoss ? lowBossGuildId : s.guildTurnGuildId;
+    const guildTurnGuildName = isLowBoss ? (lowBossGuild?.name ?? null) : s.guildTurnGuild?.name || null;
+    const guildTurn = isLowBoss ? (lowBossGuild?.name ?? null) : s.guildTurn;
+
+    return {
+      id: s.id,
+      guildId: s.guildId,
+      bossName: s.bossName,
+      bossImageUrl: s.bossImageUrl,
+      spawnTime: s.spawnTime.toISOString(),
+      location: s.location,
+      guildTurn,
+      guildTurnGuildId,
+      guildTurnGuildName,
+      status: s.status,
+      killedAt: s.killedAt ? s.killedAt.toISOString() : null,
+      creatorId: s.creatorId,
+      creatorName: userMap.get(s.creatorId) || "System / Officer",
+      createdAt: s.createdAt.toISOString(),
+      attendanceSessions: s.attendanceSessions.map(session => ({
+        id: session.id,
+        code: session.code,
+        title: session.title,
+        type: session.type,
+        // Computed at cache-write time, so it can read up to `cacheTtl.bossSchedules`
+        // seconds stale once a window crosses its expiresAt — callers needing
+        // exact freshness re-derive it from `expiresAt` against their own clock
+        // (the client already does, in getUserRecordStatus/getCountdownText).
+        isActive: session.isActive && new Date(session.expiresAt).getTime() > Date.now(),
+        expiresAt: session.expiresAt.toISOString(),
+        records: session.records.map(r => ({
+          id: r.id,
+          userId: r.userId,
+          status: r.status,
+          joinedAt: r.joinedAt.toISOString()
+        }))
       }))
-    }))
-  }));
+    };
+  });
 }
 
 export async function getBossRotation(guildId: string, actorId: string) {
@@ -2657,6 +2707,12 @@ export async function markBossRotationKilled(
   ipAddress?: string,
   userAgent?: string,
   drops?: BossDropInput[],
+  // True when the caller deliberately named `takenGuildId` (a guild picker on
+  // the web dashboard, or `!kill <boss> <guild>` on Discord). False when the
+  // Discord bot silently defaulted it to the actor's own guild — that default
+  // must not be allowed to silently jump a shared rotation queue. See the
+  // turn-order check below.
+  explicitTakenGuild: boolean = true,
 ) {
   await requireBossTakenManager(actorId, guildId);
   const killedDate = new Date(killedAt);
@@ -2687,18 +2743,17 @@ export async function markBossRotationKilled(
       orderBy: { spawnTime: "asc" },
     });
 
+    const factionGuildIds = (await getActiveFactionGuilds(guild?.factionId ?? null, guildId)).map((g) => g.id);
+
     // Self-heal: this kill already happened, so this "already logged" reply
     // is the only remaining chance to notice no attendance window ever got
     // opened for it (or one opened and has since expired unattended) —
     // otherwise this exact kill stays permanently unattendable. Reuses
     // openBossCheckInSession's own reuse-and-extend logic.
     if (schedule.guildTurnGuildId) {
-      await openBossCheckInSession(schedule.guildTurnGuildId, schedule.id, schedule.bossName).catch((error) => {
-        console.error("[Boss Rotation]: Failed to self-heal missing attendance window for an already-logged kill", error);
-      });
+      await openBossCheckInSessionsForGuilds(factionGuildIds, schedule.id, schedule.bossName);
     }
 
-    const factionGuildIds = (await getActiveFactionGuilds(guild?.factionId ?? null, guildId)).map((g) => g.id);
     const loggedBy = await findBossKillLogger(factionGuildIds, schedule.bossName);
 
     return {
@@ -2746,6 +2801,21 @@ export async function markBossRotationKilled(
 
   if (!takenGuild) {
     throw new BadRequestError("Selected taking guild is not active");
+  }
+
+  // Guard against an off-turn guild silently consuming the shared rotation
+  // slot: `!kill <boss>` with no guild named defaults to the actor's own
+  // guild, and without this check that default wins the kill (and the
+  // attendance window) even when a different guild is currently up. An
+  // explicit choice — the web picker, or `!kill <boss> <guild>` — always
+  // bypasses this, since that's the deliberate "log it for a guild that
+  // didn't run the command" escape hatch.
+  if (!explicitTakenGuild && schedule.guildTurnGuildId && schedule.guildTurnGuildId !== takenGuildId) {
+    const turnGuild = guildMap.get(schedule.guildTurnGuildId);
+    throw new BadRequestError(
+      `It's not ${takenGuild.name}'s turn for ${schedule.bossName} — ${turnGuild?.name ?? "another guild"} is up. ` +
+        `If ${takenGuild.name} is claiming it anyway, log it explicitly: !kill ${schedule.bossName} ${takenGuild.name}`,
+    );
   }
 
   const existingRotation = await prisma.bossRotation.findUnique({
@@ -2848,11 +2918,7 @@ export async function markBossRotationKilled(
     // and this one lost the claim, which is exactly the kind of case that
     // could otherwise leave the winning claim's attendance window unopened.
     if (updatedEvent?.guildTurnGuildId) {
-      await openBossCheckInSession(updatedEvent.guildTurnGuildId, updatedEvent.id, schedule.bossName).catch(
-        (error) => {
-          console.error("[Boss Rotation]: Failed to self-heal missing attendance window for an already-logged kill", error);
-        },
-      );
+      await openBossCheckInSessionsForGuilds(activeGuildIds, updatedEvent.id, schedule.bossName);
     }
 
     const loggedBy = await findBossKillLogger(activeGuildIds, schedule.bossName);
@@ -2880,11 +2946,21 @@ export async function markBossRotationKilled(
     console.error("[Boss Rotation]: Failed to auto-vault drops to guild storage", error);
   }
 
-  // Auto-open a code-free check-in window for the guild that just took this boss,
-  // so its members can immediately claim attendance for the kill (feeds the loot
-  // dividend split). The session belongs to the taking guild, not the actor's.
+  // Auto-open a code-free check-in window for the guild that just took this
+  // boss — this is the session referenced in the audit log below, so it must
+  // succeed for the kill to be considered fully logged.
   const checkInSession = await openBossCheckInSession(
     takenGuild.id,
+    updatedEvent.id,
+    schedule.bossName,
+  );
+
+  // Every other faction guild's members can check in too — a rotation boss
+  // is one shared world-boss fight; the rotation only decides who confirms
+  // the kill, not who was actually there. Best-effort so a failure for one
+  // guild doesn't block the kill that already landed above.
+  await openBossCheckInSessionsForGuilds(
+    activeGuildIds.filter((id) => id !== takenGuild.id),
     updatedEvent.id,
     schedule.bossName,
   );
@@ -2999,6 +3075,8 @@ export async function markBossRotationKilledByName(
   ipAddress?: string,
   userAgent?: string,
   drops?: BossDropInput[],
+  // See markBossRotationKilled — forwarded through when this delegates there.
+  explicitTakenGuild: boolean = true,
 ) {
   await requireBossTakenManager(actorId, guildId);
   const killedDate = new Date(killedAt);
@@ -3071,6 +3149,7 @@ export async function markBossRotationKilledByName(
       ipAddress,
       userAgent,
       drops,
+      explicitTakenGuild,
     );
   }
 
@@ -3093,11 +3172,7 @@ export async function markBossRotationKilledByName(
     // openBossCheckInSession's own reuse-and-extend logic, so a window
     // that's already open just gets extended instead of duplicated.
     if (latestKilled.guildTurnGuildId) {
-      await openBossCheckInSession(latestKilled.guildTurnGuildId, latestKilled.id, latestKilled.bossName).catch(
-        (error) => {
-          console.error("[Boss Rotation]: Failed to self-heal missing attendance window for an already-logged kill", error);
-        },
-      );
+      await openBossCheckInSessionsForGuilds(factionGuildIds, latestKilled.id, latestKilled.bossName);
     }
 
     const loggedBy = await findBossKillLogger(factionGuildIds, latestKilled.bossName);
@@ -3175,6 +3250,14 @@ export async function markBossRotationKilledByName(
   // one case that skipped it, leaving members with no way to claim
   // attendance for a boss's first-ever kill.
   const checkInSession = await openBossCheckInSession(takenGuild.id, killedSchedule.id, registryBoss.name);
+
+  // Every other faction guild's members can check in too — same reasoning
+  // as the ongoing-rotation kill path in markBossRotationKilled.
+  await openBossCheckInSessionsForGuilds(
+    activeGuildIds.filter((id) => id !== takenGuild.id),
+    killedSchedule.id,
+    registryBoss.name,
+  );
 
   const queueGuildIds = resolveQueue(existingRotation, activeGuildIds, activeFoundingGuildIds);
   const takenIndex = queueGuildIds.indexOf(takenGuildId);
@@ -3549,9 +3632,7 @@ export async function editBossKillTime(
   // self-heal in markBossRotationKilled/markBossRotationKilledByName) can
   // still be noticed and fixed, instead of staying permanently unattendable.
   if (result.updatedEvent.guildTurnGuildId) {
-    await openBossCheckInSession(result.updatedEvent.guildTurnGuildId, killed.id, killed.bossName).catch((error) => {
-      console.error("[Boss Rotation]: Failed to self-heal missing attendance window after editing kill time", error);
-    });
+    await openBossCheckInSessionsForGuilds(factionGuildIds, killed.id, killed.bossName);
   }
 
   return {
@@ -4146,18 +4227,25 @@ function lowBossToday(now: Date): { dateKey: string; weekday: number } {
 }
 
 /**
- * The guild that currently holds every flagged Low Boss, under whichever
- * cadence (DAILY/WEEKLY/MONTHLY) the faction has configured — mirrors the
- * frontend's buildGuildOfDayResolver (apps/web boss-rotation/utils/
- * calendarChips.ts), ported server-side so the Guild Rotation grid can show
- * a Low Boss's real holder instead of hiding the boss entirely (see
+ * The guild that holds every flagged Low Boss on `targetDate`, under
+ * whichever cadence (DAILY/WEEKLY/MONTHLY) the faction has configured —
+ * mirrors the frontend's buildGuildOfDayResolver (apps/web boss-rotation/
+ * utils/calendarChips.ts), ported server-side so the Guild Rotation grid can
+ * show a Low Boss's real holder instead of hiding the boss entirely (see
  * getBossRotationShared, which used to exclude Low Bosses outright).
+ *
+ * Despite the name, `targetDate` is not always "right now": getBossSchedulesShared
+ * calls this once per schedule row with that row's own spawnTime, so a Low
+ * Boss spawning tomorrow resolves against tomorrow's day-pattern entry
+ * instead of today's — otherwise every upcoming Low Boss row would show
+ * today's holder regardless of which day it actually spawns.
  */
 function resolveLowBossGuildForToday(
   config: { mode: string; weekly: unknown; days: unknown } | null,
   orderedGuildIds: string[],
-  now: Date,
+  targetDate: Date,
 ): string | null {
+  const now = targetDate;
   if (!config) return null;
   const mode = resolveLowRotationMode(config.mode);
   if (mode === "DAILY") {

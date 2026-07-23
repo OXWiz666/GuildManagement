@@ -357,6 +357,10 @@ export class BossService {
     // Which guild took the boss. Defaults to the actor's own guild — the
     // overwhelmingly common case for a kill reported from that guild's server.
     const takenGuildId = params.takenGuildId ?? params.guildId;
+    // Was the guild named explicitly (`!kill <boss> <guild>`)? Only that, not
+    // the default-to-own-guild fallback above, is allowed to claim a shared
+    // rotation boss out of turn — see the guard in markBossRotationKilled.
+    const explicitTakenGuild = params.takenGuildId !== undefined;
     const names = params.itemDrops ?? [];
 
     // Match each typed name against the catalog independently — a kill can
@@ -380,6 +384,7 @@ export class BossService {
       undefined,
       "discord-bot",
       catalogDrops.length ? catalogDrops : undefined,
+      explicitTakenGuild,
     );
 
     // Typed item text that didn't match any catalog icon — vault each anyway

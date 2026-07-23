@@ -281,11 +281,19 @@ export class BossService {
     const now = params.now ?? new Date();
     const factionGuildIds = await this.bosses.getFactionGuildIds(params.guildId);
 
-    const rows = await this.bosses.listUpcoming({
-      guildId: params.guildId,
-      factionGuildIds,
-      ...(params.bossName ? { bossName: params.bossName } : {}),
-    });
+    const [rows, holderNames] = await Promise.all([
+      this.bosses.listUpcoming({
+        guildId: params.guildId,
+        factionGuildIds,
+        ...(params.bossName ? { bossName: params.bossName } : {}),
+      }),
+      // The schedule row's own `guildTurn` text column is a legacy snapshot
+      // that never gets updated when the rotation queue advances — resolve
+      // the real current holder the same way the website does instead of
+      // trusting it. Best-effort: a lookup failure shouldn't take down
+      // `!spawn`, it just means this fallback keeps using the raw row data.
+      core.dashboard.getBossHolderNames(params.guildId).catch(() => null),
+    ]);
 
     return rows.map((row) => {
       const timer = getRealtimeBossTimer(row.bossName, row.spawnTime.toISOString(), now.getTime(), {
@@ -294,6 +302,7 @@ export class BossService {
 
       return {
         ...row,
+        guildTurn: holderNames?.has(row.bossName) ? holderNames.get(row.bossName)! : row.guildTurn,
         live: timer.live,
         timerText: timer.text,
         liveElapsedText: timer.liveElapsedText,

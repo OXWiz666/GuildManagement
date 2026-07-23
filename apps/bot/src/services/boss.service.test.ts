@@ -7,7 +7,7 @@ import { services as core } from "@guild/core";
 
 vi.mock("@guild/core", () => ({
   services: {
-    dashboard: { markBossRotationKilledByName: vi.fn() },
+    dashboard: { markBossRotationKilledByName: vi.fn(), getBossHolderNames: vi.fn().mockResolvedValue(new Map()) },
     equipment: { getDropsCatalog: vi.fn().mockResolvedValue({ items: [] }) },
     storage: { addDropsToStorage: vi.fn() },
   },

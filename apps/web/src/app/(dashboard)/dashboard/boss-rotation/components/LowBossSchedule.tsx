@@ -6,7 +6,6 @@ import {
   activityApi,
   guildApi,
   type LowBossRotationResponse,
-  type FactionGuildData,
   type BossScheduleData,
   type GuildActivitiesResponse,
   type ActivityPointRulesData,
@@ -16,12 +15,11 @@ import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getGuildColor } from "../utils/helpers";
-import { getDailyRotationIndex, SHORT_CYCLE_MAX_HOURS } from "@guild/shared";
 import { buildActivityTypeMeta } from "@/lib/activityTypeMeta";
 import WeeklyCalendar from "./WeeklyCalendar";
 import { buildWeeklyChips, type CalendarBossEntry } from "../utils/calendarChips";
 
-type Mode = "WEEKLY" | "MONTHLY" | "DAILY";
+type Mode = "WEEKLY" | "MONTHLY";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const EMPTY: LowBossRotationResponse = {
@@ -49,9 +47,10 @@ const EMPTY_ACTIVITY_RULES: ActivityPointRulesData = { activities: [] };
 /**
  * Day-based low-boss rotation: the guild assigned to a day takes ALL flagged
  * "low" bosses that day. Faction leaders flag the low bosses and choose a
- * cadence — WEEKLY or MONTHLY are hand-filled calendars; DAILY is exclusive
- * to sub-24h-cooldown bosses (they can spawn more than once a day) and
- * auto-rotates the guild order with nothing to fill in.
+ * cadence — WEEKLY or MONTHLY, both hand-filled calendars. A boss's own
+ * spawn cadence (how many times it respawns within that day, for sub-24h
+ * cooldown bosses) is unaffected by this — whichever guild holds the day
+ * gets credit for every spawn that lands on it.
  */
 export default function LowBossSchedule({ guildId }: { guildId: string }) {
   const { addToast } = useToast();
@@ -115,44 +114,6 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
     setWeekly({ ...data.weekly });
     setDays({ ...data.days });
   }, [data]);
-
-  // Daily is exclusive to bosses that can spawn more than once a day — prune
-  // any longer-cooldown boss left flagged from a prior mode.
-  const dailyEligibleBosses = useMemo(
-    () => bosses.filter((b) => b.cooldownHours != null && b.cooldownHours < SHORT_CYCLE_MAX_HOURS),
-    [bosses],
-  );
-  useEffect(() => {
-    if (mode !== "DAILY") return;
-    const allowed = new Set(dailyEligibleBosses.map((b) => b.bossName));
-    setLowBossNames((prev) => prev.filter((n) => allowed.has(n)));
-  }, [mode, dailyEligibleBosses]);
-
-  const pickerBosses = mode === "DAILY" ? dailyEligibleBosses : bosses;
-
-  // Read-only 7-day preview of the auto-rotating guild order — nothing to
-  // save here, it's a pure function of guild count + date.
-  const dailyPreview = useMemo(() => {
-    const order = guilds.map((g) => g.id);
-    const today = new Date();
-    const out: Array<{ key: string; label: string; guild: FactionGuildData | null }> = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(today.getTime() + i * 86400000);
-      const idx = getDailyRotationIndex(order.length, d);
-      const gid = idx >= 0 ? order[idx] : undefined;
-      out.push({
-        key: d.toISOString().slice(0, 10),
-        label:
-          i === 0
-            ? "Today"
-            : i === 1
-              ? "Tomorrow"
-              : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
-        guild: gid ? (guildMap.get(gid) ?? null) : null,
-      });
-    }
-    return out;
-  }, [guilds, guildMap]);
 
   const baseline = data ?? EMPTY;
 
@@ -286,10 +247,14 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
     [days, guildMap],
   );
 
+  // Monthly is this day rotation's own calendar — it should only preview the
+  // bosses actually flagged above, not every boss in the faction's overall
+  // schedule (that's what the Live/Upcoming tabs are for).
+  const lowBossNameSet = useMemo(() => new Set(lowBossNames), [lowBossNames]);
   const bossEntries: CalendarBossEntry[] = useMemo(
     () =>
       overlaySchedules
-        .filter((s) => s.status !== "KILLED")
+        .filter((s) => s.status !== "KILLED" && lowBossNameSet.has(s.bossName))
         .map((s) => ({
           id: s.id,
           bossName: s.bossName,
@@ -298,7 +263,7 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
           spawnTime: s.spawnTime,
           guildName: s.guildTurnGuildName || s.guildTurn || "Unassigned",
         })),
-    [overlaySchedules],
+    [overlaySchedules, lowBossNameSet],
   );
 
   const monthlyChips = useMemo(
@@ -330,7 +295,7 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="inline-flex items-center bg-[var(--obsidian-elevated)]/60 border border-[var(--metal-border)] rounded-lg p-1 gap-1">
-            {(["MONTHLY", "WEEKLY", "DAILY"] as Mode[]).map((m) => (
+            {(["MONTHLY", "WEEKLY"] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => canManage && setMode(m)}
@@ -341,22 +306,18 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
                     : "text-white/45 hover:text-white/75 border border-transparent"
                 }`}
               >
-                {m === "MONTHLY" ? "Monthly" : m === "WEEKLY" ? "Weekly" : "Daily"}
+                {m === "MONTHLY" ? "Monthly" : "Weekly"}
               </button>
             ))}
           </div>
           <p className="hidden sm:block text-[11px] text-white/40 max-w-[22rem]">
-            {mode === "DAILY" ? (
-              <>Guild-of-the-day <span className="text-white/70">auto-rotates every day</span> — for bosses that can spawn more than once in a day.</>
-            ) : (
-              <>The guild assigned to a day takes <span className="text-white/70">all low bosses</span> that day.</>
-            )}
+            The guild assigned to a day takes <span className="text-white/70">all low bosses</span> that day.
             {!canManage && " Read-only — only faction leaders can edit."}
           </p>
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
-            {mode !== "DAILY" && <Button variant="ghost" size="sm" onClick={autoFill}>Auto-fill</Button>}
+            <Button variant="ghost" size="sm" onClick={autoFill}>Auto-fill</Button>
             <Button variant="ghost" size="sm" onClick={reset} disabled={!dirty || saving}>Reset</Button>
             <Button variant="accent" size="sm" onClick={save} isLoading={saving} disabled={!dirty}>Save</Button>
           </div>
@@ -367,18 +328,14 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
       <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
         <div className="flex items-center justify-between mb-2.5">
           <span className="text-[10px] uppercase tracking-[0.18em] font-bold text-white/40">
-            {mode === "DAILY" ? "Low bosses (sub-24h cooldown only)" : "Low bosses"}{" "}
-            <span className="text-white/25">({lowBossNames.length} selected)</span>
+            Low bosses <span className="text-white/25">({lowBossNames.length} selected)</span>
           </span>
         </div>
         {lowBossNames.length === 0 && (
           <p className="text-[11px] text-amber-300/70 mb-2">Flag which bosses this day rotation covers.</p>
         )}
-        {mode === "DAILY" && pickerBosses.length === 0 && (
-          <p className="text-[11px] text-white/35 mb-2">No registered bosses have a cooldown under 24 hours yet.</p>
-        )}
         <div className="flex flex-wrap gap-1.5">
-          {pickerBosses.map((b) => {
+          {bosses.map((b) => {
             const on = lowBossNames.includes(b.bossName);
             return (
               <button
@@ -398,39 +355,6 @@ export default function LowBossSchedule({ guildId }: { guildId: string }) {
           })}
         </div>
       </div>
-
-      {/* Daily view — auto-computed, nothing to click or fill in */}
-      {mode === "DAILY" && (
-        <div className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
-          <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-white/40 mb-3">
-            Auto-rotating order — cycles daily, no manual assignment needed
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-            {dailyPreview.map((entry) => {
-              const color = getGuildColor(entry.guild?.name || "");
-              const isToday = entry.label === "Today";
-              return (
-                <div
-                  key={entry.key}
-                  className={`min-h-[62px] rounded-lg border p-1.5 flex flex-col items-start justify-start text-left ${
-                    entry.guild ? `${color.border} ${color.bg}` : "border-white/[0.06] bg-white/[0.015]"
-                  } ${isToday ? "ring-1 ring-[var(--forge-gold)]/50" : ""}`}
-                >
-                  <span className={`text-[11px] font-bold ${isToday ? "text-[var(--forge-gold-bright)]" : "text-white/55"}`}>
-                    {entry.label}
-                  </span>
-                  {entry.guild && (
-                    <span className="mt-1 flex items-center gap-1 min-w-0 w-full">
-                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: color.dot }} />
-                      <span className={`text-[10px] font-semibold truncate ${color.text}`}>{entry.guild.name}</span>
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Weekly view */}
       {mode === "WEEKLY" && (

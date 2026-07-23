@@ -311,7 +311,11 @@ export default function AttendanceSessionModal({
   // ─── Member: your own status (derived from the schedule record, same
   // source the old Open Check-Ins list used) ───
   const userStatus = schedule ? getUserRecordStatus(schedule) : null;
-  const memberSession = schedule?.attendanceSessions?.[0];
+  // A shared rotation boss can have one attendance session per faction
+  // guild — this modal is scoped to `guildId`, so it must find that guild's
+  // own session rather than whichever session happens to be first.
+  const memberSession =
+    schedule?.attendanceSessions?.find((s) => s.guildId === guildId) ?? schedule?.attendanceSessions?.[0];
   const tick = memberSession
     ? getCountdownText(memberSession.expiresAt)
     : getCountdownText(session.expiresAt);

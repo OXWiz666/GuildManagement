@@ -83,7 +83,7 @@ const navGroups: NavGroup[] = [
     section: "Boss Operations",
     items: [
       {
-        label: "Guild Objectives",
+        label: "Boss Operations",
         href: "/dashboard/boss-rotation",
         icon: (
           <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

@@ -9,7 +9,7 @@ import { writeAuditLog } from "./audit.service";
 import { createLedgerEntry } from "./ledger.service";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../utils/errors";
 import * as crypto from "crypto";
-import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, SHORT_CYCLE_MAX_HOURS, DEFAULT_LOW_BOSS_MAX_LEVEL, getDailyRotationIndex } from "@guild/shared";
+import { PREDEFINED_BOSSES, getBossImageUrl, getNextBossSpawnTime, DEFAULT_LOW_BOSS_MAX_LEVEL } from "@guild/shared";
 import { broadcastToGuild, broadcastToUser } from "../lib/socket";
 import { getDropCatalogMap } from "./equipment.service";
 import { getGuildMemberByUser } from "./guild.service";
@@ -1015,9 +1015,17 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
     throw new ForbiddenError("You must be an active member of the guild to check in");
   }
 
+  // A shared rotation boss opens one session PER faction guild on kill (see
+  // openBossCheckInSessionsForGuilds), so looking this up by bossScheduleId
+  // alone and taking the newest would grab whichever guild's session happened
+  // to be created last, rejecting every other guild's members with "belongs
+  // to another guild" even though their own guild's session exists too.
+  // Matching on guildId here is what actually scopes it to the caller's own
+  // guild.
   const session = await prisma.attendanceSession.findFirst({
     where: {
       bossScheduleId,
+      guildId,
       isActive: true,
       expiresAt: { gt: now },
     },
@@ -1027,9 +1035,6 @@ export async function checkInToBoss(userId: string, guildId: string, bossSchedul
 
   if (!session) {
     throw new BadRequestError("Check-in is closed for this boss");
-  }
-  if (session.guildId !== guildId) {
-    throw new ForbiddenError("This check-in belongs to another guild");
   }
 
   const existingRecord = await prisma.attendanceRecord.findUnique({
@@ -2228,7 +2233,7 @@ async function getBossSchedulesShared(guildId: string, factionId: string | null)
   return dedupedSchedules.map((s) => {
     const isLowBoss = s.status !== BossEventStatus.KILLED && lowBossNamesLower.has(s.bossName.toLowerCase());
     const lowBossGuildId = isLowBoss
-      ? resolveLowBossGuildForToday(lowBossConfig, activeGuildIds, s.spawnTime)
+      ? resolveLowBossGuildForToday(lowBossConfig, s.spawnTime)
       : null;
     const lowBossGuild = lowBossGuildId ? guildMap.get(lowBossGuildId) ?? null : null;
 
@@ -2253,6 +2258,7 @@ async function getBossSchedulesShared(guildId: string, factionId: string | null)
       createdAt: s.createdAt.toISOString(),
       attendanceSessions: s.attendanceSessions.map(session => ({
         id: session.id,
+        guildId: session.guildId,
         code: session.code,
         title: session.title,
         type: session.type,
@@ -2346,7 +2352,6 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
     ? foundingGuildIds.filter((id) => activeGuildIds.includes(id))
     : activeGuildIds;
   const guildMap = new Map(guilds.map((g) => [g.id, g]));
-  const lowBossTodayGuildId = resolveLowBossGuildForToday(lowBossConfig, activeGuildIds, new Date());
 
   // Bulk-fetch all rotation, active schedule, and killed schedule data in 3 parallel queries
   // instead of 3 sequential queries per boss (N+1 elimination). Schedules are
@@ -2411,31 +2416,6 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
     const activeSchedule = activeScheduleMap.get(boss.name) || null;
     const latestKilled = killedScheduleMap.get(boss.name) || null;
 
-    // The live schedule row's own `guildTurnGuild` is the ground truth for
-    // who currently holds a per-queue boss — it's written directly by the
-    // kill that took it, and can legitimately point at a guild outside the
-    // configured queue (takenGuildId is only checked against "any active
-    // faction guild", not "is in this boss's queue"), so trusting the queue
-    // position alone let the two drift apart. `queueGuildIds[currentIndex]`
-    // is only a fallback for a boss that's never been scheduled yet.
-    //
-    // A Low Boss has no such per-kill assignment at all — its holder is
-    // *entirely* the day-based Faction Schedule, every day, regardless of
-    // who last killed it (a schedule row's leftover guildTurnGuildId here
-    // could be a stale queue-era value, or just whichever guild happened to
-    // log the kill — neither reflects "whose day it is"). So for a Low Boss,
-    // lowBossTodayGuildId is the ground truth and the schedule row is not
-    // consulted at all; this is the reverse priority from every other boss.
-    const currentGuildId = isLowBoss
-      ? lowBossTodayGuildId
-      : activeSchedule?.guildTurnGuildId || queueGuildIds[currentIndex] || null;
-    const nextGuildId = isLowBoss || !queueGuildIds.length
-      ? null
-      : queueGuildIds[(currentIndex + 1) % queueGuildIds.length] || currentGuildId;
-    const currentGuild = isLowBoss
-      ? (currentGuildId ? guildMap.get(currentGuildId) || null : null)
-      : activeSchedule?.guildTurnGuild || (currentGuildId ? guildMap.get(currentGuildId) || null : null);
-    const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
     // A cycle boss with no active schedule, no established rotation cadence,
     // and no prior kill has simply never been taken — it has no real spawn
     // time to show, so it must not be reported as "live now". Fixed-schedule
@@ -2448,6 +2428,39 @@ async function getBossRotationShared(factionId: string | null, guildId: string) 
       : (activeSchedule?.spawnTime ||
          existing?.nextSpawnTime ||
          (latestKilled?.killedAt ? getNextBossSpawnTime(boss.name, latestKilled.killedAt) : null));
+
+    // The live schedule row's own `guildTurnGuild` is the ground truth for
+    // who currently holds a per-queue boss — it's written directly by the
+    // kill that took it, and can legitimately point at a guild outside the
+    // configured queue (takenGuildId is only checked against "any active
+    // faction guild", not "is in this boss's queue"), so trusting the queue
+    // position alone let the two drift apart. `queueGuildIds[currentIndex]`
+    // is only a fallback for a boss that's never been scheduled yet.
+    //
+    // A Low Boss has no such per-kill assignment at all — its holder is
+    // *entirely* the day-based Faction Schedule, resolved against THIS
+    // boss's own upcoming spawnTime (not "right now") — a Low Boss whose
+    // next spawn falls on a different day than today must show that day's
+    // guild, or this card's holder disagrees with its own countdown (and
+    // with the Upcoming/Schedule views, which resolve the same way — see
+    // getBossSchedulesShared). A schedule row's leftover guildTurnGuildId
+    // here could be a stale queue-era value, or just whichever guild
+    // happened to log the kill — neither reflects "whose day it is", so it
+    // is not consulted at all; this is the reverse priority from every
+    // other boss.
+    const lowBossGuildId = isLowBoss
+      ? resolveLowBossGuildForToday(lowBossConfig, spawnTime ?? new Date())
+      : null;
+    const currentGuildId = isLowBoss
+      ? lowBossGuildId
+      : activeSchedule?.guildTurnGuildId || queueGuildIds[currentIndex] || null;
+    const nextGuildId = isLowBoss || !queueGuildIds.length
+      ? null
+      : queueGuildIds[(currentIndex + 1) % queueGuildIds.length] || currentGuildId;
+    const currentGuild = isLowBoss
+      ? (currentGuildId ? guildMap.get(currentGuildId) || null : null)
+      : activeSchedule?.guildTurnGuild || (currentGuildId ? guildMap.get(currentGuildId) || null : null);
+    const nextGuild = nextGuildId ? guildMap.get(nextGuildId) || null : null;
 
     rotations.push({
       id: existing?.id || `predefined:${boss.name}`,
@@ -4132,13 +4145,14 @@ export async function updateBossMasterList(
 
 // ─── Low-boss day rotation (faction-leader owned) ──────────────
 // A single-row config: whichever guild is assigned to a day takes ALL flagged
-// "low" bosses that day. Supports a repeating WEEKLY pattern (weekday → guild),
-// a MONTHLY calendar (date → guild), and an auto-computed DAILY cadence
-// (guild-of-the-day cycles automatically — see getDailyRotationIndex) for
-// bosses with a sub-24h cooldown, since those can spawn more than once a day
-// and don't suit a hand-filled calendar.
+// "low" bosses that day. Supports a repeating WEEKLY pattern (weekday → guild)
+// or a MONTHLY calendar (date → guild). A boss's own spawn cadence (how many
+// times it respawns within that day, for sub-24h cooldown bosses) is a
+// completely separate mechanism (getNextBossSpawnTime/cooldownHours) — the
+// guild assigned to a day holds every spawn that lands on it, however many
+// that turns out to be.
 
-const LOW_ROTATION_MODES = ["WEEKLY", "MONTHLY", "DAILY"] as const;
+const LOW_ROTATION_MODES = ["WEEKLY", "MONTHLY"] as const;
 
 function parseStringMap(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -4228,7 +4242,7 @@ function lowBossToday(now: Date): { dateKey: string; weekday: number } {
 
 /**
  * The guild that holds every flagged Low Boss on `targetDate`, under
- * whichever cadence (DAILY/WEEKLY/MONTHLY) the faction has configured —
+ * whichever cadence (WEEKLY/MONTHLY) the faction has configured —
  * mirrors the frontend's buildGuildOfDayResolver (apps/web boss-rotation/
  * utils/calendarChips.ts), ported server-side so the Guild Rotation grid can
  * show a Low Boss's real holder instead of hiding the boss entirely (see
@@ -4242,16 +4256,11 @@ function lowBossToday(now: Date): { dateKey: string; weekday: number } {
  */
 function resolveLowBossGuildForToday(
   config: { mode: string; weekly: unknown; days: unknown } | null,
-  orderedGuildIds: string[],
   targetDate: Date,
 ): string | null {
   const now = targetDate;
   if (!config) return null;
   const mode = resolveLowRotationMode(config.mode);
-  if (mode === "DAILY") {
-    const idx = getDailyRotationIndex(orderedGuildIds.length, now);
-    return idx >= 0 ? orderedGuildIds[idx] ?? null : null;
-  }
   const { dateKey, weekday } = lowBossToday(now);
   if (mode === "WEEKLY") {
     return parseStringMap(config.weekly)[String(weekday)] ?? null;
@@ -4326,12 +4335,11 @@ export async function updateLowBossRotation(
   ]);
   const activeIds = new Set(guilds.map((g) => g.id));
   const bossByLower = new Map(bosses.map((b) => [b.name.toLowerCase(), b.name]));
-  const cooldownByCanonName = new Map(bosses.map((b) => [b.name, b.cooldownHours ?? null]));
 
   let mode = resolveLowRotationMode(existing?.mode);
   if (payload.mode !== undefined) {
     if (!LOW_ROTATION_MODES.includes(payload.mode as (typeof LOW_ROTATION_MODES)[number])) {
-      throw new BadRequestError("Mode must be WEEKLY, MONTHLY, or DAILY");
+      throw new BadRequestError("Mode must be WEEKLY or MONTHLY");
     }
     mode = payload.mode as (typeof LOW_ROTATION_MODES)[number];
   }
@@ -4347,17 +4355,6 @@ export async function updateLowBossRotation(
         lowBossNames.push(canon);
       }
     }
-  }
-
-  // Daily is exclusive to bosses that can spawn more than once in a day —
-  // silently drop anything with no cooldown or a cooldown of 24h+ rather than
-  // rejecting the whole save (the picker UI already filters these out, so
-  // this only ever trims stale selections left over from a prior mode).
-  if (mode === "DAILY") {
-    lowBossNames = lowBossNames.filter((name) => {
-      const cooldown = cooldownByCanonName.get(name);
-      return cooldown !== null && cooldown !== undefined && cooldown < SHORT_CYCLE_MAX_HOURS;
-    });
   }
 
   // Weekly is a full replace (only 7 possible keys).

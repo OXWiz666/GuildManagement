@@ -67,6 +67,21 @@ function addScheduleDays(date: Date, days: number) {
   return next;
 }
 
+// A shared rotation boss opens one attendance session PER faction guild on
+// kill, so `item.attendanceSessions` can hold several — one per guild, not
+// just this viewer's. Blindly reading index [0] used to work when there was
+// only ever one, but now it can silently show another guild's window state
+// (open/closed, checked-in members) instead of the viewer's own. Falls back
+// to [0] only for the (should-be-rare) case where this guild has no session
+// of its own yet.
+function pickGuildSession(
+  sessions: AttendanceSessionData[] | undefined,
+  guildId: string | undefined,
+): AttendanceSessionData | undefined {
+  if (!sessions || sessions.length === 0) return undefined;
+  return sessions.find((s) => s.guildId === guildId) ?? sessions[0];
+}
+
 function isTodayOrTomorrowSchedule(spawnTime: string | null | undefined, now = new Date()) {
   if (!spawnTime) return false;
   const key = scheduleDateKey(spawnTime);
@@ -323,14 +338,24 @@ export default function BossAttendancePage() {
   // Helper to determine logged-in user's attendance status for a boss schedule
   const getUserRecordStatus = useCallback((item: BossScheduleData) => {
     if (!user) return { status: "NONE", label: "No Session", color: "text-white/40 bg-white/[0.015] border-white/[0.03]", dotColor: "bg-zinc-650" };
-    if (!item.attendanceSessions || item.attendanceSessions.length === 0) {
-      if (item.status === "KILLED") {
-        return { status: "EXPIRED_NO_SESSION", label: "No Session Run", color: "text-white/40 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-700" };
-      }
+
+    // A fixed-schedule boss reuses the SAME schedule row every cycle — its
+    // spawnTime/status roll forward in place rather than getting a fresh row,
+    // so an attendanceSession attached to this row can be a leftover from a
+    // PAST cycle even though the row now represents a brand new, not-yet-
+    // fought spawn. A session only ever legitimately exists once this exact
+    // cycle has actually been killed (there's no advance/early check-in —
+    // see checkInToBoss), so ignore any attached session entirely until then.
+    if (item.status !== "KILLED") {
       return { status: "NONE", label: "Scheduled Spawn", color: "text-white/55 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-650" };
     }
 
-    const session = item.attendanceSessions[0];
+    if (!item.attendanceSessions || item.attendanceSessions.length === 0) {
+      return { status: "EXPIRED_NO_SESSION", label: "No Session Run", color: "text-white/40 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-700" };
+    }
+
+    const session = pickGuildSession(item.attendanceSessions, activeGuild?.guildId);
+    if (!session) return { status: "EXPIRED_NO_SESSION", label: "No Session Run", color: "text-white/40 bg-white/[0.01] border-zinc-900", dotColor: "bg-zinc-700" };
     const isSessionActive = session.isActive && new Date(session.expiresAt).getTime() > currentTime;
     const userRecord = session.records?.find(r => r.userId === user.id);
 
@@ -450,6 +475,7 @@ export default function BossAttendancePage() {
         <CheckInAlertBanner
           schedules={schedules}
           user={user}
+          guildId={activeGuild.guildId}
           checkingInId={checkingInId}
           onCheckIn={handleCheckIn}
         />
@@ -580,6 +606,7 @@ export default function BossAttendancePage() {
             schedules={schedules.filter((schedule) => isTodayOrTomorrowSchedule(schedule.spawnTime))}
             isLoading={isLoadingSessions}
             userId={user.id}
+            guildId={activeGuild.guildId}
             onSelect={handleSelectSession}
           />
         )}
@@ -589,6 +616,7 @@ export default function BossAttendancePage() {
             sessions={sessions}
             schedules={schedules}
             isLoading={isLoadingSchedules || isLoadingSessions}
+            guildId={activeGuild.guildId}
             onSelectSession={handleSelectSession}
           />
         )}
@@ -598,6 +626,7 @@ export default function BossAttendancePage() {
             sessions={sessions}
             schedules={schedules}
             isLoading={isLoadingSchedules || isLoadingSessions}
+            guildId={activeGuild.guildId}
             onSelectSession={handleSelectSession}
           />
         )}
@@ -697,11 +726,13 @@ function ViewSwitcher<T extends string>({
 const CheckInAlertBanner = memo(function CheckInAlertBanner({
   schedules,
   user,
+  guildId,
   checkingInId,
   onCheckIn,
 }: {
   schedules: BossScheduleData[];
   user: { id: string } | null;
+  guildId: string;
   checkingInId: string | null;
   onCheckIn: (item: BossScheduleData) => void;
 }) {
@@ -714,7 +745,7 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
   const openCheckIns = useMemo(() => {
     return schedules
       .filter((s) => {
-        const session = s.attendanceSessions?.[0];
+        const session = pickGuildSession(s.attendanceSessions, guildId);
         return (
           session &&
           session.isActive &&
@@ -724,24 +755,24 @@ const CheckInAlertBanner = memo(function CheckInAlertBanner({
         );
       })
       .sort((a, b) => {
-        const aExp = new Date(a.attendanceSessions![0].expiresAt).getTime();
-        const bExp = new Date(b.attendanceSessions![0].expiresAt).getTime();
+        const aExp = new Date(pickGuildSession(a.attendanceSessions, guildId)!.expiresAt).getTime();
+        const bExp = new Date(pickGuildSession(b.attendanceSessions, guildId)!.expiresAt).getTime();
         return aExp - bExp;
       });
-  }, [schedules, now]);
+  }, [schedules, now, guildId]);
 
   // Smart detect the first open window the user has NOT claimed
   const activeSessionEvent = useMemo(() => {
     if (!user) return null;
     return openCheckIns.find((s) => {
-      const userRecord = s.attendanceSessions![0].records?.find((r) => r.userId === user.id);
+      const userRecord = pickGuildSession(s.attendanceSessions, guildId)?.records?.find((r) => r.userId === user.id);
       return !userRecord;
     }) || null;
-  }, [openCheckIns, user]);
+  }, [openCheckIns, user, guildId]);
 
   if (!activeSessionEvent) return null;
 
-  const target = new Date(activeSessionEvent.attendanceSessions![0].expiresAt).getTime();
+  const target = new Date(pickGuildSession(activeSessionEvent.attendanceSessions, guildId)!.expiresAt).getTime();
   const diff = target - now;
   const countdownText = diff <= 0
     ? "EXPIRED"

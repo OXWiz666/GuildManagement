@@ -18,6 +18,7 @@ export interface AttendanceCoverflowProps {
   schedules?: BossScheduleData[];
   isLoading: boolean;
   userId?: string;
+  guildId?: string;
   onSelect: (session: AttendanceSessionSummary) => void;
 }
 
@@ -41,8 +42,16 @@ function formatRemaining(expiresAt: string, now: number) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function activeScheduleSession(schedule: BossScheduleData, now: number) {
-  return schedule.attendanceSessions?.find(
+// A shared rotation boss opens one session PER faction guild — restricting
+// to `guildId` (when known) keeps this from surfacing another guild's still-
+// open window as if it were the viewer's own. Falls back to searching every
+// session when guildId isn't available, same as before this guild
+// distinction existed.
+function activeScheduleSession(schedule: BossScheduleData, now: number, guildId?: string) {
+  const sessions = guildId
+    ? schedule.attendanceSessions?.filter((session) => session.guildId === guildId)
+    : schedule.attendanceSessions;
+  return sessions?.find(
     (session) => session.isActive && new Date(session.expiresAt).getTime() > now,
   ) ?? null;
 }
@@ -105,15 +114,19 @@ function scheduleDayLabel(spawnTime: string) {
   return spawn.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: SCHEDULE_DATE_TIME_ZONE });
 }
 
-function scheduleStatus(schedule: BossScheduleData, userId: string | undefined, now: number) {
-  const record = userScheduleRecord(schedule, userId);
+function scheduleStatus(schedule: BossScheduleData, userId: string | undefined, now: number, guildId?: string) {
+  // A fixed-schedule boss reuses the same row every cycle, so any attached
+  // session/record can be a leftover from a PAST kill even though this row
+  // now represents a fresh, not-yet-fought spawn — only trust them once this
+  // row is actually KILLED.
+  const record = schedule.status === "KILLED" ? userScheduleRecord(schedule, userId) : null;
   if (record?.status === "CONFIRMED") {
     return { label: "Confirmed", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25", pulse: false };
   }
   if (record?.status === "PENDING") {
     return { label: "Pending", color: "text-amber-400 bg-amber-500/10 border-amber-500/25", pulse: false };
   }
-  if (activeScheduleSession(schedule, now)) {
+  if (schedule.status === "KILLED" && activeScheduleSession(schedule, now, guildId)) {
     return { label: "Open", color: "text-violet-300 bg-violet-500/10 border-violet-500/25", pulse: true };
   }
   if (schedule.status === "SPAWNED") {
@@ -133,6 +146,7 @@ export default function AttendanceCoverflow({
   schedules = [],
   isLoading,
   userId,
+  guildId,
   onSelect,
 }: AttendanceCoverflowProps) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -164,11 +178,11 @@ export default function AttendanceCoverflow({
     const schedulesVisible = schedules
       .filter((schedule) => {
         if (sessionScheduleIds.has(schedule.id)) return false;
-        return schedule.status !== "KILLED" || Boolean(activeScheduleSession(schedule, bucketNow));
+        return schedule.status !== "KILLED" || Boolean(activeScheduleSession(schedule, bucketNow, guildId));
       })
       .sort((a, b) => new Date(a.spawnTime).getTime() - new Date(b.spawnTime).getTime());
     return { visibleSessions: sessionsVisible, visibleSchedules: schedulesVisible };
-  }, [sessions, schedules, nowMinuteBucket]);
+  }, [sessions, schedules, nowMinuteBucket, guildId]);
   const visibleCount = visibleSessions.length + visibleSchedules.length;
 
   function scrollBy(delta: number) {
@@ -258,10 +272,18 @@ export default function AttendanceCoverflow({
 
             {visibleSchedules.map((schedule) => {
               const imageSrc = schedule.bossImageUrl || getBossImageUrl(schedule.bossName);
-              const status = scheduleStatus(schedule, userId, now);
-              const session = activeScheduleSession(schedule, now);
-              const sessionForModal = session ?? schedule.attendanceSessions?.[0] ?? null;
-              const record = userScheduleRecord(schedule, userId);
+              const status = scheduleStatus(schedule, userId, now, guildId);
+              const session = activeScheduleSession(schedule, now, guildId);
+              // Only offer a session to open once this row is actually
+              // KILLED — otherwise any attached session is a leftover from a
+              // past cycle on this reused row, and opening it would show a
+              // stale (or even another guild's) roster for a spawn that
+              // hasn't happened yet.
+              const sessionForModal =
+                schedule.status === "KILLED"
+                  ? session ?? schedule.attendanceSessions?.find((s) => s.guildId === guildId) ?? schedule.attendanceSessions?.[0] ?? null
+                  : null;
+              const record = schedule.status === "KILLED" ? userScheduleRecord(schedule, userId) : null;
               const remaining = session ? formatRemaining(session.expiresAt, now) : null;
               const openSession = () => {
                 if (!sessionForModal) return;

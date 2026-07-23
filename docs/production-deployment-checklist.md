@@ -98,7 +98,7 @@ Prepare or identify one account for each user level:
 
 ## Smoke Test: Boss Rotation And Schedule
 
-- [ ] Guild Rotation tab loads.
+- [ ] Boss Rotation tab loads.
 - [ ] Upcoming tab loads.
 - [ ] Guild Event tab loads.
 - [ ] Faction Schedule tab loads.
@@ -172,7 +172,7 @@ Run as Unlinked:
 - [ ] Faction Leader can manage faction-level data.
 - [ ] Guild Leader/Officer cannot perform Faction Leader-only actions.
 - [ ] Faction-wide boss rotations show the correct participating guilds.
-- [ ] Solo guild rotations remain scoped to the solo guild.
+- [ ] Solo Boss rotations remain scoped to the solo guild.
 
 ## Smoke Test: Members
 
@@ -244,9 +244,9 @@ Run as Unlinked:
 - [ ] Auction close/cancel permissions work.
 - [ ] Winning bid and ledger entries are correct.
 
-## Smoke Test: Guild Objectives And Activity
+## Smoke Test: Boss Operations And Activity
 
-- [ ] Guild Objectives page loads.
+- [ ] Boss Operations Objectives page loads.
 - [ ] Officer can create/update/delete objective.
 - [ ] Member can view objectives.
 - [ ] Activity/Events list loads.

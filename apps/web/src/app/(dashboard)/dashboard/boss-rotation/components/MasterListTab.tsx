@@ -60,7 +60,9 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
     for (const b of bosses) {
       const cur = draft[b.bossName] ?? [];
       const base = baseline[b.bossName] ?? [];
-      const same = cur.length === base.length && cur.every((id) => base.includes(id));
+      // Order matters here (it's the turn sequence), so a pure reorder with
+      // the same members must still count as a change — not just membership.
+      const same = cur.length === base.length && cur.every((id, i) => id === base[i]);
       if (!same) entries.push({ bossName: b.bossName, participantGuildIds: cur });
     }
     return entries;
@@ -78,6 +80,19 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
       const cur = prev[bossName] ?? [];
       const nextArr = cur.includes(gId) ? cur.filter((id) => id !== gId) : [...cur, gId];
       return { ...prev, [bossName]: nextArr };
+    });
+  }
+
+  /** Swap a participating guild with its neighbor to manually reorder turn sequence. */
+  function moveGuild(bossName: string, gId: string, direction: -1 | 1) {
+    if (!canManage) return;
+    setDraft((prev) => {
+      const cur = [...(prev[bossName] ?? [])];
+      const idx = cur.indexOf(gId);
+      const swapIdx = idx + direction;
+      if (idx < 0 || swapIdx < 0 || swapIdx >= cur.length) return prev;
+      [cur[idx], cur[swapIdx]] = [cur[swapIdx]!, cur[idx]!];
+      return { ...prev, [bossName]: cur };
     });
   }
 
@@ -161,7 +176,7 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
           {view === "BOSS" && (
             <p className="hidden sm:block text-[11px] text-white/40 max-w-xs">
               {canManage
-                ? "Toggle which guilds take each boss. The number on each chip is its turn order — guilds left off don't rotate on it."
+                ? "Toggle which guilds take each boss. The number on each chip is its turn order — use the arrows to reorder, guilds left off don't rotate on it."
                 : "Read-only. Only faction leaders can edit the master list."}
             </p>
           )}
@@ -268,23 +283,47 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
                     // point of this view: without it there's no way to tell
                     // who's up next just from a flat set of toggled chips.
                     const sequence = on ? selected.indexOf(g.id) + 1 : null;
+                    const canReorder = on && canManage && selected.length > 1;
                     return (
-                      <button
-                        key={g.id}
-                        onClick={() => toggle(boss.bossName, g.id)}
-                        disabled={!canManage}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all ${
-                          on ? `${color.border} ${color.bg} ${color.text}` : "border-white/[0.06] bg-white/[0.02] text-white/35"
-                        } ${canManage ? "cursor-pointer hover:opacity-90" : "cursor-default"}`}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: on ? color.dot : "rgba(255,255,255,0.2)" }} />
-                        {sequence !== null && (
-                          <span className="inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-black/25 px-1 text-[9px] font-bold leading-none">
-                            {sequence}
-                          </span>
+                      <div key={g.id} className="inline-flex items-stretch gap-0.5">
+                        <button
+                          onClick={() => toggle(boss.bossName, g.id)}
+                          disabled={!canManage}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all ${
+                            on ? `${color.border} ${color.bg} ${color.text}` : "border-white/[0.06] bg-white/[0.02] text-white/35"
+                          } ${canManage ? "cursor-pointer hover:opacity-90" : "cursor-default"}`}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: on ? color.dot : "rgba(255,255,255,0.2)" }} />
+                          {sequence !== null && (
+                            <span className="inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-black/25 px-1 text-[9px] font-bold leading-none">
+                              {sequence}
+                            </span>
+                          )}
+                          {g.name}
+                        </button>
+                        {canReorder && (
+                          <div className="flex flex-col justify-center gap-px">
+                            <button
+                              type="button"
+                              onClick={() => moveGuild(boss.bossName, g.id, -1)}
+                              disabled={sequence === 1}
+                              title="Move earlier in turn order"
+                              className="h-3.5 w-4 flex items-center justify-center rounded-t bg-white/[0.04] border border-white/[0.06] text-white/50 hover:text-white/90 hover:bg-white/[0.08] disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] cursor-pointer"
+                            >
+                              <svg viewBox="0 0 10 6" className="h-1.5 w-2.5 fill-current"><path d="M5 0L10 6H0z" /></svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveGuild(boss.bossName, g.id, 1)}
+                              disabled={sequence === selected.length}
+                              title="Move later in turn order"
+                              className="h-3.5 w-4 flex items-center justify-center rounded-b bg-white/[0.04] border border-t-0 border-white/[0.06] text-white/50 hover:text-white/90 hover:bg-white/[0.08] disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] cursor-pointer"
+                            >
+                              <svg viewBox="0 0 10 6" className="h-1.5 w-2.5 fill-current"><path d="M5 6L0 0h10z" /></svg>
+                            </button>
+                          </div>
                         )}
-                        {g.name}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

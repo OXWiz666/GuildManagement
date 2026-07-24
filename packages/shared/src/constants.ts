@@ -237,15 +237,25 @@ export const STORAGE_DISPOSITION_LABELS: Record<StorageDisposition, string> = {
 // Notable bosses whose drops commonly enter storage (Clemantis → Legend Weapon)
 export const STORAGE_SOURCE_BOSSES = ["Clemantis"] as const;
 
-// Distribution rank tiers
-export const DISTRIBUTION_TIERS = ["CORE", "ELITE", "UPPER", "LOWER"] as const;
+// Distribution ranks — mirrors the Moderator & Permissions CP-based rank bands
+// (CORE_MEMBER / ELITE_MEMBER / MEMBER) one-to-one so "rank" means the same
+// thing everywhere in the app.
+export const DISTRIBUTION_TIERS = ["CORE", "ELITE", "MEMBER"] as const;
 export type DistributionTier = (typeof DISTRIBUTION_TIERS)[number];
 
 export const DISTRIBUTION_TIER_LABELS: Record<DistributionTier, string> = {
   CORE: "Core",
   ELITE: "Elite",
-  UPPER: "Upper Rank",
-  LOWER: "Lower Rank",
+  MEMBER: "Member",
+};
+
+// Maps a distribution rank onto its corresponding Moderator & Permissions
+// role band, so a guild's renamed rank labels (roleDisplayNames) can be
+// resolved for the same tier shown in Distribution Rules.
+export const DISTRIBUTION_TIER_TO_ROLE: Record<DistributionTier, "CORE_MEMBER" | "ELITE_MEMBER" | "MEMBER"> = {
+  CORE: "CORE_MEMBER",
+  ELITE: "ELITE_MEMBER",
+  MEMBER: "MEMBER",
 };
 
 // Status sets (stored as strings; UI relabels per spec)
@@ -493,12 +503,11 @@ export interface MarketCatalogItem {
 // `materialCatalog` — which named log/material items that tier can be given. The `logs` /
 // `materials` numbers stay a single shared threshold across whichever items are checked.
 export const DEFAULT_MARKET_RULES: MarketRules = {
-  cpTiers: { coreMinCp: 12000, eliteMinCp: 9000, upperMinCp: 0 },
+  cpTiers: { coreMinCp: 12000, eliteMinCp: 9000 },
   limits: {
     CORE: { logs: 8, temporalPieces: 3, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
     ELITE: { logs: 7, temporalPieces: 7, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
-    UPPER: { logs: 5, temporalPieces: 4, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
-    LOWER: { logs: 5, temporalPieces: 3, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
+    MEMBER: { logs: 5, temporalPieces: 4, materials: 5, mountIds: [], materialKeys: ["lifeCore"], logKeys: [] },
   },
   weights: {
     rank: 0.15,
@@ -517,7 +526,7 @@ export const DEFAULT_MARKET_RULES: MarketRules = {
 };
 
 export type MarketRules = {
-  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number };
+  cpTiers: { coreMinCp?: number; eliteMinCp: number };
   limits: Record<
     DistributionTier,
     {

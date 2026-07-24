@@ -261,7 +261,8 @@ export const market = new Hono<AppEnv>()
     const guildId = c.req.param("guildId");
     const id = c.req.param("id");
     const user = c.get("user");
-    const item = await services.storage.registerInMarket(guildId, id, user.userId, c.req.valid("json").price);
+    const body = c.req.valid("json");
+    const item = await services.storage.registerInMarket(guildId, id, user.userId, body.price, body.note);
     return ok(c, { item });
   })
   .post("/:guildId/storage/:id/recall", requireGuildRole("OFFICER"), async (c) => {

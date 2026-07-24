@@ -68,6 +68,7 @@ export type CreateDistributionInput = z.infer<typeof createDistributionSchema>;
 
 export const registerStorageInMarketSchema = z.object({
   price: z.number().min(0, "A valid listing price is required").max(1_000_000_000),
+  note: z.string().trim().max(500).optional(),
 });
 export type RegisterStorageInMarketInput = z.infer<typeof registerStorageInMarketSchema>;
 
@@ -179,7 +180,6 @@ export const marketRulesSchema = z.object({
   cpTiers: z.object({
     coreMinCp: z.number().int().min(0).optional(),
     eliteMinCp: z.number().int().min(0),
-    upperMinCp: z.number().int().min(0),
   }),
   limits: z.object(
     DISTRIBUTION_TIERS.reduce(

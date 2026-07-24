@@ -55,7 +55,7 @@ async function getStoredItem(guildId: string, id: string) {
 }
 
 // ─── Register into the next market listing ───────────────────────────
-export async function registerInMarket(guildId: string, id: string, actorId: string, price: number) {
+export async function registerInMarket(guildId: string, id: string, actorId: string, price: number, note?: string) {
   await requireOfficer(guildId, actorId);
   const item = await getStoredItem(guildId, id);
   if (item.status !== "IN_STORAGE") {
@@ -69,7 +69,7 @@ export async function registerInMarket(guildId: string, id: string, actorId: str
 
   const updated = await prisma.guildStorageItem.update({
     where: { id },
-    data: { status: "LISTED_MARKET", disposition: "MARKET", listingPrice },
+    data: { status: "LISTED_MARKET", disposition: "MARKET", listingPrice, ...(note !== undefined ? { note } : {}) },
     include: RECIPIENT_SELECT,
   });
 

@@ -114,6 +114,21 @@ function distributionCoversWish(item: WishlistItem, dist: Record<string, unknown
 
 // ─── Rules helpers ───────────────────────────────────────────────────
 
+/** Union two legacy tier rows (pre-migration UPPER/LOWER) into one MEMBER row. */
+function mergeLegacyMemberTier(upper: any, lower: any): any {
+  if (!upper) return lower;
+  if (!lower) return upper;
+  const unionKeys = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
+  return {
+    logs: Math.max(upper.logs ?? 0, lower.logs ?? 0),
+    temporalPieces: Math.max(upper.temporalPieces ?? 0, lower.temporalPieces ?? 0),
+    materials: Math.max(upper.materials ?? 0, lower.materials ?? 0),
+    mountIds: unionKeys(upper.mountIds, lower.mountIds),
+    materialKeys: unionKeys(upper.materialKeys, lower.materialKeys),
+    logKeys: unionKeys(upper.logKeys, lower.logKeys),
+  };
+}
+
 /** Deep-merge stored market rules over the spec defaults so missing keys are filled. */
 export function mergeMarketRules(raw: unknown): MarketRules {
   // `any` here is deliberate: this also has to read the short-lived
@@ -124,7 +139,14 @@ export function mergeMarketRules(raw: unknown): MarketRules {
   const limits = { ...DEFAULT_MARKET_RULES.limits } as MarketRules["limits"];
   if (stored.limits) {
     for (const tier of DISTRIBUTION_TIERS) {
-      const storedTier = stored.limits[tier];
+      // Pre-migration guilds saved four rank rows (CORE/ELITE/UPPER/LOWER) —
+      // the rank system has since collapsed UPPER+LOWER into a single MEMBER
+      // rank to match Moderator & Permissions. Union their configured items
+      // rather than silently discarding a guild's saved rules.
+      const storedTier =
+        tier === "MEMBER" && !stored.limits.MEMBER && (stored.limits.UPPER || stored.limits.LOWER)
+          ? mergeLegacyMemberTier(stored.limits.UPPER, stored.limits.LOWER)
+          : stored.limits[tier];
       if (!storedTier) continue;
 
       const merged: Record<string, unknown> = { ...DEFAULT_MARKET_RULES.limits[tier], ...storedTier };
@@ -156,7 +178,12 @@ export async function getEffectiveMarketRules(guildId: string): Promise<MarketRu
   return mergeMarketRules(settings?.marketRules);
 }
 
-/** Resolve a member's distribution tier from CP-based ranks. */
+/**
+ * Resolve a member's distribution rank from CP-based ranks. Mirrors the
+ * Moderator & Permissions band logic exactly (see `memberMatchesCpRank` in
+ * RoleEditorPanel/RoleManagementSection) so a member's Distribution Rules
+ * rank always matches their actual guild rank.
+ */
 export function resolveDistributionTier(
   member: { role: string; cp: number | null },
   rules: MarketRules,
@@ -164,8 +191,7 @@ export function resolveDistributionTier(
   const cp = member.cp ?? 0;
   if (cp >= (rules.cpTiers.coreMinCp ?? Number.POSITIVE_INFINITY)) return "CORE";
   if (cp >= rules.cpTiers.eliteMinCp) return "ELITE";
-  if (cp >= rules.cpTiers.upperMinCp) return "UPPER";
-  return "LOWER";
+  return "MEMBER";
 }
 
 // ─── Officer notification fan-out (shared with requests.service) ─────

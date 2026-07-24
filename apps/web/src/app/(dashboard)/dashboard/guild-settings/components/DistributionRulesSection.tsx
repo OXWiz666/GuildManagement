@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DISTRIBUTION_TIERS, DISTRIBUTION_TIER_LABELS, DEFAULT_MARKET_RULES } from "@guild/shared";
+import { DISTRIBUTION_TIERS, DISTRIBUTION_TIER_TO_ROLE, DEFAULT_MARKET_RULES } from "@guild/shared";
 import { marketApi, type MarketRulesData, type MountCatalogItem } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Magnetic } from "@/components/dashboard/DashboardHelpers";
 import { useQuery, queryClient } from "@/lib/query";
+import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 import CheckboxCombobox from "@/components/ui/CheckboxCombobox";
 import MountWishlistSection from "./MountWishlistSection";
 
@@ -28,6 +29,7 @@ const rulesKey = (guildId: string) => `market_rules:${guildId}`;
 
 export default function DistributionRulesSection({ guildId, onDirtyChange }: Props) {
   const { addToast } = useToast();
+  const { resolveRoleName } = useRoleDisplayNames();
   const [rules, setRules] = useState<MarketRulesData>(DEFAULT_MARKET_RULES as MarketRulesData);
   const [savedRules, setSavedRules] = useState<MarketRulesData>(DEFAULT_MARKET_RULES as MarketRulesData);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,7 +134,7 @@ export default function DistributionRulesSection({ guildId, onDirtyChange }: Pro
           <span className="h-px flex-1 bg-gradient-to-r from-[var(--forge-gold)]/30 to-transparent" />
         </div>
         <p className="text-sm text-white/45 mb-5 leading-relaxed">
-          Set per-tier item request limits. CP thresholds now live in Moderator & Permission so rank rules stay together.
+          Set per-rank item request limits. CP thresholds now live in Moderator & Permission so rank rules stay together.
         </p>
 
       {isLoading ? (
@@ -141,14 +143,14 @@ export default function DistributionRulesSection({ guildId, onDirtyChange }: Pro
         <div className="space-y-6">
           {/* Per-tier limits */}
           <div className="overflow-x-auto scroll-fade-x">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-white/55 mb-2">Per-tier item limits</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-white/55 mb-2">Per-rank item limits</h3>
             <p className="text-[11px] text-white/35 mb-2">
-              Check which items a tier can be given; type a new name to add it to the guild's list. Mounts come from the Mount data section below.
+              Check which items a rank can be given; type a new name to add it to the guild's list. Mounts come from the Mount data section below.
             </p>
             <table className="w-full text-[12px] min-w-[720px]">
               <thead>
                 <tr className="text-[10px] text-white/45 font-bold uppercase tracking-wider text-left">
-                  <th className="py-2 pr-3">Tier</th>
+                  <th className="py-2 pr-3">Rank</th>
                   <th className="py-2 px-2">Logs</th>
                   <th className="py-2 px-2">Mount</th>
                   <th className="py-2 px-2">Materials</th>
@@ -157,7 +159,7 @@ export default function DistributionRulesSection({ guildId, onDirtyChange }: Pro
               <tbody>
                 {DISTRIBUTION_TIERS.map((tier) => (
                   <tr key={tier}>
-                    <td className="py-2 pr-3 font-semibold text-white/80 align-top">{DISTRIBUTION_TIER_LABELS[tier]}</td>
+                    <td className="py-2 pr-3 font-semibold text-white/80 align-top">{resolveRoleName(DISTRIBUTION_TIER_TO_ROLE[tier])}</td>
 
                     {/* Logs — shared quantity threshold + which log items are checkable */}
                     <td className="py-1.5 px-2 align-top">

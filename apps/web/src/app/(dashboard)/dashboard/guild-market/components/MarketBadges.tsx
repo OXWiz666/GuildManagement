@@ -10,17 +10,21 @@ import {
 const TIER_STYLES: Record<string, string> = {
   CORE: "bg-cyan-500/10 text-cyan-300 border-cyan-500/25",
   ELITE: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
-  UPPER: "bg-amber-500/10 text-amber-300 border-amber-500/25",
-  LOWER: "bg-white/[0.05] text-zinc-300 border-white/10",
+  MEMBER: "bg-white/[0.05] text-zinc-300 border-white/10",
 };
 
+// Historical records may still carry the pre-migration UPPER/LOWER rank
+// split — both collapse into the single MEMBER rank for display.
+const LEGACY_TIER_ALIASES: Record<string, string> = { UPPER: "MEMBER", LOWER: "MEMBER" };
+
 export function RankTierBadge({ tier }: { tier: string | null | undefined }) {
-  const key = (tier || "LOWER").toUpperCase();
+  const raw = (tier || "MEMBER").toUpperCase();
+  const key = LEGACY_TIER_ALIASES[raw] || raw;
   const label = DISTRIBUTION_TIER_LABELS[key as keyof typeof DISTRIBUTION_TIER_LABELS] || key;
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${
-        TIER_STYLES[key] || TIER_STYLES.LOWER
+        TIER_STYLES[key] || TIER_STYLES.MEMBER
       }`}
     >
       {label}

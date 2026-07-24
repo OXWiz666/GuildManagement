@@ -615,8 +615,8 @@ model GuildSettings {
   // Per-rank item request limits per cycle (JSON: { "CORE_MEMBER": 7, "ELITE_MEMBER": 7, "MEMBER": 5, "OFFICER": 5 })
   itemRequestLimits Json @default("{}") @map("item_request_limits")
 
-  // Guild Market distribution rules — CP tier thresholds + per-tier item limits + priority weights
-  // Shape: { cpTiers: { eliteMinCp, upperMinCp }, limits: { CORE/ELITE/UPPER/LOWER: { logs, temporalPieces, materials } }, weights: {...} }
+  // Guild Market distribution rules — CP rank thresholds + per-rank item limits + priority weights
+  // Shape: { cpTiers: { coreMinCp, eliteMinCp }, limits: { CORE/ELITE/MEMBER: { logs, temporalPieces, materials } }, weights: {...} }
   marketRules Json @default("{}") @map("market_rules")
 
   // Per-guild overrides for how OFFICER/CORE_MEMBER/ELITE_MEMBER/MEMBER are displayed.
@@ -931,7 +931,7 @@ model ItemDistribution {
   member   GuildMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   formType String  @map("form_type") // CORE | NON_CORE
-  rankTier String? @map("rank_tier") // CORE | ELITE | UPPER | LOWER
+  rankTier String? @map("rank_tier") // CORE | ELITE | MEMBER (legacy rows may still say UPPER | LOWER)
 
   // Snapshots captured at distribution time (members change over time)
   ignSnapshot    String? @map("ign_snapshot")

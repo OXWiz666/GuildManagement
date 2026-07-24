@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import Badge from "@/components/ui/Badge";
 import MarketStatCard from "./MarketStatCard";
 import { useRoleDisplayNames } from "@/lib/useRoleDisplayNames";
 
@@ -161,7 +160,6 @@ export default function AccountingTab({
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-white/[0.08] bg-[#0d0e13] text-[10px] text-white/45 font-bold uppercase tracking-wider">
                   <th className="px-4 py-3">In-Game Name</th>
-                  <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3 text-right">Total Withdraw / Debit PHP</th>
                   <th className="px-4 py-3 text-right">Net Balance PHP</th>
                   {accounting?.treasury?.secondary?.currencyCode && (
@@ -180,7 +178,6 @@ export default function AccountingTab({
                     style={{ animationDelay: `${Math.min(index, 16) * 30}ms` }}
                   >
                     <td className="px-4 py-3 font-semibold text-white">{m.ign}</td>
-                    <td className="px-4 py-3"><Badge role={m.role} customName={m.customRole?.name} customColor={m.customRole?.color} /></td>
                     <td className="px-4 py-3 text-right font-mono text-zinc-400">
                       {settings?.currencySymbol || "₱"}{" "}
                       {(m.totalWithdrawn ?? m.totalEarned ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}

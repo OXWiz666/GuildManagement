@@ -90,8 +90,12 @@ export default function CheckboxCombobox({
     // scroll of any ancestor (capture: true catches the table's own
     // scroll container, not just the window) would otherwise leave it
     // floating over the wrong spot — closing it is simpler than re-tracking
-    // position on every scroll tick.
-    function onScroll() {
+    // position on every scroll tick. But the menu's own item list also
+    // scrolls (`overflow-y-auto`), and capture:true sees that scroll too —
+    // exclude it or the menu closes the instant you scroll inside it.
+    function onScroll(e: Event) {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return;
       setOpen(false);
       setEditingKey(null);
     }

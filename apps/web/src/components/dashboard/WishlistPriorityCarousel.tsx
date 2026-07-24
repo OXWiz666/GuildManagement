@@ -9,8 +9,7 @@ import { Reveal } from "@/components/dashboard/DashboardHelpers";
 const TIER_TONE: Record<string, string> = {
   CORE: "text-[var(--forge-gold-bright)] border-[var(--forge-gold)]/30 bg-[var(--forge-gold)]/[0.08]",
   ELITE: "text-sky-300 border-sky-500/30 bg-sky-500/10",
-  UPPER: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10",
-  LOWER: "text-white/60 border-white/15 bg-white/[0.04]",
+  MEMBER: "text-white/60 border-white/15 bg-white/[0.04]",
 };
 
 function wishLabel(key: string, fallback?: string) {
@@ -88,7 +87,7 @@ export default function WishlistPriorityCarousel({ guildId }: { guildId: string 
                       <p className="text-[15px] font-semibold text-white truncate">{m.ign}</p>
                       <p className="text-[11px] text-white/40 truncate">{m.rankName}</p>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border shrink-0 ${TIER_TONE[m.tier] || TIER_TONE.LOWER}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border shrink-0 ${TIER_TONE[m.tier] || TIER_TONE.MEMBER}`}>
                       {m.tier}
                     </span>
                   </div>

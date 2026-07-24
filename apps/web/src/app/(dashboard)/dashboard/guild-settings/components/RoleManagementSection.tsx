@@ -19,7 +19,7 @@ interface RoleManagementSectionProps {
 function memberMatchesCpRank(
   cp: number,
   band: string,
-  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number },
+  cpTiers: { coreMinCp?: number; eliteMinCp: number },
 ) {
   const coreMinCp = cpTiers.coreMinCp ?? Number.POSITIVE_INFINITY;
   if (band === "CORE_MEMBER") return cp >= coreMinCp;
@@ -130,7 +130,7 @@ export default function RoleManagementSection({ guildId, onDirtyChange }: RoleMa
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const setCpTier = (key: "coreMinCp" | "eliteMinCp" | "upperMinCp", value: string) =>
+  const setCpTier = (key: "coreMinCp" | "eliteMinCp", value: string) =>
     setRules((current) => ({
       ...current,
       cpTiers: { ...current.cpTiers, [key]: parseInt(value, 10) || 0 },

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { SLOT_LABELS } from "@guild/shared";
 import { marketApi, type AuditLogEntry, type ItemDistributionData } from "@/lib/api";
 import { useQuery } from "@/lib/query";
 import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { RankTierBadge } from "./MarketBadges";
 
@@ -21,14 +22,55 @@ const ACTION_LABELS: Record<string, string> = {
   DISTRIBUTION_LIMIT_OVERRIDDEN: "Limit override",
   PRIORITY_SEQUENCE_CHANGED: "Priority sequence changed",
   DISTRIBUTION_RULE_UPDATED: "Distribution rules updated",
+  WISHLIST_ITEM_DISTRIBUTED: "Wishlist item distributed",
+  WISHLIST_LOG_REQUESTED: "Log requested from wishlist",
+  MOUNT_CATALOG_UPDATED: "Mount catalog updated",
+  MOUNT_DISTRIBUTED: "Mount distributed",
 };
 
 const ACTION_COLOR: Record<string, string> = {
   ITEM_DISTRIBUTED: "text-cyan-300",
+  WISHLIST_ITEM_DISTRIBUTED: "text-cyan-300",
+  MOUNT_DISTRIBUTED: "text-cyan-300",
   DISTRIBUTION_LIMIT_OVERRIDDEN: "text-amber-300",
   ITEM_REQUEST_DECLINED: "text-rose-300",
   LEGENDARY_PRIORITY_REJECTED: "text-rose-300",
 };
+
+const ACTION_DOT: Record<string, string> = {
+  ITEM_DISTRIBUTED: "bg-cyan-400",
+  WISHLIST_ITEM_DISTRIBUTED: "bg-cyan-400",
+  MOUNT_DISTRIBUTED: "bg-cyan-400",
+  DISTRIBUTION_LIMIT_OVERRIDDEN: "bg-amber-400",
+  ITEM_REQUEST_DECLINED: "bg-rose-400",
+  LEGENDARY_PRIORITY_REJECTED: "bg-rose-400",
+};
+
+/** Groups newest-first log entries into Today / Yesterday / calendar-date buckets, preserving order. */
+function groupByDay(logs: AuditLogEntry[]): Array<[string, AuditLogEntry[]]> {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const map = new Map<string, AuditLogEntry[]>();
+  for (const l of logs) {
+    const d = new Date(l.createdAt);
+    const label = sameDay(d, today)
+      ? "Today"
+      : sameDay(d, yesterday)
+        ? "Yesterday"
+        : d.toLocaleDateString(undefined, {
+            month: "long",
+            day: "numeric",
+            year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+          });
+    if (!map.has(label)) map.set(label, []);
+    map.get(label)!.push(l);
+  }
+  return Array.from(map.entries());
+}
 
 interface Props {
   guildId: string;
@@ -42,6 +84,10 @@ export default function DistributionHistoryTab({ guildId, isOfficer }: Props) {
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 function summarizeDetail(detail: Record<string, unknown> | null): string {
@@ -59,27 +105,42 @@ function summarizeDetail(detail: Record<string, unknown> | null): string {
 function AuditLogView({ guildId }: { guildId: string }) {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+
+  function onFilterChange(v: string) {
+    setActionFilter(v);
+    setPage(1);
+  }
+
   const { data, isLoading } = useQuery(
-    `market_audit:${guildId}`,
+    `market_audit:${guildId}:${actionFilter}:${page}`,
     async () => {
-      const res = await marketApi.getAuditLogs(guildId);
-      return res.success && res.data ? res.data.logs : [];
+      const res = await marketApi.getAuditLogs(guildId, {
+        action: actionFilter !== "ALL" ? actionFilter : undefined,
+        page,
+      });
+      return res.success && res.data
+        ? res.data
+        : { logs: [] as AuditLogEntry[], pagination: { page: 1, limit: 30, total: 0, totalPages: 1 } };
     },
     { staleTime: 15000 },
   );
-  const logs = useMemo(() => (data || []) as AuditLogEntry[], [data]);
+  const logs = useMemo(() => (data?.logs || []) as AuditLogEntry[], [data]);
+  const pagination = data?.pagination;
+  const totalPages = Math.max(1, pagination?.totalPages ?? 1);
+
   const filtered = useMemo(() => {
-    return logs.filter((l) => {
-      if (actionFilter !== "ALL" && l.action !== actionFilter) return false;
-      if (!search.trim()) return true;
-      const s = search.toLowerCase();
-      return (
+    if (!search.trim()) return logs;
+    const s = search.toLowerCase();
+    return logs.filter(
+      (l) =>
         (ACTION_LABELS[l.action] || l.action).toLowerCase().includes(s) ||
         l.actor.displayName.toLowerCase().includes(s) ||
-        summarizeDetail(l.detail).toLowerCase().includes(s)
-      );
-    });
-  }, [logs, actionFilter, search]);
+        summarizeDetail(l.detail).toLowerCase().includes(s),
+    );
+  }, [logs, search]);
+
+  const groups = useMemo(() => groupByDay(filtered), [filtered]);
 
   if (isLoading && logs.length === 0) return <Skeleton className="h-64 w-full rounded-2xl animate-pulse" />;
 
@@ -88,7 +149,7 @@ function AuditLogView({ guildId }: { guildId: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
+          onChange={(e) => onFilterChange(e.target.value)}
           className="rounded-lg border border-white/[0.1] bg-black/30 px-2.5 py-1.5 text-[11px] text-white focus:border-cyan-500/50 focus:outline-none cursor-pointer"
         >
           <option value="ALL">All actions</option>
@@ -97,30 +158,54 @@ function AuditLogView({ guildId }: { guildId: string }) {
           ))}
         </select>
         <div className="max-w-sm flex-1 min-w-[160px]">
-          <Input placeholder="Search audit log…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder="Search this page…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
+
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/35 border border-dashed border-white/[0.06] rounded-2xl">
           <p className="text-3xl mb-2">📜</p>No market activity recorded yet.
         </div>
       ) : (
-        <ol className="relative border-l border-white/[0.08] ml-2 space-y-1">
-          {filtered.map((l) => (
-            <li key={l.id} className="ml-4 py-2.5">
-              <span className="absolute -left-[5px] mt-1.5 h-2 w-2 rounded-full bg-[var(--forge-gold)]/70" />
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className={`text-xs font-bold ${ACTION_COLOR[l.action] || "text-white/85"}`}>
-                  {ACTION_LABELS[l.action] || l.action}
-                </span>
-                <span className="text-[11px] text-white/45">{summarizeDetail(l.detail)}</span>
-              </div>
-              <p className="text-[10px] text-white/35 mt-0.5">
-                {l.actor.displayName} · {fmtDate(l.createdAt)}
-              </p>
-            </li>
+        <div className="space-y-5">
+          {groups.map(([label, entries]) => (
+            <div key={label}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/35 mb-2 pl-2">{label}</p>
+              <ol className="relative border-l border-white/[0.08] ml-2 space-y-1">
+                {entries.map((l) => (
+                  <li key={l.id} className="ml-4 py-2.5">
+                    <span className={`absolute -left-[5px] mt-1.5 h-2 w-2 rounded-full ${ACTION_DOT[l.action] || "bg-[var(--forge-gold)]/70"}`} />
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className={`text-xs font-bold ${ACTION_COLOR[l.action] || "text-white/85"}`}>
+                        {ACTION_LABELS[l.action] || l.action}
+                      </span>
+                      <span className="text-[11px] text-white/45">{summarizeDetail(l.detail)}</span>
+                    </div>
+                    <p className="text-[10px] text-white/35 mt-0.5">
+                      {l.actor.displayName} · {fmtTime(l.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
           ))}
-        </ol>
+        </div>
+      )}
+
+      {pagination && pagination.total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
+          <p className="text-[11px] text-zinc-500">
+            Page {pagination.page} of {totalPages} <span className="text-white/25">/ {pagination.total.toLocaleString()} total</span>
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" size="xs" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="border border-white/[0.05]">
+              Prev
+            </Button>
+            <Button variant="ghost" size="xs" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="border border-white/[0.05]">
+              Next
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );

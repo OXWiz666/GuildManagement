@@ -36,8 +36,8 @@ interface Props {
   customRoles: CustomRoleData[];
   roleDisplayOverrides: Partial<Record<GuildRoleType, string>>;
   members: GuildMemberData[];
-  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number };
-  onCpTierChange: (key: "coreMinCp" | "eliteMinCp" | "upperMinCp", value: string) => void;
+  cpTiers: { coreMinCp?: number; eliteMinCp: number };
+  onCpTierChange: (key: "coreMinCp" | "eliteMinCp", value: string) => void;
   onSaveCpThresholds: () => Promise<void> | void;
   isCpThresholdDirty: boolean;
   isSavingCpThresholds: boolean;
@@ -58,7 +58,7 @@ interface Props {
 function memberMatchesCpRank(
   cp: number,
   band: GuildRoleType | null,
-  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number },
+  cpTiers: { coreMinCp?: number; eliteMinCp: number },
 ) {
   const coreMinCp = cpTiers.coreMinCp ?? Number.POSITIVE_INFINITY;
   if (band === "CORE_MEMBER") return cp >= coreMinCp;
@@ -250,7 +250,7 @@ export default function RoleEditorPanel({
         ? {
             label: "Member rank",
             value: 0,
-            key: "upperMinCp" as const,
+            key: null,
             help: "Member is the default rank for active members below the Elite CP requirement.",
           }
         : null;
@@ -307,12 +307,12 @@ export default function RoleEditorPanel({
                         </label>
                         <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">CP Threshold</span>
                       </div>
-                      {cpThreshold.key !== "upperMinCp" && (
+                      {cpThreshold.key && (
                         <input
                           type="number"
                           min={0}
                           value={cpThreshold.value}
-                          onChange={(e) => onCpTierChange(cpThreshold.key, e.target.value)}
+                          onChange={(e) => onCpTierChange(cpThreshold.key!, e.target.value)}
                           className="mt-2 w-full px-3.5 py-2.5 rounded-xl bg-black/25 border border-white/[0.08] text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-primary-500/40"
                         />
                       )}

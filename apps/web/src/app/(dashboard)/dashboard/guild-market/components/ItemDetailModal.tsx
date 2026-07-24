@@ -55,6 +55,9 @@ export default function ItemDetailModal({
 
   const [showListForm, setShowListForm] = useState(false);
   const [listPrice, setListPrice] = useState("");
+  const [listNote, setListNote] = useState("");
+
+  const [showDistribute, setShowDistribute] = useState(false);
 
   const [showSoldForm, setShowSoldForm] = useState(false);
   const [saleValue, setSaleValue] = useState("");
@@ -88,7 +91,10 @@ export default function ItemDetailModal({
 
   function openListForm() {
     setListPrice("");
+    setListNote("");
     setShowListForm(true);
+    setShowDistribute(false);
+    setShowSoldForm(false);
   }
 
   async function confirmListing(e: React.FormEvent) {
@@ -98,13 +104,24 @@ export default function ItemDetailModal({
       addToast("error", "Enter a valid listing price");
       return;
     }
-    await act(() => marketApi.registerStorageInMarket(guildId, item.id, price), "Listed in next market.");
+    await act(
+      () => marketApi.registerStorageInMarket(guildId, item.id, { price, note: listNote.trim() || undefined }),
+      "Listed in next market.",
+    );
+  }
+
+  function openDistribute() {
+    setShowDistribute(true);
+    setShowListForm(false);
+    setShowSoldForm(false);
   }
 
   function openSoldForm() {
     setSaleValue(item.listingPrice != null ? (Number(item.listingPrice) / 100).toString() : "");
     setSoldAt("");
     setShowSoldForm(true);
+    setShowListForm(false);
+    setShowDistribute(false);
   }
 
   async function confirmSold(e: React.FormEvent) {
@@ -205,30 +222,63 @@ export default function ItemDetailModal({
           ) : null
         ) : (
           <div className="space-y-5">
-            {/* Quick actions */}
-            <div className="flex flex-wrap items-center gap-2">
-              {item.status === "IN_STORAGE" ? (
-                <Button variant="secondary" size="xs" disabled={busy} className="border border-white/[0.08]" onClick={openListForm}>
-                  Register in Market
-                </Button>
-              ) : (
-                <>
+            {/* Primary actions — Next Market / Distribute are the two paths a stored item can take */}
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
+                {item.status === "IN_STORAGE" && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => (showListForm ? setShowListForm(false) : openListForm())}
+                    className={`py-3.5 px-3 rounded-xl border text-sm font-bold transition-all cursor-pointer disabled:opacity-50 ${
+                      showListForm
+                        ? "border-[var(--forge-gold)]/50 bg-[var(--forge-gold)]/10 text-white"
+                        : "border-white/[0.1] bg-white/[0.03] text-white/70 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    Next Market
+                    <span className="block text-[10px] font-normal text-white/40 mt-0.5">List for sale</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => (showDistribute ? setShowDistribute(false) : openDistribute())}
+                  className={`py-3.5 px-3 rounded-xl border text-sm font-bold transition-all cursor-pointer disabled:opacity-50 ${
+                    item.status === "IN_STORAGE" ? "" : "col-span-2"
+                  } ${
+                    showDistribute
+                      ? "border-[var(--forge-gold)]/50 bg-[var(--forge-gold)]/10 text-white"
+                      : "border-white/[0.1] bg-white/[0.03] text-white/70 hover:text-white hover:border-white/20"
+                  }`}
+                >
+                  Distribute
+                  <span className="block text-[10px] font-normal text-white/40 mt-0.5">Guild sale or auction</span>
+                </button>
+              </div>
+
+              {item.status !== "IN_STORAGE" && (
+                <div className="flex flex-wrap items-center gap-2">
                   <Button variant="ghost" size="xs" disabled={busy} onClick={() => act(() => marketApi.recallStorageItem(guildId, item.id), "Recalled to storage.")}>
                     Recall to Storage
                   </Button>
                   <Button variant="secondary" size="xs" disabled={busy} className="border border-emerald-500/25 text-emerald-300" onClick={openSoldForm}>
                     Mark as Sold
                   </Button>
-                </>
+                </div>
               )}
-              <Button variant="ghost" size="xs" disabled={busy} className="text-rose-300/70" onClick={() => act(() => marketApi.removeStorageItem(guildId, item.id), "Removed from storage.")}>
-                Remove
-              </Button>
+
+              <div className="flex justify-end">
+                <Button variant="ghost" size="xs" disabled={busy} className="text-rose-300/70" onClick={() => act(() => marketApi.removeStorageItem(guildId, item.id), "Removed from storage.")}>
+                  Remove
+                </Button>
+              </div>
             </div>
 
-            {/* Register in market — inline price form */}
+            {/* Next Market — listing price + optional note */}
             {showListForm && (
-              <form onSubmit={confirmListing} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 space-y-3">
+              <form onSubmit={confirmListing} className="rounded-xl border border-[var(--forge-gold)]/20 bg-[var(--forge-gold)]/[0.04] p-4 space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">Next Market listing</p>
                 <Input
                   label={`Listing price (${currencySymbol})`}
                   type="number"
@@ -239,9 +289,21 @@ export default function ItemDetailModal({
                   placeholder="0.00"
                   autoFocus
                 />
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="ghost" size="xs" onClick={() => setShowListForm(false)} disabled={busy}>Cancel</Button>
-                  <Button type="submit" variant="primary" size="xs" isLoading={busy}>Confirm Listing</Button>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">Note (optional)</label>
+                  <textarea
+                    value={listNote}
+                    onChange={(e) => setListNote(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-xl bg-surface-100 border border-white/8 text-white placeholder-gray-500 px-4 py-3 text-sm focus:outline-none focus:border-primary-500/50 resize-none"
+                    placeholder="Context for buyers or officers"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowListForm(false)} disabled={busy}>Cancel</Button>
+                  <Button type="submit" variant="primary" size="sm" isLoading={busy} className="min-w-[160px] text-sm font-bold">
+                    Register Now
+                  </Button>
                 </div>
               </form>
             )}
@@ -274,7 +336,8 @@ export default function ItemDetailModal({
               </form>
             )}
 
-            {/* Distribute */}
+            {/* Distribute — Guild Sale / Guild Auction */}
+            {showDistribute && (
             <div className="border-t border-white/[0.06] pt-4">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">Distribute</p>
               <div className="grid grid-cols-2 gap-2 mb-4">
@@ -331,6 +394,7 @@ export default function ItemDetailModal({
                 </div>
               </form>
             </div>
+            )}
           </div>
         )}
       </div>

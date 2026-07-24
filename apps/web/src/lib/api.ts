@@ -2310,7 +2310,7 @@ export interface PriorityQueueEntry {
   avatarUrl: string | null;
   role: string;
   rankName: string;
-  tier: "CORE" | "ELITE" | "UPPER" | "LOWER";
+  tier: "CORE" | "ELITE" | "MEMBER";
   cp: number;
   dkp: number;
   attendance: number;
@@ -2339,7 +2339,7 @@ export interface WishlistMasterRow {
   userId: string;
   ign: string;
   role: string;
-  tier: "CORE" | "ELITE" | "UPPER" | "LOWER";
+  tier: "CORE" | "ELITE" | "MEMBER";
   item: WishlistItem;
   label: string;
   status: WishlistStatus;
@@ -2372,9 +2372,9 @@ export interface MarketCatalogItem {
 }
 
 export interface MarketRulesData {
-  cpTiers: { coreMinCp?: number; eliteMinCp: number; upperMinCp: number };
+  cpTiers: { coreMinCp?: number; eliteMinCp: number };
   limits: Record<
-    "CORE" | "ELITE" | "UPPER" | "LOWER",
+    "CORE" | "ELITE" | "MEMBER",
     {
       logs: number;
       temporalPieces: number;
@@ -2711,8 +2711,8 @@ export const marketApi = {
       `/market/${guildId}/storage`,
     );
   },
-  async registerStorageInMarket(guildId: string, id: string, price: number) {
-    return api.post<{ item: StorageItemData }>(`/market/${guildId}/storage/${id}/register`, { price });
+  async registerStorageInMarket(guildId: string, id: string, payload: { price: number; note?: string }) {
+    return api.post<{ item: StorageItemData }>(`/market/${guildId}/storage/${id}/register`, payload);
   },
   async recallStorageItem(guildId: string, id: string) {
     return api.post<{ item: StorageItemData }>(`/market/${guildId}/storage/${id}/recall`, {});

@@ -173,7 +173,7 @@ const SORT_FIELD_LABELS: Record<SortField, string> = {
 };
 const SORT_FIELDS: SortField[] = ["SEQUENCE", "TIER", "CP", "POINTS", "STATUS"];
 
-const TIER_RANK: Record<string, number> = { CORE: 0, ELITE: 1, UPPER: 2, LOWER: 3 };
+const TIER_RANK: Record<string, number> = { CORE: 0, ELITE: 1, MEMBER: 2 };
 
 // Members with pending wishes surface first (most actionable), then members with
 // no wishes at all, then fully-distributed members last.
@@ -605,7 +605,7 @@ function MyWishlistCard({ guildId }: { guildId: string }) {
         ? res.data
         : {
             items: [] as WishlistItem[],
-            tier: "LOWER",
+            tier: "MEMBER",
             formType: "NON_CORE" as const,
             caps: { logs: 5, temporalPieces: 3, materials: 5 } as WishlistCaps,
           };

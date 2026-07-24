@@ -19,6 +19,7 @@ export const partyCommand: Command = {
   aliases: ["roster", "committed", "commits"],
   description: "Show members committed to the next boss fight.",
   usage: "!party [boss]",
+  example: ["!party", "!party Venatus"],
   category: "Bosses",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,

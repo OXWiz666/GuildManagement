@@ -254,6 +254,19 @@ export class DiscordServerRepository {
     await redisCache.del(cacheKeys.discordServer(row.discordGuildId));
   }
 
+  /**
+   * Remove a channel purpose binding (e.g. lift `!cmdhere`'s restriction).
+   * Returns whether a row actually existed to clear, so the calling command
+   * can tell "removed" apart from "there was nothing set" instead of always
+   * reporting success.
+   */
+  async clearChannel(discordServerId: string, purpose: ChannelPurpose): Promise<boolean> {
+    const result = await prisma.discordChannel.deleteMany({
+      where: { discordServerId, purpose },
+    });
+    return result.count > 0;
+  }
+
   async getChannel(discordServerId: string, purpose: ChannelPurpose): Promise<string | null> {
     const row = await prisma.discordChannel.findUnique({
       where: { discordServerId_purpose: { discordServerId, purpose } },

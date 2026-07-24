@@ -24,6 +24,12 @@ export const killCommand: Command = {
   aliases: ["killed", "down"],
   description: "Log a boss kill (with optional item drops) and restart its respawn timer.",
   usage: USAGE,
+  example: [
+    "!kill Venatus",
+    "!kill Venatus 21:30",
+    "!kill Livera Ancient Boots",
+    "!kill ven RivalGuild",
+  ],
   category: "Bosses",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,

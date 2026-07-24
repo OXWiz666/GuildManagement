@@ -36,6 +36,7 @@ export const cpCommand: Command = {
   aliases: ["combatpower", "power", "gs"],
   description: "View or update Combat Power. Attach a screenshot to scan it.",
   usage: "!cp [value | leaderboard [page] | top10 | history | flagged]",
+  example: ["!cp", "!cp 985000", "!cp leaderboard 2", "!cp history"],
   category: "Combat Power",
   requiresLink: true,
   minimumRole: null,

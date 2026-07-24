@@ -16,9 +16,13 @@ import { logger, errorFields } from "../../utils/logger.js";
  * `!bindguild` must work before any channel is configured, and `!commands`
  * needs to be able to tell a confused user where the right channel is —
  * restricting either would make the bot unrecoverable from a bad config.
+ * `!cmdhereoff` gets the same exemption for the same reason: if the
+ * restricted channel is deleted or otherwise inaccessible, there must be a
+ * way to lift the restriction from anywhere rather than locking the whole
+ * server out of every command.
  */
 const BOOTSTRAP_COMMANDS = new Set(["bindguild", "commands", "link"]);
-const CHANNEL_RESTRICTION_EXEMPT = new Set([...BOOTSTRAP_COMMANDS]);
+const CHANNEL_RESTRICTION_EXEMPT = new Set([...BOOTSTRAP_COMMANDS, "cmdhereoff"]);
 
 /**
  * The dispatch pipeline. In order:

@@ -12,6 +12,7 @@ export const itemsCommand: Command = {
   aliases: ["drops", "itemnames", "dropitems"],
   description: "Show boss-drop item names from the shared icon catalog.",
   usage: "!items [search]",
+  example: ["!items", "!items ancient boots"],
   category: "Bosses",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,

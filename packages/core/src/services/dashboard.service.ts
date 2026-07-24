@@ -353,15 +353,36 @@ async function getActiveFactionGuilds(factionId: string | null, soloGuildId?: st
     });
     return guild ? [guild] : [];
   }
+  // `Guild.factionId` is the authoritative membership signal (it's what
+  // `getGuildFactionId` reads, and it's kept in sync on join/leave — see
+  // approveFactionJoinRequest / the leave-faction path), so query it
+  // directly rather than solely through FactionGuildMembership. A guild can
+  // end up with factionId set but no membership row (e.g. a faction created
+  // before that row was added, or any future path that misses it) — falling
+  // back to Guild.createdAt for ordering in that case means such a guild
+  // still shows up here instead of silently vanishing from every boss's
+  // participant picker.
+  const [guilds, memberships] = await Promise.all([
+    prisma.guild.findMany({
+      where: { factionId, isActive: true },
+      select: { id: true, name: true, slug: true, avatarUrl: true, createdAt: true },
+    }),
+    prisma.factionGuildMembership.findMany({
+      where: { factionId, status: "ACTIVE" },
+      select: { guildId: true, joinedAt: true },
+    }),
+  ]);
+  const joinedAtByGuildId = new Map(memberships.map((m) => [m.guildId, m.joinedAt]));
   // Chronological (when a guild joined the faction), not alphabetical — this
   // list is what a boss's queue defaults to before a leader configures its
   // master list, so turn order should reflect join sequence, not guild name.
-  const memberships = await prisma.factionGuildMembership.findMany({
-    where: { factionId, status: "ACTIVE", guild: { isActive: true } },
-    select: { guild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
-    orderBy: { joinedAt: "asc" },
-  });
-  return memberships.map((m) => m.guild);
+  return guilds
+    .sort((a, b) => {
+      const aJoined = (joinedAtByGuildId.get(a.id) ?? a.createdAt).getTime();
+      const bJoined = (joinedAtByGuildId.get(b.id) ?? b.createdAt).getTime();
+      return aJoined - bJoined;
+    })
+    .map(({ createdAt: _createdAt, ...guild }) => guild);
 }
 
 /**

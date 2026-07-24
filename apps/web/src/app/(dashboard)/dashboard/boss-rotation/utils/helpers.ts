@@ -1,17 +1,3 @@
-export interface RotationBoss {
-  id: string;
-  name: string;
-  level: number;
-  location: string;
-  status: "AVAILABLE" | "CLAIMED" | "DEAD" | "LOCKED";
-  imageUrl: string | null;
-  spawnTime: string;
-  claimedBy: string; // Guild Name
-  rotationQueue: string[]; // List of Guild Names
-  cooldownHours: number;
-  activeScheduleId: string | null;
-}
-
 export const GUILD_PALETTE = [
   { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", dot: "#f59e0b" },
   { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400", dot: "#10b981" },
@@ -49,22 +35,8 @@ export function getRelativeTime(dateStr: string) {
   return `${diffDays}d ago`;
 }
 
-export function getTickingCountdown(spawnTimeStr: string, currentTime: number) {
-  const target = new Date(spawnTimeStr).getTime();
-  const diff = target - currentTime;
-  if (diff <= 0) return { expired: true, text: "00h 00m 00s", warning: false };
-
-  const hrs = Math.floor(diff / (3600 * 1000));
-  const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
-  const secs = Math.floor((diff % (60 * 1000)) / 1000);
-
-  const hrsStr = hrs > 0 ? `${hrs}h ` : "";
-  const minsStr = `${String(mins).padStart(2, "0")}m `;
-  const secsStr = `${String(secs).padStart(2, "0")}s`;
-
-  return {
-    expired: false,
-    text: `${hrsStr}${minsStr}${secsStr}`,
-    warning: diff <= 60 * 60 * 1000 // Less than 1 hour remains
-  };
+export function toDateTimeInputValue(date: Date) {
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 16);
 }

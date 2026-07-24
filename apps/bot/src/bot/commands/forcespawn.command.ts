@@ -24,6 +24,7 @@ export const forceSpawnCommand: Command = {
   aliases: ["fspawn", "spawnnow"],
   description: "Force a boss to be live right now.",
   usage: "!forcespawn <boss>",
+  example: "!forcespawn Venatus",
   category: "Bosses",
   requiresLink: true,
   // Rewrites timers the whole faction reads — officers and up only.

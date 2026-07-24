@@ -37,6 +37,7 @@ function channelCommand(params: {
     aliases: params.aliases,
     description: params.description,
     usage: `!${params.name}`,
+    example: `!${params.name} (run it inside the channel you want to use)`,
     category: "Configuration",
     requiresLink: true,
     // Notification routing is a guild-wide setting — officers and up only.
@@ -64,6 +65,49 @@ function channelCommand(params: {
   };
 }
 
+/**
+ * Counterpart to `channelCommand` — clears a previously-set channel purpose
+ * instead of setting one, so e.g. `!cmdhere`'s restriction can be lifted
+ * without knowing (or needing to be in) the channel it was originally set
+ * from. Same three-purpose shape, but only COMMAND currently ships a paired
+ * "off" command — NOTIFICATION/THREAD have never needed one requested.
+ */
+function clearChannelCommand(params: {
+  name: string;
+  aliases: string[];
+  purpose: ChannelPurpose;
+  description: string;
+  confirmationSet: string;
+  confirmationAlreadyClear: string;
+}): Command {
+  return {
+    name: params.name,
+    aliases: params.aliases,
+    description: params.description,
+    usage: `!${params.name}`,
+    example: `!${params.name}`,
+    category: "Configuration",
+    requiresLink: true,
+    minimumRole: OFFICER_MINIMUM,
+
+    async execute(ctx: CommandContext): Promise<void> {
+      const cleared = await ctx.services.repositories.discordServer.clearChannel(
+        ctx.server.discordServerId,
+        params.purpose,
+      );
+
+      await ctx.message.reply({
+        embeds: [
+          successEmbed(
+            cleared ? "✅ Restriction removed" : "Nothing to clear",
+            cleared ? params.confirmationSet : params.confirmationAlreadyClear,
+          ),
+        ],
+      });
+    },
+  };
+}
+
 export const notifHereCommand = channelCommand({
   name: "notifhere",
   aliases: ["setnotif", "notifychannel"],
@@ -80,6 +124,15 @@ export const cmdHereCommand = channelCommand({
   confirmation: "Commands are now restricted to",
 });
 
+export const cmdHereOffCommand = clearChannelCommand({
+  name: "cmdhereoff",
+  aliases: ["unrestrict", "uncmdhere", "clearcmd"],
+  purpose: "COMMAND",
+  description: "Remove the !cmdhere restriction — commands work in every channel again.",
+  confirmationSet: "Commands now work in every channel again.",
+  confirmationAlreadyClear: "Commands aren't currently restricted to a specific channel — nothing to change.",
+});
+
 export const threadHereCommand = channelCommand({
   name: "threadhere",
   aliases: ["setthread", "threadchannel"],
@@ -93,6 +146,7 @@ export const pingRoleCommand: Command = {
   aliases: ["setpingrole", "spawnrole", "bossrole"],
   description: "Set the role(s) pinged by boss spawn alerts.",
   usage: "!pingrole @Role [@Role...] | !pingrole off",
+  example: ["!pingrole @Raiders", "!pingrole off"],
   category: "Configuration",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,

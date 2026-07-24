@@ -118,6 +118,7 @@ cache outage shouldn't become a bot outage.
 | `!link <code>` / `!unlink` | Anyone | Account linking |
 | `!bindguild <invite>` | Guild Leader | Bind this server to a guild |
 | `!notifhere` / `!cmdhere` / `!threadhere` | Officers | Channel routing |
+| `!cmdhereoff` | Officers | Lifts the `!cmdhere` restriction — exempt from it, so it works from any channel |
 | `!webhookhere [name]` | Officers | Create a channel webhook; URL is delivered by DM |
 | `!alias [add\|remove]` | Officers | Boss nicknames; also editable in Guild Settings |
 | `!commands [name]` | Anyone | Generated from the live registry |

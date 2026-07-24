@@ -24,6 +24,7 @@ export const editKillTimeCommand: Command = {
   aliases: ["editkill", "fixkill", "kt"],
   description: "Correct the kill time of the last logged kill for a boss.",
   usage: "!editkilltime <boss> <HH:MM>",
+  example: "!editkilltime Venatus 21:30",
   category: "Bosses",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,

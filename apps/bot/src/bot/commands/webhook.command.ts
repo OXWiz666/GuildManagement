@@ -20,6 +20,7 @@ export const webhookHereCommand: Command = {
   aliases: ["createwebhook", "webhook"],
   description: "Create a Discord webhook for this channel and DM you the URL.",
   usage: "!webhookhere [name]",
+  example: ["!webhookhere", "!webhookhere Boss Alerts"],
   category: "Configuration",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,

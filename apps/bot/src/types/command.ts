@@ -64,6 +64,13 @@ export interface Command {
   aliases: string[];
   description: string;
   usage: string;
+  /**
+   * One or more ready-to-paste example invocations, shown by `!commands
+   * <name>` under "Example". Filled-in (real boss name, real time) rather
+   * than restating `usage`'s placeholder syntax — the point is something a
+   * member can copy verbatim and see work.
+   */
+  example?: string | string[];
   category: CommandCategory;
 
   /**

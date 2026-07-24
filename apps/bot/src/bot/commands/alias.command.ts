@@ -25,6 +25,7 @@ export const aliasCommand: Command = {
   aliases: ["aliases", "nickname"],
   description: "List, add or remove boss name aliases.",
   usage: "!alias [add <alias> <boss> | remove <alias>]",
+  example: ["!alias", "!alias add baron Baron Baraudmore", "!alias remove baron"],
   category: "Configuration",
   requiresLink: true,
   // Listing is harmless, but the command as a whole writes guild-wide config.

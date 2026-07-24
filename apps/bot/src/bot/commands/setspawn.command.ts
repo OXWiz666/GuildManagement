@@ -21,6 +21,7 @@ export const setSpawnCommand: Command = {
   aliases: ["settimer", "spawntime", "correctspawn"],
   description: "Set a boss's next spawn to an exact known time.",
   usage: "!setspawn <boss> <HH:MM>",
+  example: "!setspawn Auraq 22:00",
   category: "Bosses",
   requiresLink: true,
   minimumRole: OFFICER_MINIMUM,

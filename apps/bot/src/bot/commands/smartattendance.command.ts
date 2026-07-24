@@ -12,6 +12,7 @@ export const smartAttendanceCommand: Command = {
   aliases: ["smartattendance", "smartatt", "rallyatt", "rallyattendance"],
   description: "View open killed-boss attendance windows, or scan a rally screenshot for one boss.",
   usage: "!attendance [boss] OR !attendance <boss> [minutes] + one or more screenshots",
+  example: ["!attendance", "!attendance Venatus (with a rally screenshot attached)"],
   category: "Attendance",
   requiresLink: true,
   minimumRole: null,

@@ -16,6 +16,7 @@ export const spawnCommand: Command = {
   aliases: ["spawns", "timer", "timers"],
   description: "Show upcoming boss spawns. Pass a boss name to filter.",
   usage: "!spawn [boss]",
+  example: ["!spawn", "!spawn Venatus"],
   category: "Bosses",
   requiresLink: true,
   minimumRole: null,

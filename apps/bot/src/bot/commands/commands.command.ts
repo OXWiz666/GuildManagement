@@ -23,6 +23,7 @@ export const commandsCommand: Command = {
   aliases: ["command", "help", "cmds", "h"],
   description: "Show available commands.",
   usage: "!commands [command]",
+  example: ["!commands", "!commands kill"],
   category: "General",
   requiresLink: false,
   minimumRole: null,
@@ -113,6 +114,15 @@ function detailEmbed(command: Command) {
         inline: true,
       },
     );
+
+  if (command.example) {
+    const examples = Array.isArray(command.example) ? command.example : [command.example];
+    embed.addFields({
+      name: examples.length > 1 ? "Examples" : "Example",
+      value: examples.map((line) => `\`${line}\``).join("\n"),
+      inline: false,
+    });
+  }
 
   if (command.aliases.length > 0) {
     embed.addFields({

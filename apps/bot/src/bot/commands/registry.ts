@@ -7,7 +7,13 @@ import { forceSpawnAllCommand, forceSpawnCommand } from "./forcespawn.command.js
 import { spawnCommand } from "./spawn.command.js";
 import { partyCommand } from "./party.command.js";
 import { bindGuildCommand, linkCommand, unbindGuildCommand, unlinkCommand } from "./link.command.js";
-import { cmdHereCommand, notifHereCommand, pingRoleCommand, threadHereCommand } from "./config.command.js";
+import {
+  cmdHereCommand,
+  cmdHereOffCommand,
+  notifHereCommand,
+  pingRoleCommand,
+  threadHereCommand,
+} from "./config.command.js";
 import { aliasCommand } from "./alias.command.js";
 import { commandsCommand } from "./commands.command.js";
 import { smartAttendanceCommand } from "./smartattendance.command.js";
@@ -38,6 +44,7 @@ export const COMMANDS: Command[] = [
   notifHereCommand,
   pingRoleCommand,
   cmdHereCommand,
+  cmdHereOffCommand,
   threadHereCommand,
   webhookHereCommand,
   aliasCommand,

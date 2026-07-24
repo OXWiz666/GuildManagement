@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { dashboardApi, type BossMasterListResponse } from "@/lib/api";
 import { useQuery, queryClient } from "@/lib/query";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { getGuildColor } from "../utils/helpers";
-import { getBossImageUrl } from "@guild/shared";
 import LowBossSchedule from "./LowBossSchedule";
+import MasterListBossCard from "./MasterListBossCard";
 
 type ViewMode = "BOSS" | "SCHEDULE";
 
@@ -70,36 +69,36 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
 
   const dirty = changedEntries.length > 0;
 
-  function isParticipating(bossName: string, gId: string) {
-    return (draft[bossName] ?? []).includes(gId);
-  }
-
-  function toggle(bossName: string, gId: string) {
-    if (!canManage) return;
+  // Stable references (useCallback) so MasterListBossCard's memo isn't
+  // defeated by a fresh closure on every MasterListTab render — only the
+  // `[bossName]` key actually being edited gets a new `draft` slice, so a
+  // card whose own `selected` prop didn't change also needs these callback
+  // props to stay referentially equal, or it'd re-render anyway.
+  const toggle = useCallback((bossName: string, gId: string) => {
     setDraft((prev) => {
       const cur = prev[bossName] ?? [];
       const nextArr = cur.includes(gId) ? cur.filter((id) => id !== gId) : [...cur, gId];
       return { ...prev, [bossName]: nextArr };
     });
-  }
+  }, []);
 
-  /** Swap a participating guild with its neighbor to manually reorder turn sequence. */
-  function moveGuild(bossName: string, gId: string, direction: -1 | 1) {
-    if (!canManage) return;
+  /** Swap two participating guilds' turn-order positions (drag-to-reorder). */
+  const swapGuilds = useCallback((bossName: string, guildIdA: string, guildIdB: string) => {
     setDraft((prev) => {
       const cur = [...(prev[bossName] ?? [])];
-      const idx = cur.indexOf(gId);
-      const swapIdx = idx + direction;
-      if (idx < 0 || swapIdx < 0 || swapIdx >= cur.length) return prev;
-      [cur[idx], cur[swapIdx]] = [cur[swapIdx]!, cur[idx]!];
+      const idxA = cur.indexOf(guildIdA);
+      const idxB = cur.indexOf(guildIdB);
+      if (idxA < 0 || idxB < 0) return prev;
+      [cur[idxA], cur[idxB]] = [cur[idxB]!, cur[idxA]!];
       return { ...prev, [bossName]: cur };
     });
-  }
+  }, []);
 
-  function setAllForBoss(bossName: string, all: boolean) {
-    if (!canManage) return;
+  const setAllForBoss = useCallback((bossName: string, all: boolean) => {
     setDraft((prev) => ({ ...prev, [bossName]: all ? guilds.map((g) => g.id) : [] }));
-  }
+  }, [guilds]);
+
+  const openSchedule = useCallback(() => setView("SCHEDULE"), []);
 
   function reset() {
     const next: Record<string, string[]> = {};
@@ -176,7 +175,7 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
           {view === "BOSS" && (
             <p className="hidden sm:block text-[11px] text-white/40 max-w-xs">
               {canManage
-                ? "Toggle which guilds take each boss. The number on each chip is its turn order — use the arrows to reorder, guilds left off don't rotate on it."
+                ? "Click to toggle which guilds take each boss. Drag a participating guild's chip onto another to swap their turn order."
                 : "Read-only. Only faction leaders can edit the master list."}
             </p>
           )}
@@ -209,130 +208,21 @@ export default function MasterListTab({ guildId }: { guildId: string }) {
       {/* By Boss view */}
       {view === "BOSS" && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-          {filteredBosses.map((boss) => {
-            const selected = draft[boss.bossName] ?? [];
-
-            // A Low Boss has no per-boss participant queue to toggle — its
-            // guild comes from the Faction Schedule's day pattern instead.
-            // Still shown here (rather than omitted, as before) so a leader
-            // browsing "By Boss" isn't left wondering why the boss vanished.
-            if (boss.isLowBoss) {
-              return (
-                <div key={boss.bossName} className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-zinc-950">
-                      <img src={getBossImageUrl(boss.bossName)} alt={boss.bossName} className="h-full w-full object-cover" loading="lazy" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-white truncate">{boss.bossName}</h3>
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] shrink-0">
-                          Lvl {boss.level}
-                        </span>
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 shrink-0">
-                          Low Boss
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-white/40 mt-0.5 truncate">{boss.location}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setView("SCHEDULE")}
-                    className="w-full rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left text-[11px] leading-relaxed text-white/50 hover:border-cyan-500/25 hover:text-white/75 cursor-pointer transition-all"
-                  >
-                    Follows the day-based Faction Schedule, not a per-boss queue — open the <span className="text-cyan-300 font-semibold">Schedule</span> tab to see or edit who takes it each day.
-                  </button>
-                </div>
-              );
-            }
-
-            return (
-              <div key={boss.bossName} className="rounded-xl border border-[var(--metal-border)] bg-[var(--obsidian-elevated)]/40 p-3.5">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-zinc-950">
-                    <img src={getBossImageUrl(boss.bossName)} alt={boss.bossName} className="h-full w-full object-cover" loading="lazy" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-white truncate">{boss.bossName}</h3>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--forge-glow)] border border-[var(--forge-gold)]/25 text-[var(--forge-gold-bright)] shrink-0">
-                        Lvl {boss.level}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-white/40 mt-0.5 truncate">{boss.location}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[11px] font-mono text-white/50">{selected.length}/{guilds.length}</span>
-                    {canManage && (
-                      <div className="mt-1 flex items-center gap-1 justify-end">
-                        <button onClick={() => setAllForBoss(boss.bossName, true)} className="text-[9px] uppercase tracking-wide text-emerald-400/70 hover:text-emerald-300 cursor-pointer">All</button>
-                        <span className="text-white/15">·</span>
-                        <button onClick={() => setAllForBoss(boss.bossName, false)} className="text-[9px] uppercase tracking-wide text-white/40 hover:text-white/70 cursor-pointer">None</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {guilds.map((g) => {
-                    const on = isParticipating(boss.bossName, g.id);
-                    const color = getGuildColor(g.name);
-                    // Turn order is just array position — the guild added
-                    // first takes the boss first, then the queue cycles back
-                    // to the start. Surfacing that position is the whole
-                    // point of this view: without it there's no way to tell
-                    // who's up next just from a flat set of toggled chips.
-                    const sequence = on ? selected.indexOf(g.id) + 1 : null;
-                    const canReorder = on && canManage && selected.length > 1;
-                    return (
-                      <div key={g.id} className="inline-flex items-stretch gap-0.5">
-                        <button
-                          onClick={() => toggle(boss.bossName, g.id)}
-                          disabled={!canManage}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all ${
-                            on ? `${color.border} ${color.bg} ${color.text}` : "border-white/[0.06] bg-white/[0.02] text-white/35"
-                          } ${canManage ? "cursor-pointer hover:opacity-90" : "cursor-default"}`}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: on ? color.dot : "rgba(255,255,255,0.2)" }} />
-                          {sequence !== null && (
-                            <span className="inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-black/25 px-1 text-[9px] font-bold leading-none">
-                              {sequence}
-                            </span>
-                          )}
-                          {g.name}
-                        </button>
-                        {canReorder && (
-                          <div className="flex flex-col justify-center gap-px">
-                            <button
-                              type="button"
-                              onClick={() => moveGuild(boss.bossName, g.id, -1)}
-                              disabled={sequence === 1}
-                              title="Move earlier in turn order"
-                              className="h-3.5 w-4 flex items-center justify-center rounded-t bg-white/[0.04] border border-white/[0.06] text-white/50 hover:text-white/90 hover:bg-white/[0.08] disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] cursor-pointer"
-                            >
-                              <svg viewBox="0 0 10 6" className="h-1.5 w-2.5 fill-current"><path d="M5 0L10 6H0z" /></svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveGuild(boss.bossName, g.id, 1)}
-                              disabled={sequence === selected.length}
-                              title="Move later in turn order"
-                              className="h-3.5 w-4 flex items-center justify-center rounded-b bg-white/[0.04] border border-t-0 border-white/[0.06] text-white/50 hover:text-white/90 hover:bg-white/[0.08] disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] cursor-pointer"
-                            >
-                              <svg viewBox="0 0 10 6" className="h-1.5 w-2.5 fill-current"><path d="M5 6L0 0h10z" /></svg>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          {filteredBosses.map((boss) => (
+            <MasterListBossCard
+              key={boss.bossName}
+              boss={boss}
+              guilds={guilds}
+              selected={draft[boss.bossName] ?? []}
+              canManage={canManage}
+              onToggle={toggle}
+              onSwap={swapGuilds}
+              onSetAll={setAllForBoss}
+              onOpenSchedule={openSchedule}
+            />
+          ))}
         </div>
       )}
-
     </div>
   );
 }

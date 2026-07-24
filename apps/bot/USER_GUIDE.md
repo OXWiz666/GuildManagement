@@ -87,7 +87,7 @@ you don't need to do anything else.
 | Bot doesn't respond at all | Someone with **Manage Server** needs to bind this Discord server to your guild first — that's a one-time setup step, ask your Guild Leader. |
 | "Your Discord account isn't linked" | Run `!link <code>` — get a fresh code from **Settings → Discord** on the website (Step 1 above). |
 | "I couldn't find a Combat Power value" | Make sure the CP number is visible and unobstructed in the screenshot, or just type it: `!cp 1234567` |
-| Commands only work in one channel | An officer restricted commands to a specific channel with `!cmdhere` — try there. |
+| Commands only work in one channel | An officer restricted commands to a specific channel with `!cmdhere` — try there, or an officer can run `!cmdhereoff` (works from any channel) to lift the restriction. |
 
 ---
 *Need more than this covers? Full setup and troubleshooting docs are in

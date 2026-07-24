@@ -353,11 +353,15 @@ async function getActiveFactionGuilds(factionId: string | null, soloGuildId?: st
     });
     return guild ? [guild] : [];
   }
-  return prisma.guild.findMany({
-    where: { isActive: true, factionId },
-    select: { id: true, name: true, slug: true, avatarUrl: true },
-    orderBy: { name: "asc" },
+  // Chronological (when a guild joined the faction), not alphabetical — this
+  // list is what a boss's queue defaults to before a leader configures its
+  // master list, so turn order should reflect join sequence, not guild name.
+  const memberships = await prisma.factionGuildMembership.findMany({
+    where: { factionId, status: "ACTIVE", guild: { isActive: true } },
+    select: { guild: { select: { id: true, name: true, slug: true, avatarUrl: true } } },
+    orderBy: { joinedAt: "asc" },
   });
+  return memberships.map((m) => m.guild);
 }
 
 /**
@@ -4094,12 +4098,41 @@ export async function updateBossMasterList(
   });
   const existingMap = new Map(existing.map((r) => [r.bossName, r]));
 
+  // Whoever currently holds each boss, so an edit that reshuffles the
+  // participant list can re-anchor `currentIndex` to that guild's NEW
+  // position instead of leaving it pointing at a raw array slot. An open
+  // (not-yet-killed) schedule's own guildTurnGuildId is ground truth here —
+  // same priority as getBossRotationShared — since it can reflect a kill
+  // that already happened this cycle, which the stored queue position alone
+  // wouldn't capture.
+  const activeGuildIdList = guilds.map((g) => g.id);
+  const activeSchedules = await prisma.bossSchedule.findMany({
+    where: {
+      bossName: { in: normalizedEntries.map((e) => e.bossName) },
+      OR: [{ guildId: { in: activeGuildIdList } }, { guildId: null }],
+      status: { not: BossEventStatus.KILLED },
+    },
+    select: { bossName: true, guildTurnGuildId: true, spawnTime: true },
+    orderBy: { spawnTime: "asc" },
+  });
+  const activeHolderMap = new Map<string, string | null>();
+  for (const s of activeSchedules) {
+    if (!activeHolderMap.has(s.bossName)) activeHolderMap.set(s.bossName, s.guildTurnGuildId);
+  }
+
   await prisma.$transaction(
     normalizedEntries.map((entry) => {
       const prev = existingMap.get(entry.bossName);
-      // Preserve whose turn it is where possible; clamp if the list shrank.
+      const prevQueue = Array.isArray(prev?.queueGuildIds)
+        ? prev.queueGuildIds.filter((id): id is string => typeof id === "string")
+        : [];
+      const currentHolderId = activeHolderMap.get(entry.bossName) || prevQueue[prev?.currentIndex ?? 0] || null;
+      const holderIndex = currentHolderId ? entry.participantGuildIds.indexOf(currentHolderId) : -1;
+      // Re-anchor to the current holder's new position when it's still in
+      // the list; otherwise fall back to clamping the raw index (the old
+      // behavior) so a boss with no established holder yet doesn't break.
       const clampedIndex = entry.participantGuildIds.length
-        ? Math.min(prev?.currentIndex ?? 0, entry.participantGuildIds.length - 1)
+        ? (holderIndex >= 0 ? holderIndex : Math.min(prev?.currentIndex ?? 0, entry.participantGuildIds.length - 1))
         : 0;
       return prisma.bossRotation.upsert({
         where: { factionId_bossName: { factionId, bossName: entry.bossName } },
